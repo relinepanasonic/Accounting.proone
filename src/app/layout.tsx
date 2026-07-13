@@ -3,9 +3,9 @@ import './globals.css';
 import { CyberSidebar } from '@/components/navigation/CyberSidebar';
 
 export const metadata: Metadata = {
-  title: 'Accounting.proone | Cybernetic Action Accounting HUD',
+  title: 'Accounting.proone | Executive Luxury Gold Accounting Suite',
   description:
-    'Frictionless Advanced Action-Oriented Accounting & Invoice Generator SaaS for non-accountants.',
+    'Frictionless Advanced Action-Oriented Accounting & Invoice Generator SaaS in Brushed Luxury Gold for non-accountants.',
 };
 
 export default function RootLayout({
@@ -15,8 +15,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className="bg-[#080b11] text-slate-100 antialiased selection:bg-cyan-500 selection:text-black flex min-h-screen">
-        {/* Persistent Cybernetic Collapsible Left Sidebar */}
+      <body className="bg-[#0b0c10] text-zinc-100 antialiased selection:bg-[#d4af37] selection:text-black flex min-h-screen">
+        {/* Persistent Luxury Gold Left Sidebar */}
         <CyberSidebar />
 
         {/* Main Content Area */}

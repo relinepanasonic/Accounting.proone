@@ -9,12 +9,11 @@ export const dynamic = 'force-dynamic';
 async function InvoicesTableServer() {
   const supabase = await createClient();
 
-  const { data: invoices, error } = await supabase
+  const { data: invoices } = await supabase
     .from('invoices')
     .select('id, invoice_number, status, total_amount, due_date, client_id, clients(name)')
     .order('created_at', { ascending: false });
 
-  // Fallback to rich agency seed items if table is temporarily empty
   const displayInvoices =
     invoices && invoices.length > 0
       ? invoices.map((inv) => {
@@ -35,60 +34,57 @@ async function InvoicesTableServer() {
         ];
 
   return (
-    <div className="bg-slate-900/70 border border-slate-800/80 rounded-2xl p-6 backdrop-blur-xl">
+    <div className="gold-glass-panel rounded-2xl p-6">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-200">
-            UNPAID & PAID INVOICES TELEMETRY
+          <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-200">
+            CLIENT RECEIVABLES & ISSUED BILLS REGISTRY
           </h2>
-          <p className="text-[10px] text-slate-400 font-mono mt-0.5">
-            REALTIME SUPABASE STREAM • ONE-CLICK DUPLICATE
+          <p className="text-[10px] text-zinc-400 font-mono mt-0.5">
+            LUXURY GOLD TELEMETRY • INSTANT STATUS SWITCH & DRAFT COPY
           </p>
         </div>
-        <span className="inline-block w-12 h-2 rounded-full bg-gradient-to-r from-cyan-400 to-blue-500 shadow-[0_0_10px_#22d3ee]"></span>
+        <span className="text-[10px] font-mono text-[#f5d77f] bg-[#d4af37]/15 px-3 py-1 rounded-full border border-[#d4af37]/40">
+          INCOME RECEIVABLE MATRIX
+        </span>
       </div>
 
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse text-xs font-mono">
           <thead>
-            <tr className="border-b border-slate-800 text-slate-400 uppercase text-[10px] font-sans">
+            <tr className="border-b border-zinc-800 text-zinc-400 uppercase text-[10px] font-sans">
               <th className="py-3 px-3">Invoice ID</th>
-              <th className="py-3 px-3">Client</th>
-              <th className="py-3 px-3 text-right">Amount</th>
-              <th className="py-3 px-3 text-right">Due Date</th>
-              <th className="py-3 px-3 text-center">Status</th>
-              <th className="py-3 px-3 text-right">Actions</th>
+              <th className="py-3 px-3">Client Payee</th>
+              <th className="py-3 px-3">Due Date</th>
+              <th className="py-3 px-3 text-right">Amount Billed</th>
+              <th className="py-3 px-3 text-center">Status Action</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-800/60">
-            {displayInvoices.map((inv) => {
-              const isPaid = inv.status.toLowerCase() === 'paid';
-              return (
-                <tr key={inv.id} className="hover:bg-slate-800/40 transition-colors group">
-                  <td className="py-3 px-3 text-slate-200 font-bold">{inv.invoiceNumber}</td>
-                  <td className="py-3 px-3 text-white font-sans font-medium">{inv.clientName}</td>
-                  <td className="py-3 px-3 text-right text-cyan-400 font-extrabold">{inv.amount}</td>
-                  <td className="py-3 px-3 text-right text-slate-400">{inv.dueDate}</td>
-                  <td className="py-3 px-3 text-center">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase">
-                      <span
-                        className={`w-2 h-2 rounded-full ${
-                          isPaid
-                            ? 'bg-cyan-400 shadow-[0_0_6px_#22d3ee]'
-                            : 'bg-amber-500 shadow-[0_0_6px_#f97316]'
-                        }`}
-                      />
-                      <span className={isPaid ? 'text-cyan-400' : 'text-amber-400'}>
-                        {inv.status}
-                      </span>
-                    </span>
-                  </td>
-                  <td className="py-3 px-3 text-right">
-                    <InvoiceRowActions invoiceId={inv.id} currentStatus={inv.status} />
-                  </td>
-                </tr>
-              );
-            })}
+          <tbody className="divide-y divide-zinc-800/60">
+            {displayInvoices.map((inv) => (
+              <tr
+                key={inv.id}
+                className="hover:bg-zinc-800/30 transition-colors group"
+              >
+                <td className="py-3 px-3 font-bold text-[#f5d77f]">
+                  {inv.invoiceNumber}
+                </td>
+                <td className="py-3 px-3 font-sans font-semibold text-white group-hover:text-[#f5d77f] transition-colors">
+                  {inv.clientName}
+                </td>
+                <td className="py-3 px-3 text-zinc-400">
+                  {inv.dueDate}
+                </td>
+                <td className="py-3 px-3 text-right">
+                  <span className="text-sm font-extrabold text-[#f5d77f] drop-shadow-[0_0_10px_rgba(245,215,127,0.35)]">
+                    {inv.amount}
+                  </span>
+                </td>
+                <td className="py-3 px-3 text-center">
+                  <InvoiceRowActions id={inv.id} status={inv.status} />
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -96,40 +92,32 @@ async function InvoicesTableServer() {
   );
 }
 
-export default function InvoicesListPage() {
+export default function InvoicesPage() {
   return (
     <div className="max-w-[1500px] mx-auto px-6 py-8 space-y-6">
       {/* Page Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#d4af37]/20">
         <div>
-          <h1 className="text-lg font-extrabold tracking-wider uppercase text-white">
-            INCOME • ACTION-ORIENTED INVOICES
+          <h1 className="text-lg font-extrabold tracking-wider uppercase text-white flex items-center gap-2">
+            <span>INVOICES • CLIENT INCOME & RECEIVABLES REGISTRY</span>
           </h1>
-          <p className="text-xs text-slate-400 font-mono">
-            HIDE THE SPREADSHEET MATH • ONE-CLICK SMART ACTIONS
+          <p className="text-xs text-[#d4af37] font-mono">
+            LUXURY EXECUTIVE HUD • ZERO WATERFALL DATA PROTOCOL
           </p>
         </div>
 
         <Link
           href="/invoices/new"
-          className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-gradient-to-r from-cyan-400 to-cyan-300 hover:from-cyan-300 hover:to-cyan-200 text-slate-950 font-extrabold text-xs uppercase tracking-wider shadow-[0_0_20px_rgba(34,211,238,0.5)] transition-all transform hover:-translate-y-0.5"
+          className="gold-btn inline-flex items-center gap-2 px-6 py-2.5 rounded-full text-xs uppercase tracking-wider"
         >
           <Plus className="w-4 h-4" />
-          NEW INVOICE
+          <span>NEW INVOICE</span>
         </Link>
       </div>
 
-      {/* Server Component Streaming Table */}
       <Suspense
         fallback={
-          <div className="bg-slate-900/70 border border-slate-800/80 rounded-2xl h-96 animate-pulse p-6">
-            <div className="h-6 w-1/3 bg-slate-800 rounded mb-6"></div>
-            <div className="space-y-3">
-              <div className="h-10 bg-slate-800/60 rounded"></div>
-              <div className="h-10 bg-slate-800/60 rounded"></div>
-              <div className="h-10 bg-slate-800/60 rounded"></div>
-            </div>
-          </div>
+          <div className="gold-glass-panel rounded-2xl h-80 animate-pulse p-6"></div>
         }
       >
         <InvoicesTableServer />

@@ -1,26 +1,24 @@
 'use client';
 
-import React, { useState, useTransition } from 'react';
-import { Copy, RefreshCw, CheckCircle2 } from 'lucide-react';
+import React, { useTransition } from 'react';
+import { Copy, CheckCircle, Clock } from 'lucide-react';
 import { duplicateInvoice, toggleInvoiceStatus } from '@/app/actions/invoices';
 
 interface InvoiceRowActionsProps {
-  invoiceId: string;
-  currentStatus: string;
+  id: string;
+  status: string;
 }
 
-export function InvoiceRowActions({ invoiceId, currentStatus }: InvoiceRowActionsProps) {
+export function InvoiceRowActions({ id, status }: InvoiceRowActionsProps) {
   const [isPending, startTransition] = useTransition();
-  const [justCopied, setJustCopied] = useState(false);
+  const isPaid = status.toLowerCase() === 'paid';
 
   const handleDuplicate = () => {
     startTransition(async () => {
       try {
-        await duplicateInvoice(invoiceId);
-        setJustCopied(true);
-        setTimeout(() => setJustCopied(false), 2000);
+        await duplicateInvoice(id);
       } catch (err) {
-        console.error('Duplicate failed:', err);
+        console.error(err);
       }
     });
   };
@@ -28,43 +26,47 @@ export function InvoiceRowActions({ invoiceId, currentStatus }: InvoiceRowAction
   const handleToggleStatus = () => {
     startTransition(async () => {
       try {
-        await toggleInvoiceStatus(invoiceId, currentStatus);
+        await toggleInvoiceStatus(id, status);
       } catch (err) {
-        console.error('Toggle status failed:', err);
+        console.error(err);
       }
     });
   };
 
   return (
-    <div className="flex items-center justify-end gap-2">
-      {/* Duplicate Button */}
+    <div className="inline-flex items-center gap-2">
+      {/* Status Toggle Button in Brushed Gold */}
       <button
-        onClick={handleDuplicate}
+        onClick={handleToggleStatus}
         disabled={isPending}
-        title="One-Click Duplicate Invoice (Net 15 Draft)"
-        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-cyan-400 border border-slate-700/80 text-[10px] font-mono transition-colors disabled:opacity-50"
+        title="Toggle Invoice Status"
+        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-mono uppercase transition-all duration-200 ${
+          isPaid
+            ? 'bg-[#d4af37]/15 border border-[#d4af37]/50 text-[#f5d77f] hover:bg-[#d4af37]/25 shadow-[0_0_12px_rgba(212,175,55,0.25)]'
+            : 'bg-zinc-900 border border-[#d4af37]/30 text-[#d4af37] hover:border-[#f5d77f]'
+        } ${isPending ? 'opacity-50 cursor-not-allowed' : ''}`}
       >
-        {justCopied ? (
+        {isPaid ? (
           <>
-            <CheckCircle2 className="w-3 h-3 text-cyan-400" />
-            <span className="text-cyan-400">COPIED</span>
+            <CheckCircle className="w-3 h-3 text-[#f5d77f]" />
+            <span>PAID</span>
           </>
         ) : (
           <>
-            <Copy className="w-3 h-3" />
-            <span>DUPLICATE</span>
+            <Clock className="w-3 h-3 text-[#d4af37]" />
+            <span>PENDING</span>
           </>
         )}
       </button>
 
-      {/* Toggle Status Button */}
+      {/* Duplicate Invoice Action in Brushed Gold */}
       <button
-        onClick={handleToggleStatus}
+        onClick={handleDuplicate}
         disabled={isPending}
-        title="Toggle Status (Paid <-> Overdue/Draft)"
-        className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-amber-400 border border-slate-700/80 transition-colors disabled:opacity-50"
+        title="Duplicate Invoice to New Draft"
+        className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-[#d4af37]/50 text-zinc-400 hover:text-[#f5d77f] transition-all duration-200"
       >
-        <RefreshCw className={`w-3 h-3 ${isPending ? 'animate-spin text-cyan-400' : ''}`} />
+        <Copy className="w-3.5 h-3.5" />
       </button>
     </div>
   );

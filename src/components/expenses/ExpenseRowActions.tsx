@@ -27,20 +27,20 @@ export function ExpenseRowActions({ id, status }: ExpenseRowActionsProps) {
     <button
       onClick={handleToggle}
       disabled={isPending}
-      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-mono uppercase transition-all ${
+      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-mono uppercase transition-all duration-200 ${
         isPaid
-          ? 'bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20'
-          : 'bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20'
+          ? 'bg-[#d4af37]/15 border border-[#d4af37]/40 text-[#f5d77f] hover:bg-[#d4af37]/25 shadow-[0_0_12px_rgba(212,175,55,0.25)]'
+          : 'bg-zinc-900 border border-[#d4af37]/30 text-[#d4af37] hover:border-[#f5d77f]'
       } ${isPending ? 'opacity-50 cursor-not-allowed' : ''}`}
     >
       {isPaid ? (
         <>
-          <CheckCircle className="w-3 h-3" />
+          <CheckCircle className="w-3 h-3 text-[#f5d77f]" />
           <span>PAID</span>
         </>
       ) : (
         <>
-          <Clock className="w-3 h-3" />
+          <Clock className="w-3 h-3 text-[#d4af37]" />
           <span>PENDING</span>
         </>
       )}

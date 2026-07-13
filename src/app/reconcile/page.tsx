@@ -1,5 +1,5 @@
 import React, { Suspense } from 'react';
-import { ShieldAlert, CheckSquare, RefreshCw } from 'lucide-react';
+import { ShieldAlert, CheckSquare } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import {
   ReconciliationHUD,
@@ -11,7 +11,6 @@ export const dynamic = 'force-dynamic';
 async function ReconciliationCore() {
   const supabase = await createClient();
 
-  // 1. Server-Side RBAC Security Check
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -33,26 +32,20 @@ async function ReconciliationCore() {
 
   if (!hasClearance) {
     return (
-      <div className="bg-slate-900/80 border border-red-500/40 rounded-2xl p-12 backdrop-blur-2xl text-center max-w-xl mx-auto my-12 shadow-[0_0_40px_rgba(239,68,68,0.15)]">
+      <div className="gold-glass-panel border-red-500/40 rounded-2xl p-12 text-center max-w-xl mx-auto my-12">
         <div className="w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/40 flex items-center justify-center mx-auto mb-4 text-red-400">
           <ShieldAlert className="w-7 h-7 animate-pulse" />
         </div>
         <h2 className="text-sm font-black uppercase tracking-widest text-red-400 mb-2">
           SECURITY CLEARANCE DENIED
         </h2>
-        <p className="text-xs text-slate-300 font-mono leading-relaxed mb-6">
-          BANK RECONCILIATION & TREASURY CLEARANCE IS STRICTLY RESTRICTED TO SUPERADMIN & ACCOUNTING ROLES.
-          OPERATIONAL ROLES CANNOT RECONCILE GENERAL CASH LEDGERS.
+        <p className="text-xs text-zinc-300 font-mono leading-relaxed mb-6">
+          BANK RECONCILIATION IS STRICTLY RESTRICTED TO SUPERADMIN & ACCOUNTING ROLES.
         </p>
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-950 border border-slate-800 text-[10px] font-mono text-slate-400">
-          <span>RLS GUARDRAIL: ACTIVE</span>
-          <span className="w-1.5 h-1.5 rounded-full bg-red-400"></span>
-        </div>
       </div>
     );
   }
 
-  // 2. Fetch Unreconciled System Records
   const [invoicesRes, transactionsRes] = await Promise.all([
     supabase
       .from('invoices')
@@ -91,35 +84,13 @@ async function ReconciliationCore() {
     })),
   ];
 
-  // Fallback rich unreconciled reference items if database table is completely cleared
   const displayRecords: UnreconciledSystemRecord[] =
     systemRecords.length > 0
       ? systemRecords
       : [
-          {
-            id: '33333333-3333-3333-3333-333333333301',
-            type: 'invoice',
-            reference: 'INV-2026-001',
-            payeeOrClient: 'Prof Toko Online',
-            date: '2026-07-02',
-            amount: 149870,
-          },
-          {
-            id: 'exp-101',
-            type: 'expense',
-            reference: 'Software & Infrastructure',
-            payeeOrClient: 'Cloud Server Hosting A/P',
-            date: '2026-07-07',
-            amount: 1200,
-          },
-          {
-            id: 'exp-102',
-            type: 'expense',
-            reference: 'Office & Utilities',
-            payeeOrClient: 'Studio Rent Power Utilities',
-            date: '2026-07-10',
-            amount: 4300,
-          },
+          { id: '33333333-3333-3333-3333-333333333301', type: 'invoice', reference: 'INV-2026-001', payeeOrClient: 'Prof Toko Online', date: '2026-07-02', amount: 149870 },
+          { id: 'exp-101', type: 'expense', reference: 'Software & Infrastructure', payeeOrClient: 'Cloud Server Hosting A/P', date: '2026-07-07', amount: 1200 },
+          { id: 'exp-102', type: 'expense', reference: 'Office & Utilities', payeeOrClient: 'Studio Rent Power Utilities', date: '2026-07-10', amount: 4300 },
         ];
 
   return <ReconciliationHUD systemRecords={displayRecords} />;
@@ -128,22 +99,21 @@ async function ReconciliationCore() {
 export default function BankReconciliationPage() {
   return (
     <div className="max-w-[1500px] mx-auto px-6 py-8 space-y-6">
-      {/* Header Bar */}
-      <div className="pb-4 border-b border-slate-800/80">
+      <div className="pb-4 border-b border-[#d4af37]/20">
         <h1 className="text-lg font-extrabold tracking-wider uppercase text-white flex items-center gap-2">
-          <CheckSquare className="w-5 h-5 text-amber-400" />
+          <CheckSquare className="w-5 h-5 text-[#d4af37]" />
           <span>BANK RECONCILIATION ENGINE • AUTOMATED STATEMENT MATCHING</span>
         </h1>
-        <p className="text-xs text-slate-400 font-mono">
-          DRAG-AND-DROP BANK STATEMENTS • INTELLIGENT PARITY AUTOMATCH • ZERO ERROR AUDIT CLEARANCE
+        <p className="text-xs text-[#d4af37] font-mono">
+          BRUSHED GOLD AUTOMATCH FEED • PARITY CLEARANCE HUD
         </p>
       </div>
 
       <Suspense
         fallback={
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-pulse">
-            <div className="h-96 bg-slate-900/60 border border-slate-800 rounded-2xl"></div>
-            <div className="h-96 bg-slate-900/60 border border-slate-800 rounded-2xl"></div>
+            <div className="h-96 gold-glass-panel rounded-2xl"></div>
+            <div className="h-96 gold-glass-panel rounded-2xl"></div>
           </div>
         }
       >

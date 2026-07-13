@@ -14,7 +14,7 @@ import {
   CheckSquare,
   ChevronLeft,
   ChevronRight,
-  ShieldAlert,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface NavItem {
@@ -22,61 +22,54 @@ interface NavItem {
   href: string;
   icon: React.ReactNode;
   badge?: string;
-  badgeColor?: 'cyan' | 'amber';
 }
 
-const navItems: NavItem[] = [
+const NAV_ITEMS: NavItem[] = [
   {
     name: 'Dashboard',
     href: '/',
     icon: <LayoutDashboard className="w-4 h-4" />,
   },
   {
-    name: 'Income',
+    name: 'Invoices',
     href: '/invoices',
-    icon: <ArrowDownLeft className="w-4 h-4 text-cyan-400" />,
-    badge: 'Invoices',
-    badgeColor: 'cyan',
+    icon: <ArrowDownLeft className="w-4 h-4" />,
+    badge: 'Income',
   },
   {
     name: 'Expenses',
     href: '/expenses',
-    icon: <ArrowUpRight className="w-4 h-4 text-amber-400" />,
-    badge: 'A/P Bills',
-    badgeColor: 'amber',
+    icon: <ArrowUpRight className="w-4 h-4" />,
+    badge: 'Bills',
   },
   {
     name: 'Team Payroll',
     href: '/payroll',
-    icon: <Users className="w-4 h-4 text-cyan-300" />,
+    icon: <Users className="w-4 h-4" />,
     badge: 'Salaries',
-    badgeColor: 'cyan',
   },
   {
     name: 'Assets',
     href: '/assets',
-    icon: <Box className="w-4 h-4 text-amber-300" />,
+    icon: <Box className="w-4 h-4" />,
     badge: 'Deprec.',
-    badgeColor: 'amber',
   },
   {
     name: 'Activity Ledger',
     href: '/ledger',
-    icon: <BookOpen className="w-4 h-4 text-cyan-400" />,
+    icon: <BookOpen className="w-4 h-4" />,
     badge: 'Live',
-    badgeColor: 'cyan',
   },
   {
     name: 'Bank Reconcile',
     href: '/reconcile',
-    icon: <CheckSquare className="w-4 h-4 text-amber-400" />,
+    icon: <CheckSquare className="w-4 h-4" />,
     badge: 'Match',
-    badgeColor: 'amber',
   },
   {
     name: 'Settings & Users',
     href: '/settings',
-    icon: <Settings className="w-4 h-4 text-slate-400" />,
+    icon: <Settings className="w-4 h-4" />,
   },
 ];
 
@@ -86,76 +79,76 @@ export function CyberSidebar() {
 
   return (
     <aside
-      className={`relative z-40 flex flex-col justify-between bg-[#0a0e16]/90 backdrop-blur-2xl border-r border-slate-800/80 transition-all duration-300 ${
+      className={`relative z-40 flex flex-col justify-between bg-[#0e0f14]/95 backdrop-blur-2xl border-r border-[#d4af37]/20 transition-all duration-300 ${
         isCollapsed ? 'w-20' : 'w-64'
       }`}
     >
       {/* Top Brand Logo & Toggle */}
       <div>
-        <div className="h-16 flex items-center justify-between px-4 border-b border-slate-800/80">
+        <div className="h-16 flex items-center justify-between px-4 border-b border-[#d4af37]/20">
           {!isCollapsed && (
             <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-cyan-400 to-cyan-600 flex items-center justify-center font-black text-black text-xs shadow-[0_0_12px_rgba(34,211,238,0.5)]">
-                AGY
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-[#f5d77f] via-[#d4af37] to-[#997319] flex items-center justify-center font-black text-black text-xs shadow-[0_0_15px_rgba(212,175,55,0.4)]">
+                PRO
               </div>
               <div className="flex flex-col">
                 <span className="text-xs font-bold tracking-wider uppercase text-white">
                   ACCT.PROONE
                 </span>
-                <span className="text-[9px] font-mono text-cyan-400">
-                  HUD TELEMETRY
+                <span className="text-[9px] font-mono text-[#d4af37]">
+                  LUXURY GOLD SUITE
                 </span>
               </div>
             </div>
           )}
           {isCollapsed && (
-            <div className="mx-auto w-7 h-7 rounded-lg bg-gradient-to-tr from-cyan-400 to-cyan-600 flex items-center justify-center font-black text-black text-xs shadow-[0_0_12px_rgba(34,211,238,0.5)]">
-              AGY
+            <div className="mx-auto w-7 h-7 rounded-lg bg-gradient-to-tr from-[#f5d77f] via-[#d4af37] to-[#997319] flex items-center justify-center font-black text-black text-xs shadow-[0_0_15px_rgba(212,175,55,0.4)]">
+              PRO
             </div>
           )}
 
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
-            aria-label={isCollapsed ? 'Expand navigation' : 'Collapse navigation'}
-            className="p-1.5 rounded-lg bg-slate-900/80 border border-slate-800 text-slate-400 hover:text-cyan-400 hover:border-cyan-500/40 transition-colors"
+            className="p-1 rounded-lg text-zinc-400 hover:text-[#f5d77f] hover:bg-[#d4af37]/10 transition-colors"
           >
-            {isCollapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
+            {isCollapsed ? (
+              <ChevronRight className="w-4 h-4" />
+            ) : (
+              <ChevronLeft className="w-4 h-4" />
+            )}
           </button>
         </div>
 
-        {/* Workspace RBAC Tier Banner */}
-        {!isCollapsed && (
-          <div className="m-3 p-2.5 rounded-xl bg-slate-900/60 border border-cyan-500/20 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ShieldAlert className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="text-[10px] font-mono uppercase text-slate-300">
-                ROLE: SUPERADMIN
-              </span>
-            </div>
-            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>
-          </div>
-        )}
-
         {/* Navigation Menu Links */}
-        <nav className="p-3 space-y-1.5 font-mono text-xs">
-          {navItems.map((item) => {
-            const isActive = pathname === item.href;
+        <nav className="p-3 space-y-1">
+          {NAV_ITEMS.map((item) => {
+            const isActive =
+              item.href === '/'
+                ? pathname === '/'
+                : pathname.startsWith(item.href);
+
             return (
               <Link
-                key={item.name}
+                key={item.href}
                 href={item.href}
-                className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all group ${
+                className={`group flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all duration-200 ${
                   isActive
-                    ? 'bg-gradient-to-r from-cyan-500/20 to-transparent border-l-2 border-cyan-400 text-cyan-300 font-bold shadow-[0_0_15px_rgba(34,211,238,0.15)]'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+                    ? 'bg-gradient-to-r from-[#d4af37]/20 to-[#d4af37]/5 text-[#f5d77f] border border-[#d4af37]/40 shadow-[0_0_20px_rgba(212,175,55,0.12)]'
+                    : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900/60'
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <span className="group-hover:scale-110 transition-transform">
+                  <span
+                    className={`transition-colors ${
+                      isActive
+                        ? 'text-[#f5d77f]'
+                        : 'text-zinc-500 group-hover:text-[#d4af37]'
+                    }`}
+                  >
                     {item.icon}
                   </span>
                   {!isCollapsed && (
-                    <span className="font-sans font-semibold tracking-wide">
+                    <span className="font-sans tracking-wide">
                       {item.name}
                     </span>
                   )}
@@ -163,10 +156,10 @@ export function CyberSidebar() {
 
                 {!isCollapsed && item.badge && (
                   <span
-                    className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-mono ${
-                      item.badgeColor === 'cyan'
-                        ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30'
-                        : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                    className={`px-2 py-0.5 rounded-full text-[9px] font-mono uppercase ${
+                      isActive
+                        ? 'bg-[#d4af37]/25 text-[#f5d77f] border border-[#d4af37]/50'
+                        : 'bg-zinc-900 text-zinc-400 border border-zinc-800'
                     }`}
                   >
                     {item.badge}
@@ -178,19 +171,24 @@ export function CyberSidebar() {
         </nav>
       </div>
 
-      {/* Footer System Node Indicator */}
-      <div className="p-3 border-t border-slate-800/80">
-        {!isCollapsed ? (
-          <div className="flex items-center justify-between text-[10px] font-mono text-slate-500">
-            <span>SYNC: SUPABASE EDGE</span>
-            <span className="text-cyan-400">RLS ACTIVE</span>
+      {/* Bottom Security Telemetry Footer */}
+      {!isCollapsed && (
+        <div className="p-4 border-t border-[#d4af37]/20 bg-black/40">
+          <div className="flex items-center gap-2.5">
+            <div className="w-6 h-6 rounded-md bg-[#d4af37]/10 border border-[#d4af37]/30 flex items-center justify-center text-[#d4af37]">
+              <ShieldCheck className="w-3.5 h-3.5" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[10px] font-bold text-zinc-300">
+                RLS SECURITY VAULT
+              </span>
+              <span className="text-[9px] font-mono text-[#d4af37]">
+                ZERO JARGON ENFORCED
+              </span>
+            </div>
           </div>
-        ) : (
-          <div className="flex justify-center">
-            <span className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_6px_#22d3ee]" />
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </aside>
   );
 }

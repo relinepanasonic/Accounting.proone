@@ -9,21 +9,21 @@ export default function NewExpensePage() {
   return (
     <div className="max-w-[1200px] mx-auto px-6 py-8 space-y-6">
       {/* Header Bar */}
-      <div className="flex items-center justify-between pb-4 border-b border-slate-800/80">
+      <div className="flex items-center justify-between pb-4 border-b border-[#d4af37]/20">
         <div className="flex items-center gap-3">
           <Link
             href="/expenses"
-            className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:border-amber-500/40 transition-colors"
+            className="w-9 h-9 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white hover:border-[#d4af37]/40 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
           </Link>
           <div>
             <h1 className="text-lg font-extrabold tracking-wider uppercase text-white flex items-center gap-2">
-              <Receipt className="w-5 h-5 text-amber-400" />
-              <span>RECORD VENDOR EXPENSE OUTFLOW</span>
+              <Receipt className="w-5 h-5 text-[#d4af37]" />
+              <span>RECORD VENDOR EXPENSE OUTFLOW • LUXURY GOLD HUD</span>
             </h1>
-            <p className="text-xs text-slate-400 font-mono">
-              INSTANT A/P LOGGING • COPPER-GOLD HUD ACCENT
+            <p className="text-xs text-[#d4af37] font-mono">
+              INSTANT A/P LOGGING • BRUSHED GOLD ACCENT
             </p>
           </div>
         </div>

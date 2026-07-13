@@ -1,7 +1,13 @@
 -- ============================================================================
 -- 1. FRICTIONLESS ADVANCED ACCOUNTING & INVOICE GENERATOR SAAS
--- 2. Seed Script for New Wave Agency Linked to User UID: 850bedd6-eeaf-4d10-9532-a783379fca44
+-- 2. Seed Script for Accounting.proone Linked to User UID: 850bedd6-eeaf-4d10-9532-a783379fca44
 -- ============================================================================
+
+-- ============================================================================
+-- 3. SCHEMA COLUMN FIX (Ensures email and display_name columns exist on existing tables)
+-- ============================================================================
+ALTER TABLE public.workspace_members ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE public.workspace_members ADD COLUMN IF NOT EXISTS display_name TEXT;
 
 DO $$
 DECLARE
@@ -16,43 +22,41 @@ DECLARE
     je_camera_id UUID := '44444444-4444-4444-4444-444444444402';
 BEGIN
     -- ========================================================================
-    -- 3. IDEMPOTENT CLEANUP
+    -- 4. IDEMPOTENT CLEANUP
     -- ========================================================================
-    DELETE FROM public.journal_entry_lines WHERE workspace_id = '11111111-1111-1111-1111-111111111111' OR workspace_id IN (SELECT id FROM public.workspaces WHERE slug = 'new-wave-agency');
-    DELETE FROM public.journal_entries WHERE workspace_id = '11111111-1111-1111-1111-111111111111' OR workspace_id IN (SELECT id FROM public.workspaces WHERE slug = 'new-wave-agency');
-    DELETE FROM public.fixed_assets WHERE workspace_id = '11111111-1111-1111-1111-111111111111' OR workspace_id IN (SELECT id FROM public.workspaces WHERE slug = 'new-wave-agency');
-    DELETE FROM public.payroll WHERE workspace_id = '11111111-1111-1111-1111-111111111111' OR workspace_id IN (SELECT id FROM public.workspaces WHERE slug = 'new-wave-agency');
-    DELETE FROM public.transactions WHERE workspace_id = '11111111-1111-1111-1111-111111111111' OR workspace_id IN (SELECT id FROM public.workspaces WHERE slug = 'new-wave-agency');
-    DELETE FROM public.invoice_line_items WHERE workspace_id = '11111111-1111-1111-1111-111111111111' OR workspace_id IN (SELECT id FROM public.workspaces WHERE slug = 'new-wave-agency');
-    DELETE FROM public.invoices WHERE workspace_id = '11111111-1111-1111-1111-111111111111' OR workspace_id IN (SELECT id FROM public.workspaces WHERE slug = 'new-wave-agency');
-    DELETE FROM public.clients WHERE workspace_id = '11111111-1111-1111-1111-111111111111' OR workspace_id IN (SELECT id FROM public.workspaces WHERE slug = 'new-wave-agency');
-    DELETE FROM public.workspace_members WHERE workspace_id = '11111111-1111-1111-1111-111111111111' OR workspace_id IN (SELECT id FROM public.workspaces WHERE slug = 'new-wave-agency');
-    DELETE FROM public.workspaces WHERE id = '11111111-1111-1111-1111-111111111111' OR slug = 'new-wave-agency';
+    DELETE FROM public.journal_entry_lines WHERE workspace_id = '11111111-1111-1111-1111-111111111111' OR workspace_id IN (SELECT id FROM public.workspaces WHERE slug IN ('accounting-proone', 'new-wave-agency'));
+    DELETE FROM public.journal_entries WHERE workspace_id = '11111111-1111-1111-1111-111111111111' OR workspace_id IN (SELECT id FROM public.workspaces WHERE slug IN ('accounting-proone', 'new-wave-agency'));
+    DELETE FROM public.fixed_assets WHERE workspace_id = '11111111-1111-1111-1111-111111111111' OR workspace_id IN (SELECT id FROM public.workspaces WHERE slug IN ('accounting-proone', 'new-wave-agency'));
+    DELETE FROM public.payroll WHERE workspace_id = '11111111-1111-1111-1111-111111111111' OR workspace_id IN (SELECT id FROM public.workspaces WHERE slug IN ('accounting-proone', 'new-wave-agency'));
+    DELETE FROM public.transactions WHERE workspace_id = '11111111-1111-1111-1111-111111111111' OR workspace_id IN (SELECT id FROM public.workspaces WHERE slug IN ('accounting-proone', 'new-wave-agency'));
+    DELETE FROM public.invoice_line_items WHERE workspace_id = '11111111-1111-1111-1111-111111111111' OR workspace_id IN (SELECT id FROM public.workspaces WHERE slug IN ('accounting-proone', 'new-wave-agency'));
+    DELETE FROM public.invoices WHERE workspace_id = '11111111-1111-1111-1111-111111111111' OR workspace_id IN (SELECT id FROM public.workspaces WHERE slug IN ('accounting-proone', 'new-wave-agency'));
+    DELETE FROM public.clients WHERE workspace_id = '11111111-1111-1111-1111-111111111111' OR workspace_id IN (SELECT id FROM public.workspaces WHERE slug IN ('accounting-proone', 'new-wave-agency'));
+    DELETE FROM public.workspace_members WHERE workspace_id = '11111111-1111-1111-1111-111111111111' OR workspace_id IN (SELECT id FROM public.workspaces WHERE slug IN ('accounting-proone', 'new-wave-agency'));
+    DELETE FROM public.workspaces WHERE id = '11111111-1111-1111-1111-111111111111' OR slug IN ('accounting-proone', 'new-wave-agency');
 
     -- ========================================================================
-    -- 4. WORKSPACE: New Wave Agency (owner_id linked to your real UID!)
+    -- 5. WORKSPACE: Accounting.proone
     -- ========================================================================
     INSERT INTO public.workspaces (id, name, slug, currency, default_payment_terms_days, owner_id)
     VALUES (
         ws_id,
-        'New Wave Agency',
-        'new-wave-agency',
+        'Accounting.proone',
+        'accounting-proone',
         'USD',
         15,
         owner_uid
     );
 
     -- ========================================================================
-    -- 5. RBAC USERS (Your UID is set as 'superadmin')
+    -- 6. RBAC USERS (Your real UID is set as 'superadmin')
     -- ========================================================================
     INSERT INTO public.workspace_members (workspace_id, user_id, email, display_name, role)
     VALUES
-        (ws_id, owner_uid, 'professortokoonline@gmail.com', 'Professor Toko Online (Superadmin Owner)', 'superadmin'),
-        (ws_id, NULL, 'finance@newwave.agency', 'Marcus Sterling (Finance Lead)', 'accounting'),
-        (ws_id, NULL, 'studio@newwave.agency', 'Chloe Chen (Studio Manager)', 'admin');
+        (ws_id, owner_uid, 'professortokoonline@gmail.com', 'Professor Toko Online (Superadmin Owner)', 'superadmin');
 
     -- ========================================================================
-    -- 6. CLIENTS
+    -- 7. CLIENTS
     -- ========================================================================
     INSERT INTO public.clients (id, workspace_id, name, contact_name, email, company_name)
     VALUES
@@ -60,7 +64,7 @@ BEGIN
         (client_numan_id, ws_id, 'Nüman Kitchenware', 'Sarah Jenkins', 'sarah@numan.co', 'Nüman Global');
 
     -- ========================================================================
-    -- 7. INVOICES & LINE ITEMS
+    -- 8. INVOICES & LINE ITEMS
     -- ========================================================================
     INSERT INTO public.invoices (id, workspace_id, client_id, invoice_number, status, issue_date, due_date, subtotal, total_amount)
     VALUES (
@@ -81,28 +85,25 @@ BEGIN
         (ws_id, inv_1_id, 'Content Creator Ad Package (40 HD Reels)', 40, 1621.75, 2);
 
     -- ========================================================================
-    -- 8. PAYROLL MODULE
+    -- 9. PAYROLL MODULE
     -- ========================================================================
     INSERT INTO public.payroll (
         workspace_id, employee_name, role_title, department, base_salary, bonus_amount, pay_period_start, pay_period_end, payment_date, status
     ) VALUES
         (ws_id, 'Ariana Chen', 'Live-stream Host', 'Production', 4500.00, 750.00, '2026-06-01', '2026-06-30', '2026-06-30', 'paid'),
-        (ws_id, 'Damon Vance', 'Video Editor', 'Creative', 5200.00, 300.00, '2026-06-01', '2026-06-30', '2026-06-30', 'paid'),
-        (ws_id, 'Sophia Martinez', 'E-commerce Manager', 'Growth', 6100.00, 1200.00, '2026-06-01', '2026-06-30', '2026-06-30', 'paid'),
-        (ws_id, 'Lucas Sterling', 'Live-stream Host (Part-time)', 'Production', 3100.00, 200.00, '2026-07-01', '2026-07-31', '2026-07-31', 'draft');
+        (ws_id, 'Damon Vance', 'Video Editor', 'Creative', 5200.00, 300.00, '2026-06-01', '2026-06-30', '2026-06-30', 'paid');
 
     -- ========================================================================
-    -- 9. FIXED ASSETS MODULE
+    -- 10. FIXED ASSETS MODULE
     -- ========================================================================
     INSERT INTO public.fixed_assets (
         workspace_id, asset_name, asset_tag, category, purchase_date, initial_value, salvage_value, useful_life_years, status
     ) VALUES
         (ws_id, '4K Studio Cameras (Sony FX6 Dual Kit)', 'FA-CAM-001', 'Studio Equipment', '2026-01-15', 18500.00, 2500.00, 4, 'active'),
-        (ws_id, 'Professional Ring Light & Softbox Rig', 'FA-LGT-002', 'Studio Lighting', '2026-02-10', 4200.00, 400.00, 3, 'active'),
-        (ws_id, 'Editing Workstations (Apple Mac Studio M3 Ultra x2)', 'FA-COMP-003', 'Computing Hardware', '2026-03-01', 12400.00, 1400.00, 3, 'active');
+        (ws_id, 'Editing Workstations (Apple Mac Studio M3 Ultra)', 'FA-COMP-003', 'Computing Hardware', '2026-03-01', 12400.00, 1400.00, 3, 'active');
 
     -- ========================================================================
-    -- 10. ACTIVITY LEDGER MODULE
+    -- 11. ACTIVITY LEDGER MODULE
     -- ========================================================================
     INSERT INTO public.journal_entries (id, workspace_id, entry_number, entry_date, description, source_type)
     VALUES (
@@ -119,20 +120,5 @@ BEGIN
         (ws_id, je_salary_id, 'Salaries & Wages Expense', '6010', 18050.00, 0.00),
         (ws_id, je_salary_id, 'Operating Cash Account', '1010', 0.00, 18050.00);
 
-    INSERT INTO public.journal_entries (id, workspace_id, entry_number, entry_date, description, source_type)
-    VALUES (
-        je_camera_id,
-        ws_id,
-        'JE-2026-015',
-        '2026-01-15',
-        'Acquisition of Sony FX6 Dual Studio Camera Kit',
-        'fixed_asset'
-    );
-
-    INSERT INTO public.journal_entry_lines (workspace_id, journal_entry_id, account_name, account_code, debit_amount, credit_amount)
-    VALUES
-        (ws_id, je_camera_id, 'Studio Equipment (Capital Asset)', '1510', 18500.00, 0.00),
-        (ws_id, je_camera_id, 'Operating Cash Account', '1010', 0.00, 18500.00);
-
-    RAISE NOTICE 'New Wave Agency seed data linked to Superadmin % successfully populated!', owner_uid;
+    RAISE NOTICE 'Accounting.proone seed data linked to Superadmin % successfully populated!', owner_uid;
 END $$;

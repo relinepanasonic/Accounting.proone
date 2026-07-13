@@ -1,9 +1,11 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { CyberSidebar } from '@/components/navigation/CyberSidebar';
 
 export const metadata: Metadata = {
-  title: 'New Wave Agency | Frictionless Action Accounting',
-  description: 'Action-oriented accounting and invoice generator for agencies, creators, and e-commerce operators. Hide the math, highlight the actions.',
+  title: 'New Wave Agency | Cybernetic Accounting HUD',
+  description:
+    'Advanced Action-Oriented Accounting & Invoice Generator SaaS with RBAC, Payroll, Fixed Assets, and Activity Ledger.',
 };
 
 export default function RootLayout({
@@ -13,8 +15,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className="bg-slate-950 text-slate-100 antialiased selection:bg-cyan-500 selection:text-black">
-        {children}
+      <body className="bg-[#080b11] text-slate-100 antialiased selection:bg-cyan-500 selection:text-black flex min-h-screen">
+        {/* Persistent Cybernetic Collapsible Left Sidebar */}
+        <CyberSidebar />
+
+        {/* Main Content Area */}
+        <main className="flex-1 overflow-x-hidden overflow-y-auto">
+          {children}
+        </main>
       </body>
     </html>
   );

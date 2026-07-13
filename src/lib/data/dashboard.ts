@@ -7,7 +7,10 @@ export interface DashboardTelemetry {
     overdueCount: number;
     paidCount: number;
     avgInvoiceAmount: number;
-    unpaidRatio: number; // percentage e.g. 810
+    unpaidRatio: number; // percentage display
+    activeReceivables: number;
+    totalRevenue: number;
+    totalAssetsBookValue: number;
   };
   clientReceivables: Array<{
     name: string;
@@ -31,18 +34,17 @@ export interface DashboardTelemetry {
 
 /**
  * Concurrent, zero-waterfall server-side telemetry fetcher.
- * Uses strict column projection (no .select('*')) and Promise.all execution.
+ * Uses Promise.all to fetch Invoices, Clients, Bills, and Fixed Assets simultaneously.
  */
 export async function getDashboardTelemetry(): Promise<DashboardTelemetry> {
   const supabase = await createClient();
 
   // Concurrent Execution via Promise.all (Anti-Waterfall Guardrail)
-  const [invoicesRes, clientsRes, billsRes] = await Promise.all([
+  const [invoicesRes, clientsRes, billsRes, assetsRes] = await Promise.all([
     supabase
       .from('invoices')
       .select('id, invoice_number, status, total_amount, due_date, client_id, clients(name)')
-      .order('created_at', { ascending: false })
-      .limit(10),
+      .order('created_at', { ascending: false }),
     supabase
       .from('clients')
       .select('id, name')
@@ -53,21 +55,69 @@ export async function getDashboardTelemetry(): Promise<DashboardTelemetry> {
       .eq('is_upcoming_bill', true)
       .order('due_date', { ascending: true })
       .limit(8),
+    supabase
+      .from('fixed_assets')
+      .select('initial_value, salvage_value, useful_life_years, purchase_date, status')
+      .eq('status', 'active'),
   ]);
 
-  // If live Supabase tables have data, transform and return
-  if (invoicesRes.data && invoicesRes.data.length > 0) {
-    const totalVolume = invoicesRes.data.reduce((acc, inv) => acc + Number(inv.total_amount || 0), 0);
-    const overdue = invoicesRes.data.filter((i) => i.status === 'overdue');
-    const paid = invoicesRes.data.filter((i) => i.status === 'paid');
+  const invoices = invoicesRes.data || [];
+  const assets = assetsRes.data || [];
 
+  // Calculate Fixed Assets straight-line Current Book Value sum
+  const nowMs = Date.now();
+  let totalAssetsBookValue = 0;
+
+  for (const asset of assets) {
+    const initialVal = Number(asset.initial_value || 0);
+    const salvageVal = Number(asset.salvage_value || 0);
+    const lifeYears = Number(asset.useful_life_years || 3);
+    const annualDeprec = (initialVal - salvageVal) / (lifeYears > 0 ? lifeYears : 1);
+
+    const purchaseDateMs = new Date(asset.purchase_date).getTime() || nowMs;
+    const yearsPassedRaw = (nowMs - purchaseDateMs) / (365.25 * 24 * 3600 * 1000);
+    const yearsPassed = Math.min(lifeYears, Math.max(0, yearsPassedRaw));
+
+    const currentBookValue = Math.max(salvageVal, initialVal - annualDeprec * yearsPassed);
+    totalAssetsBookValue += currentBookValue;
+  }
+
+  // Calculate Live Revenue & Active Receivables
+  let activeReceivables = 0;
+  let totalRevenue = 0;
+  let overdueCount = 0;
+  let paidCount = 0;
+
+  for (const inv of invoices) {
+    const amt = Number(inv.total_amount || 0);
+    const st = (inv.status || 'draft').toLowerCase();
+
+    if (st === 'draft' || st === 'overdue') {
+      activeReceivables += amt;
+    }
+    if (st === 'paid') {
+      totalRevenue += amt;
+      paidCount++;
+    }
+    if (st === 'overdue') {
+      overdueCount++;
+    }
+  }
+
+  const totalVolume = activeReceivables + totalRevenue;
+
+  // If live Supabase tables have data, transform and return
+  if (invoices.length > 0) {
     return {
       invoicesSummary: {
         totalVolume: totalVolume || 149870,
-        overdueCount: overdue.length,
-        paidCount: paid.length,
-        avgInvoiceAmount: totalVolume / (invoicesRes.data.length || 1),
-        unpaidRatio: 810,
+        overdueCount,
+        paidCount,
+        avgInvoiceAmount: totalVolume / (invoices.length || 1),
+        unpaidRatio: totalVolume > 0 ? Math.round((activeReceivables / totalVolume) * 100) : 81,
+        activeReceivables,
+        totalRevenue,
+        totalAssetsBookValue,
       },
       clientReceivables: (clientsRes.data || []).map((c, i) => ({
         name: c.name,
@@ -75,8 +125,7 @@ export async function getDashboardTelemetry(): Promise<DashboardTelemetry> {
         owed: `$${((i + 1) * 12400).toLocaleString()}`,
         status: i % 2 === 0 ? 'cyan' : 'copper',
       })),
-      invoicesList: invoicesRes.data.map((inv) => {
-        // Handle Supabase joined client name safely whether object or array
+      invoicesList: invoices.slice(0, 10).map((inv) => {
         const clientObj = Array.isArray(inv.clients) ? inv.clients[0] : inv.clients;
         const clientName = clientObj?.name || 'Client';
         return {
@@ -102,35 +151,23 @@ export async function getDashboardTelemetry(): Promise<DashboardTelemetry> {
       overdueCount: 3,
       paidCount: 22,
       avgInvoiceAmount: 6800,
-      unpaidRatio: 810,
+      unpaidRatio: 81,
+      activeReceivables: 85400,
+      totalRevenue: 149870,
+      totalAssetsBookValue: totalAssetsBookValue || 28400,
     },
     clientReceivables: [
       { name: 'Prof Toko Online', count: 6, owed: '$149,870', status: 'cyan' },
       { name: 'Nüman Kitchenware', count: 20, owed: '$22,410', status: 'copper' },
       { name: 'Niko Elektronik', count: 5, owed: '$152,700', status: 'cyan' },
-      { name: 'Competitors Rooro', count: 10, owed: '$149,800', status: 'cyan' },
-      { name: 'Aleamsad Corp', count: 1, owed: '$85,400', status: 'cyan' },
-      { name: 'Bochtmon Studio', count: 3, owed: '$85,400', status: 'copper' },
-      { name: 'Pionie Media Group', count: 4, owed: '$85,200', status: 'cyan' },
-      { name: 'Horrtnaes Co', count: 2, owed: '$83,400', status: 'copper' },
     ],
     invoicesList: [
-      { id: 'Invoice1', client: 'Aleamsad', amount: '$149,070', dueDate: '01/10/21', status: 'Paid' },
-      { id: 'Invoice2', client: 'Bochtmon', amount: '$23,400', dueDate: '01/10/21', status: 'Overdue' },
-      { id: 'Invoice3', client: 'Pionie', amount: '$13,800', dueDate: '01/10/21', status: 'Overdue' },
-      { id: 'Invoice4', client: 'Horrtnaes', amount: '$25,800', dueDate: '01/10/21', status: 'Paid' },
-      { id: 'Invoice5', client: 'Lereon', amount: '$29,600', dueDate: '01/10/21', status: 'Paid' },
-      { id: 'Invoice6', client: 'Recolnans', amount: '$23,600', dueDate: '01/10/21', status: 'Paid' },
-      { id: 'Invoice7', client: 'Rovisnvad', amount: '$6,800', dueDate: '01/10/21', status: 'Overdue' },
+      { id: 'INV-2026-001', client: 'Prof Toko Online', amount: '$149,870', dueDate: '07/16/26', status: 'Paid' },
+      { id: 'INV-2026-002', client: 'Nüman Kitchenware', amount: '$22,410', dueDate: '07/18/26', status: 'Overdue' },
     ],
     upcomingBills: [
-      { vendor: 'Due Bills Name', amount: '$80,300', dueDate: '07/07/23' },
-      { vendor: 'Competitors Rooro', amount: '$50,300', dueDate: '07/05/23' },
-      { vendor: 'Billt Customers', amount: '$25,700', dueDate: '07/07/23' },
-      { vendor: 'Bills Software', amount: '$35,800', dueDate: '07/07/23' },
-      { vendor: 'Doc Software', amount: '$15,800', dueDate: '07/10/21' },
-      { vendor: 'Comprantiors Store', amount: '$30,400', dueDate: '07/10/21' },
-      { vendor: 'Doc Sol & Inlive', amount: '$15,300', dueDate: '07/14/21' },
+      { vendor: 'Cloud Server Hosting A/P', amount: '$1,200', dueDate: '07/07/26' },
+      { vendor: 'Studio Rent & Power', amount: '$4,300', dueDate: '07/10/26' },
     ],
   };
 }

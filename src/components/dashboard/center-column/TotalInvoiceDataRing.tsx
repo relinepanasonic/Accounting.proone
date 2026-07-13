@@ -2,18 +2,30 @@
 
 import React from 'react';
 
-export function TotalInvoiceDataRing() {
+interface TotalInvoiceDataRingProps {
+  totalVolume?: number;
+  overdueCount?: number;
+  paidCount?: number;
+  avgAmount?: number;
+}
+
+export function TotalInvoiceDataRing({
+  totalVolume = 149870,
+  overdueCount = 3,
+  paidCount = 22,
+  avgAmount = 6800,
+}: TotalInvoiceDataRingProps) {
   return (
     <div className="bg-slate-900/70 border border-slate-800/80 rounded-2xl p-5 backdrop-blur-xl relative overflow-hidden flex flex-col items-center justify-center">
       {/* Top micro status strip */}
       <div className="w-full flex items-center justify-between text-[11px] font-mono text-slate-400 mb-2">
         <div className="flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-          <span>Overdue Inv: <strong className="text-amber-400">3</strong></span>
+          <span>Overdue Inv: <strong className="text-amber-400">{overdueCount}</strong></span>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-          <span>Paid Inv: <strong className="text-cyan-400">22</strong></span>
+          <span>Paid Inv: <strong className="text-cyan-400">{paidCount}</strong></span>
         </div>
       </div>
 
@@ -43,26 +55,32 @@ export function TotalInvoiceDataRing() {
             Invoices Total
           </span>
           <span className="text-2xl font-extrabold text-white tracking-tight mt-0.5">
-            $149,870
+            ${Math.round(totalVolume).toLocaleString()}
           </span>
           <span className="text-[10px] text-cyan-400 font-mono mt-1">
-            Avg: $6,800
+            Avg: ${Math.round(avgAmount).toLocaleString()}
           </span>
         </div>
 
         {/* Surrounding Node Labels */}
         <div className="absolute top-1 left-6 text-[10px] font-mono text-amber-400">
-          Overdue: 3
+          Overdue: {overdueCount}
         </div>
         <div className="absolute top-1 right-6 text-[10px] font-mono text-cyan-400">
-          Paid: 22
+          Paid: {paidCount}
         </div>
         <div className="absolute bottom-2 left-6 text-[10px] font-mono text-slate-300">
-          Avg Days: 18
+          NET 15
         </div>
-        <div className="absolute bottom-2 right-6 text-[10px] font-mono text-cyan-400">
-          Paid: 12 days
+        <div className="absolute bottom-2 right-6 text-[10px] font-mono text-cyan-300">
+          REALTIME
         </div>
+      </div>
+
+      {/* Footer System Integrity Status */}
+      <div className="w-full flex items-center justify-between text-[10px] font-mono text-slate-400 pt-2 border-t border-slate-800/80">
+        <span className="uppercase text-slate-400">SYNC: SUPABASE CORE</span>
+        <span className="text-cyan-400 font-bold">LIVE METRIC</span>
       </div>
     </div>
   );

@@ -2,12 +2,17 @@
 
 import React from 'react';
 
-export function UnpaidAmountGauge() {
+interface UnpaidAmountGaugeProps {
+  amount?: number | string;
+  overdueCount?: number;
+}
+
+export function UnpaidAmountGauge({ amount = 810, overdueCount = 4 }: UnpaidAmountGaugeProps) {
   return (
     <div className="bg-slate-900/70 border border-slate-800/80 rounded-2xl p-5 backdrop-blur-xl flex flex-col items-center justify-between">
       <div className="w-full flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-200 mb-2">
         <span>UNPAID INVOICES</span>
-        <span className="text-[10px] text-amber-400 font-mono">Days Overdue: 4</span>
+        <span className="text-[10px] text-amber-400 font-mono">Days Overdue: {overdueCount}</span>
       </div>
 
       {/* Glowing Circular Arc Gauge */}
@@ -41,16 +46,21 @@ export function UnpaidAmountGauge() {
         {/* Central Metric */}
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
           <span className="text-4xl font-extrabold text-white tracking-tight drop-shadow-[0_0_10px_rgba(255,255,255,0.4)]">
-            810
+            {amount}
           </span>
-          <span className="text-xs font-semibold text-cyan-400">%</span>
+          <span className="text-[10px] font-mono text-cyan-400 tracking-widest uppercase mt-0.5">
+            UNPAID RATIO
+          </span>
         </div>
       </div>
 
-      {/* Bottom Sub-label */}
-      <div className="w-full flex items-center justify-between text-xs font-mono text-slate-300 pt-2 border-t border-slate-800/80">
-        <span className="text-slate-400">Target Rec: 4</span>
-        <span className="text-cyan-400 font-bold">Active Receivables: $15,000</span>
+      {/* Footer Spark Indicators */}
+      <div className="w-full flex items-center justify-between text-[10px] font-mono text-slate-400 pt-2 border-t border-slate-800/80">
+        <div className="flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
+          <span>LIVE AR STREAM</span>
+        </div>
+        <span className="text-cyan-300 font-bold">NET 15 AUTO</span>
       </div>
     </div>
   );

@@ -3,9 +3,9 @@ import './globals.css';
 import { CyberSidebar } from '@/components/navigation/CyberSidebar';
 
 export const metadata: Metadata = {
-  title: 'New Wave Agency | Cybernetic Accounting HUD',
+  title: 'Accounting.proone | Cybernetic Action Accounting HUD',
   description:
-    'Advanced Action-Oriented Accounting & Invoice Generator SaaS with RBAC, Payroll, Fixed Assets, and Activity Ledger.',
+    'Frictionless Advanced Action-Oriented Accounting & Invoice Generator SaaS for non-accountants.',
 };
 
 export default function RootLayout({

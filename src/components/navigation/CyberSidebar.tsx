@@ -92,7 +92,7 @@ export function CyberSidebar() {
               </div>
               <div className="flex flex-col">
                 <span className="text-xs font-bold tracking-wider uppercase text-white">
-                  NEW WAVE
+                  ACCT.PROONE
                 </span>
                 <span className="text-[9px] font-mono text-cyan-400">
                   HUD TELEMETRY

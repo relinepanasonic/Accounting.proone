@@ -38,27 +38,27 @@ async function FixedAssetsRegistry() {
             id: '1',
             asset_name: 'Sony FX3 Professional Cinema Camera',
             category: 'Production Hardware',
-            purchase_price: 4800,
-            current_book_value: 3600,
-            salvage_value: 800,
+            purchase_price: 48000000,
+            current_book_value: 36000000,
+            salvage_value: 8000000,
             status: 'Active',
           },
           {
             id: '2',
             asset_name: 'MacBook Pro M3 Max Studio Workstation',
             category: 'Computing Hardware',
-            purchase_price: 3800,
-            current_book_value: 2950,
-            salvage_value: 600,
+            purchase_price: 38000000,
+            current_book_value: 29500000,
+            salvage_value: 6000000,
             status: 'Active',
           },
           {
             id: '3',
             asset_name: 'Aputure LS 600d Pro Studio Lighting Array',
             category: 'Studio Lighting',
-            purchase_price: 2400,
-            current_book_value: 1800,
-            salvage_value: 300,
+            purchase_price: 24000000,
+            current_book_value: 18000000,
+            salvage_value: 3000000,
             status: 'Active',
           },
         ];
@@ -105,12 +105,12 @@ async function FixedAssetsRegistry() {
                   </span>
                 </td>
                 <td className="py-3 px-3 text-right text-zinc-300">
-                  ${item.purchase_price.toLocaleString()}
+                  Rp {item.purchase_price.toLocaleString('id-ID')}
                 </td>
                 {/* Critical Current Value highlighted in Glowing Rich Gold */}
                 <td className="py-3 px-3 text-right">
                   <span className="text-sm font-black text-[#f5d77f] drop-shadow-[0_0_10px_rgba(245,215,127,0.45)]">
-                    ${item.current_book_value.toLocaleString()}
+                    Rp {item.current_book_value.toLocaleString('id-ID')}
                   </span>
                 </td>
                 <td className="py-3 px-3 text-center">

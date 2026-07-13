@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useTransition } from 'react';
-import { Copy, CheckCircle, Clock } from 'lucide-react';
+import Link from 'next/link';
+import { Copy, CheckCircle, Clock, FileText } from 'lucide-react';
 import { duplicateInvoice, toggleInvoiceStatus } from '@/app/actions/invoices';
 
 interface InvoiceRowActionsProps {
@@ -58,6 +59,15 @@ export function InvoiceRowActions({ id, status }: InvoiceRowActionsProps) {
           </>
         )}
       </button>
+
+      {/* View PDF / Print Invoice Action */}
+      <Link
+        href={`/invoices/${id}`}
+        title="View / Download PDF Invoice"
+        className="p-1.5 rounded-lg bg-zinc-900 border border-[#d4af37]/30 hover:border-[#d4af37] text-[#f5d77f] hover:scale-105 transition-all duration-200"
+      >
+        <FileText className="w-3.5 h-3.5" />
+      </Link>
 
       {/* Duplicate Invoice Action in Brushed Gold */}
       <button

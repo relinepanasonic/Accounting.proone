@@ -88,8 +88,8 @@ async function ActivityLedgerTimeline() {
             description: 'Automated Revenue Realization & Client Payment Clearing',
             source_module: 'Invoices',
             lines: [
-              { id: 'l1', account_name: 'Operating Cash Vault (Debit)', debit_amount: 1430, credit_amount: 0 },
-              { id: 'l2', account_name: 'Accounts Receivable Client (Credit)', debit_amount: 0, credit_amount: 1430 },
+              { id: 'l1', account_name: 'Operating Cash Vault (Debit)', debit_amount: 143000000, credit_amount: 0 },
+              { id: 'l2', account_name: 'Accounts Receivable Client (Credit)', debit_amount: 0, credit_amount: 143000000 },
             ],
           },
           {
@@ -99,8 +99,8 @@ async function ActivityLedgerTimeline() {
             description: 'Creator Team Payroll disbursement & withholdings',
             source_module: 'Payroll',
             lines: [
-              { id: 'l3', account_name: 'Salaries & Creator Compensation (Debit)', debit_amount: 350, credit_amount: 0 },
-              { id: 'l4', account_name: 'Operating Cash Vault (Credit)', debit_amount: 0, credit_amount: 350 },
+              { id: 'l3', account_name: 'Salaries & Creator Compensation (Debit)', debit_amount: 35000000, credit_amount: 0 },
+              { id: 'l4', account_name: 'Operating Cash Vault (Credit)', debit_amount: 0, credit_amount: 35000000 },
             ],
           },
           {
@@ -110,8 +110,8 @@ async function ActivityLedgerTimeline() {
             description: 'Studio Lighting Capital Asset Depreciation Expense',
             source_module: 'Fixed Assets',
             lines: [
-              { id: 'l5', account_name: 'Depreciation Expense (Debit)', debit_amount: 30, credit_amount: 0 },
-              { id: 'l6', account_name: 'Accumulated Depreciation Equipment (Credit)', debit_amount: 0, credit_amount: 30 },
+              { id: 'l5', account_name: 'Depreciation Expense (Debit)', debit_amount: 3000000, credit_amount: 0 },
+              { id: 'l6', account_name: 'Accumulated Depreciation Equipment (Credit)', debit_amount: 0, credit_amount: 3000000 },
             ],
           },
         ];
@@ -189,7 +189,7 @@ async function ActivityLedgerTimeline() {
                         : 'text-zinc-100'
                     }`}
                   >
-                    ${(line.debit_amount || line.credit_amount).toLocaleString()}
+                    Rp {(line.debit_amount || line.credit_amount).toLocaleString('id-ID')}
                   </span>
                 </div>
               ))}

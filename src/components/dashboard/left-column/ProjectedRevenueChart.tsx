@@ -10,10 +10,10 @@ export function ProjectedRevenueChart() {
           <h3 className="text-xs font-bold uppercase tracking-wider text-white">
             PROJECTED REVENUE TREND
           </h3>
-          <p className="text-[10px] font-mono text-zinc-400 mt-0.5">Q3 2026 FORECAST</p>
+          <p className="text-[10px] font-mono text-zinc-400 mt-0.5">Q3 2026 FORECAST (IDR)</p>
         </div>
         <span className="text-[10px] font-mono text-[#f5d77f] bg-[#d4af37]/15 px-2.5 py-1 rounded-full border border-[#d4af37]/40">
-          +24.8% YOY
+          +24.8% YoY
         </span>
       </div>
 
@@ -37,15 +37,14 @@ export function ProjectedRevenueChart() {
             strokeLinecap="round"
             className="drop-shadow-[0_0_8px_rgba(245,215,127,0.5)]"
           />
-          {/* Data points */}
           <circle cx="140" cy="55" r="4" fill="#09090b" stroke="#f5d77f" strokeWidth="2" />
           <circle cx="280" cy="20" r="4.5" fill="#f5d77f" stroke="#09090b" strokeWidth="1.5" />
         </svg>
       </div>
 
       <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 pt-2 border-t border-zinc-800">
-        <span>JUL FORECAST: $310K</span>
-        <span className="text-[#f5d77f] font-bold">EXECUTIVE TARGET</span>
+        <span>JUL FORECAST: Rp 3,1 Miliar</span>
+        <span className="text-[#f5d77f] font-bold">TARGET EXECUTIVE</span>
       </div>
     </div>
   );

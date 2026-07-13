@@ -80,8 +80,8 @@ async function PayrollPersonnelGrid() {
             employee_name: 'Ariana Chen',
             role_title: 'Live-stream Host',
             department: 'Production',
-            base_salary: 4500,
-            bonus_amount: 750,
+            base_salary: 15000000,
+            bonus_amount: 3500000,
             pay_period_end: '2026-06-30',
             status: 'paid',
           },
@@ -90,8 +90,8 @@ async function PayrollPersonnelGrid() {
             employee_name: 'Damon Vance',
             role_title: 'Video Editor',
             department: 'Creative',
-            base_salary: 5200,
-            bonus_amount: 300,
+            base_salary: 18000000,
+            bonus_amount: 2500000,
             pay_period_end: '2026-06-30',
             status: 'paid',
           },
@@ -100,8 +100,8 @@ async function PayrollPersonnelGrid() {
             employee_name: 'Sophia Martinez',
             role_title: 'E-commerce Manager',
             department: 'Growth',
-            base_salary: 6100,
-            bonus_amount: 1200,
+            base_salary: 22000000,
+            bonus_amount: 5000000,
             pay_period_end: '2026-06-30',
             status: 'paid',
           },
@@ -165,11 +165,11 @@ async function PayrollPersonnelGrid() {
               <div className="space-y-2 p-3 rounded-xl bg-black/50 border border-zinc-800/80 font-mono text-xs">
                 <div className="flex justify-between text-zinc-400">
                   <span>Base Salary:</span>
-                  <span className="text-zinc-200">${item.base_salary.toLocaleString()}</span>
+                  <span className="text-zinc-200">Rp {item.base_salary.toLocaleString('id-ID')}</span>
                 </div>
                 <div className="flex justify-between text-zinc-400">
                   <span>Performance Bonus:</span>
-                  <span className="text-[#f5d77f]">+${item.bonus_amount.toLocaleString()}</span>
+                  <span className="text-[#f5d77f]">+Rp {item.bonus_amount.toLocaleString('id-ID')}</span>
                 </div>
               </div>
             </div>
@@ -181,7 +181,7 @@ async function PayrollPersonnelGrid() {
                   NET PAYOUT
                 </span>
                 <span className="text-lg font-black font-mono text-[#f5d77f] drop-shadow-[0_0_10px_rgba(245,215,127,0.45)]">
-                  ${totalPayout.toLocaleString()}
+                  Rp {totalPayout.toLocaleString('id-ID')}
                 </span>
               </div>
 

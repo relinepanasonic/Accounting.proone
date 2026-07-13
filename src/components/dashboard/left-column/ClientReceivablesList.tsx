@@ -3,9 +3,9 @@
 import React from 'react';
 
 const CLIENTS = [
-  { name: 'Prof Toko Online', amount: '$149,870', status: 'PAID', isPaid: true },
-  { name: 'Nüman Kitchenware', amount: '$22,410', status: 'OVERDUE', isPaid: false },
-  { name: 'Bochtmon Studio', amount: '$85,400', status: 'PENDING', isPaid: false },
+  { name: 'Prof Toko Online', amount: 'Rp 149.870.000', status: 'PAID', isPaid: true },
+  { name: 'Nüman Kitchenware', amount: 'Rp 22.410.000', status: 'OVERDUE', isPaid: false },
+  { name: 'Bochtmon Studio', amount: 'Rp 85.400.000', status: 'PENDING', isPaid: false },
 ];
 
 export function ClientReceivablesList() {
@@ -15,7 +15,7 @@ export function ClientReceivablesList() {
         <h3 className="text-xs font-bold uppercase tracking-wider text-white">
           CLIENT RECEIVABLES LIST
         </h3>
-        <span className="text-[10px] font-mono text-[#f5d77f]">LIVE A/R</span>
+        <span className="text-[10px] font-mono text-[#f5d77f]">IDR LIVE</span>
       </div>
 
       <div className="space-y-2.5">

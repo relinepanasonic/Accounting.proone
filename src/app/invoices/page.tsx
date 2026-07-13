@@ -22,15 +22,15 @@ async function InvoicesTableServer() {
             id: inv.id,
             invoiceNumber: inv.invoice_number,
             clientName: clientObj?.name || 'Client',
-            amount: `$${Number(inv.total_amount || 0).toLocaleString()}`,
-            dueDate: inv.due_date ? new Date(inv.due_date).toLocaleDateString() : '07/16/2026',
+            amount: `Rp ${Number(inv.total_amount || 0).toLocaleString('id-ID')}`,
+            dueDate: inv.due_date ? new Date(inv.due_date).toLocaleDateString() : '16/07/2026',
             status: inv.status || 'draft',
           };
         })
       : [
-          { id: '33333333-3333-3333-3333-333333333301', invoiceNumber: 'INV-2026-001', clientName: 'Prof Toko Online', amount: '$149,870', dueDate: '07/16/2026', status: 'paid' },
-          { id: '33333333-3333-3333-3333-333333333302', invoiceNumber: 'INV-2026-002', clientName: 'Nüman Kitchenware', amount: '$22,410', dueDate: '07/18/2026', status: 'overdue' },
-          { id: '33333333-3333-3333-3333-333333333303', invoiceNumber: 'INV-2026-003', clientName: 'Bochtmon Studio', amount: '$85,400', dueDate: '07/20/2026', status: 'draft' },
+          { id: '33333333-3333-3333-3333-333333333301', invoiceNumber: 'INV-2026-001', clientName: 'Prof Toko Online', amount: 'Rp 149.870.000', dueDate: '16/07/2026', status: 'paid' },
+          { id: '33333333-3333-3333-3333-333333333302', invoiceNumber: 'INV-2026-002', clientName: 'Nüman Kitchenware', amount: 'Rp 22.410.000', dueDate: '18/07/2026', status: 'overdue' },
+          { id: '33333333-3333-3333-3333-333333333303', invoiceNumber: 'INV-2026-003', clientName: 'Bochtmon Studio', amount: 'Rp 85.400.000', dueDate: '20/07/2026', status: 'draft' },
         ];
 
   return (

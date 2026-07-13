@@ -26,9 +26,9 @@ interface BankLine {
 }
 
 const SAMPLE_BANK_STATEMENT: BankLine[] = [
-  { id: 'bank-001', date: '2026-07-02', description: 'TRANSFER INVOICE INV-2026-001 PROF TOKO ONLINE', amount: 149870 },
-  { id: 'bank-002', date: '2026-07-07', description: 'ACH DEBIT CLOUD SERVER HOSTING A/P', amount: -1200 },
-  { id: 'bank-003', date: '2026-07-10', description: 'WIRE OUTWARD STUDIO RENT POWER UTILITIES', amount: -4300 },
+  { id: 'bank-001', date: '2026-07-02', description: 'TRANSFER INVOICE INV-2026-001 PROF TOKO ONLINE', amount: 149870000 },
+  { id: 'bank-002', date: '2026-07-07', description: 'ACH DEBIT CLOUD SERVER HOSTING A/P', amount: -18000000 },
+  { id: 'bank-003', date: '2026-07-10', description: 'WIRE OUTWARD STUDIO RENT POWER UTILITIES', amount: -64500000 },
 ];
 
 interface ReconciliationHUDProps {
@@ -177,8 +177,8 @@ export function ReconciliationHUD({ systemRecords }: ReconciliationHUDProps) {
                         <span className="text-zinc-400">{bank.date}</span>
                         <span className="font-bold text-[#f5d77f]">
                           {bank.amount >= 0
-                            ? `+$${bank.amount.toLocaleString()}`
-                            : `-$${Math.abs(bank.amount).toLocaleString()}`}
+                            ? `+Rp ${bank.amount.toLocaleString('id-ID')}`
+                            : `-Rp ${Math.abs(bank.amount).toLocaleString('id-ID')}`}
                         </span>
                       </div>
                       <div className="text-xs font-sans text-white font-medium">
@@ -236,7 +236,7 @@ export function ReconciliationHUD({ systemRecords }: ReconciliationHUDProps) {
                       <div className="flex items-center justify-between text-xs font-mono mb-1">
                         <span className="text-zinc-400">{rec.date}</span>
                         <span className="font-bold text-[#f5d77f]">
-                          ${rec.amount.toLocaleString()}
+                          Rp {rec.amount.toLocaleString('id-ID')}
                         </span>
                       </div>
                       <div className="text-xs font-sans text-white font-medium flex items-center justify-between">

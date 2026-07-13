@@ -10,10 +10,10 @@ interface TotalInvoiceDataRingProps {
 }
 
 export function TotalInvoiceDataRing({
-  totalVolume = 149870,
+  totalVolume = 1498700000,
   overdueCount = 3,
   paidCount = 22,
-  avgAmount = 6800,
+  avgAmount = 68000000,
 }: TotalInvoiceDataRingProps) {
   return (
     <div className="gold-glass-panel gold-glass-panel-hover rounded-2xl p-5 relative overflow-hidden flex flex-col items-center justify-center">
@@ -54,33 +54,25 @@ export function TotalInvoiceDataRing({
           <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-widest">
             Invoices Total
           </span>
-          <span className="text-2xl font-extrabold text-white tracking-tight mt-0.5">
-            ${Math.round(totalVolume).toLocaleString()}
+          <span className="text-lg font-extrabold font-mono text-white tracking-tight mt-0.5">
+            Rp 1,49 Miliar
           </span>
           <span className="text-[10px] text-[#f5d77f] font-mono mt-1">
-            Avg: ${Math.round(avgAmount).toLocaleString()}
+            Realtime IDR
           </span>
-        </div>
-
-        {/* Surrounding Node Labels */}
-        <div className="absolute top-1 left-6 text-[10px] font-mono text-[#f5d77f]">
-          Overdue: {overdueCount}
-        </div>
-        <div className="absolute top-1 right-6 text-[10px] font-mono text-[#d4af37]">
-          Paid: {paidCount}
-        </div>
-        <div className="absolute bottom-2 left-6 text-[10px] font-mono text-zinc-300">
-          NET 15
-        </div>
-        <div className="absolute bottom-2 right-6 text-[10px] font-mono text-[#f5d77f]">
-          REALTIME
         </div>
       </div>
 
-      {/* Footer System Integrity Status */}
-      <div className="w-full flex items-center justify-between text-[10px] font-mono text-zinc-400 pt-2 border-t border-[#d4af37]/20">
-        <span className="uppercase text-zinc-400">SYNC: SUPABASE CORE</span>
-        <span className="text-[#d4af37] font-bold">LIVE METRIC</span>
+      {/* Bottom micro telemetry strip */}
+      <div className="w-full flex items-center justify-between text-xs font-mono text-zinc-400 pt-3 border-t border-[#d4af37]/20">
+        <div>
+          <span className="block text-[9px] text-zinc-500 uppercase">AVG INVOICE</span>
+          <span className="text-[#f5d77f] font-bold">Rp 68.000.000</span>
+        </div>
+        <div className="text-right">
+          <span className="block text-[9px] text-zinc-500 uppercase">RECENCY</span>
+          <span className="text-zinc-300">INSTANT TELEMETRY</span>
+        </div>
       </div>
     </div>
   );

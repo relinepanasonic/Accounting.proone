@@ -35,10 +35,10 @@ async function ExpensesTable() {
           status: r.status || 'pending',
         }))
       : [
-          { id: '1', date: '2026-07-07', vendor: 'Cloud Server Hosting A/P', category: 'Software & Infrastructure', amount: 1200, status: 'pending' },
-          { id: '2', date: '2026-07-10', vendor: 'Studio Rent & Production Power', category: 'Office & Utilities', amount: 4300, status: 'pending' },
-          { id: '3', date: '2026-07-12', vendor: 'Affiliator Agency Creator Payouts', category: 'Creator Partnerships', amount: 8500, status: 'pending' },
-          { id: '4', date: '2026-07-14', vendor: 'Adobe Creative Cloud Team License', category: 'Software & Subscriptions', amount: 480, status: 'paid' },
+          { id: '1', date: '2026-07-07', vendor: 'Cloud Server Hosting A/P', category: 'Software & Infrastructure', amount: 18000000, status: 'pending' },
+          { id: '2', date: '2026-07-10', vendor: 'Studio Rent & Production Power', category: 'Office & Utilities', amount: 64500000, status: 'pending' },
+          { id: '3', date: '2026-07-12', vendor: 'Affiliator Agency Creator Payouts', category: 'Creator Partnerships', amount: 127500000, status: 'pending' },
+          { id: '4', date: '2026-07-14', vendor: 'Adobe Creative Cloud Team License', category: 'Software & Subscriptions', amount: 7200000, status: 'paid' },
         ];
 
   return (
@@ -87,7 +87,7 @@ async function ExpensesTable() {
                 </td>
                 <td className="py-3 px-3 text-right">
                   <span className="text-sm font-black text-[#f5d77f] drop-shadow-[0_0_10px_rgba(245,215,127,0.4)]">
-                    -${item.amount.toLocaleString()}
+                    -Rp {item.amount.toLocaleString('id-ID')}
                   </span>
                 </td>
                 <td className="py-3 px-3 text-center">

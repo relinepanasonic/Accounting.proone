@@ -3,9 +3,9 @@
 import React from 'react';
 
 const BILLS = [
-  { payee: 'Cloud Server Hosting A/P', due: 'Jul 15', amount: '$1,200' },
-  { payee: 'Studio Rent & Power', due: 'Jul 18', amount: '$4,300' },
-  { payee: 'Affiliator Creator Payouts', due: 'Jul 20', amount: '$8,500' },
+  { payee: 'Cloud Server Hosting A/P', due: '15 Jul', amount: 'Rp 18.000.000' },
+  { payee: 'Studio Rent & Power', due: '18 Jul', amount: 'Rp 64.500.000' },
+  { payee: 'Affiliator Creator Payouts', due: '20 Jul', amount: 'Rp 127.500.000' },
 ];
 
 export function UpcomingBillsList() {
@@ -13,7 +13,7 @@ export function UpcomingBillsList() {
     <div className="gold-glass-panel gold-glass-panel-hover rounded-2xl p-5 space-y-4">
       <div className="flex items-center justify-between border-b border-[#d4af37]/20 pb-3">
         <h3 className="text-xs font-bold uppercase tracking-wider text-white">
-          UPCOMING BILLS & A/P
+          UPCOMING BILLS & A/P (IDR)
         </h3>
         <span className="text-[10px] font-mono text-[#f5d77f]">MONEY OUT</span>
       </div>

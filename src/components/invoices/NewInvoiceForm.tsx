@@ -2,7 +2,7 @@
 
 import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Trash2, Check, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Check, AlertCircle, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { createInvoice } from '@/app/actions/invoices';
 
@@ -39,13 +39,13 @@ export function NewInvoiceForm({ clients }: NewInvoiceFormProps) {
       id: '1',
       description: 'TikTok Live Commerce Monthly Production Retainer',
       quantity: 1,
-      unitPrice: 85000,
+      unitPrice: 85000000,
     },
     {
       id: '2',
       description: 'Custom HD Video Creator Package (40 Ads)',
       quantity: 40,
-      unitPrice: 1621.75,
+      unitPrice: 1621750,
     },
   ]);
 
@@ -92,7 +92,7 @@ export function NewInvoiceForm({ clients }: NewInvoiceFormProps) {
     setErrorMsg(null);
     startTransition(async () => {
       try {
-        await createInvoice({
+        const res = await createInvoice({
           clientId,
           invoiceNumber,
           issueDate,
@@ -104,9 +104,19 @@ export function NewInvoiceForm({ clients }: NewInvoiceFormProps) {
             unitPrice: Number(l.unitPrice),
           })),
         });
-        router.push('/invoices');
+
+        if (!res.success) {
+          setErrorMsg(res.error || 'Failed to create invoice. Please verify your workspace permission.');
+          return;
+        }
+
+        if (res.invoiceId) {
+          router.push(`/invoices/${res.invoiceId}`);
+        } else {
+          router.push('/invoices');
+        }
       } catch (err: any) {
-        setErrorMsg(err.message || 'Failed to create invoice');
+        setErrorMsg(err?.message || 'An unexpected error occurred while saving.');
       }
     });
   };
@@ -114,8 +124,8 @@ export function NewInvoiceForm({ clients }: NewInvoiceFormProps) {
   return (
     <form onSubmit={handleSubmit} className="space-y-6 max-w-4xl mx-auto">
       {errorMsg && (
-        <div className="flex items-center gap-2 p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-mono">
-          <AlertCircle className="w-4 h-4 shrink-0" />
+        <div className="flex items-center gap-3 p-4 rounded-xl bg-[#d4af37]/15 border border-[#d4af37]/60 text-[#f5d77f] text-xs font-mono shadow-[0_0_20px_rgba(212,175,55,0.25)]">
+          <AlertCircle className="w-5 h-5 shrink-0 text-[#f5d77f]" />
           <span>{errorMsg}</span>
         </div>
       )}
@@ -251,7 +261,7 @@ export function NewInvoiceForm({ clients }: NewInvoiceFormProps) {
                 </div>
 
                 <div className="col-span-2 md:col-span-1 text-right text-xs font-mono font-bold text-zinc-300">
-                  ${Math.round(rowTotal).toLocaleString()}
+                  Rp {Math.round(rowTotal).toLocaleString('id-ID')}
                 </div>
 
                 <div className="col-span-1 text-right">
@@ -275,7 +285,7 @@ export function NewInvoiceForm({ clients }: NewInvoiceFormProps) {
             TOTAL INVOICE AMOUNT
           </span>
           <span className="text-2xl font-black font-mono text-[#f5d77f] drop-shadow-[0_0_12px_rgba(245,215,127,0.4)]">
-            ${grandTotal.toLocaleString()}
+            Rp {grandTotal.toLocaleString('id-ID')}
           </span>
         </div>
       </div>
@@ -291,10 +301,14 @@ export function NewInvoiceForm({ clients }: NewInvoiceFormProps) {
         <button
           type="submit"
           disabled={isPending}
-          className="gold-btn inline-flex items-center gap-2 px-8 py-3 rounded-full text-xs uppercase tracking-wider disabled:opacity-50"
+          className="gold-btn inline-flex items-center gap-2.5 px-8 py-3 rounded-full text-xs uppercase tracking-wider disabled:opacity-75 transition-all shadow-[0_0_20px_rgba(212,175,55,0.4)]"
         >
-          <Check className="w-4 h-4" />
-          <span>
+          {isPending ? (
+            <Loader2 className="w-4 h-4 animate-spin text-black" />
+          ) : (
+            <Check className="w-4 h-4 text-black" />
+          )}
+          <span className="font-extrabold">
             {isPending ? 'GENERATING INVOICE...' : 'SAVE & GENERATE INVOICE'}
           </span>
         </button>

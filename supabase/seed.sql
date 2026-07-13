@@ -1,15 +1,14 @@
 -- ============================================================================
 -- 1. FRICTIONLESS ADVANCED ACCOUNTING & INVOICE GENERATOR SAAS
--- 2. 100% Bulletproof & Idempotent Seed Script for New Wave Agency
--- ============================================================================
--- NOTE ON AUTH.USERS:
--- To prevent Foreign Key constraint errors ("violates foreign key constraint workspaces_owner_id_fkey"),
--- seed records use NULL for owner_id/user_id so this script runs cleanly on ANY Supabase project!
+-- 2. Seed Script for New Wave Agency Linked to User UID: 850bedd6-eeaf-4d10-9532-a783379fca44
 -- ============================================================================
 
 DO $$
 DECLARE
+    -- Real Supabase Auth UID for professortokoonline@gmail.com
     ws_id UUID := '11111111-1111-1111-1111-111111111111';
+    owner_uid UUID := '850bedd6-eeaf-4d10-9532-a783379fca44';
+    
     client_prof_id UUID := '22222222-2222-2222-2222-222222222201';
     client_numan_id UUID := '22222222-2222-2222-2222-222222222202';
     inv_1_id UUID := '33333333-3333-3333-3333-333333333301';
@@ -17,7 +16,7 @@ DECLARE
     je_camera_id UUID := '44444444-4444-4444-4444-444444444402';
 BEGIN
     -- ========================================================================
-    -- 3. IDEMPOTENT CLEANUP (Safe to run multiple times without duplicate slug errors)
+    -- 3. IDEMPOTENT CLEANUP
     -- ========================================================================
     DELETE FROM public.journal_entry_lines WHERE workspace_id = '11111111-1111-1111-1111-111111111111' OR workspace_id IN (SELECT id FROM public.workspaces WHERE slug = 'new-wave-agency');
     DELETE FROM public.journal_entries WHERE workspace_id = '11111111-1111-1111-1111-111111111111' OR workspace_id IN (SELECT id FROM public.workspaces WHERE slug = 'new-wave-agency');
@@ -31,7 +30,7 @@ BEGIN
     DELETE FROM public.workspaces WHERE id = '11111111-1111-1111-1111-111111111111' OR slug = 'new-wave-agency';
 
     -- ========================================================================
-    -- 4. WORKSPACE: New Wave Agency (owner_id = NULL to prevent auth.users FK error)
+    -- 4. WORKSPACE: New Wave Agency (owner_id linked to your real UID!)
     -- ========================================================================
     INSERT INTO public.workspaces (id, name, slug, currency, default_payment_terms_days, owner_id)
     VALUES (
@@ -40,15 +39,15 @@ BEGIN
         'new-wave-agency',
         'USD',
         15,
-        NULL
+        owner_uid
     );
 
     -- ========================================================================
-    -- 5. RBAC USERS (3 Tiers: superadmin, accounting, admin)
+    -- 5. RBAC USERS (Your UID is set as 'superadmin')
     -- ========================================================================
     INSERT INTO public.workspace_members (workspace_id, user_id, email, display_name, role)
     VALUES
-        (ws_id, NULL, 'owner@newwave.agency', 'Elena Vance (Agency Founder)', 'superadmin'),
+        (ws_id, owner_uid, 'professortokoonline@gmail.com', 'Professor Toko Online (Superadmin Owner)', 'superadmin'),
         (ws_id, NULL, 'finance@newwave.agency', 'Marcus Sterling (Finance Lead)', 'accounting'),
         (ws_id, NULL, 'studio@newwave.agency', 'Chloe Chen (Studio Manager)', 'admin');
 
@@ -82,7 +81,7 @@ BEGIN
         (ws_id, inv_1_id, 'Content Creator Ad Package (40 HD Reels)', 40, 1621.75, 2);
 
     -- ========================================================================
-    -- 8. PAYROLL MODULE (Team Salaries & Bonuses)
+    -- 8. PAYROLL MODULE
     -- ========================================================================
     INSERT INTO public.payroll (
         workspace_id, employee_name, role_title, department, base_salary, bonus_amount, pay_period_start, pay_period_end, payment_date, status
@@ -93,7 +92,7 @@ BEGIN
         (ws_id, 'Lucas Sterling', 'Live-stream Host (Part-time)', 'Production', 3100.00, 200.00, '2026-07-01', '2026-07-31', '2026-07-31', 'draft');
 
     -- ========================================================================
-    -- 9. FIXED ASSETS MODULE (High-Value Equipment)
+    -- 9. FIXED ASSETS MODULE
     -- ========================================================================
     INSERT INTO public.fixed_assets (
         workspace_id, asset_name, asset_tag, category, purchase_date, initial_value, salvage_value, useful_life_years, status
@@ -135,5 +134,5 @@ BEGIN
         (ws_id, je_camera_id, 'Studio Equipment (Capital Asset)', '1510', 18500.00, 0.00),
         (ws_id, je_camera_id, 'Operating Cash Account', '1010', 0.00, 18500.00);
 
-    RAISE NOTICE 'New Wave Agency seed data successfully populated!';
+    RAISE NOTICE 'New Wave Agency seed data linked to Superadmin % successfully populated!', owner_uid;
 END $$;

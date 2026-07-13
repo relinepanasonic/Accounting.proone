@@ -4,10 +4,15 @@
 -- ============================================================================
 
 -- ============================================================================
--- 3. SCHEMA COLUMN FIX (Ensures email and display_name columns exist on existing tables)
+-- 3. SCHEMA & CHECK CONSTRAINT FIX (Ensures roles and columns match 3-Tier RBAC)
 -- ============================================================================
 ALTER TABLE public.workspace_members ADD COLUMN IF NOT EXISTS email TEXT;
 ALTER TABLE public.workspace_members ADD COLUMN IF NOT EXISTS display_name TEXT;
+
+-- Drop any outdated role check constraint and apply the updated 3-Tier RBAC check
+ALTER TABLE public.workspace_members DROP CONSTRAINT IF EXISTS workspace_members_role_check;
+ALTER TABLE public.workspace_members ADD CONSTRAINT workspace_members_role_check 
+    CHECK (role IN ('superadmin', 'accounting', 'admin'));
 
 DO $$
 DECLARE

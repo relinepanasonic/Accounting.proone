@@ -11,6 +11,7 @@ import {
   Box,
   BookOpen,
   Settings,
+  CheckSquare,
   ChevronLeft,
   ChevronRight,
   ShieldAlert,
@@ -64,6 +65,13 @@ const navItems: NavItem[] = [
     icon: <BookOpen className="w-4 h-4 text-cyan-400" />,
     badge: 'Live',
     badgeColor: 'cyan',
+  },
+  {
+    name: 'Bank Reconcile',
+    href: '/reconcile',
+    icon: <CheckSquare className="w-4 h-4 text-amber-400" />,
+    badge: 'Match',
+    badgeColor: 'amber',
   },
   {
     name: 'Settings & Users',

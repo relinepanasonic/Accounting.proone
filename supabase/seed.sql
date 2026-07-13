@@ -14,6 +14,12 @@ ALTER TABLE public.workspace_members DROP CONSTRAINT IF EXISTS workspace_members
 ALTER TABLE public.workspace_members ADD CONSTRAINT workspace_members_role_check 
     CHECK (role IN ('superadmin', 'accounting', 'admin'));
 
+-- Bank Reconciliation columns
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS reconciled BOOLEAN DEFAULT false;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS bank_reference TEXT;
+ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS reconciled BOOLEAN DEFAULT false;
+ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS bank_reference TEXT;
+
 DO $$
 DECLARE
     -- Real Supabase Auth UID for professortokoonline@gmail.com

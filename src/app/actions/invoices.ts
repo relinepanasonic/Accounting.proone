@@ -23,51 +23,54 @@ export interface InvoiceActionResult {
 }
 
 /**
- * Helper to securely resolve the active workspace ID for the current authenticated user
+ * Helper: Retrieve Authenticated User ID and their active workspace_id
  */
-async function resolveWorkspaceId(supabase: any): Promise<string> {
-  try {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+async function getAuthenticatedWorkspaceContext(supabase: any): Promise<{
+  userId: string;
+  workspaceId: string;
+}> {
+  // 1. Fetch Authenticated User
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
 
-    if (user) {
-      const { data: memberRows } = await supabase
-        .from('workspace_members')
-        .select('workspace_id')
-        .eq('user_id', user.id)
-        .limit(1);
-
-      if (memberRows && memberRows.length > 0 && memberRows[0].workspace_id) {
-        return memberRows[0].workspace_id;
-      }
-    }
-
-    // Fallback to active workspace query
-    const { data: workspaces } = await supabase
-      .from('workspaces')
-      .select('id')
-      .limit(1);
-
-    if (workspaces && workspaces.length > 0 && workspaces[0].id) {
-      return workspaces[0].id;
-    }
-  } catch (err) {
-    console.error('Error resolving workspace_id:', err);
+  if (authError || !user) {
+    throw new Error('Unauthorized: Authentication required to create or manage invoices.');
   }
 
-  // Safe default fallback matching seed workspace
-  return '11111111-1111-1111-1111-111111111111';
+  // 2. Query workspace_members for user's active workspace_id
+  const { data: memberRows, error: memberErr } = await supabase
+    .from('workspace_members')
+    .select('workspace_id')
+    .eq('user_id', user.id)
+    .limit(1);
+
+  if (memberErr) {
+    throw new Error(`Failed to verify workspace membership: ${memberErr.message}`);
+  }
+
+  if (!memberRows || memberRows.length === 0 || !memberRows[0].workspace_id) {
+    throw new Error('Unauthorized: No active workspace membership found for your account.');
+  }
+
+  return {
+    userId: user.id,
+    workspaceId: memberRows[0].workspace_id,
+  };
 }
 
 /**
  * Server Action: Create a new action-oriented invoice and its line items.
- * Bulletproof try/catch returning serializable { success, invoiceId, error }.
+ * Strictly enforces authentication and RLS workspace context.
  */
 export async function createInvoice(payload: CreateInvoicePayload): Promise<InvoiceActionResult> {
   try {
+    // 1. Authenticated Server Client reading Next.js cookie store
     const supabase = await createClient();
-    const workspaceId = await resolveWorkspaceId(supabase);
+
+    // 2 & 3. Fetch Auth UID & Workspace ID from workspace_members
+    const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
     if (!payload.clientId) {
       return { success: false, error: 'Client Payee is required.' };
@@ -83,7 +86,7 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
       0
     );
 
-    // 1. Insert parent invoice
+    // 4a. Inject workspace_id into parent invoices payload
     const { data: invoice, error: invoiceError } = await supabase
       .from('invoices')
       .insert({
@@ -107,7 +110,7 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
       };
     }
 
-    // 2. Bulk insert line items
+    // 4b. Inject workspace_id into every item in invoice_line_items array
     const lineItemsData = payload.lineItems.map((item, idx) => ({
       workspace_id: workspaceId,
       invoice_id: invoice.id,
@@ -132,10 +135,10 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
     revalidatePath('/');
     return { success: true, invoiceId: invoice.id };
   } catch (err: any) {
-    console.error('Unhandled exception in createInvoice:', err);
+    console.error('Exception in createInvoice:', err);
     return {
       success: false,
-      error: err?.message || 'An unexpected server error occurred while creating the invoice.',
+      error: err?.message || 'An unexpected error occurred while creating the invoice.',
     };
   }
 }
@@ -146,21 +149,24 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
 export async function duplicateInvoice(invoiceId: string) {
   try {
     const supabase = await createClient();
+    const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
     const { data: orig, error: fetchErr } = await supabase
       .from('invoices')
       .select('*')
       .eq('id', invoiceId)
+      .eq('workspace_id', workspaceId)
       .single();
 
     if (fetchErr || !orig) {
-      return { success: false, error: 'Original invoice not found.' };
+      return { success: false, error: 'Original invoice not found or access denied.' };
     }
 
     const { data: origLines } = await supabase
       .from('invoice_line_items')
       .select('*')
       .eq('invoice_id', invoiceId)
+      .eq('workspace_id', workspaceId)
       .order('sort_order', { ascending: true });
 
     const today = new Date();
@@ -172,7 +178,7 @@ export async function duplicateInvoice(invoiceId: string) {
     const { data: newInv, error: dupErr } = await supabase
       .from('invoices')
       .insert({
-        workspace_id: orig.workspace_id,
+        workspace_id: workspaceId,
         client_id: orig.client_id,
         invoice_number: copyNumber,
         status: 'draft',
@@ -191,7 +197,7 @@ export async function duplicateInvoice(invoiceId: string) {
 
     if (origLines && origLines.length > 0) {
       const linesToInsert = origLines.map((l) => ({
-        workspace_id: l.workspace_id,
+        workspace_id: workspaceId,
         invoice_id: newInv.id,
         description: l.description,
         quantity: l.quantity,
@@ -215,12 +221,14 @@ export async function duplicateInvoice(invoiceId: string) {
 export async function toggleInvoiceStatus(invoiceId: string, currentStatus: string) {
   try {
     const supabase = await createClient();
+    const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
     const nextStatus = currentStatus.toLowerCase() === 'paid' ? 'overdue' : 'paid';
 
     const { error } = await supabase
       .from('invoices')
       .update({ status: nextStatus })
-      .eq('id', invoiceId);
+      .eq('id', invoiceId)
+      .eq('workspace_id', workspaceId);
 
     if (error) {
       return { success: false, error: error.message };

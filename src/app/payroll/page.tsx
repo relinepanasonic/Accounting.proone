@@ -1,6 +1,7 @@
 import React, { Suspense } from 'react';
 import { ShieldAlert, Users, DollarSign } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,7 @@ interface PayrollRecord {
 
 async function PayrollPersonnelGrid() {
   const supabase = await createClient();
+  const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
   const {
     data: { user },
@@ -29,6 +31,7 @@ async function PayrollPersonnelGrid() {
       .from('workspace_members')
       .select('role')
       .eq('user_id', user.id)
+      .eq('workspace_id', activeWorkspaceId)
       .limit(1)
       .single();
 
@@ -60,6 +63,7 @@ async function PayrollPersonnelGrid() {
   const { data: records } = await supabase
     .from('payroll')
     .select('*')
+    .eq('workspace_id', activeWorkspaceId)
     .order('employee_name', { ascending: true });
 
   const displayRecords: PayrollRecord[] =

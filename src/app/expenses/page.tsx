@@ -2,6 +2,7 @@ import React, { Suspense } from 'react';
 import Link from 'next/link';
 import { Plus, Receipt } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { ExpenseRowActions } from '@/components/expenses/ExpenseRowActions';
 
 export const dynamic = 'force-dynamic';
@@ -17,10 +18,12 @@ interface ExpenseRecord {
 
 async function ExpensesTable() {
   const supabase = await createClient();
+  const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
   const { data: records } = await supabase
     .from('transactions')
     .select('id, due_date, description, category, amount, status')
+    .eq('workspace_id', activeWorkspaceId)
     .eq('is_upcoming_bill', true)
     .order('due_date', { ascending: true });
 

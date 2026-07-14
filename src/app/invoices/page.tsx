@@ -2,16 +2,19 @@ import React, { Suspense } from 'react';
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { InvoiceRowActions } from '@/components/invoices/InvoiceRowActions';
 
 export const dynamic = 'force-dynamic';
 
 async function InvoicesTableServer() {
   const supabase = await createClient();
+  const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
   const { data: invoices } = await supabase
     .from('invoices')
     .select('id, invoice_number, status, total_amount, due_date, client_id, clients(name)')
+    .eq('workspace_id', activeWorkspaceId)
     .order('created_at', { ascending: false });
 
   const displayInvoices =

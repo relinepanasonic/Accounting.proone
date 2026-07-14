@@ -3,6 +3,8 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { WorkspaceSwitcher } from '@/components/layout/WorkspaceSwitcher';
+import type { WorkspaceContextInfo } from '@/lib/auth/workspace-context';
 import {
   LayoutDashboard,
   ArrowDownLeft,
@@ -73,9 +75,34 @@ const NAV_ITEMS: NavItem[] = [
   },
 ];
 
-export function CyberSidebar() {
+interface CyberSidebarProps {
+  workspaceContext?: WorkspaceContextInfo;
+}
+
+export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const pathname = usePathname();
+
+  const activeId = workspaceContext?.activeWorkspaceId || '11111111-1111-1111-1111-111111111111';
+  const activeName = workspaceContext?.activeWorkspaceName || 'Professor Toko Online HQ';
+  const activeRole = workspaceContext?.role || 'superadmin';
+  const availableWorkspaces = workspaceContext?.availableWorkspaces || [
+    {
+      id: '11111111-1111-1111-1111-111111111111',
+      name: 'Professor Toko Online HQ',
+      role: 'superadmin',
+    },
+    {
+      id: '11111111-1111-1111-1111-111111111112',
+      name: 'Nüman Kitchenware Enterprise',
+      role: 'accounting',
+    },
+    {
+      id: '11111111-1111-1111-1111-111111111113',
+      name: 'Bochtmon Studio Venture',
+      role: 'superadmin',
+    },
+  ];
 
   return (
     <aside
@@ -118,6 +145,15 @@ export function CyberSidebar() {
             )}
           </button>
         </div>
+
+        {/* Company Switcher Dropdown */}
+        <WorkspaceSwitcher
+          activeWorkspaceId={activeId}
+          activeWorkspaceName={activeName}
+          activeRole={activeRole}
+          availableWorkspaces={availableWorkspaces}
+          isCollapsed={isCollapsed}
+        />
 
         {/* Navigation Menu Links */}
         <nav className="p-3 space-y-1">

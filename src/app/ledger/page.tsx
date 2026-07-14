@@ -1,6 +1,7 @@
 import React, { Suspense } from 'react';
 import { ShieldAlert, BookOpen, CheckCircle2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,6 +23,7 @@ interface JournalEntryRecord {
 
 async function ActivityLedgerTimeline() {
   const supabase = await createClient();
+  const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
   const {
     data: { user },
@@ -34,6 +36,7 @@ async function ActivityLedgerTimeline() {
       .from('workspace_members')
       .select('role')
       .eq('user_id', user.id)
+      .eq('workspace_id', activeWorkspaceId)
       .limit(1)
       .single();
 
@@ -44,14 +47,14 @@ async function ActivityLedgerTimeline() {
 
   if (!hasClearance) {
     return (
-      <div className="gold-glass-panel border-red-500/40 rounded-2xl p-12 text-center max-w-xl mx-auto my-12">
+      <div className="gold-glass-panel border-red-500/40 rounded-2xl p-12 text-center max-w-xl mx-auto my-12 shadow-[0_0_40px_rgba(239,68,68,0.15)]">
         <div className="w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/40 flex items-center justify-center mx-auto mb-4 text-red-400">
           <ShieldAlert className="w-7 h-7 animate-pulse" />
         </div>
         <h2 className="text-sm font-black uppercase tracking-widest text-red-400 mb-2">
           SECURITY CLEARANCE DENIED
         </h2>
-        <p className="text-xs text-zinc-300 font-mono leading-relaxed mb-6">
+        <p className="text-xs text-zinc-300 font-mono leading-relaxed">
           DOUBLE-ENTRY LEDGER ACCESS IS RESTRICTED TO SUPERADMIN & ACCOUNTING ROLES.
         </p>
       </div>
@@ -61,6 +64,7 @@ async function ActivityLedgerTimeline() {
   const { data: entries } = await supabase
     .from('journal_entries')
     .select('*, journal_entry_lines(*)')
+    .eq('workspace_id', activeWorkspaceId)
     .order('entry_date', { ascending: false });
 
   const displayEntries: JournalEntryRecord[] =

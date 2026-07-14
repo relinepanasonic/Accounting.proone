@@ -2,6 +2,7 @@
 
 import React, { useState, useTransition } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   Sliders,
@@ -43,8 +44,10 @@ export function WorkspaceDetailTabs({
   products: initialProducts,
   isCurrentActive,
 }: WorkspaceDetailTabsProps) {
-  // Navigation State
-  const [activeTab, setActiveTab] = useState<'identity' | 'banking' | 'catalog'>('identity');
+  const router = useRouter();
+
+  // Navigation State (ordered: Product List -> Bank Account -> Tax)
+  const [activeTab, setActiveTab] = useState<'catalog' | 'banking' | 'identity'>('catalog');
 
   // Tab 1: Identity State
   const [name, setName] = useState(initialName);
@@ -87,6 +90,7 @@ export function WorkspaceDetailTabs({
 
       if (res.success) {
         setIdentityMsg({ type: 'success', text: 'Identity & Tax profile updated successfully.' });
+        router.refresh();
       } else {
         setIdentityMsg({ type: 'error', text: res.error || 'Failed to update identity settings.' });
       }
@@ -104,7 +108,11 @@ export function WorkspaceDetailTabs({
         bankAccounts: updatedList,
       });
       if (res.success) {
+        if (res.savedBankAccounts) {
+          setAccounts(res.savedBankAccounts);
+        }
         setBankingMsg({ type: 'success', text: successMessage });
+        router.refresh();
       } else {
         setBankingMsg({ type: 'error', text: res.error || 'Failed to sync bank accounts.' });
       }
@@ -177,6 +185,7 @@ export function WorkspaceDetailTabs({
         setNewProdName('');
         setNewProdDesc('');
         setNewProdPrice('1000000');
+        router.refresh();
       } else {
         setCatalogMsg({ type: 'error', text: res.error || 'Failed to add product.' });
       }
@@ -191,6 +200,8 @@ export function WorkspaceDetailTabs({
       const res = await deleteProduct(productId, targetWorkspaceId);
       if (!res.success) {
         setCatalogMsg({ type: 'error', text: res.error || 'Failed to remove item from server.' });
+      } else {
+        router.refresh();
       }
     });
   };
@@ -237,19 +248,28 @@ export function WorkspaceDetailTabs({
         </div>
       </div>
 
-      {/* HORIZONTAL TAB PILLS WRAPPER */}
+      {/* HORIZONTAL TAB PILLS WRAPPER (Product List | Bank Account | Tax) */}
       <div className="bg-white/5 backdrop-blur-md border border-yellow-600/30 rounded-2xl p-1.5 flex flex-wrap items-center gap-2 shadow-[0_0_30px_rgba(0,0,0,0.4)]">
         <button
           type="button"
-          onClick={() => setActiveTab('identity')}
+          onClick={() => setActiveTab('catalog')}
           className={`flex-1 min-w-[150px] py-3 px-5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2.5 transition-all duration-300 ${
-            activeTab === 'identity'
+            activeTab === 'catalog'
               ? 'bg-gradient-to-r from-[#d4af37] to-[#f5d77f] text-black shadow-[0_0_20px_rgba(212,175,55,0.4)] font-extrabold'
               : 'text-zinc-400 hover:text-white hover:bg-white/5'
           }`}
         >
-          <Sliders className={`w-4 h-4 ${activeTab === 'identity' ? 'text-black' : 'text-[#d4af37]'}`} />
-          <span>Identity & Tax</span>
+          <Package className={`w-4 h-4 ${activeTab === 'catalog' ? 'text-black' : 'text-[#d4af37]'}`} />
+          <span>Product List</span>
+          <span
+            className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
+              activeTab === 'catalog'
+                ? 'bg-black text-[#f5d77f]'
+                : 'bg-white/10 text-zinc-300'
+            }`}
+          >
+            {catalogItems.length}
+          </span>
         </button>
 
         <button
@@ -262,7 +282,7 @@ export function WorkspaceDetailTabs({
           }`}
         >
           <CreditCard className={`w-4 h-4 ${activeTab === 'banking' ? 'text-black' : 'text-[#d4af37]'}`} />
-          <span>Bank Accounts</span>
+          <span>Bank Account</span>
           <span
             className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
               activeTab === 'banking'
@@ -276,24 +296,15 @@ export function WorkspaceDetailTabs({
 
         <button
           type="button"
-          onClick={() => setActiveTab('catalog')}
+          onClick={() => setActiveTab('identity')}
           className={`flex-1 min-w-[150px] py-3 px-5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2.5 transition-all duration-300 ${
-            activeTab === 'catalog'
+            activeTab === 'identity'
               ? 'bg-gradient-to-r from-[#d4af37] to-[#f5d77f] text-black shadow-[0_0_20px_rgba(212,175,55,0.4)] font-extrabold'
               : 'text-zinc-400 hover:text-white hover:bg-white/5'
           }`}
         >
-          <Package className={`w-4 h-4 ${activeTab === 'catalog' ? 'text-black' : 'text-[#d4af37]'}`} />
-          <span>Product Catalog</span>
-          <span
-            className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
-              activeTab === 'catalog'
-                ? 'bg-black text-[#f5d77f]'
-                : 'bg-white/10 text-zinc-300'
-            }`}
-          >
-            {catalogItems.length}
-          </span>
+          <Sliders className={`w-4 h-4 ${activeTab === 'identity' ? 'text-black' : 'text-[#d4af37]'}`} />
+          <span>Tax</span>
         </button>
       </div>
 

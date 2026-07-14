@@ -102,28 +102,55 @@ export async function saveWorkspaceSettings(payload: {
 
     // 2. Sync workspace_bank_accounts table if bankAccounts array is provided
     if (payload.bankAccounts !== undefined) {
+      // Always update legacy payment_instructions on workspaces table as a guaranteed fallback!
+      const legacyInstructionsText = payload.bankAccounts
+        .map((b) => `${b.bank_name} - ${b.account_number} (${b.account_name})`)
+        .join('\n');
+      await supabase
+        .from('workspaces')
+        .update({ payment_instructions: legacyInstructionsText })
+        .eq('id', workspaceId);
+
       const { data: existingAccounts, error: fetchErr } = await supabase
         .from('workspace_bank_accounts')
         .select('id')
         .eq('workspace_id', workspaceId);
 
-      if (!fetchErr && existingAccounts) {
-        const payloadIds = new Set(payload.bankAccounts.filter((b) => b.id && !b.id.startsWith('temp-')).map((b) => b.id));
+      if (fetchErr) {
+        if (fetchErr.code === '42P01' || fetchErr.message?.includes('does not exist')) {
+          return {
+            success: false,
+            error: `Table workspace_bank_accounts does not exist in Supabase yet. Please run the SQL migration. (Fallback saved to payment instructions)`,
+          };
+        }
+        return { success: false, error: `Error checking bank accounts: ${fetchErr.message}` };
+      }
+
+      if (existingAccounts) {
+        const payloadIds = new Set(
+          payload.bankAccounts
+            .filter((b) => b.id && !b.id.startsWith('temp-') && !b.id.startsWith('temp-legacy-'))
+            .map((b) => b.id)
+        );
         const toDeleteIds = existingAccounts.filter((b) => !payloadIds.has(b.id)).map((b) => b.id);
 
         if (toDeleteIds.length > 0) {
-          await supabase
+          const { error: delErr } = await supabase
             .from('workspace_bank_accounts')
             .delete()
             .in('id', toDeleteIds)
             .eq('workspace_id', workspaceId);
+          if (delErr) {
+            return { success: false, error: `Error deleting removed bank accounts: ${delErr.message}` };
+          }
         }
       }
 
       // Insert or update remaining items
       for (const item of payload.bankAccounts) {
-        if (item.id && !item.id.startsWith('temp-')) {
-          await supabase
+        const isRealId = item.id && !item.id.startsWith('temp-') && !item.id.startsWith('temp-legacy-');
+        if (isRealId) {
+          const { error: updErr } = await supabase
             .from('workspace_bank_accounts')
             .update({
               bank_name: item.bank_name.trim(),
@@ -133,8 +160,11 @@ export async function saveWorkspaceSettings(payload: {
             })
             .eq('id', item.id)
             .eq('workspace_id', workspaceId);
+          if (updErr) {
+            return { success: false, error: `Error updating bank account (${item.bank_name}): ${updErr.message}` };
+          }
         } else {
-          await supabase
+          const { error: insErr } = await supabase
             .from('workspace_bank_accounts')
             .insert({
               workspace_id: workspaceId,
@@ -143,7 +173,35 @@ export async function saveWorkspaceSettings(payload: {
               account_name: item.account_name.trim(),
               is_default: item.is_default,
             });
+          if (insErr) {
+            return { success: false, error: `Error inserting bank account (${item.bank_name}): ${insErr.message}` };
+          }
         }
+      }
+
+      // Fetch fresh list after changes to return real UUIDs back to client
+      const { data: refreshedAccounts, error: refErr } = await supabase
+        .from('workspace_bank_accounts')
+        .select('*')
+        .eq('workspace_id', workspaceId)
+        .order('is_default', { ascending: false });
+
+      if (!refErr && refreshedAccounts) {
+        revalidatePath('/settings');
+        if (payload.targetWorkspaceId) {
+          revalidatePath(`/settings/workspaces/${payload.targetWorkspaceId}`);
+        }
+        revalidatePath('/invoices/new');
+        return {
+          success: true,
+          savedBankAccounts: refreshedAccounts.map((acc: any) => ({
+            id: acc.id,
+            bank_name: acc.bank_name,
+            account_number: acc.account_number,
+            account_name: acc.account_name,
+            is_default: Boolean(acc.is_default),
+          })),
+        };
       }
     }
 

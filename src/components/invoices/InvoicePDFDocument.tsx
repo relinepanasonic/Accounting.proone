@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { ArrowLeft, Printer, Download, Mail, Phone, Globe, MapPin } from 'lucide-react';
 import { ProfessorTokoOnlineLogo } from '@/components/invoices/ProfessorTokoOnlineLogo';
+import { DescriptionBullets } from '@/components/ui/DescriptionBullets';
 
 export interface InvoiceItemData {
   id: string;
@@ -203,7 +204,11 @@ export function InvoicePDFDocument({
                       {item.deliveryDate}
                     </td>
                     <td className="py-4 px-2 font-medium text-[#1e2536]">
-                      {item.description}
+                      <DescriptionBullets
+                        description={item.description}
+                        isDark={false}
+                        className="text-xs"
+                      />
                     </td>
                     <td className="py-4 px-2 text-right font-mono">
                       Rp {item.unitPrice.toLocaleString('id-ID')}

@@ -95,7 +95,7 @@ export function NewInvoiceForm({ clients, products = [] }: NewInvoiceFormProps) 
           item.id === rowId
             ? {
                 ...item,
-                description: prod.name + (prod.description ? ` (${prod.description})` : ''),
+                description: prod.description ? `${prod.name}\n${prod.description}` : prod.name,
                 unitPrice: Number(prod.unit_price) || 0,
               }
             : item
@@ -266,15 +266,15 @@ export function NewInvoiceForm({ clients, products = [] }: NewInvoiceFormProps) 
                       <option value="custom">-- Custom / Manual Override --</option>
                     </select>
                   )}
-                  <input
-                    type="text"
+                  <textarea
+                    rows={3}
                     required
-                    placeholder="Deliverable description..."
+                    placeholder="Deliverable description (bullet points auto-rendered from newlines or |)..."
                     value={item.description}
                     onChange={(e) =>
                       handleUpdateItem(item.id, 'description', e.target.value)
                     }
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#d4af37]"
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#d4af37] font-sans whitespace-pre-line"
                   />
                 </div>
 

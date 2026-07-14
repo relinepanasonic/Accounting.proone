@@ -4,6 +4,7 @@ import React, { useState, useTransition } from 'react';
 import { Plus, Trash2, Package, Loader2, AlertCircle } from 'lucide-react';
 import { createProduct, deleteProduct } from '@/app/actions/settings';
 import { RupiahInput } from '@/components/ui/RupiahInput';
+import { DescriptionBullets } from '@/components/ui/DescriptionBullets';
 
 export interface CatalogProduct {
   id: string;
@@ -106,14 +107,14 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
 
           <div>
             <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1">
-              DELIVERABLE DESCRIPTION
+              DELIVERABLE DESCRIPTION (BULLET POINTS)
             </label>
             <textarea
-              rows={2}
-              placeholder="Scope of work details..."
+              rows={3}
+              placeholder={`Enter bullet points (one per line or pipe-separated):\n• 3 month Contracts\n• 2 jam per live session\n• Regular Host ketersediaan Jam Host`}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-300 focus:outline-none focus:border-[#d4af37]"
+              className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-300 focus:outline-none focus:border-[#d4af37] font-sans whitespace-pre-line"
             />
           </div>
 
@@ -168,9 +169,12 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
                 <tr key={item.id} className="hover:bg-zinc-900/40 transition-colors">
                   <td className="py-3.5 px-3">
                     <div className="font-bold text-white">{item.name}</div>
-                    {item.description && (
-                      <div className="text-[11px] text-zinc-400 mt-0.5">{item.description}</div>
-                    )}
+                    <DescriptionBullets
+                      description={item.description}
+                      allBullets={true}
+                      isDark={true}
+                      className="mt-1"
+                    />
                   </td>
                   <td className="py-3.5 px-3 text-right font-mono font-bold text-[#f5d77f]">
                     Rp {Number(item.unit_price).toLocaleString('id-ID')}

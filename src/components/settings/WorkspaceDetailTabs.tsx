@@ -4,6 +4,7 @@ import React, { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { RupiahInput } from '@/components/ui/RupiahInput';
+import { DescriptionBullets } from '@/components/ui/DescriptionBullets';
 import {
   ArrowLeft,
   Sliders,
@@ -748,16 +749,16 @@ export function WorkspaceDetailTabs({
                     />
                   </div>
 
-                  <div>
+                  <div className="sm:col-span-2">
                     <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1.5 font-mono">
-                      DELIVERABLE DESCRIPTION
+                      DELIVERABLE DESCRIPTION (BULLET POINTS)
                     </label>
-                    <input
-                      type="text"
-                      placeholder="Scope of work details..."
+                    <textarea
+                      rows={3}
+                      placeholder={`Enter deliverable scope, one bullet point per line:\n• 3 month Contracts\n• 2 jam per live session\n• Regular Host ketersediaan Jam Host`}
                       value={newProdDesc}
                       onChange={(e) => setNewProdDesc(e.target.value)}
-                      className="w-full bg-black border border-yellow-600/30 rounded-xl px-3.5 py-2.5 text-xs text-zinc-300 focus:outline-none focus:border-[#d4af37]"
+                      className="w-full bg-black border border-yellow-600/30 rounded-xl px-3.5 py-2.5 text-xs text-zinc-300 focus:outline-none focus:border-[#d4af37] font-sans whitespace-pre-line"
                     />
                   </div>
 
@@ -832,15 +833,16 @@ export function WorkspaceDetailTabs({
                         key={item.id}
                         className="hover:bg-white/5 transition-colors group"
                       >
-                        <td className="py-4 px-6 min-w-[240px]">
+                        <td className="py-4 px-6 min-w-[280px]">
                           <div className="font-bold text-sm text-white font-sans group-hover:text-[#f5d77f] transition-colors">
                             {item.name}
                           </div>
-                          {item.description && (
-                            <div className="text-zinc-400 text-xs font-sans mt-0.5 max-w-xl line-clamp-2">
-                              {item.description}
-                            </div>
-                          )}
+                          <DescriptionBullets
+                            description={item.description}
+                            allBullets={true}
+                            isDark={true}
+                            className="mt-1.5 max-w-xl"
+                          />
                         </td>
                         <td className="py-4 px-6 text-right font-mono font-bold text-sm text-[#f5d77f] whitespace-nowrap">
                           Rp {Number(item.unit_price || 0).toLocaleString('id-ID')}

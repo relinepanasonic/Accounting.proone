@@ -2,7 +2,7 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Professor Toko Accounting • Luxury Gold Executive Suite',
+    name: 'Professor Toko Online',
     short_name: 'PTO Finance',
     description:
       'Frictionless Advanced Action-Oriented Accounting & Invoice Generator SaaS in Brushed Luxury Gold.',
@@ -16,7 +16,19 @@ export default function manifest(): MetadataRoute.Manifest {
         src: '/icon.png',
         sizes: '192x192',
         type: 'image/png',
+        purpose: 'any',
+      },
+      {
+        src: '/icon.png',
+        sizes: '192x192',
+        type: 'image/png',
         purpose: 'maskable',
+      },
+      {
+        src: '/icon.png',
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'any',
       },
       {
         src: '/icon.png',

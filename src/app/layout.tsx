@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { CyberSidebar } from '@/components/navigation/CyberSidebar';
 import { BottomMobileNav } from '@/components/navigation/BottomMobileNav';
+import { PWAInit } from '@/components/PWAInit';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 
 export const viewport: Viewport = {
@@ -52,6 +53,9 @@ export default async function RootLayout({
 
         {/* PWA Mobile Bottom Tab Navigation Bar (Mobile: flex, Desktop: hidden) */}
         <BottomMobileNav />
+
+        {/* PWA Service Worker Registration */}
+        <PWAInit />
       </body>
     </html>
   );

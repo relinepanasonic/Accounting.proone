@@ -371,3 +371,28 @@ CREATE POLICY "Ledger lines alter access"
     ON public.journal_entry_lines FOR ALL
     USING (public.has_workspace_role(workspace_id, ARRAY['superadmin', 'accounting']))
     WITH CHECK (public.has_workspace_role(workspace_id, ARRAY['superadmin', 'accounting']));
+
+-- ==========================================
+-- 8. WORKSPACE BANK ACCOUNTS TABLE
+-- ==========================================
+CREATE TABLE IF NOT EXISTS public.workspace_bank_accounts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+    bank_name TEXT NOT NULL,
+    account_number TEXT NOT NULL,
+    account_name TEXT NOT NULL,
+    is_default BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.workspace_bank_accounts ENABLE ROW LEVEL SECURITY;
+
+CREATE INDEX IF NOT EXISTS idx_workspace_bank_accounts_workspace_id ON public.workspace_bank_accounts(workspace_id);
+
+DROP POLICY IF EXISTS "Workspace bank accounts read/write access" ON public.workspace_bank_accounts;
+CREATE POLICY "Workspace bank accounts read/write access"
+    ON public.workspace_bank_accounts FOR ALL
+    USING (public.is_workspace_member(workspace_id))
+    WITH CHECK (public.is_workspace_member(workspace_id));
+

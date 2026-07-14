@@ -111,16 +111,33 @@ export async function saveWorkspaceSettings(payload: {
         .update({ payment_instructions: legacyInstructionsText })
         .eq('id', workspaceId);
 
+      const isTableMissingErr = (err: any) =>
+        err &&
+        (err.code === '42P01' ||
+          err.code === 'PGRST204' ||
+          err.message?.includes('does not exist') ||
+          err.message?.includes('Could not find the table') ||
+          err.message?.includes('schema cache'));
+
       const { data: existingAccounts, error: fetchErr } = await supabase
         .from('workspace_bank_accounts')
         .select('id')
         .eq('workspace_id', workspaceId);
 
       if (fetchErr) {
-        if (fetchErr.code === '42P01' || fetchErr.message?.includes('does not exist')) {
+        if (isTableMissingErr(fetchErr)) {
+          revalidatePath('/settings');
+          if (payload.targetWorkspaceId) {
+            revalidatePath(`/settings/workspaces/${payload.targetWorkspaceId}`);
+          }
+          revalidatePath('/invoices/new');
           return {
-            success: false,
-            error: `Table workspace_bank_accounts does not exist in Supabase yet. Please run the SQL migration. (Fallback saved to payment instructions)`,
+            success: true,
+            warning: 'Bank accounts saved to workspace instructions. Note: Run the SQL migration in Supabase to enable dedicated bank account records.',
+            savedBankAccounts: payload.bankAccounts.map((b, idx) => ({
+              ...b,
+              id: b.id || `temp-legacy-${idx}`,
+            })),
           };
         }
         return { success: false, error: `Error checking bank accounts: ${fetchErr.message}` };
@@ -141,6 +158,12 @@ export async function saveWorkspaceSettings(payload: {
             .in('id', toDeleteIds)
             .eq('workspace_id', workspaceId);
           if (delErr) {
+            if (isTableMissingErr(delErr)) {
+              revalidatePath('/settings');
+              if (payload.targetWorkspaceId) revalidatePath(`/settings/workspaces/${payload.targetWorkspaceId}`);
+              revalidatePath('/invoices/new');
+              return { success: true, savedBankAccounts: payload.bankAccounts };
+            }
             return { success: false, error: `Error deleting removed bank accounts: ${delErr.message}` };
           }
         }
@@ -161,6 +184,12 @@ export async function saveWorkspaceSettings(payload: {
             .eq('id', item.id)
             .eq('workspace_id', workspaceId);
           if (updErr) {
+            if (isTableMissingErr(updErr)) {
+              revalidatePath('/settings');
+              if (payload.targetWorkspaceId) revalidatePath(`/settings/workspaces/${payload.targetWorkspaceId}`);
+              revalidatePath('/invoices/new');
+              return { success: true, savedBankAccounts: payload.bankAccounts };
+            }
             return { success: false, error: `Error updating bank account (${item.bank_name}): ${updErr.message}` };
           }
         } else {
@@ -174,6 +203,12 @@ export async function saveWorkspaceSettings(payload: {
               is_default: item.is_default,
             });
           if (insErr) {
+            if (isTableMissingErr(insErr)) {
+              revalidatePath('/settings');
+              if (payload.targetWorkspaceId) revalidatePath(`/settings/workspaces/${payload.targetWorkspaceId}`);
+              revalidatePath('/invoices/new');
+              return { success: true, savedBankAccounts: payload.bankAccounts };
+            }
             return { success: false, error: `Error inserting bank account (${item.bank_name}): ${insErr.message}` };
           }
         }
@@ -202,6 +237,11 @@ export async function saveWorkspaceSettings(payload: {
             is_default: Boolean(acc.is_default),
           })),
         };
+      } else if (isTableMissingErr(refErr)) {
+        revalidatePath('/settings');
+        if (payload.targetWorkspaceId) revalidatePath(`/settings/workspaces/${payload.targetWorkspaceId}`);
+        revalidatePath('/invoices/new');
+        return { success: true, savedBankAccounts: payload.bankAccounts };
       }
     }
 

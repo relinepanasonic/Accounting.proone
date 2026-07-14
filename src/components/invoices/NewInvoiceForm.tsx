@@ -13,11 +13,19 @@ interface LineItem {
   unitPrice: number;
 }
 
-interface NewInvoiceFormProps {
-  clients: Array<{ id: string; name: string }>;
+export interface CatalogProductOption {
+  id: string;
+  name: string;
+  description?: string;
+  unit_price: number;
 }
 
-export function NewInvoiceForm({ clients }: NewInvoiceFormProps) {
+interface NewInvoiceFormProps {
+  clients: Array<{ id: string; name: string }>;
+  products?: CatalogProductOption[];
+}
+
+export function NewInvoiceForm({ clients, products = [] }: NewInvoiceFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -75,6 +83,24 @@ export function NewInvoiceForm({ clients }: NewInvoiceFormProps) {
     setLineItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
     );
+  };
+
+  const handleSelectProduct = (rowId: string, productId: string) => {
+    if (!productId || productId === 'custom') return;
+    const prod = products?.find((p) => p.id === productId);
+    if (prod) {
+      setLineItems((prev) =>
+        prev.map((item) =>
+          item.id === rowId
+            ? {
+                ...item,
+                description: prod.name + (prod.description ? ` (${prod.description})` : ''),
+                unitPrice: Number(prod.unit_price) || 0,
+              }
+            : item
+        )
+      );
+    }
   };
 
   const grandTotal = lineItems.reduce(
@@ -221,7 +247,24 @@ export function NewInvoiceForm({ clients }: NewInvoiceFormProps) {
                 key={item.id}
                 className="grid grid-cols-12 gap-3 items-center p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80"
               >
-                <div className="col-span-12 md:col-span-5">
+                <div className="col-span-12 md:col-span-5 space-y-1.5">
+                  {products && products.length > 0 && (
+                    <select
+                      onChange={(e) => handleSelectProduct(item.id, e.target.value)}
+                      defaultValue=""
+                      className="w-full bg-zinc-900/90 border border-[#d4af37]/40 rounded-lg px-2.5 py-1 text-[11px] font-mono text-[#f5d77f] focus:outline-none focus:border-[#d4af37]"
+                    >
+                      <option value="" disabled>
+                        ⚡ AUTO-FILL FROM CATALOG...
+                      </option>
+                      {products.map((prod) => (
+                        <option key={prod.id} value={prod.id}>
+                          {prod.name} • Rp {Number(prod.unit_price).toLocaleString('id-ID')}
+                        </option>
+                      ))}
+                      <option value="custom">-- Custom / Manual Override --</option>
+                    </select>
+                  )}
                   <input
                     type="text"
                     required

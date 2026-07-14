@@ -75,6 +75,14 @@ export function TopExecutiveStatsBar() {
             <Receipt className="w-4 h-4" />
             <span>RECORD EXPENSE</span>
           </Link>
+
+          <Link
+            href="/settings"
+            className="px-5 py-2.5 rounded-full bg-zinc-900/80 border border-zinc-700 hover:border-[#d4af37] text-zinc-300 hover:text-white font-bold text-xs uppercase tracking-wider transition-all hover:scale-105"
+            title="System Settings & Product Catalog"
+          >
+            <span>SETTINGS</span>
+          </Link>
         </div>
       </div>
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
-import { ArrowLeft, FileText } from 'lucide-react';
+import { ArrowLeft, FileText, Package } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { NewInvoiceForm } from '@/components/invoices/NewInvoiceForm';
 
@@ -9,6 +9,7 @@ export const dynamic = 'force-dynamic';
 export default async function NewInvoicePage() {
   const supabase = await createClient();
   const { data: clients } = await supabase.from('clients').select('id, name');
+  const { data: products } = await supabase.from('products').select('*');
 
   const clientList =
     clients && clients.length > 0
@@ -17,6 +18,30 @@ export default async function NewInvoicePage() {
           { id: '22222222-2222-2222-2222-222222222201', name: 'Prof Toko Online' },
           { id: '22222222-2222-2222-2222-222222222202', name: 'Nüman Kitchenware' },
           { id: '22222222-2222-2222-2222-222222222203', name: 'Bochtmon Studio' },
+        ];
+
+  const productList =
+    products && products.length > 0
+      ? products
+      : [
+          {
+            id: 'prod-seed-1',
+            name: 'TikTok Live Commerce Monthly Production Retainer',
+            description: 'Monthly dedicated TikTok Live studio setup and host curation',
+            unit_price: 85000000,
+          },
+          {
+            id: 'prod-seed-2',
+            name: 'Custom HD Video Creator Package (40 Ads)',
+            description: '40 high-converting short-form HD video ads with script writing',
+            unit_price: 1621750,
+          },
+          {
+            id: 'prod-seed-3',
+            name: 'Full-Funnel Brand Consulting & Media Buy Retainer',
+            description: 'Comprehensive e-commerce strategy & conversion attribution modeling',
+            unit_price: 120000000,
+          },
         ];
 
   return (
@@ -36,13 +61,20 @@ export default async function NewInvoicePage() {
               <span>NEW INVOICE GENERATOR • LUXURY GOLD EXECUTIVE HUD</span>
             </h1>
             <p className="text-xs text-[#d4af37] font-mono">
-              ZERO-JARGON INSTANT COMPUTATION ENGINE
+              INSTANT CATALOG AUTO-FILL & COMPUTATION ENGINE
             </p>
           </div>
         </div>
+        <Link
+          href="/settings/catalog"
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl gold-glass-panel text-xs font-bold text-[#f5d77f] hover:border-[#d4af37] transition-all"
+        >
+          <Package className="w-3.5 h-3.5" />
+          <span>MANAGE PRODUCT CATALOG</span>
+        </Link>
       </div>
 
-      <NewInvoiceForm clients={clientList} />
+      <NewInvoiceForm clients={clientList} products={productList} />
     </div>
   );
 }

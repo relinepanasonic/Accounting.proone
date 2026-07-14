@@ -1,8 +1,7 @@
 'use client';
 
 import React from 'react';
-import Link from 'next/link';
-import { Plus, Receipt, TrendingUp, ArrowUpRight, Users, Sparkles } from 'lucide-react';
+import { TrendingUp, ArrowUpRight } from 'lucide-react';
 
 export function TopExecutiveStatsBar() {
   const stats = [
@@ -45,47 +44,7 @@ export function TopExecutiveStatsBar() {
   ];
 
   return (
-    <div className="space-y-6 mb-8">
-      {/* Top Actions Strip: Replaces bottom dashboard buttons and puts them prominently at TOP */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-[#d4af37]/20">
-        <div>
-          <h2 className="text-sm font-extrabold tracking-wider uppercase text-white flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-[#d4af37]" />
-            <span>EXECUTIVE TELEMETRY • INDONESIAN RUPIAH (IDR) REALTIME PARITY</span>
-          </h2>
-          <p className="text-[11px] text-[#d4af37] font-mono mt-0.5">
-            INSTANT TOP-LEVEL METRICS & QUICK TRANSACTION RECORDING
-          </p>
-        </div>
-
-        {/* Action Buttons at TOP */}
-        <div className="flex items-center gap-3">
-          <Link
-            href="/invoices/new"
-            className="gold-btn px-6 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-2 shadow-[0_0_20px_rgba(212,175,55,0.35)] transition-all hover:scale-105"
-          >
-            <Plus className="w-4 h-4" />
-            <span>NEW INVOICE</span>
-          </Link>
-
-          <Link
-            href="/expenses/new"
-            className="px-6 py-2.5 rounded-full bg-zinc-900 border border-[#d4af37]/50 hover:bg-[#d4af37]/15 text-[#f5d77f] font-extrabold text-xs uppercase tracking-wider shadow-[0_0_15px_rgba(212,175,55,0.2)] transition-all hover:scale-105 flex items-center gap-2"
-          >
-            <Receipt className="w-4 h-4" />
-            <span>RECORD EXPENSE</span>
-          </Link>
-
-          <Link
-            href="/settings"
-            className="px-5 py-2.5 rounded-full bg-zinc-900/80 border border-zinc-700 hover:border-[#d4af37] text-zinc-300 hover:text-white font-bold text-xs uppercase tracking-wider transition-all hover:scale-105"
-            title="System Settings & Product Catalog"
-          >
-            <span>SETTINGS</span>
-          </Link>
-        </div>
-      </div>
-
+    <div className="mb-8">
       {/* 4 Executive Number Cards with Mini Sparkline Charts (Pic 4 Style in Luxury Gold) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         {stats.map((stat, idx) => (

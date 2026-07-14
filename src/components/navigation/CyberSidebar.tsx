@@ -124,11 +124,11 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
                 className="rounded-lg object-contain drop-shadow-[0_0_12px_rgba(212,175,55,0.45)]"
               />
               <div className="flex flex-col">
-                <span className="text-xs font-bold tracking-wider uppercase text-white">
-                  ACCT.PROONE
+                <span className="text-sm font-extrabold tracking-wide text-white font-serif">
+                  Accounting
                 </span>
-                <span className="text-[9px] font-mono text-[#d4af37]">
-                  LUXURY GOLD SUITE
+                <span className="text-[9px] font-mono text-[#d4af37] tracking-wider uppercase">
+                  PROFESSOR TOKO
                 </span>
               </div>
             </div>

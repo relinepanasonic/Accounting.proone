@@ -10,6 +10,8 @@ export interface WorkspaceTenantInfo {
 
 export interface WorkspaceContextInfo {
   userId: string | null;
+  userName?: string;
+  userEmail?: string;
   activeWorkspaceId: string;
   activeWorkspaceName: string;
   role: 'superadmin' | 'accounting' | 'admin';
@@ -50,6 +52,12 @@ export async function getAuthenticatedWorkspaceContext(
   const cookieStore = await cookies();
   const cookieWorkspaceId = cookieStore.get('active_workspace_id')?.value;
 
+  const resolvedName =
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.name ||
+    (user?.email ? user.email.split('@')[0] : 'Nico');
+  const resolvedEmail = user?.email || 'nico@professortoko.com';
+
   // 1. Authenticated User flow
   if (user) {
     const { data: memberRows } = await supabaseClient
@@ -86,6 +94,8 @@ export async function getAuthenticatedWorkspaceContext(
 
       return {
         userId: user.id,
+        userName: resolvedName,
+        userEmail: resolvedEmail,
         activeWorkspaceId: active.id,
         activeWorkspaceName: active.name,
         role: active.role,
@@ -99,6 +109,8 @@ export async function getAuthenticatedWorkspaceContext(
 
   return {
     userId: user ? user.id : null,
+    userName: resolvedName,
+    userEmail: resolvedEmail,
     activeWorkspaceId: matchedSeed.id,
     activeWorkspaceName: matchedSeed.name,
     role: matchedSeed.role,

@@ -3,8 +3,8 @@
 import React, { useState, useTransition } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Building2, ChevronDown, Check, Loader2, ShieldCheck, Plus, AlertCircle } from 'lucide-react';
-import { switchWorkspace, createWorkspace } from '@/app/actions/workspace';
+import { Building2, ChevronDown, Check, Loader2, AlertCircle } from 'lucide-react';
+import { switchWorkspace } from '@/app/actions/workspace';
 import type { WorkspaceTenantInfo } from '@/lib/auth/workspace-context';
 
 interface WorkspaceSwitcherProps {
@@ -24,8 +24,6 @@ export function WorkspaceSwitcher({
 }: WorkspaceSwitcherProps) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [newCompanyName, setNewCompanyName] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [isPending, startTransition] = useTransition();
 
@@ -43,24 +41,6 @@ export function WorkspaceSwitcher({
         router.refresh();
       } else {
         setErrorMsg(res.error || 'Failed to switch company.');
-      }
-    });
-  };
-
-  const handleCreateCompany = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCompanyName.trim()) return;
-
-    setErrorMsg('');
-    startTransition(async () => {
-      const res = await createWorkspace(newCompanyName.trim());
-      if (res.success) {
-        setNewCompanyName('');
-        setShowCreateForm(false);
-        setIsOpen(false);
-        router.refresh();
-      } else {
-        setErrorMsg(res.error || 'Failed to create company.');
       }
     });
   };
@@ -89,7 +69,6 @@ export function WorkspaceSwitcher({
         type="button"
         onClick={() => {
           setIsOpen(!isOpen);
-          setShowCreateForm(false);
           setErrorMsg('');
         }}
         disabled={isPending}
@@ -128,7 +107,7 @@ export function WorkspaceSwitcher({
         </div>
       </button>
 
-      {/* Dropdown Menu */}
+      {/* Read-Only Dropdown Menu of Existing Workspaces */}
       {isOpen && (
         <div className="absolute left-3 right-3 top-full mt-1.5 z-50 gold-glass-panel rounded-2xl border border-[#d4af37]/60 shadow-[0_10px_40px_rgba(0,0,0,0.8)] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
           <div className="px-3 py-2 bg-zinc-950/80 border-b border-zinc-800 flex items-center justify-between">
@@ -147,7 +126,7 @@ export function WorkspaceSwitcher({
             </div>
           )}
 
-          <div className="max-h-52 overflow-y-auto divide-y divide-zinc-900">
+          <div className="max-h-60 overflow-y-auto divide-y divide-zinc-900">
             {availableWorkspaces.map((ws) => {
               const isCurrent = ws.id === activeWorkspaceId;
               return (
@@ -173,57 +152,11 @@ export function WorkspaceSwitcher({
             })}
           </div>
 
-          {/* Create Company Inline Section */}
-          <div className="p-2.5 bg-zinc-950/90 border-t border-zinc-800 space-y-2">
-            {!showCreateForm ? (
-              <button
-                type="button"
-                onClick={() => setShowCreateForm(true)}
-                className="w-full py-2 rounded-xl bg-[#d4af37]/15 border border-[#d4af37]/40 hover:border-[#d4af37] text-center text-[11px] font-mono font-bold uppercase text-[#f5d77f] flex items-center justify-center gap-1.5 transition-all shadow-[0_0_15px_rgba(212,175,55,0.2)]"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>NEW COMPANY TENANT</span>
-              </button>
-            ) : (
-              <form onSubmit={handleCreateCompany} className="space-y-2">
-                <input
-                  type="text"
-                  placeholder="e.g. PT Pintu Langit Inovasi"
-                  value={newCompanyName}
-                  onChange={(e) => setNewCompanyName(e.target.value)}
-                  disabled={isPending}
-                  autoFocus
-                  className="w-full bg-black border border-[#d4af37]/50 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#d4af37]"
-                />
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="submit"
-                    disabled={isPending || !newCompanyName.trim()}
-                    className="flex-1 py-1.5 rounded-xl bg-[#d4af37] text-black font-bold text-[10px] uppercase font-mono disabled:opacity-50 transition-all shadow-[0_0_12px_rgba(212,175,55,0.4)]"
-                  >
-                    {isPending ? 'CREATING...' : 'CREATE & SWITCH'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCreateForm(false);
-                      setNewCompanyName('');
-                    }}
-                    className="px-3 py-1.5 rounded-xl border border-zinc-800 text-zinc-400 text-[10px] font-mono uppercase hover:text-white"
-                  >
-                    CANCEL
-                  </button>
-                </div>
-              </form>
-            )}
-
+          <div className="p-2 bg-zinc-950/90 border-t border-zinc-800">
             <button
               type="button"
-              onClick={() => {
-                setIsOpen(false);
-                setShowCreateForm(false);
-              }}
-              className="w-full py-1 text-center text-[10px] font-mono uppercase text-zinc-500 hover:text-zinc-300 transition-colors"
+              onClick={() => setIsOpen(false)}
+              className="w-full py-1.5 rounded-xl text-center text-[10px] font-mono font-bold uppercase text-zinc-400 hover:text-[#f5d77f] transition-colors"
             >
               CLOSE MENU
             </button>

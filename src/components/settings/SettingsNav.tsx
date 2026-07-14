@@ -10,7 +10,7 @@ export function SettingsNav() {
 
   const tabs = [
     {
-      label: 'GENERAL CONFIG',
+      label: 'WORKSPACE',
       href: '/settings/general',
       icon: Sliders,
       description: 'Workspace identity, tax rate & bank instructions',

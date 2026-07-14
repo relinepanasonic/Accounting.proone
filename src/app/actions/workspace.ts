@@ -51,6 +51,13 @@ export async function switchWorkspace(newWorkspaceId: string) {
   }
 }
 
+function generateSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)+/g, '');
+}
+
 /**
  * Create a New Workspace / Company Entity and immediately link authenticated user as superadmin.
  */
@@ -60,6 +67,7 @@ export async function createWorkspace(workspaceName: string) {
       return { success: false, error: 'Company or Workspace name is required.' };
     }
 
+    const newName = workspaceName.trim();
     const supabase = await createClient();
     const cookieStore = await cookies();
 
@@ -76,14 +84,31 @@ export async function createWorkspace(workspaceName: string) {
       };
     }
 
-    // Step 2: INSERT new company into workspaces table and return new id
-    const { data: newWs, error: createError } = await supabase
+    // Step 2: INSERT new company into workspaces table with owner_id and fallback resilience
+    let insertPayload: any = {
+      name: newName,
+      slug: generateSlug(newName),
+      owner_id: user.id,
+      currency: 'IDR',
+    };
+
+    let { data: newWs, error: createError } = await supabase
       .from('workspaces')
-      .insert({
-        name: workspaceName.trim(),
-      })
+      .insert(insertPayload)
       .select('id, name')
       .single();
+
+    // Graceful schema fallback if extra columns don't exist in workspaces table
+    if (createError && (createError.message.includes('column') || createError.code === '42703')) {
+      const basicPayload: any = { name: newName };
+      const fallbackRes = await supabase
+        .from('workspaces')
+        .insert(basicPayload)
+        .select('id, name')
+        .single();
+      newWs = fallbackRes.data;
+      createError = fallbackRes.error;
+    }
 
     if (createError || !newWs) {
       return {
@@ -92,7 +117,7 @@ export async function createWorkspace(workspaceName: string) {
       };
     }
 
-    // Step 3 (The Missing Link): Immediately INSERT row into workspace_members table with role 'superadmin'
+    // Step 3: Immediately INSERT row into workspace_members table with role 'superadmin'
     const { error: memberError } = await supabase.from('workspace_members').insert({
       workspace_id: newWs.id,
       user_id: user.id,

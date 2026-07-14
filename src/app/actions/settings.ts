@@ -55,6 +55,7 @@ async function resolveWorkspaceContext(supabase: any) {
  * Save Workspace General Settings & Dynamic Bank Accounts
  */
 export async function saveWorkspaceSettings(payload: {
+  targetWorkspaceId?: string;
   name: string;
   isTaxRegistered: boolean;
   taxRatePercent: number;
@@ -62,7 +63,8 @@ export async function saveWorkspaceSettings(payload: {
 }) {
   try {
     const supabase = await createClient();
-    const { workspaceId } = await resolveWorkspaceContext(supabase);
+    const { workspaceId: activeId } = await resolveWorkspaceContext(supabase);
+    const workspaceId = payload.targetWorkspaceId || activeId;
 
     if (!workspaceId) {
       return { success: false, error: 'No active workspace context found.' };
@@ -144,6 +146,9 @@ export async function saveWorkspaceSettings(payload: {
     }
 
     revalidatePath('/settings');
+    if (payload.targetWorkspaceId) {
+      revalidatePath(`/settings/workspaces/${payload.targetWorkspaceId}`);
+    }
     revalidatePath('/invoices/new');
     return { success: true };
   } catch (err: any) {
@@ -207,13 +212,15 @@ export async function updateGeneralSettings(payload: {
  * Create a new Product / Service in the catalog
  */
 export async function createProduct(payload: {
+  targetWorkspaceId?: string;
   name: string;
   description: string;
   unitPrice: number;
 }) {
   try {
     const supabase = await createClient();
-    const { workspaceId } = await resolveWorkspaceContext(supabase);
+    const { workspaceId: activeId } = await resolveWorkspaceContext(supabase);
+    const workspaceId = payload.targetWorkspaceId || activeId;
 
     if (!payload.name) {
       return { success: false, error: 'Product or Service name is required.' };
@@ -230,7 +237,10 @@ export async function createProduct(payload: {
       return { success: false, error: error.message };
     }
 
-    revalidatePath('/settings/catalog');
+    revalidatePath('/settings');
+    if (payload.targetWorkspaceId) {
+      revalidatePath(`/settings/workspaces/${payload.targetWorkspaceId}`);
+    }
     revalidatePath('/invoices/new');
     return { success: true };
   } catch (err: any) {
@@ -241,7 +251,7 @@ export async function createProduct(payload: {
 /**
  * Delete a product / service item
  */
-export async function deleteProduct(productId: string) {
+export async function deleteProduct(productId: string, targetWorkspaceId?: string) {
   try {
     const supabase = await createClient();
     const { error } = await supabase.from('products').delete().eq('id', productId);
@@ -250,7 +260,10 @@ export async function deleteProduct(productId: string) {
       return { success: false, error: error.message };
     }
 
-    revalidatePath('/settings/catalog');
+    revalidatePath('/settings');
+    if (targetWorkspaceId) {
+      revalidatePath(`/settings/workspaces/${targetWorkspaceId}`);
+    }
     revalidatePath('/invoices/new');
     return { success: true };
   } catch (err: any) {

@@ -38,7 +38,7 @@ export function WorkspaceSwitcher({
       const res = await switchWorkspace(tenantId);
       if (res.success) {
         setIsOpen(false);
-        router.refresh();
+        window.location.reload();
       } else {
         setErrorMsg(res.error || 'Failed to switch company.');
       }

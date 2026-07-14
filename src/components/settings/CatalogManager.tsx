@@ -12,10 +12,11 @@ export interface CatalogProduct {
 }
 
 interface CatalogManagerProps {
+  targetWorkspaceId?: string;
   initialProducts: CatalogProduct[];
 }
 
-export function CatalogManager({ initialProducts }: CatalogManagerProps) {
+export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogManagerProps) {
   const [products, setProducts] = useState<CatalogProduct[]>(initialProducts);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -31,6 +32,7 @@ export function CatalogManager({ initialProducts }: CatalogManagerProps) {
     startTransition(async () => {
       try {
         const res = await createProduct({
+          targetWorkspaceId,
           name,
           description,
           unitPrice: Number(unitPrice) || 0,
@@ -61,7 +63,7 @@ export function CatalogManager({ initialProducts }: CatalogManagerProps) {
   const handleDelete = (id: string) => {
     startTransition(async () => {
       setProducts((prev) => prev.filter((p) => p.id !== id));
-      await deleteProduct(id);
+      await deleteProduct(id, targetWorkspaceId);
     });
   };
 

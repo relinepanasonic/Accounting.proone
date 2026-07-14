@@ -5,6 +5,7 @@ import { Save, AlertCircle, Check, Loader2, Plus, Trash2, Star, CreditCard, Shie
 import { saveWorkspaceSettings, type BankAccountItem } from '@/app/actions/settings';
 
 interface GeneralSettingsFormProps {
+  targetWorkspaceId?: string;
   initialName: string;
   initialIsTaxRegistered: boolean;
   initialTaxRate: number;
@@ -12,6 +13,7 @@ interface GeneralSettingsFormProps {
 }
 
 export function GeneralSettingsForm({
+  targetWorkspaceId,
   initialName = 'Professor Toko Online',
   initialIsTaxRegistered = false,
   initialTaxRate = 11,
@@ -79,6 +81,7 @@ export function GeneralSettingsForm({
     startTransition(async () => {
       try {
         const res = await saveWorkspaceSettings({
+          targetWorkspaceId,
           name,
           isTaxRegistered,
           taxRatePercent: finalTaxRate,

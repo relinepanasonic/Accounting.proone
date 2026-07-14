@@ -3,23 +3,17 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Sliders, Package, Users, ShieldAlert } from 'lucide-react';
+import { Building2, Users, ShieldAlert } from 'lucide-react';
 
 export function SettingsNav() {
   const pathname = usePathname();
 
   const tabs = [
     {
-      label: 'WORKSPACE',
-      href: '/settings/general',
-      icon: Sliders,
-      description: 'Workspace identity, tax rate & bank instructions',
-    },
-    {
-      label: 'PRODUCT CATALOG',
-      href: '/settings/catalog',
-      icon: Package,
-      description: 'Standardized services & pricing in Rp',
+      label: 'WORKSPACES',
+      href: '/settings/workspaces',
+      icon: Building2,
+      description: 'Enterprise tenants, identity & tax profiles',
     },
     {
       label: 'CLIENTS CRM',

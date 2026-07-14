@@ -84,16 +84,7 @@ async function ReconciliationCore() {
     })),
   ];
 
-  const displayRecords: UnreconciledSystemRecord[] =
-    systemRecords.length > 0
-      ? systemRecords
-      : [
-          { id: '33333333-3333-3333-3333-333333333301', type: 'invoice', reference: 'INV-2026-001', payeeOrClient: 'Prof Toko Online', date: '2026-07-02', amount: 149870000 },
-          { id: 'exp-101', type: 'expense', reference: 'Software & Infrastructure', payeeOrClient: 'Cloud Server Hosting A/P', date: '2026-07-07', amount: 18000000 },
-          { id: 'exp-102', type: 'expense', reference: 'Office & Utilities', payeeOrClient: 'Studio Rent Power Utilities', date: '2026-07-10', amount: 64500000 },
-        ];
-
-  return <ReconciliationHUD systemRecords={displayRecords} />;
+  return <ReconciliationHUD systemRecords={systemRecords} />;
 }
 
 export default function BankReconciliationPage() {

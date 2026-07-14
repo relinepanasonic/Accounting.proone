@@ -2,13 +2,18 @@
 
 import React from 'react';
 
-const CLIENTS = [
-  { name: 'Prof Toko Online', amount: 'Rp 149.870.000', status: 'PAID', isPaid: true },
-  { name: 'Nüman Kitchenware', amount: 'Rp 22.410.000', status: 'OVERDUE', isPaid: false },
-  { name: 'Bochtmon Studio', amount: 'Rp 85.400.000', status: 'PENDING', isPaid: false },
-];
+interface ClientItem {
+  name: string;
+  count: number;
+  owed: string;
+  status: 'cyan' | 'copper';
+}
 
-export function ClientReceivablesList() {
+interface ClientReceivablesListProps {
+  clientReceivables?: ClientItem[];
+}
+
+export function ClientReceivablesList({ clientReceivables = [] }: ClientReceivablesListProps) {
   return (
     <div className="gold-glass-panel gold-glass-panel-hover rounded-2xl p-5 space-y-4">
       <div className="flex items-center justify-between border-b border-[#d4af37]/20 pb-3">
@@ -18,25 +23,31 @@ export function ClientReceivablesList() {
         <span className="text-[10px] font-mono text-[#f5d77f]">IDR LIVE</span>
       </div>
 
-      <div className="space-y-2.5">
-        {CLIENTS.map((c, idx) => (
-          <div
-            key={idx}
-            className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80 hover:border-[#d4af37]/40 transition-colors"
-          >
-            <div>
-              <div className="text-xs font-bold text-white">{c.name}</div>
-              <div className="text-[10px] font-mono text-zinc-400 mt-0.5">
-                Status: <span className={c.isPaid ? 'text-[#f5d77f]' : 'text-[#d4af37]'}>{c.status}</span>
+      {clientReceivables.length === 0 ? (
+        <div className="py-8 text-center border border-dashed border-zinc-800/80 rounded-xl text-zinc-500 text-[11px] font-mono">
+          No client accounts with active balances.
+        </div>
+      ) : (
+        <div className="space-y-2.5">
+          {clientReceivables.map((c, idx) => (
+            <div
+              key={idx}
+              className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80 hover:border-[#d4af37]/40 transition-colors"
+            >
+              <div>
+                <div className="text-xs font-bold text-white">{c.name}</div>
+                <div className="text-[10px] font-mono text-zinc-400 mt-0.5">
+                  Bills: <span className="text-[#f5d77f]">{c.count} active</span>
+                </div>
               </div>
-            </div>
 
-            <span className="text-xs font-extrabold font-mono text-[#f5d77f] drop-shadow-[0_0_8px_rgba(245,215,127,0.35)]">
-              {c.amount}
-            </span>
-          </div>
-        ))}
-      </div>
+              <span className="text-xs font-extrabold font-mono text-[#f5d77f] drop-shadow-[0_0_8px_rgba(245,215,127,0.35)]">
+                {c.owed}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

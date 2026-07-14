@@ -16,7 +16,7 @@ export async function LeftColumnHUD() {
         amount={telemetry.invoicesSummary.unpaidRatio}
         overdueCount={telemetry.invoicesSummary.overdueCount}
       />
-      <ClientReceivablesList />
+      <ClientReceivablesList clientReceivables={telemetry.clientReceivables} />
     </div>
   );
 }

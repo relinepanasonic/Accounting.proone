@@ -36,9 +36,9 @@ interface ReconciliationHUDProps {
 }
 
 export function ReconciliationHUD({ systemRecords }: ReconciliationHUDProps) {
-  const [bankLines, setBankLines] = useState<BankLine[]>(SAMPLE_BANK_STATEMENT);
+  const [bankLines, setBankLines] = useState<BankLine[]>([]);
   const [recordsList, setRecordsList] = useState<UnreconciledSystemRecord[]>(systemRecords);
-  const [selectedBankId, setSelectedBankId] = useState<string | null>(SAMPLE_BANK_STATEMENT[0].id);
+  const [selectedBankId, setSelectedBankId] = useState<string | null>(null);
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -152,8 +152,9 @@ export function ReconciliationHUD({ systemRecords }: ReconciliationHUDProps) {
 
             <div className="space-y-3">
               {bankLines.length === 0 ? (
-                <div className="p-8 text-center text-zinc-500 font-mono text-xs">
-                  ALL BANK FEED ITEMS FULLY MATCHED & RECONCILED!
+                <div className="p-8 text-center text-zinc-500 font-mono text-xs border border-dashed border-zinc-800 rounded-xl space-y-2">
+                  <div className="text-white font-bold">NO BANK FEED TRANSACTIONS LOADED</div>
+                  <div className="text-[10px] text-zinc-400 font-sans">Click "UPLOAD STATEMENT (.CSV)" above to import bank feed items.</div>
                 </div>
               ) : (
                 bankLines.map((bank) => {
@@ -215,8 +216,9 @@ export function ReconciliationHUD({ systemRecords }: ReconciliationHUDProps) {
 
             <div className="space-y-3">
               {recordsList.length === 0 ? (
-                <div className="p-8 text-center text-zinc-500 font-mono text-xs">
-                  NO PENDING UNRECONCILED RECORDS
+                <div className="p-8 text-center text-zinc-500 font-mono text-xs border border-dashed border-zinc-800 rounded-xl space-y-2">
+                  <div className="text-white font-bold">NO UNRECONCILED SYSTEM RECORDS</div>
+                  <div className="text-[10px] text-zinc-400 font-sans">All invoices and expenses are cleared or none have been issued yet.</div>
                 </div>
               ) : (
                 recordsList.map((rec) => {

@@ -106,68 +106,58 @@ export async function getDashboardTelemetry(): Promise<DashboardTelemetry> {
 
   const totalVolume = activeReceivables + totalRevenue;
 
-  // If live Supabase tables have data, transform and return
-  if (invoices.length > 0) {
-    return {
-      invoicesSummary: {
-        totalVolume: totalVolume || 149870,
-        overdueCount,
-        paidCount,
-        avgInvoiceAmount: totalVolume / (invoices.length || 1),
-        unpaidRatio: totalVolume > 0 ? Math.round((activeReceivables / totalVolume) * 100) : 81,
-        activeReceivables,
-        totalRevenue,
-        totalAssetsBookValue,
-      },
-      clientReceivables: (clientsRes.data || []).map((c, i) => ({
-        name: c.name,
-        count: (i % 5) + 1,
-        owed: `$${((i + 1) * 12400).toLocaleString()}`,
-        status: i % 2 === 0 ? 'cyan' : 'copper',
-      })),
-      invoicesList: invoices.slice(0, 10).map((inv) => {
-        const clientObj = Array.isArray(inv.clients) ? inv.clients[0] : inv.clients;
-        const clientName = clientObj?.name || 'Client';
-        return {
-          id: inv.invoice_number,
-          client: clientName,
-          amount: `$${Number(inv.total_amount).toLocaleString()}`,
-          dueDate: inv.due_date ? new Date(inv.due_date).toLocaleDateString() : '01/10/21',
-          status: inv.status === 'overdue' ? 'Overdue' : 'Paid',
-        };
-      }),
-      upcomingBills: (billsRes.data || []).map((b) => ({
-        vendor: b.description,
-        amount: `$${Number(b.amount).toLocaleString()}`,
-        dueDate: b.due_date ? new Date(b.due_date).toLocaleDateString() : '07/07/23',
-      })),
-    };
+  // Transform live Supabase data into telemetry structures (or return clean empty states if zero rows)
+  const clientReceivablesMap = new Map<string, { count: number; owed: number }>();
+  for (const inv of invoices) {
+    const st = (inv.status || 'draft').toLowerCase();
+    if (st === 'draft' || st === 'overdue' || st === 'pending') {
+      const clientObj = Array.isArray(inv.clients) ? inv.clients[0] : inv.clients;
+      const name = clientObj?.name || 'Unknown Client';
+      const amt = Number(inv.total_amount || 0);
+      const existing = clientReceivablesMap.get(name) || { count: 0, owed: 0 };
+      clientReceivablesMap.set(name, { count: existing.count + 1, owed: existing.owed + amt });
+    }
   }
 
-  // Graceful High-Fidelity Reference Data Fallback
+  const clientReceivables = Array.from(clientReceivablesMap.entries()).map(([name, data], i) => ({
+    name,
+    count: data.count,
+    owed: `Rp ${data.owed.toLocaleString('id-ID')}`,
+    status: (i % 2 === 0 ? 'cyan' : 'copper') as 'cyan' | 'copper',
+  }));
+
+  const invoicesList = invoices.slice(0, 10).map((inv) => {
+    const clientObj = Array.isArray(inv.clients) ? inv.clients[0] : inv.clients;
+    const clientName = clientObj?.name || 'Client';
+    const st = (inv.status || 'draft').toLowerCase();
+    return {
+      id: inv.invoice_number || 'INV-REF',
+      client: clientName,
+      amount: `Rp ${Number(inv.total_amount || 0).toLocaleString('id-ID')}`,
+      dueDate: inv.due_date ? new Date(inv.due_date).toLocaleDateString('id-ID') : '15/07/2026',
+      status: (st === 'overdue' ? 'Overdue' : st === 'paid' ? 'Paid' : 'Pending') as 'Paid' | 'Overdue',
+    };
+  });
+
+  const upcomingBills = (billsRes.data || []).map((b) => ({
+    vendor: b.description || 'Vendor Payee',
+    amount: `Rp ${Number(b.amount || 0).toLocaleString('id-ID')}`,
+    dueDate: b.due_date ? new Date(b.due_date).toLocaleDateString('id-ID') : '15/07/2026',
+  }));
+
   return {
     invoicesSummary: {
-      totalVolume: 149870,
-      overdueCount: 3,
-      paidCount: 22,
-      avgInvoiceAmount: 6800,
-      unpaidRatio: 81,
-      activeReceivables: 85400,
-      totalRevenue: 149870,
-      totalAssetsBookValue: totalAssetsBookValue || 28400,
+      totalVolume,
+      overdueCount,
+      paidCount,
+      avgInvoiceAmount: invoices.length > 0 ? totalVolume / invoices.length : 0,
+      unpaidRatio: totalVolume > 0 ? Math.round((activeReceivables / totalVolume) * 100) : 0,
+      activeReceivables,
+      totalRevenue,
+      totalAssetsBookValue,
     },
-    clientReceivables: [
-      { name: 'Prof Toko Online', count: 6, owed: '$149,870', status: 'cyan' },
-      { name: 'Nüman Kitchenware', count: 20, owed: '$22,410', status: 'copper' },
-      { name: 'Niko Elektronik', count: 5, owed: '$152,700', status: 'cyan' },
-    ],
-    invoicesList: [
-      { id: 'INV-2026-001', client: 'Prof Toko Online', amount: '$149,870', dueDate: '07/16/26', status: 'Paid' },
-      { id: 'INV-2026-002', client: 'Nüman Kitchenware', amount: '$22,410', dueDate: '07/18/26', status: 'Overdue' },
-    ],
-    upcomingBills: [
-      { vendor: 'Cloud Server Hosting A/P', amount: '$1,200', dueDate: '07/07/26' },
-      { vendor: 'Studio Rent & Power', amount: '$4,300', dueDate: '07/10/26' },
-    ],
+    clientReceivables,
+    invoicesList,
+    upcomingBills,
   };
 }

@@ -78,42 +78,23 @@ async function PayrollPersonnelGrid() {
           pay_period_end: r.pay_period_end || '2026-06-30',
           status: r.status || 'paid',
         }))
-      : [
-          {
-            id: '1',
-            employee_name: 'Ariana Chen',
-            role_title: 'Live-stream Host',
-            department: 'Production',
-            base_salary: 15000000,
-            bonus_amount: 3500000,
-            pay_period_end: '2026-06-30',
-            status: 'paid',
-          },
-          {
-            id: '2',
-            employee_name: 'Damon Vance',
-            role_title: 'Video Editor',
-            department: 'Creative',
-            base_salary: 18000000,
-            bonus_amount: 2500000,
-            pay_period_end: '2026-06-30',
-            status: 'paid',
-          },
-          {
-            id: '3',
-            employee_name: 'Sophia Martinez',
-            role_title: 'E-commerce Manager',
-            department: 'Growth',
-            base_salary: 22000000,
-            bonus_amount: 5000000,
-            pay_period_end: '2026-06-30',
-            status: 'paid',
-          },
-        ];
+      : [];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {displayRecords.map((item) => {
+    <div>
+      {displayRecords.length === 0 ? (
+        <div className="gold-glass-panel rounded-2xl p-16 text-center space-y-4">
+          <div className="w-12 h-12 rounded-full bg-[#d4af37]/10 border border-[#d4af37]/30 flex items-center justify-center mx-auto text-[#f5d77f]">
+            <span className="font-bold text-lg">$</span>
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider">No Payroll Records Posted Yet</h3>
+            <p className="text-xs text-zinc-400 font-sans mt-1">Personnel compensation and creator payout telemetry will display here once added.</p>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {displayRecords.map((item) => {
         const totalPayout = item.base_salary + item.bonus_amount;
         const isPaid = item.status.toLowerCase() === 'paid';
 
@@ -199,6 +180,8 @@ async function PayrollPersonnelGrid() {
           </div>
         );
       })}
+        </div>
+      )}
     </div>
   );
 }

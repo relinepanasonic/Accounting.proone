@@ -6,6 +6,7 @@ import { CenterColumnHUD } from '@/components/dashboard/CenterColumnHUD';
 import { RightColumnHUD } from '@/components/dashboard/RightColumnHUD';
 import { TopExecutiveStatsBar } from '@/components/dashboard/header/TopExecutiveStatsBar';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
+import { getDashboardTelemetry } from '@/lib/data/dashboard';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +20,7 @@ const ColumnSkeleton = () => (
 
 export default async function CyberneticAccountingDashboardRSC() {
   const wsContext = await getAuthenticatedWorkspaceContext();
+  const telemetry = await getDashboardTelemetry();
   const userName = wsContext.userName || 'Executive';
   const activeWorkspaceName = wsContext.activeWorkspaceName || 'Professor Toko Online HQ';
 
@@ -89,8 +91,8 @@ export default async function CyberneticAccountingDashboardRSC() {
             </div>
           </header>
 
-          {/* TOP EXECUTIVE STATS BAR WITH MINI SPARKLINES & ACTION BUTTONS */}
-          <TopExecutiveStatsBar />
+          {/* TOP EXECUTIVE STATS BAR WITH MINI SPARKLINES */}
+          <TopExecutiveStatsBar summary={telemetry.invoicesSummary} />
 
           {/* 3-COLUMN MODULAR LUXURY HUD GRID */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">

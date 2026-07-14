@@ -33,35 +33,7 @@ async function FixedAssetsRegistry() {
           salvage_value: Number(r.salvage_value || 0),
           status: r.status || 'Active',
         }))
-      : [
-          {
-            id: '1',
-            asset_name: 'Sony FX3 Professional Cinema Camera',
-            category: 'Production Hardware',
-            purchase_price: 48000000,
-            current_book_value: 36000000,
-            salvage_value: 8000000,
-            status: 'Active',
-          },
-          {
-            id: '2',
-            asset_name: 'MacBook Pro M3 Max Studio Workstation',
-            category: 'Computing Hardware',
-            purchase_price: 38000000,
-            current_book_value: 29500000,
-            salvage_value: 6000000,
-            status: 'Active',
-          },
-          {
-            id: '3',
-            asset_name: 'Aputure LS 600d Pro Studio Lighting Array',
-            category: 'Studio Lighting',
-            purchase_price: 24000000,
-            current_book_value: 18000000,
-            salvage_value: 3000000,
-            status: 'Active',
-          },
-        ];
+      : [];
 
   return (
     <div className="gold-glass-panel rounded-2xl p-6">
@@ -79,51 +51,63 @@ async function FixedAssetsRegistry() {
         </span>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse text-xs font-mono">
-          <thead>
-            <tr className="border-b border-zinc-800 text-zinc-400 uppercase text-[10px] font-sans">
-              <th className="py-3 px-3">Fixed Asset Name</th>
-              <th className="py-3 px-3">Category</th>
-              <th className="py-3 px-3 text-right">Purchase Cost</th>
-              <th className="py-3 px-3 text-right">Current Book Value</th>
-              <th className="py-3 px-3 text-center">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-800/60">
-            {displayRecords.map((item) => (
-              <tr
-                key={item.id}
-                className="hover:bg-zinc-800/30 transition-colors group"
-              >
-                <td className="py-3 px-3 font-sans font-semibold text-white group-hover:text-[#f5d77f] transition-colors">
-                  {item.asset_name}
-                </td>
-                <td className="py-3 px-3">
-                  <span className="text-[10px] px-2.5 py-0.5 rounded bg-zinc-900 text-[#d4af37] border border-[#d4af37]/20">
-                    {item.category}
-                  </span>
-                </td>
-                <td className="py-3 px-3 text-right text-zinc-300">
-                  Rp {item.purchase_price.toLocaleString('id-ID')}
-                </td>
-                {/* Critical Current Value highlighted in Glowing Rich Gold */}
-                <td className="py-3 px-3 text-right">
-                  <span className="text-sm font-black text-[#f5d77f] drop-shadow-[0_0_10px_rgba(245,215,127,0.45)]">
-                    Rp {item.current_book_value.toLocaleString('id-ID')}
-                  </span>
-                </td>
-                <td className="py-3 px-3 text-center">
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-mono uppercase bg-[#d4af37]/15 text-[#f5d77f] border border-[#d4af37]/40">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#f5d77f] animate-pulse"></span>
-                    <span>{item.status}</span>
-                  </span>
-                </td>
+      {displayRecords.length === 0 ? (
+        <div className="py-16 text-center border border-dashed border-zinc-800/80 rounded-2xl my-4 space-y-4">
+          <div className="w-12 h-12 rounded-full bg-[#d4af37]/10 border border-[#d4af37]/30 flex items-center justify-center mx-auto text-[#f5d77f]">
+            <span className="font-bold text-lg">📦</span>
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider">No Fixed Assets Recorded Yet</h3>
+            <p className="text-xs text-zinc-400 font-sans mt-1">Capital equipment, studio hardware, and computing assets will appear here once added.</p>
+          </div>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse text-xs font-mono">
+            <thead>
+              <tr className="border-b border-zinc-800 text-zinc-400 uppercase text-[10px] font-sans">
+                <th className="py-3 px-3">Fixed Asset Name</th>
+                <th className="py-3 px-3">Category</th>
+                <th className="py-3 px-3 text-right">Purchase Cost</th>
+                <th className="py-3 px-3 text-right">Current Book Value</th>
+                <th className="py-3 px-3 text-center">Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-zinc-800/60">
+              {displayRecords.map((item) => (
+                <tr
+                  key={item.id}
+                  className="hover:bg-zinc-800/30 transition-colors group"
+                >
+                  <td className="py-3 px-3 font-sans font-semibold text-white group-hover:text-[#f5d77f] transition-colors">
+                    {item.asset_name}
+                  </td>
+                  <td className="py-3 px-3">
+                    <span className="text-[10px] px-2.5 py-0.5 rounded bg-zinc-900 text-[#d4af37] border border-[#d4af37]/20">
+                      {item.category}
+                    </span>
+                  </td>
+                  <td className="py-3 px-3 text-right text-zinc-300">
+                    Rp {item.purchase_price.toLocaleString('id-ID')}
+                  </td>
+                  {/* Critical Current Value highlighted in Glowing Rich Gold */}
+                  <td className="py-3 px-3 text-right">
+                    <span className="text-sm font-black text-[#f5d77f] drop-shadow-[0_0_10px_rgba(245,215,127,0.45)]">
+                      Rp {item.current_book_value.toLocaleString('id-ID')}
+                    </span>
+                  </td>
+                  <td className="py-3 px-3 text-center">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-mono uppercase bg-[#d4af37]/15 text-[#f5d77f] border border-[#d4af37]/40">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#f5d77f] animate-pulse"></span>
+                      <span>{item.status}</span>
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

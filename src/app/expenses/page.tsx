@@ -37,12 +37,7 @@ async function ExpensesTable() {
           amount: Number(r.amount || 0),
           status: r.status || 'pending',
         }))
-      : [
-          { id: '1', date: '2026-07-07', vendor: 'Cloud Server Hosting A/P', category: 'Software & Infrastructure', amount: 18000000, status: 'pending' },
-          { id: '2', date: '2026-07-10', vendor: 'Studio Rent & Production Power', category: 'Office & Utilities', amount: 64500000, status: 'pending' },
-          { id: '3', date: '2026-07-12', vendor: 'Affiliator Agency Creator Payouts', category: 'Creator Partnerships', amount: 127500000, status: 'pending' },
-          { id: '4', date: '2026-07-14', vendor: 'Adobe Creative Cloud Team License', category: 'Software & Subscriptions', amount: 7200000, status: 'paid' },
-        ];
+      : [];
 
   return (
     <div className="gold-glass-panel rounded-2xl p-6">
@@ -60,47 +55,63 @@ async function ExpensesTable() {
         </span>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse text-xs font-mono">
-          <thead>
-            <tr className="border-b border-zinc-800 text-zinc-400 uppercase text-[10px] font-sans">
-              <th className="py-3 px-3">Due Date</th>
-              <th className="py-3 px-3">Vendor / Payee</th>
-              <th className="py-3 px-3">Category</th>
-              <th className="py-3 px-3 text-right">Amount Owed</th>
-              <th className="py-3 px-3 text-center">Status Action</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-800/60">
-            {displayRecords.map((item) => (
-              <tr
-                key={item.id}
-                className="hover:bg-zinc-800/30 transition-colors group"
-              >
-                <td className="py-3 px-3 text-zinc-300 font-bold">
-                  {item.date}
-                </td>
-                <td className="py-3 px-3 font-sans font-semibold text-white group-hover:text-[#f5d77f] transition-colors">
-                  {item.vendor}
-                </td>
-                <td className="py-3 px-3">
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-zinc-900 text-[#d4af37] border border-[#d4af37]/20">
-                    {item.category}
-                  </span>
-                </td>
-                <td className="py-3 px-3 text-right">
-                  <span className="text-sm font-black text-[#f5d77f] drop-shadow-[0_0_10px_rgba(245,215,127,0.4)]">
-                    -Rp {item.amount.toLocaleString('id-ID')}
-                  </span>
-                </td>
-                <td className="py-3 px-3 text-center">
-                  <ExpenseRowActions id={item.id} status={item.status} />
-                </td>
+      {displayRecords.length === 0 ? (
+        <div className="py-16 text-center border border-dashed border-zinc-800/80 rounded-2xl my-4 space-y-4">
+          <div className="w-12 h-12 rounded-full bg-[#d4af37]/10 border border-[#d4af37]/30 flex items-center justify-center mx-auto text-[#f5d77f]">
+            <Receipt className="w-6 h-6" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider">No Expenses Recorded Yet</h3>
+            <p className="text-xs text-zinc-400 font-sans mt-1">Record vendor bills, operational overhead, and recurring payables.</p>
+          </div>
+          <Link
+            href="/expenses/new"
+            className="gold-btn inline-flex items-center gap-2 px-6 py-2.5 rounded-full text-xs font-extrabold uppercase tracking-wider shadow-[0_0_20px_rgba(212,175,55,0.35)] transition-transform hover:scale-105"
+          >
+            <Plus className="w-4 h-4" /> RECORD FIRST EXPENSE
+          </Link>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse text-xs font-mono">
+            <thead>
+              <tr className="border-b border-zinc-800 text-zinc-400 uppercase text-[10px] font-sans">
+                <th className="py-3 px-3">Due Date</th>
+                <th className="py-3 px-3">Vendor / Payee</th>
+                <th className="py-3 px-3">Category</th>
+                <th className="py-3 px-3 text-right">Amount Owed</th>
+                <th className="py-3 px-3 text-center">Status Action</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-zinc-800/60">
+              {displayRecords.map((item) => (
+                <tr
+                  key={item.id}
+                  className="hover:bg-zinc-800/30 transition-colors group"
+                >
+                  <td className="py-3 px-3 text-zinc-300 font-bold">
+                    {item.date}
+                  </td>
+                  <td className="py-3 px-3 font-sans font-semibold text-white group-hover:text-[#f5d77f] transition-colors">
+                    {item.vendor}
+                  </td>
+                  <td className="py-3 px-3 text-zinc-400 font-sans">
+                    {item.category}
+                  </td>
+                  <td className="py-3 px-3 text-right">
+                    <span className="text-sm font-extrabold text-[#f5d77f] drop-shadow-[0_0_10px_rgba(245,215,127,0.35)]">
+                      Rp {item.amount.toLocaleString('id-ID')}
+                    </span>
+                  </td>
+                  <td className="py-3 px-3 text-center">
+                    <ExpenseRowActions id={item.id} status={item.status} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

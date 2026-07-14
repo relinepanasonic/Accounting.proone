@@ -84,45 +84,22 @@ async function ActivityLedgerTimeline() {
               }))
             : [],
         }))
-      : [
-          {
-            id: '1',
-            entry_number: 'JE-2026-018',
-            entry_date: 'March 16, 2026',
-            description: 'Automated Revenue Realization & Client Payment Clearing',
-            source_module: 'Invoices',
-            lines: [
-              { id: 'l1', account_name: 'Operating Cash Vault (Debit)', debit_amount: 143000000, credit_amount: 0 },
-              { id: 'l2', account_name: 'Accounts Receivable Client (Credit)', debit_amount: 0, credit_amount: 143000000 },
-            ],
-          },
-          {
-            id: '2',
-            entry_number: 'JE-2026-017',
-            entry_date: 'December 25, 2025',
-            description: 'Creator Team Payroll disbursement & withholdings',
-            source_module: 'Payroll',
-            lines: [
-              { id: 'l3', account_name: 'Salaries & Creator Compensation (Debit)', debit_amount: 35000000, credit_amount: 0 },
-              { id: 'l4', account_name: 'Operating Cash Vault (Credit)', debit_amount: 0, credit_amount: 35000000 },
-            ],
-          },
-          {
-            id: '3',
-            entry_number: 'JE-2026-016',
-            entry_date: 'December 25, 2025',
-            description: 'Studio Lighting Capital Asset Depreciation Expense',
-            source_module: 'Fixed Assets',
-            lines: [
-              { id: 'l5', account_name: 'Depreciation Expense (Debit)', debit_amount: 3000000, credit_amount: 0 },
-              { id: 'l6', account_name: 'Accumulated Depreciation Equipment (Credit)', debit_amount: 0, credit_amount: 3000000 },
-            ],
-          },
-        ];
+      : [];
 
   return (
     <div className="space-y-6">
-      {displayEntries.map((entry) => {
+      {displayEntries.length === 0 ? (
+        <div className="gold-glass-panel rounded-2xl p-16 text-center space-y-4">
+          <div className="w-12 h-12 rounded-full bg-[#d4af37]/10 border border-[#d4af37]/30 flex items-center justify-center mx-auto text-[#f5d77f]">
+            <BookOpen className="w-6 h-6" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider">No Double-Entry Journal Entries Posted Yet</h3>
+            <p className="text-xs text-zinc-400 font-sans mt-1">Activity ledger transactions are automatically generated when you issue invoices, record expenses, or reconcile bank statements.</p>
+          </div>
+        </div>
+      ) : (
+        displayEntries.map((entry) => {
         const totalDebits = entry.lines.reduce((s, l) => s + l.debit_amount, 0);
         const totalCredits = entry.lines.reduce((s, l) => s + l.credit_amount, 0);
         const isBalanced = Math.abs(totalDebits - totalCredits) < 0.01;
@@ -200,7 +177,7 @@ async function ActivityLedgerTimeline() {
             </div>
           </div>
         );
-      })}
+      }))}
     </div>
   );
 }

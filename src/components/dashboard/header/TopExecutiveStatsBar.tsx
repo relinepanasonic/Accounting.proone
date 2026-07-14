@@ -3,40 +3,55 @@
 import React from 'react';
 import { TrendingUp, ArrowUpRight } from 'lucide-react';
 
-export function TopExecutiveStatsBar() {
+interface TopExecutiveStatsBarProps {
+  summary?: {
+    totalRevenue?: number;
+    activeReceivables?: number;
+    paidCount?: number;
+    overdueCount?: number;
+    avgInvoiceAmount?: number;
+  };
+}
+
+export function TopExecutiveStatsBar({ summary }: TopExecutiveStatsBarProps) {
+  const rev = Number(summary?.totalRevenue || 0);
+  const receivables = Number(summary?.activeReceivables || 0);
+  const totalCount = Number((summary?.paidCount || 0) + (summary?.overdueCount || 0));
+  const avgVal = Number(summary?.avgInvoiceAmount || 0);
+
   const stats = [
     {
       label: 'TOTAL SALES & REVENUE',
-      value: 'Rp 1.450.800.000',
-      change: '+18.4% vs last month',
-      badge: '+18.4%',
+      value: `Rp ${rev.toLocaleString('id-ID')}`,
+      change: rev > 0 ? 'Verified live collection' : 'No revenue recorded yet',
+      badge: rev > 0 ? 'Live' : '0.0%',
       isPositive: true,
       curve: 'M 0 35 Q 25 20, 50 28 T 100 12 L 100 45 L 0 45 Z',
       line: 'M 0 35 Q 25 20, 50 28 T 100 12',
     },
     {
-      label: 'TOTAL EXPENSES & OUTFLOW',
-      value: 'Rp 482.500.000',
-      change: '-4.2% operational savings',
-      badge: '-4.2%',
+      label: 'ACTIVE RECEIVABLES (A/R)',
+      value: `Rp ${receivables.toLocaleString('id-ID')}`,
+      change: receivables > 0 ? 'Pending client settlement' : 'All receivables cleared',
+      badge: receivables > 0 ? 'A/R' : '0.0%',
       isPositive: true,
       curve: 'M 0 25 Q 30 35, 60 22 T 100 30 L 100 45 L 0 45 Z',
       line: 'M 0 25 Q 30 35, 60 22 T 100 30',
     },
     {
-      label: 'NEW CLIENTS & CUSTOMERS',
-      value: '3.482',
-      change: '+114 active accounts',
-      badge: '+14.8%',
+      label: 'BILLED CLIENT INVOICES',
+      value: `${totalCount}`,
+      change: `${summary?.paidCount || 0} paid, ${summary?.overdueCount || 0} overdue/draft`,
+      badge: totalCount > 0 ? 'Active' : '0',
       isPositive: true,
       curve: 'M 0 38 Q 20 28, 50 32 T 100 15 L 100 45 L 0 45 Z',
       line: 'M 0 38 Q 20 28, 50 32 T 100 15',
     },
     {
       label: 'AVG. INVOICE VALUE',
-      value: 'Rp 25.400.000',
-      change: '+Rp 2.100.000 order size',
-      badge: '+9.6%',
+      value: `Rp ${Math.round(avgVal).toLocaleString('id-ID')}`,
+      change: avgVal > 0 ? 'Mean deliverable size' : 'No transactions computed',
+      badge: avgVal > 0 ? 'Avg' : '0.0%',
       isPositive: true,
       curve: 'M 0 30 Q 30 15, 60 25 T 100 10 L 100 45 L 0 45 Z',
       line: 'M 0 30 Q 30 15, 60 25 T 100 10',

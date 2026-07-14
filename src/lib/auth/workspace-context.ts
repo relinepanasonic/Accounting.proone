@@ -54,16 +54,18 @@ export async function getAuthenticatedWorkspaceContext(
   if (user) {
     const { data: memberRows } = await supabaseClient
       .from('workspace_members')
-      .select('workspace_id, role, workspaces (*)')
+      .select('workspace_id, role, workspaces (id, name)')
       .eq('user_id', user.id);
 
     if (memberRows && memberRows.length > 0) {
-      const allowedWorkspaces: WorkspaceTenantInfo[] = memberRows.map((m: any) => ({
-        id: m.workspace_id,
-        name: m.workspaces?.name || 'Workspace Enterprise',
-        role: (m.role as any) || 'accounting',
-        logoUrl: m.workspaces?.company_logo_url || undefined,
-      }));
+      const allowedWorkspaces: WorkspaceTenantInfo[] = memberRows.map((m: any) => {
+        const wsObj = Array.isArray(m.workspaces) ? m.workspaces[0] : m.workspaces;
+        return {
+          id: m.workspace_id || wsObj?.id,
+          name: wsObj?.name || 'Workspace Enterprise',
+          role: (m.role as any) || 'accounting',
+        };
+      });
 
       // Check if cookie matches one of allowed workspaces
       const matched = allowedWorkspaces.find((w) => w.id === cookieWorkspaceId);

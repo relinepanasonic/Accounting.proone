@@ -11,38 +11,8 @@ export default async function NewInvoicePage() {
   const { data: clients } = await supabase.from('clients').select('id, name');
   const { data: products } = await supabase.from('products').select('*');
 
-  const clientList =
-    clients && clients.length > 0
-      ? clients
-      : [
-          { id: '22222222-2222-2222-2222-222222222201', name: 'Prof Toko Online' },
-          { id: '22222222-2222-2222-2222-222222222202', name: 'Nüman Kitchenware' },
-          { id: '22222222-2222-2222-2222-222222222203', name: 'Bochtmon Studio' },
-        ];
-
-  const productList =
-    products && products.length > 0
-      ? products
-      : [
-          {
-            id: 'prod-seed-1',
-            name: 'TikTok Live Commerce Monthly Production Retainer',
-            description: 'Monthly dedicated TikTok Live studio setup and host curation',
-            unit_price: 85000000,
-          },
-          {
-            id: 'prod-seed-2',
-            name: 'Custom HD Video Creator Package (40 Ads)',
-            description: '40 high-converting short-form HD video ads with script writing',
-            unit_price: 1621750,
-          },
-          {
-            id: 'prod-seed-3',
-            name: 'Full-Funnel Brand Consulting & Media Buy Retainer',
-            description: 'Comprehensive e-commerce strategy & conversion attribution modeling',
-            unit_price: 120000000,
-          },
-        ];
+  const clientList = clients || [];
+  const productList = products || [];
 
   return (
     <div className="max-w-[1200px] mx-auto px-6 py-8 space-y-6">

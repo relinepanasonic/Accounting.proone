@@ -347,22 +347,137 @@ export async function createClientRecord(payload: {
       return { success: false, error: 'Company Name is required.' };
     }
 
-    const { error } = await supabase.from('clients').insert({
+    const insertObj: any = {
       workspace_id: workspaceId,
-      name: payload.name,
-      company: payload.contactPerson || payload.name,
-      email: payload.email || null,
-    });
+      name: payload.name.trim(),
+      contact_name: payload.contactPerson?.trim() || null,
+      company_name: payload.name.trim(),
+      email: payload.email?.trim() || null,
+    };
+
+    let { data: inserted, error } = await supabase
+      .from('clients')
+      .insert(insertObj)
+      .select('*')
+      .single();
+
+    if (error && (error.message?.includes('column') || error.code === '42703')) {
+      // Fallback if schema only has basic columns (e.g. name, email)
+      const fallbackRes = await supabase
+        .from('clients')
+        .insert({
+          workspace_id: workspaceId,
+          name: payload.name.trim(),
+          email: payload.email?.trim() || null,
+        })
+        .select('*')
+        .single();
+      if (fallbackRes.error) {
+        return { success: false, error: fallbackRes.error.message };
+      }
+      inserted = fallbackRes.data;
+    } else if (error) {
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/settings');
+    revalidatePath('/settings/clients');
+    revalidatePath('/invoices/new');
+    return { success: true, client: inserted };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to create client.' };
+  }
+}
+
+/**
+ * Update Client CRM profile (RBAC protected: Superadmin only)
+ */
+export async function updateClientRecord(payload: {
+  id: string;
+  name: string;
+  contactPerson: string;
+  email: string;
+}) {
+  try {
+    const supabase = await createClient();
+    const { workspaceId, role } = await resolveWorkspaceContext(supabase);
+
+    if (role !== 'superadmin') {
+      return { success: false, error: 'Access denied: Only Superadmin can edit client profiles.' };
+    }
+
+    if (!payload.name) {
+      return { success: false, error: 'Company Name is required.' };
+    }
+
+    const updateObj: any = {
+      name: payload.name.trim(),
+      contact_name: payload.contactPerson?.trim() || null,
+      company_name: payload.name.trim(),
+      email: payload.email?.trim() || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    let { error } = await supabase
+      .from('clients')
+      .update(updateObj)
+      .eq('id', payload.id)
+      .eq('workspace_id', workspaceId);
+
+    if (error && (error.message?.includes('column') || error.code === '42703')) {
+      const { error: fallbackErr } = await supabase
+        .from('clients')
+        .update({
+          name: payload.name.trim(),
+          email: payload.email?.trim() || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', payload.id)
+        .eq('workspace_id', workspaceId);
+      if (fallbackErr) {
+        return { success: false, error: fallbackErr.message };
+      }
+    } else if (error) {
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/settings');
+    revalidatePath('/settings/clients');
+    revalidatePath('/invoices/new');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to update client profile.' };
+  }
+}
+
+/**
+ * Delete Client CRM profile (RBAC protected: Superadmin only)
+ */
+export async function deleteClientRecord(clientId: string) {
+  try {
+    const supabase = await createClient();
+    const { workspaceId, role } = await resolveWorkspaceContext(supabase);
+
+    if (role !== 'superadmin') {
+      return { success: false, error: 'Access denied: Only Superadmin can delete client profiles.' };
+    }
+
+    const { error } = await supabase
+      .from('clients')
+      .delete()
+      .eq('id', clientId)
+      .eq('workspace_id', workspaceId);
 
     if (error) {
       return { success: false, error: error.message };
     }
 
+    revalidatePath('/settings');
     revalidatePath('/settings/clients');
     revalidatePath('/invoices/new');
     return { success: true };
   } catch (err: any) {
-    return { success: false, error: err?.message || 'Failed to create client.' };
+    return { success: false, error: err?.message || 'Failed to delete client profile.' };
   }
 }
 

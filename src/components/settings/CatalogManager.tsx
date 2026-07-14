@@ -90,8 +90,8 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
           </div>
         )}
 
-        <div className="space-y-3">
-          <div>
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
+          <div className="md:col-span-3">
             <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1">
               SERVICE / ITEM NAME *
             </label>
@@ -105,7 +105,7 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
             />
           </div>
 
-          <div>
+          <div className="md:col-span-6">
             <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1">
               DELIVERABLE DESCRIPTION (BULLET POINTS)
             </label>
@@ -118,7 +118,7 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
             />
           </div>
 
-          <div>
+          <div className="md:col-span-3">
             <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1">
               UNIT PRICE (IDR / RP) *
             </label>

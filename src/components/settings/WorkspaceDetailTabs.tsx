@@ -733,8 +733,8 @@ export function WorkspaceDetailTabs({
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
+                  <div className="md:col-span-3">
                     <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1.5 font-mono">
                       SERVICE / DELIVERABLE NAME *
                     </label>
@@ -749,7 +749,7 @@ export function WorkspaceDetailTabs({
                     />
                   </div>
 
-                  <div className="sm:col-span-2">
+                  <div className="md:col-span-6">
                     <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1.5 font-mono">
                       DELIVERABLE DESCRIPTION (BULLET POINTS)
                     </label>
@@ -762,7 +762,7 @@ export function WorkspaceDetailTabs({
                     />
                   </div>
 
-                  <div>
+                  <div className="md:col-span-3">
                     <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1.5 font-mono">
                       UNIT PRICE (IDR / RP) *
                     </label>

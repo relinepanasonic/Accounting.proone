@@ -23,8 +23,12 @@ export const metadata: Metadata = {
     title: 'PTO Finance',
   },
   icons: {
-    icon: '/logo (8).png',
-    apple: '/logo (8).png',
+    icon: [
+      { url: '/icon.png', type: 'image/png', sizes: '512x512' },
+      { url: '/favicon.png', type: 'image/png' },
+    ],
+    shortcut: '/icon.png',
+    apple: '/apple-icon.png',
   },
 };
 

@@ -1,9 +1,28 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
+
+export interface BankAccountItem {
+  id?: string;
+  bank_name: string;
+  account_number: string;
+  account_name: string;
+  is_default: boolean;
+}
 
 async function resolveWorkspaceContext(supabase: any) {
+  const wsCtx = await getAuthenticatedWorkspaceContext();
+  if (wsCtx && wsCtx.activeWorkspaceId) {
+    return {
+      userId: wsCtx.userId,
+      workspaceId: wsCtx.activeWorkspaceId,
+      role: wsCtx.role,
+    };
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -33,7 +52,107 @@ async function resolveWorkspaceContext(supabase: any) {
 }
 
 /**
- * Update Workspace General Settings
+ * Save Workspace General Settings & Dynamic Bank Accounts
+ */
+export async function saveWorkspaceSettings(payload: {
+  name: string;
+  isTaxRegistered: boolean;
+  taxRatePercent: number;
+  bankAccounts: BankAccountItem[];
+}) {
+  try {
+    const supabase = await createClient();
+    const { workspaceId } = await resolveWorkspaceContext(supabase);
+
+    if (!workspaceId) {
+      return { success: false, error: 'No active workspace context found.' };
+    }
+
+    const effectiveTaxRate = payload.isTaxRegistered ? Number(payload.taxRatePercent) || 0 : 0;
+
+    // 1. Update workspaces table
+    const { error: wsError } = await supabase
+      .from('workspaces')
+      .update({
+        name: payload.name.trim(),
+        is_tax_registered: payload.isTaxRegistered,
+        tax_rate_percent: effectiveTaxRate,
+      })
+      .eq('id', workspaceId);
+
+    if (wsError) {
+      // Resilient fallback if is_tax_registered column hasn't been migrated yet
+      if (wsError.message?.includes('column') || wsError.code === '42703') {
+        const { error: fallbackErr } = await supabase
+          .from('workspaces')
+          .update({
+            name: payload.name.trim(),
+            tax_rate_percent: effectiveTaxRate,
+          })
+          .eq('id', workspaceId);
+        if (fallbackErr) {
+          return { success: false, error: fallbackErr.message };
+        }
+      } else {
+        return { success: false, error: wsError.message };
+      }
+    }
+
+    // 2. Sync workspace_bank_accounts table
+    const { data: existingAccounts, error: fetchErr } = await supabase
+      .from('workspace_bank_accounts')
+      .select('id')
+      .eq('workspace_id', workspaceId);
+
+    if (!fetchErr && existingAccounts) {
+      const payloadIds = new Set(payload.bankAccounts.filter((b) => b.id && !b.id.startsWith('temp-')).map((b) => b.id));
+      const toDeleteIds = existingAccounts.filter((b) => !payloadIds.has(b.id)).map((b) => b.id);
+
+      if (toDeleteIds.length > 0) {
+        await supabase
+          .from('workspace_bank_accounts')
+          .delete()
+          .in('id', toDeleteIds)
+          .eq('workspace_id', workspaceId);
+      }
+    }
+
+    // Insert or update remaining items
+    for (const item of payload.bankAccounts) {
+      if (item.id && !item.id.startsWith('temp-')) {
+        await supabase
+          .from('workspace_bank_accounts')
+          .update({
+            bank_name: item.bank_name.trim(),
+            account_number: item.account_number.trim(),
+            account_name: item.account_name.trim(),
+            is_default: item.is_default,
+          })
+          .eq('id', item.id)
+          .eq('workspace_id', workspaceId);
+      } else {
+        await supabase
+          .from('workspace_bank_accounts')
+          .insert({
+            workspace_id: workspaceId,
+            bank_name: item.bank_name.trim(),
+            account_number: item.account_number.trim(),
+            account_name: item.account_name.trim(),
+            is_default: item.is_default,
+          });
+      }
+    }
+
+    revalidatePath('/settings');
+    revalidatePath('/invoices/new');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to save workspace settings.' };
+  }
+}
+
+/**
+ * Update Workspace General Settings (Legacy wrapper around basic update)
  */
 export async function updateGeneralSettings(payload: {
   name: string;
@@ -54,7 +173,6 @@ export async function updateGeneralSettings(payload: {
       .eq('id', workspaceId);
 
     if (error) {
-      // Resilient fallback: if column missing in schema cache, update base name column cleanly
       if (
         error.message?.includes('schema cache') ||
         error.message?.includes('column') ||

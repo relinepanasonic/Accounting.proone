@@ -3,6 +3,7 @@
 import React, { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { RupiahInput } from '@/components/ui/RupiahInput';
 import {
   ArrowLeft,
   Sliders,
@@ -764,11 +765,9 @@ export function WorkspaceDetailTabs({
                     <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1.5 font-mono">
                       UNIT PRICE (IDR / RP) *
                     </label>
-                    <input
-                      type="number"
+                    <RupiahInput
                       required
-                      min="0"
-                      step="10000"
+                      placeholder="Rp 0"
                       value={newProdPrice}
                       onChange={(e) => setNewProdPrice(e.target.value)}
                       className="w-full bg-black border border-yellow-600/30 rounded-xl px-3.5 py-2.5 text-xs font-mono text-[#f5d77f] focus:outline-none focus:border-[#d4af37]"

@@ -3,6 +3,7 @@
 import React, { useState, useTransition } from 'react';
 import { Plus, Trash2, Package, Loader2, AlertCircle } from 'lucide-react';
 import { createProduct, deleteProduct } from '@/app/actions/settings';
+import { RupiahInput } from '@/components/ui/RupiahInput';
 
 export interface CatalogProduct {
   id: string;
@@ -120,10 +121,9 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
             <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1">
               UNIT PRICE (IDR / RP) *
             </label>
-            <input
-              type="number"
-              min="0"
+            <RupiahInput
               required
+              placeholder="Rp 0"
               value={unitPrice}
               onChange={(e) => setUnitPrice(e.target.value)}
               className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-3 py-2 text-xs font-mono text-[#f5d77f] focus:outline-none focus:border-[#d4af37]"

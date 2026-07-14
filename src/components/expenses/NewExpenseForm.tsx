@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Check, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 import { createExpense } from '@/app/actions/expenses';
+import { RupiahInput } from '@/components/ui/RupiahInput';
 
 const CATEGORY_OPTIONS = [
   'Computing Hardware',
@@ -113,20 +114,15 @@ export function NewExpenseForm() {
 
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-2">
-              Amount Owed (USD) *
+              Amount Owed (IDR / Rp) *
             </label>
-            <div className="relative">
-              <span className="absolute left-3.5 top-2.5 text-zinc-400 font-mono font-bold">$</span>
-              <input
-                type="number"
-                step="0.01"
-                required
-                placeholder="0.00"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value === '' ? '' : Number(e.target.value))}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-8 pr-4 py-2.5 text-sm font-mono font-bold text-[#f5d77f] focus:outline-none focus:border-[#d4af37]"
-              />
-            </div>
+            <RupiahInput
+              required
+              placeholder="Rp 0"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value === '' ? '' : Number(e.target.value))}
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm font-mono font-bold text-[#f5d77f] focus:outline-none focus:border-[#d4af37]"
+            />
           </div>
         </div>
 

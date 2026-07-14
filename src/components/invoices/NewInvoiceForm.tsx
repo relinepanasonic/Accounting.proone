@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Plus, Trash2, Check, AlertCircle, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { createInvoice } from '@/app/actions/invoices';
+import { RupiahInput } from '@/components/ui/RupiahInput';
 
 interface LineItem {
   id: string;
@@ -291,9 +292,7 @@ export function NewInvoiceForm({ clients, products = [] }: NewInvoiceFormProps) 
                 </div>
 
                 <div className="col-span-5 md:col-span-3">
-                  <input
-                    type="number"
-                    step="0.01"
+                  <RupiahInput
                     required
                     value={item.unitPrice}
                     onChange={(e) =>

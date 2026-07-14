@@ -56,10 +56,10 @@ async function resolveWorkspaceContext(supabase: any) {
  */
 export async function saveWorkspaceSettings(payload: {
   targetWorkspaceId?: string;
-  name: string;
-  isTaxRegistered: boolean;
-  taxRatePercent: number;
-  bankAccounts: BankAccountItem[];
+  name?: string;
+  isTaxRegistered?: boolean;
+  taxRatePercent?: number;
+  bankAccounts?: BankAccountItem[];
 }) {
   try {
     const supabase = await createClient();
@@ -70,78 +70,80 @@ export async function saveWorkspaceSettings(payload: {
       return { success: false, error: 'No active workspace context found.' };
     }
 
-    const effectiveTaxRate = payload.isTaxRegistered ? Number(payload.taxRatePercent) || 0 : 0;
+    // 1. Update workspaces table if identity/tax fields are provided
+    if (payload.name !== undefined && payload.isTaxRegistered !== undefined && payload.taxRatePercent !== undefined) {
+      const effectiveTaxRate = payload.isTaxRegistered ? Number(payload.taxRatePercent) || 0 : 0;
+      const { error: wsError } = await supabase
+        .from('workspaces')
+        .update({
+          name: payload.name.trim(),
+          is_tax_registered: payload.isTaxRegistered,
+          tax_rate_percent: effectiveTaxRate,
+        })
+        .eq('id', workspaceId);
 
-    // 1. Update workspaces table
-    const { error: wsError } = await supabase
-      .from('workspaces')
-      .update({
-        name: payload.name.trim(),
-        is_tax_registered: payload.isTaxRegistered,
-        tax_rate_percent: effectiveTaxRate,
-      })
-      .eq('id', workspaceId);
-
-    if (wsError) {
-      // Resilient fallback if is_tax_registered column hasn't been migrated yet
-      if (wsError.message?.includes('column') || wsError.code === '42703') {
-        const { error: fallbackErr } = await supabase
-          .from('workspaces')
-          .update({
-            name: payload.name.trim(),
-            tax_rate_percent: effectiveTaxRate,
-          })
-          .eq('id', workspaceId);
-        if (fallbackErr) {
-          return { success: false, error: fallbackErr.message };
+      if (wsError) {
+        if (wsError.message?.includes('column') || wsError.code === '42703') {
+          const { error: fallbackErr } = await supabase
+            .from('workspaces')
+            .update({
+              name: payload.name.trim(),
+              tax_rate_percent: effectiveTaxRate,
+            })
+            .eq('id', workspaceId);
+          if (fallbackErr) {
+            return { success: false, error: fallbackErr.message };
+          }
+        } else {
+          return { success: false, error: wsError.message };
         }
-      } else {
-        return { success: false, error: wsError.message };
       }
     }
 
-    // 2. Sync workspace_bank_accounts table
-    const { data: existingAccounts, error: fetchErr } = await supabase
-      .from('workspace_bank_accounts')
-      .select('id')
-      .eq('workspace_id', workspaceId);
+    // 2. Sync workspace_bank_accounts table if bankAccounts array is provided
+    if (payload.bankAccounts !== undefined) {
+      const { data: existingAccounts, error: fetchErr } = await supabase
+        .from('workspace_bank_accounts')
+        .select('id')
+        .eq('workspace_id', workspaceId);
 
-    if (!fetchErr && existingAccounts) {
-      const payloadIds = new Set(payload.bankAccounts.filter((b) => b.id && !b.id.startsWith('temp-')).map((b) => b.id));
-      const toDeleteIds = existingAccounts.filter((b) => !payloadIds.has(b.id)).map((b) => b.id);
+      if (!fetchErr && existingAccounts) {
+        const payloadIds = new Set(payload.bankAccounts.filter((b) => b.id && !b.id.startsWith('temp-')).map((b) => b.id));
+        const toDeleteIds = existingAccounts.filter((b) => !payloadIds.has(b.id)).map((b) => b.id);
 
-      if (toDeleteIds.length > 0) {
-        await supabase
-          .from('workspace_bank_accounts')
-          .delete()
-          .in('id', toDeleteIds)
-          .eq('workspace_id', workspaceId);
+        if (toDeleteIds.length > 0) {
+          await supabase
+            .from('workspace_bank_accounts')
+            .delete()
+            .in('id', toDeleteIds)
+            .eq('workspace_id', workspaceId);
+        }
       }
-    }
 
-    // Insert or update remaining items
-    for (const item of payload.bankAccounts) {
-      if (item.id && !item.id.startsWith('temp-')) {
-        await supabase
-          .from('workspace_bank_accounts')
-          .update({
-            bank_name: item.bank_name.trim(),
-            account_number: item.account_number.trim(),
-            account_name: item.account_name.trim(),
-            is_default: item.is_default,
-          })
-          .eq('id', item.id)
-          .eq('workspace_id', workspaceId);
-      } else {
-        await supabase
-          .from('workspace_bank_accounts')
-          .insert({
-            workspace_id: workspaceId,
-            bank_name: item.bank_name.trim(),
-            account_number: item.account_number.trim(),
-            account_name: item.account_name.trim(),
-            is_default: item.is_default,
-          });
+      // Insert or update remaining items
+      for (const item of payload.bankAccounts) {
+        if (item.id && !item.id.startsWith('temp-')) {
+          await supabase
+            .from('workspace_bank_accounts')
+            .update({
+              bank_name: item.bank_name.trim(),
+              account_number: item.account_number.trim(),
+              account_name: item.account_name.trim(),
+              is_default: item.is_default,
+            })
+            .eq('id', item.id)
+            .eq('workspace_id', workspaceId);
+        } else {
+          await supabase
+            .from('workspace_bank_accounts')
+            .insert({
+              workspace_id: workspaceId,
+              bank_name: item.bank_name.trim(),
+              account_number: item.account_number.trim(),
+              account_name: item.account_name.trim(),
+              is_default: item.is_default,
+            });
+        }
       }
     }
 

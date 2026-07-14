@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useTransition } from 'react';
+import Image from 'next/image';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { AlertCircle, Loader2, Lock, Mail, KeyRound, ShieldCheck } from 'lucide-react';
 import { ProfessorTokoOnlineLogo } from '@/components/invoices/ProfessorTokoOnlineLogo';
 import { signInWithEmail } from '@/app/actions/auth';
@@ -49,7 +51,13 @@ export function LoginForm() {
         {/* Brand Crest Header */}
         <div className="flex flex-col items-center text-center mb-8 relative z-10">
           <div className="p-3 rounded-2xl bg-gradient-to-b from-[#18233c] to-[#0b0c10] border border-[#d4af37]/40 shadow-[0_0_20px_rgba(212,175,55,0.3)] mb-4">
-            <ProfessorTokoOnlineLogo className="w-14 h-14" />
+            <Image
+              src="/logo (8).png"
+              alt="Professor Toko Online Logo"
+              width={64}
+              height={64}
+              className="rounded-xl object-contain drop-shadow-[0_0_15px_rgba(212,175,55,0.4)]"
+            />
           </div>
           <h1 className="text-2xl font-extrabold tracking-wider uppercase text-white font-serif">
             PROFESSOR TOKO ONLINE

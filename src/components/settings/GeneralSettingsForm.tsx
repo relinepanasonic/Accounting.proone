@@ -40,7 +40,7 @@ export function GeneralSettingsForm({
         } else {
           setStatusMsg({
             type: 'success',
-            text: 'Workspace identity and bank instructions saved successfully.',
+            text: res.warning || 'Workspace identity and bank instructions saved successfully.',
           });
         }
       } catch (err: any) {

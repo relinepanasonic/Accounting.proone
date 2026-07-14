@@ -54,6 +54,26 @@ export async function updateGeneralSettings(payload: {
       .eq('id', workspaceId);
 
     if (error) {
+      // Resilient fallback: if column missing in schema cache, update base name column cleanly
+      if (
+        error.message?.includes('schema cache') ||
+        error.message?.includes('column') ||
+        error.message?.includes('payment_instructions')
+      ) {
+        const { error: fallbackErr } = await supabase
+          .from('workspaces')
+          .update({ name: payload.name })
+          .eq('id', workspaceId);
+
+        if (!fallbackErr) {
+          revalidatePath('/settings');
+          return {
+            success: true,
+            warning:
+              "Workspace Name saved. Note: Run the SQL migration in Supabase to enable custom tax & bank instruction columns.",
+          };
+        }
+      }
       return { success: false, error: error.message };
     }
 

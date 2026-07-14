@@ -52,9 +52,9 @@ export async function getAuthenticatedWorkspaceContext(
 
   // 1. Authenticated User flow
   if (user) {
-    const { data: memberRows, error } = await supabaseClient
+    const { data: memberRows } = await supabaseClient
       .from('workspace_members')
-      .select('workspace_id, role, workspaces (id, name, company_logo_url)')
+      .select('workspace_id, role, workspaces (*)')
       .eq('user_id', user.id);
 
     if (memberRows && memberRows.length > 0) {

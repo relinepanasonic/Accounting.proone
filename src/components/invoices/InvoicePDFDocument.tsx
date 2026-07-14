@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { ArrowLeft, Printer, Download, Mail, Phone, Globe, MapPin } from 'lucide-react';
 import { ProfessorTokoOnlineLogo } from '@/components/invoices/ProfessorTokoOnlineLogo';
 
@@ -96,7 +97,13 @@ export function InvoicePDFDocument({
 
           {/* Logo & Branding (Top Left) */}
           <div className="flex items-center gap-4 z-10 pl-2">
-            <ProfessorTokoOnlineLogo className="w-14 h-14 shrink-0" />
+            <Image
+              src="/logo (8).png"
+              alt="Professor Toko Online Logo"
+              width={56}
+              height={56}
+              className="shrink-0 object-contain"
+            />
             <div>
               <h1 className="text-xl font-bold tracking-wider uppercase text-white font-serif">
                 PROFESSOR TOKO ONLINE

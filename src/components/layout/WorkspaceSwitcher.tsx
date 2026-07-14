@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useTransition } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Building2, ChevronDown, Check, Loader2, ShieldCheck, Plus } from 'lucide-react';
 import { switchWorkspace } from '@/app/actions/workspace';
@@ -72,7 +73,7 @@ export function WorkspaceSwitcher({
               {isPending ? (
                 <Loader2 className="w-4 h-4 animate-spin text-[#f5d77f]" />
               ) : (
-                <Building2 className="w-4 h-4 text-[#d4af37]" />
+                <Image src="/logo (8).png" alt="PTO" width={20} height={20} className="object-contain" />
               )}
             </div>
             <div className="min-w-0 flex-1">

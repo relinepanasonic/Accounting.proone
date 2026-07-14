@@ -334,17 +334,18 @@ export function NewInvoiceForm({ clients, products = [] }: NewInvoiceFormProps) 
       </div>
 
       {/* Footer Submission Actions */}
-      <div className="flex items-center justify-end gap-3">
+      {/* Footer Submission Actions (Mobile-First responsive flex & touch target height >=44px) */}
+      <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-3">
         <Link
           href="/invoices"
-          className="px-5 py-2.5 rounded-full border border-zinc-800 hover:border-zinc-700 text-xs font-bold text-zinc-300 uppercase tracking-wider transition-colors"
+          className="px-5 py-3 min-h-[44px] rounded-full border border-zinc-800 hover:border-zinc-700 text-xs font-bold text-zinc-300 uppercase tracking-wider transition-colors text-center flex items-center justify-center"
         >
           Cancel
         </Link>
         <button
           type="submit"
           disabled={isPending}
-          className="gold-btn inline-flex items-center gap-2.5 px-8 py-3 rounded-full text-xs uppercase tracking-wider disabled:opacity-75 transition-all shadow-[0_0_20px_rgba(212,175,55,0.4)]"
+          className="gold-btn inline-flex items-center justify-center gap-2.5 px-8 py-3 min-h-[44px] rounded-full text-xs uppercase tracking-wider disabled:opacity-75 transition-all shadow-[0_0_20px_rgba(212,175,55,0.4)]"
         >
           {isPending ? (
             <Loader2 className="w-4 h-4 animate-spin text-black" />

@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { WorkspaceSwitcher } from '@/components/layout/WorkspaceSwitcher';
 import type { WorkspaceContextInfo } from '@/lib/auth/workspace-context';
@@ -106,7 +107,7 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
 
   return (
     <aside
-      className={`relative z-40 flex flex-col justify-between bg-[#0e0f14]/95 backdrop-blur-2xl border-r border-[#d4af37]/20 transition-all duration-300 ${
+      className={`relative z-40 hidden lg:flex flex-col justify-between bg-[#0e0f14]/95 backdrop-blur-2xl border-r border-[#d4af37]/20 transition-all duration-300 ${
         isCollapsed ? 'w-20' : 'w-64'
       }`}
     >
@@ -115,9 +116,13 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
         <div className="h-16 flex items-center justify-between px-4 border-b border-[#d4af37]/20">
           {!isCollapsed && (
             <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-[#f5d77f] via-[#d4af37] to-[#997319] flex items-center justify-center font-black text-black text-xs shadow-[0_0_15px_rgba(212,175,55,0.4)]">
-                PRO
-              </div>
+              <Image
+                src="/logo (8).png"
+                alt="Professor Toko Logo"
+                width={30}
+                height={30}
+                className="rounded-lg object-contain drop-shadow-[0_0_12px_rgba(212,175,55,0.45)]"
+              />
               <div className="flex flex-col">
                 <span className="text-xs font-bold tracking-wider uppercase text-white">
                   ACCT.PROONE
@@ -129,8 +134,14 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
             </div>
           )}
           {isCollapsed && (
-            <div className="mx-auto w-7 h-7 rounded-lg bg-gradient-to-tr from-[#f5d77f] via-[#d4af37] to-[#997319] flex items-center justify-center font-black text-black text-xs shadow-[0_0_15px_rgba(212,175,55,0.4)]">
-              PRO
+            <div className="mx-auto">
+              <Image
+                src="/logo (8).png"
+                alt="Professor Toko Logo"
+                width={28}
+                height={28}
+                className="rounded-lg object-contain drop-shadow-[0_0_12px_rgba(212,175,55,0.45)]"
+              />
             </div>
           )}
 

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { RupiahInput } from '@/components/ui/RupiahInput';
 import { DescriptionBullets } from '@/components/ui/DescriptionBullets';
+import { BulletTextarea } from '@/components/ui/BulletTextarea';
 import {
   ArrowLeft,
   Sliders,
@@ -753,11 +754,11 @@ export function WorkspaceDetailTabs({
                     <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1.5 font-mono">
                       DELIVERABLE DESCRIPTION (BULLET POINTS)
                     </label>
-                    <textarea
+                    <BulletTextarea
                       rows={3}
-                      placeholder={`Enter deliverable scope, one bullet point per line:\n• 3 month Contracts\n• 2 jam per live session\n• Regular Host ketersediaan Jam Host`}
+                      placeholder="Automatic bullet points..."
                       value={newProdDesc}
-                      onChange={(e) => setNewProdDesc(e.target.value)}
+                      onChange={(val) => setNewProdDesc(val)}
                       className="w-full bg-black border border-yellow-600/30 rounded-xl px-3.5 py-2.5 text-xs text-zinc-300 focus:outline-none focus:border-[#d4af37] font-sans whitespace-pre-line"
                     />
                   </div>

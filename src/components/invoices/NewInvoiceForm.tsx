@@ -6,6 +6,7 @@ import { Plus, Trash2, Check, AlertCircle, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { createInvoice } from '@/app/actions/invoices';
 import { RupiahInput } from '@/components/ui/RupiahInput';
+import { BulletTextarea } from '@/components/ui/BulletTextarea';
 
 interface LineItem {
   id: string;
@@ -266,13 +267,13 @@ export function NewInvoiceForm({ clients, products = [] }: NewInvoiceFormProps) 
                       <option value="custom">-- Custom / Manual Override --</option>
                     </select>
                   )}
-                  <textarea
+                  <BulletTextarea
                     rows={3}
                     required
-                    placeholder="Deliverable description (bullet points auto-rendered from newlines or |)..."
+                    placeholder="Automatic bullet points..."
                     value={item.description}
-                    onChange={(e) =>
-                      handleUpdateItem(item.id, 'description', e.target.value)
+                    onChange={(val) =>
+                      handleUpdateItem(item.id, 'description', val)
                     }
                     className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#d4af37] font-sans whitespace-pre-line"
                   />

@@ -5,6 +5,7 @@ import { Plus, Trash2, Package, Loader2, AlertCircle } from 'lucide-react';
 import { createProduct, deleteProduct } from '@/app/actions/settings';
 import { RupiahInput } from '@/components/ui/RupiahInput';
 import { DescriptionBullets } from '@/components/ui/DescriptionBullets';
+import { BulletTextarea } from '@/components/ui/BulletTextarea';
 
 export interface CatalogProduct {
   id: string;
@@ -109,11 +110,11 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
             <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1">
               DELIVERABLE DESCRIPTION (BULLET POINTS)
             </label>
-            <textarea
+            <BulletTextarea
               rows={3}
-              placeholder={`Enter bullet points (one per line or pipe-separated):\n• 3 month Contracts\n• 2 jam per live session\n• Regular Host ketersediaan Jam Host`}
+              placeholder="Automatic bullet points..."
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(val) => setDescription(val)}
               className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-300 focus:outline-none focus:border-[#d4af37] font-sans whitespace-pre-line"
             />
           </div>

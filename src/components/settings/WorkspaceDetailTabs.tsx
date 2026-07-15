@@ -19,10 +19,15 @@ import {
   Loader2,
   Save,
   Building2,
+  Edit2,
+  Copy,
+  X,
 } from 'lucide-react';
 import {
   saveWorkspaceSettings,
   createProduct,
+  updateProduct,
+  duplicateProduct,
   deleteProduct,
   type BankAccountItem,
 } from '@/app/actions/settings';
@@ -74,6 +79,10 @@ export function WorkspaceDetailTabs({
   const [newProdName, setNewProdName] = useState('');
   const [newProdDesc, setNewProdDesc] = useState('');
   const [newProdPrice, setNewProdPrice] = useState('85000000');
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const [editProdName, setEditProdName] = useState('');
+  const [editProdDesc, setEditProdDesc] = useState('');
+  const [editProdPrice, setEditProdPrice] = useState('0');
   const [catalogMsg, setCatalogMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [catalogPending, startCatalogTransition] = useTransition();
 
@@ -205,6 +214,55 @@ export function WorkspaceDetailTabs({
         setCatalogMsg({ type: 'error', text: res.error || 'Failed to remove item from server.' });
       } else {
         router.refresh();
+      }
+    });
+  };
+
+  const handleUpdateProduct = (productId: string) => {
+    if (!editProdName.trim()) return;
+    setCatalogMsg(null);
+    startCatalogTransition(async () => {
+      const res = await updateProduct({
+        id: productId,
+        targetWorkspaceId,
+        name: editProdName.trim(),
+        description: editProdDesc,
+        unitPrice: Number(editProdPrice) || 0,
+      });
+      if (res.success) {
+        setCatalogItems((prev) =>
+          prev.map((p) =>
+            p.id === productId
+              ? {
+                  ...p,
+                  name: editProdName.trim(),
+                  description: editProdDesc,
+                  unit_price: Number(editProdPrice) || 0,
+                }
+              : p
+          )
+        );
+        setCatalogMsg({ type: 'success', text: `Updated "${editProdName.trim()}" successfully.` });
+        setEditingProductId(null);
+        router.refresh();
+      } else {
+        setCatalogMsg({ type: 'error', text: res.error || 'Failed to update item.' });
+      }
+    });
+  };
+
+  const handleDuplicateProduct = (productId: string) => {
+    setCatalogMsg(null);
+    startCatalogTransition(async () => {
+      const res = await duplicateProduct(productId, targetWorkspaceId);
+      if (res.success) {
+        if (res.product) {
+          setCatalogItems((prev) => [...prev, res.product]);
+        }
+        setCatalogMsg({ type: 'success', text: 'Product duplicated successfully.' });
+        router.refresh();
+      } else {
+        setCatalogMsg({ type: 'error', text: res.error || 'Failed to duplicate item.' });
       }
     });
   };
@@ -829,38 +887,133 @@ export function WorkspaceDetailTabs({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-yellow-600/10 text-xs">
-                    {catalogItems.map((item) => (
-                      <tr
-                        key={item.id}
-                        className="hover:bg-white/5 transition-colors group"
-                      >
-                        <td className="py-4 px-6 min-w-[280px]">
-                          <div className="font-bold text-sm text-white font-sans group-hover:text-[#f5d77f] transition-colors">
-                            {item.name}
-                          </div>
-                          <DescriptionBullets
-                            description={item.description}
-                            allBullets={true}
-                            isDark={true}
-                            className="mt-1.5 max-w-xl"
-                          />
-                        </td>
-                        <td className="py-4 px-6 text-right font-mono font-bold text-sm text-[#f5d77f] whitespace-nowrap">
-                          Rp {Number(item.unit_price || 0).toLocaleString('id-ID')}
-                        </td>
-                        <td className="py-4 px-6 text-right whitespace-nowrap">
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteProduct(item.id)}
-                            disabled={catalogPending}
-                            title="Remove Product"
-                            className="p-2 rounded-xl border border-yellow-600/20 bg-black/40 text-zinc-400 hover:text-red-400 hover:border-red-500/40 transition-all"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {catalogItems.map((item) =>
+                      editingProductId === item.id ? (
+                        <tr key={item.id} className="bg-white/5 border-y border-[#d4af37]/40 transition-all">
+                          <td className="py-4 px-6 min-w-[280px]">
+                            <div className="space-y-3 py-1">
+                              <div>
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-300 mb-1 font-mono">
+                                  SERVICE / DELIVERABLE NAME *
+                                </label>
+                                <input
+                                  type="text"
+                                  value={editProdName}
+                                  onChange={(e) => setEditProdName(e.target.value)}
+                                  autoFocus
+                                  className="w-full bg-black border border-yellow-600/40 rounded-xl px-3 py-2 text-xs text-white font-sans focus:outline-none focus:border-[#d4af37]"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-300 mb-1 font-mono">
+                                  DELIVERABLE DESCRIPTION (BULLET POINTS)
+                                </label>
+                                <BulletTextarea
+                                  rows={3}
+                                  value={editProdDesc}
+                                  onChange={(val) => setEditProdDesc(val)}
+                                  className="w-full bg-black border border-yellow-600/40 rounded-xl px-3 py-2 text-xs text-zinc-300 font-sans focus:outline-none focus:border-[#d4af37] whitespace-pre-line"
+                                />
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-4 px-6 text-right align-top">
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-300 mb-1 font-mono text-right">
+                                UNIT PRICE (IDR / RP) *
+                              </label>
+                              <RupiahInput
+                                value={editProdPrice}
+                                onChange={(e) => setEditProdPrice(e.target.value)}
+                                className="w-44 bg-black border border-yellow-600/40 rounded-xl px-3 py-2 text-xs font-mono text-[#f5d77f] text-right focus:outline-none focus:border-[#d4af37] ml-auto"
+                              />
+                            </div>
+                          </td>
+                          <td className="py-4 px-6 text-right whitespace-nowrap align-top">
+                            <div className="flex items-center justify-end gap-2 mt-5">
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateProduct(item.id)}
+                                disabled={catalogPending || !editProdName.trim()}
+                                title="Save Changes"
+                                className="p-2 rounded-xl border border-green-500/40 bg-green-500/15 text-green-400 hover:bg-green-500/25 hover:border-green-400 transition-all shadow-[0_0_12px_rgba(34,197,94,0.2)]"
+                              >
+                                {catalogPending ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Check className="w-4 h-4" />
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingProductId(null)}
+                                disabled={catalogPending}
+                                title="Cancel Edit"
+                                className="p-2 rounded-xl border border-zinc-700 bg-black/40 text-zinc-400 hover:text-white hover:border-zinc-500 transition-all"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr
+                          key={item.id}
+                          className="hover:bg-white/5 transition-colors group"
+                        >
+                          <td className="py-4 px-6 min-w-[280px]">
+                            <div className="font-bold text-sm text-white font-sans group-hover:text-[#f5d77f] transition-colors">
+                              {item.name}
+                            </div>
+                            <DescriptionBullets
+                              description={item.description}
+                              allBullets={true}
+                              isDark={true}
+                              className="mt-1.5 max-w-xl"
+                            />
+                          </td>
+                          <td className="py-4 px-6 text-right font-mono font-bold text-sm text-[#f5d77f] whitespace-nowrap">
+                            Rp {Number(item.unit_price || 0).toLocaleString('id-ID')}
+                          </td>
+                          <td className="py-4 px-6 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleDuplicateProduct(item.id)}
+                                disabled={catalogPending}
+                                title="Duplicate Product"
+                                className="p-2 rounded-xl border border-yellow-600/20 bg-black/40 text-zinc-400 hover:text-[#f5d77f] hover:border-[#f5d77f]/40 transition-all"
+                              >
+                                <Copy className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingProductId(item.id);
+                                  setEditProdName(item.name);
+                                  setEditProdDesc(item.description || '');
+                                  setEditProdPrice(String(item.unit_price || 0));
+                                }}
+                                disabled={catalogPending}
+                                title="Edit Product"
+                                className="p-2 rounded-xl border border-yellow-600/20 bg-black/40 text-zinc-400 hover:text-[#f5d77f] hover:border-[#f5d77f]/40 transition-all"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteProduct(item.id)}
+                                disabled={catalogPending}
+                                title="Remove Product"
+                                className="p-2 rounded-xl border border-yellow-600/20 bg-black/40 text-zinc-400 hover:text-red-400 hover:border-red-500/40 transition-all"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    )}
                   </tbody>
                 </table>
               </div>

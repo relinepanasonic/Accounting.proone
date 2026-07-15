@@ -372,6 +372,88 @@ export async function deleteProduct(productId: string, targetWorkspaceId?: strin
 }
 
 /**
+ * Update an existing Product / Service in the catalog
+ */
+export async function updateProduct(payload: {
+  id: string;
+  targetWorkspaceId?: string;
+  name: string;
+  description: string;
+  unitPrice: number;
+}) {
+  try {
+    const supabase = await createClient();
+    if (!payload.id || !payload.name) {
+      return { success: false, error: 'Product ID and Name are required.' };
+    }
+
+    const { error } = await supabase
+      .from('products')
+      .update({
+        name: payload.name,
+        description: payload.description || null,
+        unit_price: Number(payload.unitPrice) || 0,
+      })
+      .eq('id', payload.id);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/settings');
+    if (payload.targetWorkspaceId) {
+      revalidatePath(`/settings/workspaces/${payload.targetWorkspaceId}`);
+    }
+    revalidatePath('/invoices/new');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to update catalog item.' };
+  }
+}
+
+/**
+ * Duplicate an existing Product / Service in the catalog
+ */
+export async function duplicateProduct(productId: string, targetWorkspaceId?: string) {
+  try {
+    const supabase = await createClient();
+    const { workspaceId: activeId } = await resolveWorkspaceContext(supabase);
+    const workspaceId = targetWorkspaceId || activeId;
+
+    // Fetch existing item
+    const { data: item, error: fetchErr } = await supabase
+      .from('products')
+      .select('*')
+      .eq('id', productId)
+      .single();
+
+    if (fetchErr || !item) {
+      return { success: false, error: 'Original product not found for duplication.' };
+    }
+
+    const { data: inserted, error } = await supabase.from('products').insert({
+      workspace_id: workspaceId,
+      name: `${item.name} (Copy)`,
+      description: item.description || null,
+      unit_price: Number(item.unit_price) || 0,
+    }).select('*').single();
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/settings');
+    if (targetWorkspaceId) {
+      revalidatePath(`/settings/workspaces/${targetWorkspaceId}`);
+    }
+    revalidatePath('/invoices/new');
+    return { success: true, product: inserted };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to duplicate item.' };
+  }
+}
+
+/**
  * Create a new Client CRM record
  */
 export async function createClientRecord(payload: {

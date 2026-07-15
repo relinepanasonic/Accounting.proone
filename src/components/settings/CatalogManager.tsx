@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useTransition } from 'react';
-import { Plus, Trash2, Package, Loader2, AlertCircle } from 'lucide-react';
-import { createProduct, deleteProduct } from '@/app/actions/settings';
+import { Plus, Trash2, Package, Loader2, AlertCircle, Edit2, Copy, X, Check } from 'lucide-react';
+import { createProduct, deleteProduct, updateProduct, duplicateProduct } from '@/app/actions/settings';
 import { RupiahInput } from '@/components/ui/RupiahInput';
 import { DescriptionBullets } from '@/components/ui/DescriptionBullets';
 import { BulletTextarea } from '@/components/ui/BulletTextarea';
@@ -24,6 +24,10 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [unitPrice, setUnitPrice] = useState('85000000');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editPrice, setEditPrice] = useState('0');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -67,6 +71,42 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
     startTransition(async () => {
       setProducts((prev) => prev.filter((p) => p.id !== id));
       await deleteProduct(id, targetWorkspaceId);
+    });
+  };
+
+  const handleUpdate = (id: string) => {
+    if (!editName.trim()) return;
+    startTransition(async () => {
+      const res = await updateProduct({
+        id,
+        targetWorkspaceId,
+        name: editName.trim(),
+        description: editDesc,
+        unitPrice: Number(editPrice) || 0,
+      });
+      if (res.success) {
+        setProducts((prev) =>
+          prev.map((p) =>
+            p.id === id
+              ? { ...p, name: editName.trim(), description: editDesc, unit_price: Number(editPrice) || 0 }
+              : p
+          )
+        );
+        setEditingId(null);
+      } else {
+        setErrorMsg(res.error || 'Failed to update item');
+      }
+    });
+  };
+
+  const handleDuplicate = (id: string) => {
+    startTransition(async () => {
+      const res = await duplicateProduct(id, targetWorkspaceId);
+      if (res.success && res.product) {
+        setProducts((prev) => [res.product, ...prev]);
+      } else if (!res.success) {
+        setErrorMsg(res.error || 'Failed to duplicate item');
+      }
     });
   };
 
@@ -166,32 +206,119 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-900 text-xs">
-              {products.map((item) => (
-                <tr key={item.id} className="hover:bg-zinc-900/40 transition-colors">
-                  <td className="py-3.5 px-3">
-                    <div className="font-bold text-white">{item.name}</div>
-                    <DescriptionBullets
-                      description={item.description}
-                      allBullets={true}
-                      isDark={true}
-                      className="mt-1"
-                    />
-                  </td>
-                  <td className="py-3.5 px-3 text-right font-mono font-bold text-[#f5d77f]">
-                    Rp {Number(item.unit_price).toLocaleString('id-ID')}
-                  </td>
-                  <td className="py-3.5 px-3 text-right">
-                    <button
-                      onClick={() => handleDelete(item.id)}
-                      disabled={isPending}
-                      className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-red-500/50 text-zinc-500 hover:text-red-400 transition-colors"
-                      title="Delete Product"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {products.map((item) =>
+                editingId === item.id ? (
+                  <tr key={item.id} className="bg-zinc-900/60 border-y border-[#d4af37]/40 transition-colors">
+                    <td className="py-3 px-3 min-w-[240px]">
+                      <div className="space-y-2">
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-300 mb-1">
+                            SERVICE NAME *
+                          </label>
+                          <input
+                            type="text"
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            autoFocus
+                            className="w-full bg-black border border-yellow-600/40 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#d4af37]"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-300 mb-1">
+                            DELIVERABLE DESCRIPTION (BULLET POINTS)
+                          </label>
+                          <BulletTextarea
+                            rows={3}
+                            value={editDesc}
+                            onChange={(val) => setEditDesc(val)}
+                            className="w-full bg-black border border-yellow-600/40 rounded-xl px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-[#d4af37] whitespace-pre-line font-sans"
+                          />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-3 px-3 text-right align-top">
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-300 mb-1 text-right">
+                          UNIT PRICE (RP) *
+                        </label>
+                        <RupiahInput
+                          value={editPrice}
+                          onChange={(e) => setEditPrice(e.target.value)}
+                          className="w-40 bg-black border border-yellow-600/40 rounded-xl px-2.5 py-1.5 text-xs font-mono text-[#f5d77f] text-right focus:outline-none focus:border-[#d4af37] ml-auto"
+                        />
+                      </div>
+                    </td>
+                    <td className="py-3 px-3 text-right align-top whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-1.5 mt-4">
+                        <button
+                          onClick={() => handleUpdate(item.id)}
+                          disabled={isPending || !editName.trim()}
+                          className="p-1.5 rounded-lg bg-green-500/15 border border-green-500/40 hover:border-green-400 text-green-400 transition-colors"
+                          title="Save Changes"
+                        >
+                          {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                        </button>
+                        <button
+                          onClick={() => setEditingId(null)}
+                          disabled={isPending}
+                          className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white transition-colors"
+                          title="Cancel"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  <tr key={item.id} className="hover:bg-zinc-900/40 transition-colors">
+                    <td className="py-3.5 px-3">
+                      <div className="font-bold text-white">{item.name}</div>
+                      <DescriptionBullets
+                        description={item.description}
+                        allBullets={true}
+                        isDark={true}
+                        className="mt-1"
+                      />
+                    </td>
+                    <td className="py-3.5 px-3 text-right font-mono font-bold text-[#f5d77f]">
+                      Rp {Number(item.unit_price).toLocaleString('id-ID')}
+                    </td>
+                    <td className="py-3.5 px-3 text-right whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => handleDuplicate(item.id)}
+                          disabled={isPending}
+                          className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-[#f5d77f]/50 text-zinc-500 hover:text-[#f5d77f] transition-colors"
+                          title="Duplicate Product"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingId(item.id);
+                            setEditName(item.name);
+                            setEditDesc(item.description || '');
+                            setEditPrice(String(item.unit_price || 0));
+                          }}
+                          disabled={isPending}
+                          className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-[#f5d77f]/50 text-zinc-500 hover:text-[#f5d77f] transition-colors"
+                          title="Edit Product"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(item.id)}
+                          disabled={isPending}
+                          className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-red-500/50 text-zinc-500 hover:text-red-400 transition-colors"
+                          title="Delete Product"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              )}
               {products.length === 0 && (
                 <tr>
                   <td colSpan={3} className="py-8 text-center text-xs text-zinc-500 font-mono">

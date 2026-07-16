@@ -22,6 +22,7 @@ import {
   Edit2,
   Copy,
   X,
+  UploadCloud,
 } from 'lucide-react';
 import {
   saveWorkspaceSettings,
@@ -127,6 +128,51 @@ export function WorkspaceDetailTabs({
         setIdentityMsg({ type: 'error', text: res.error || 'Failed to update identity settings.' });
       }
     });
+  };
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      if (!result) return;
+
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxDim = 400; // 400px maximum dimension preserves crisp quality while keeping data footprint light
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/png');
+          setLogoUrl(dataUrl);
+        } else {
+          setLogoUrl(result);
+        }
+      };
+      img.onerror = () => {
+        setLogoUrl(result);
+      };
+      img.src = result;
+    };
+    reader.readAsDataURL(file);
   };
 
   // --- Handlers: Banking Tab ---
@@ -450,18 +496,53 @@ export function WorkspaceDetailTabs({
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1.5">
-                    LOGO URL (IMAGE PATH OR DIRECT LINK)
+                <div className="sm:col-span-2">
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1.5 font-mono">
+                    BRAND LOGO (BROWSE & UPLOAD FROM YOUR PC OR ENTER URL)
                   </label>
-                  <input
-                    type="text"
-                    placeholder="/logo (8).png or https://..."
-                    value={logoUrl}
-                    onChange={(e) => setLogoUrl(e.target.value)}
-                    disabled={identityPending}
-                    className="w-full bg-black border border-yellow-600/30 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#d4af37] transition-all"
-                  />
+                  <div className="flex flex-col sm:flex-row items-center gap-4 p-4 rounded-xl bg-black/70 border border-yellow-600/30">
+                    {/* Logo Preview box */}
+                    <div className="w-20 h-20 rounded-xl bg-zinc-900 border border-yellow-600/40 flex items-center justify-center shrink-0 overflow-hidden relative group shadow-md">
+                      {logoUrl ? (
+                        <img src={logoUrl} alt="Logo preview" className="w-full h-full object-contain p-1.5" />
+                      ) : (
+                        <UploadCloud className="w-7 h-7 text-zinc-600" />
+                      )}
+                    </div>
+
+                    <div className="flex-1 w-full space-y-3">
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        <label className="gold-btn inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wider cursor-pointer shadow-[0_0_15px_rgba(212,175,55,0.3)] hover:scale-105 transition-transform">
+                          <UploadCloud className="w-4 h-4 text-black" />
+                          <span>BROWSE PC / UPLOAD LOGO</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleLogoUpload}
+                            disabled={identityPending}
+                            className="hidden"
+                          />
+                        </label>
+                        {logoUrl && (
+                          <button
+                            type="button"
+                            onClick={() => setLogoUrl('')}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-red-500/15 border border-red-500/40 text-red-400 hover:bg-red-500/25 text-xs font-mono font-bold transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" /> REMOVE LOGO
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Or enter direct image URL / path (e.g. /logo.png or https://...)"
+                        value={logoUrl}
+                        onChange={(e) => setLogoUrl(e.target.value)}
+                        disabled={identityPending}
+                        className="w-full bg-black/90 border border-yellow-600/20 rounded-lg px-3 py-2 text-xs text-zinc-300 font-mono focus:outline-none focus:border-[#d4af37] transition-all"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div>

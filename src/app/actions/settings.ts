@@ -119,17 +119,41 @@ export async function saveWorkspaceSettings(payload: {
           break;
         }
         lastErr = error;
-        // If error mentions a missing column, strip that column out and try updating the rest
-        const colMatch = error.message?.match(/column "([^"]+)"/);
+        // Catch both single and double quotes, e.g. "column 'email'" or "find the 'email' column"
+        const colMatch =
+          error.message?.match(/column ['"]([^'"]+)['"]/i) ||
+          error.message?.match(/find the ['"]([^'"]+)['"] column/i);
+
         if (colMatch && colMatch[1] && colMatch[1] in currentData) {
           delete currentData[colMatch[1]];
-        } else if (error.code === '42703' || error.message?.includes('does not exist')) {
-          // Safe ultimate fallback if regex didn't match
-          currentData = {
-            name: (payload.name || '').trim(),
-          };
-          if (effectiveTaxRate !== undefined) {
-            currentData.tax_rate_percent = effectiveTaxRate;
+        } else if (
+          error.code === '42703' ||
+          error.code === 'PGRST204' ||
+          error.message?.includes('does not exist') ||
+          error.message?.includes('schema cache') ||
+          error.message?.includes('Could not find the')
+        ) {
+          // Strip new columns progressively if regex didn't match
+          const optionalCols = [
+            'email',
+            'phone',
+            'website',
+            'tagline',
+            'company_logo_url',
+            'logo_url',
+            'tax_rate_percent',
+            'is_tax_registered',
+          ];
+          let removedAny = false;
+          for (const col of optionalCols) {
+            if (col in currentData) {
+              delete currentData[col];
+              removedAny = true;
+              break;
+            }
+          }
+          if (!removedAny) {
+            currentData = { name: (payload.name || '').trim() };
           }
         } else {
           break;

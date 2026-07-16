@@ -65,7 +65,7 @@ export async function createQuotation(payload: CreateQuotationPayload): Promise<
     }
 
     // Fallback if quotations table is not yet created in Supabase: store in invoices table with status = 'quotation'
-    const totalAmount = payload.lineItems.reduce((acc, item) => acc + (Number(item.unitPrice) || 0), 0);
+    const totalAmount = payload.lineItems.reduce((acc: number, item: any) => acc + (Number(item.unitPrice) || 0), 0);
     const { data: fallbackInv, error: invError } = await supabase
       .from('invoices')
       .insert({

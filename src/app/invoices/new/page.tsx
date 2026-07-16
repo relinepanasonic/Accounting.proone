@@ -2,14 +2,17 @@ import React from 'react';
 import Link from 'next/link';
 import { ArrowLeft, FileText, Package } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { NewInvoiceForm } from '@/components/invoices/NewInvoiceForm';
 
 export const dynamic = 'force-dynamic';
 
 export default async function NewInvoicePage() {
   const supabase = await createClient();
-  const { data: clients } = await supabase.from('clients').select('id, name');
-  const { data: products } = await supabase.from('products').select('*');
+  const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+
+  const { data: clients } = await supabase.from('clients').select('id, name').eq('workspace_id', activeWorkspaceId);
+  const { data: products } = await supabase.from('products').select('*').eq('workspace_id', activeWorkspaceId);
 
   const clientList = clients || [];
   const productList = products || [];

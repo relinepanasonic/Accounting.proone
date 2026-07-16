@@ -13,32 +13,32 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
   const { id } = resolvedParams;
   const supabase = await createClient();
 
-  // 1. Fetch parent invoice
+  // 1. Fetch parent invoice with relational joins
   const { data: inv } = await supabase
     .from('invoices')
-    .select('*, clients(*)')
+    .select('*, clients(*), invoice_line_items(*), workspaces(*)')
     .eq('id', id)
     .single();
 
-  // 2. Fetch line items
-  const { data: lineItems } = await supabase
-    .from('invoice_line_items')
-    .select('*')
-    .eq('invoice_id', id)
-    .order('sort_order', { ascending: true });
+  // 2. Extract line items directly or fallback to query
+  const lineItems =
+    Array.isArray(inv?.invoice_line_items) && inv.invoice_line_items.length > 0
+      ? inv.invoice_line_items.sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0))
+      : (await supabase.from('invoice_line_items').select('*').eq('invoice_id', id).order('sort_order', { ascending: true })).data;
 
   const clientObj = Array.isArray(inv?.clients) ? inv?.clients[0] : inv?.clients;
-  const workspaceId = inv?.workspace_id || '';
+  const wsObjFromJoin = Array.isArray(inv?.workspaces) ? inv?.workspaces[0] : inv?.workspaces;
+  const workspaceId = inv?.workspace_id || wsObjFromJoin?.id || '';
 
-  // 3. Fetch workspace and bank accounts
-  let wsObj: any = null;
+  // 3. Fetch workspace (if join missed) and bank accounts
+  let wsObj: any = wsObjFromJoin || null;
   let bankAccounts: any[] = [];
   if (workspaceId) {
     const [wsRes, accountsRes] = await Promise.all([
-      supabase.from('workspaces').select('*').eq('id', workspaceId).single(),
+      wsObj ? Promise.resolve({ data: wsObj }) : supabase.from('workspaces').select('*').eq('id', workspaceId).single(),
       supabase.from('workspace_bank_accounts').select('*').eq('workspace_id', workspaceId).order('is_default', { ascending: false }),
     ]);
-    wsObj = wsRes.data;
+    if (!wsObj) wsObj = wsRes.data;
     if (accountsRes.data && accountsRes.data.length > 0) {
       bankAccounts = accountsRes.data;
     } else if (wsObj?.payment_instructions) {
@@ -87,7 +87,7 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
         }))
       : [];
 
-  const subtotal = items.reduce((acc, item) => acc + item.total, 0);
+  const subtotal = items.reduce((acc: number, item: any) => acc + item.total, 0);
 
   const isTaxReg =
     wsObj?.is_tax_registered !== undefined && wsObj?.is_tax_registered !== null

@@ -11,7 +11,7 @@ export default async function NewQuotationPage() {
   const supabase = await createClient();
   const { activeWorkspaceId: workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
-  const { data: clients } = await supabase.from('clients').select('id, name');
+  const { data: clients } = await supabase.from('clients').select('id, name').eq('workspace_id', workspaceId);
   const { data: products } = await supabase.from('products').select('*').eq('workspace_id', workspaceId);
 
   const clientList = clients || [];

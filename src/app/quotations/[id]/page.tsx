@@ -20,24 +20,26 @@ export default async function QuotationDetailPage({ params }: QuotationPageProps
 
   const { data: quoData } = await supabase
     .from('quotations')
-    .select('*, clients(*)')
+    .select('*, clients(*), quotation_line_items(*), workspaces(*)')
     .eq('id', id)
     .single();
+
+  let wsObjFromJoin: any = null;
 
   if (quoData) {
     quoObj = quoData;
     clientObj = Array.isArray(quoObj.clients) ? quoObj.clients[0] : quoObj.clients;
-    const { data: items } = await supabase
-      .from('quotation_line_items')
-      .select('*')
-      .eq('quotation_id', id)
-      .order('sort_order', { ascending: true });
+    wsObjFromJoin = Array.isArray(quoObj.workspaces) ? quoObj.workspaces[0] : quoObj.workspaces;
+    const items =
+      Array.isArray(quoObj.quotation_line_items) && quoObj.quotation_line_items.length > 0
+        ? quoObj.quotation_line_items.sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0))
+        : (await supabase.from('quotation_line_items').select('*').eq('quotation_id', id).order('sort_order', { ascending: true })).data;
     lineItems = items || [];
   } else {
     // 2. Fallback: check if stored inside invoices table with status = 'quotation'
     const { data: invData } = await supabase
       .from('invoices')
-      .select('*, clients(*)')
+      .select('*, clients(*), invoice_line_items(*), workspaces(*)')
       .eq('id', id)
       .single();
 
@@ -46,25 +48,25 @@ export default async function QuotationDetailPage({ params }: QuotationPageProps
     }
     quoObj = invData;
     clientObj = Array.isArray(quoObj.clients) ? quoObj.clients[0] : quoObj.clients;
-    const { data: items } = await supabase
-      .from('invoice_line_items')
-      .select('*')
-      .eq('invoice_id', id)
-      .order('sort_order', { ascending: true });
+    wsObjFromJoin = Array.isArray(quoObj.workspaces) ? quoObj.workspaces[0] : quoObj.workspaces;
+    const items =
+      Array.isArray(quoObj.invoice_line_items) && quoObj.invoice_line_items.length > 0
+        ? quoObj.invoice_line_items.sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0))
+        : (await supabase.from('invoice_line_items').select('*').eq('invoice_id', id).order('sort_order', { ascending: true })).data;
     lineItems = items || [];
   }
 
-  const workspaceId = quoObj.workspace_id || '';
+  const workspaceId = quoObj.workspace_id || wsObjFromJoin?.id || '';
 
   // 3. Fetch workspace Brand ID details and bank accounts
-  let wsObj: any = null;
+  let wsObj: any = wsObjFromJoin || null;
   let bankAccounts: any[] = [];
   if (workspaceId) {
     const [wsRes, accountsRes] = await Promise.all([
-      supabase.from('workspaces').select('*').eq('id', workspaceId).single(),
+      wsObj ? Promise.resolve({ data: wsObj }) : supabase.from('workspaces').select('*').eq('id', workspaceId).single(),
       supabase.from('workspace_bank_accounts').select('*').eq('workspace_id', workspaceId).order('is_default', { ascending: false }),
     ]);
-    wsObj = wsRes.data;
+    if (!wsObj) wsObj = wsRes.data;
     if (accountsRes.data && accountsRes.data.length > 0) {
       bankAccounts = accountsRes.data;
     } else if (wsObj?.payment_instructions) {

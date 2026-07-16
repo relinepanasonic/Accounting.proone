@@ -100,8 +100,8 @@ async function ActivityLedgerTimeline() {
         </div>
       ) : (
         displayEntries.map((entry) => {
-        const totalDebits = entry.lines.reduce((s, l) => s + l.debit_amount, 0);
-        const totalCredits = entry.lines.reduce((s, l) => s + l.credit_amount, 0);
+        const totalDebits = entry.lines.reduce((s: number, l: any) => s + l.debit_amount, 0);
+        const totalCredits = entry.lines.reduce((s: number, l: any) => s + l.credit_amount, 0);
         const isBalanced = Math.abs(totalDebits - totalCredits) < 0.01;
 
         return (

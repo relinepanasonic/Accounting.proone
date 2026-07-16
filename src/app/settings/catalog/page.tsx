@@ -1,14 +1,17 @@
 import React from 'react';
 import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { CatalogManager, type CatalogProduct } from '@/components/settings/CatalogManager';
 
 export const dynamic = 'force-dynamic';
 
 export default async function CatalogSettingsPage() {
   const supabase = await createClient();
+  const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
   const { data: products } = await supabase
     .from('products')
     .select('*')
+    .eq('workspace_id', activeWorkspaceId)
     .order('created_at', { ascending: false });
 
   const fallbackCatalog: CatalogProduct[] = [

@@ -59,6 +59,11 @@ export async function saveWorkspaceSettings(payload: {
   name?: string;
   isTaxRegistered?: boolean;
   taxRatePercent?: number;
+  logoUrl?: string;
+  tagline?: string;
+  phone?: string;
+  email?: string;
+  website?: string;
   bankAccounts?: BankAccountItem[];
 }) {
   try {
@@ -70,33 +75,69 @@ export async function saveWorkspaceSettings(payload: {
       return { success: false, error: 'No active workspace context found.' };
     }
 
-    // 1. Update workspaces table if identity/tax fields are provided
-    if (payload.name !== undefined && payload.isTaxRegistered !== undefined && payload.taxRatePercent !== undefined) {
-      const effectiveTaxRate = payload.isTaxRegistered ? Number(payload.taxRatePercent) || 0 : 0;
-      const { error: wsError } = await supabase
-        .from('workspaces')
-        .update({
-          name: payload.name.trim(),
-          is_tax_registered: payload.isTaxRegistered,
-          tax_rate_percent: effectiveTaxRate,
-        })
-        .eq('id', workspaceId);
+    // 1. Update workspaces table if identity/tax/brand fields are provided
+    if (
+      payload.name !== undefined ||
+      payload.isTaxRegistered !== undefined ||
+      payload.taxRatePercent !== undefined ||
+      payload.logoUrl !== undefined ||
+      payload.tagline !== undefined ||
+      payload.phone !== undefined ||
+      payload.email !== undefined ||
+      payload.website !== undefined
+    ) {
+      const effectiveTaxRate =
+        payload.isTaxRegistered !== undefined
+          ? payload.isTaxRegistered
+            ? Number(payload.taxRatePercent) || 0
+            : 0
+          : undefined;
 
-      if (wsError) {
-        if (wsError.message?.includes('column') || wsError.code === '42703') {
-          const { error: fallbackErr } = await supabase
-            .from('workspaces')
-            .update({
-              name: payload.name.trim(),
-              tax_rate_percent: effectiveTaxRate,
-            })
-            .eq('id', workspaceId);
-          if (fallbackErr) {
-            return { success: false, error: fallbackErr.message };
+      const updatePayload: any = {};
+      if (payload.name !== undefined) updatePayload.name = payload.name.trim();
+      if (payload.isTaxRegistered !== undefined) updatePayload.is_tax_registered = payload.isTaxRegistered;
+      if (effectiveTaxRate !== undefined) updatePayload.tax_rate_percent = effectiveTaxRate;
+      if (payload.logoUrl !== undefined) {
+        updatePayload.company_logo_url = payload.logoUrl.trim();
+        updatePayload.logo_url = payload.logoUrl.trim();
+      }
+      if (payload.tagline !== undefined) updatePayload.tagline = payload.tagline.trim();
+      if (payload.phone !== undefined) updatePayload.phone = payload.phone.trim();
+      if (payload.email !== undefined) updatePayload.email = payload.email.trim();
+      if (payload.website !== undefined) updatePayload.website = payload.website.trim();
+
+      let currentData = { ...updatePayload };
+      let lastErr = null;
+      for (let attempt = 0; attempt < 10; attempt++) {
+        const { error } = await supabase
+          .from('workspaces')
+          .update(currentData)
+          .eq('id', workspaceId);
+
+        if (!error) {
+          lastErr = null;
+          break;
+        }
+        lastErr = error;
+        // If error mentions a missing column, strip that column out and try updating the rest
+        const colMatch = error.message?.match(/column "([^"]+)"/);
+        if (colMatch && colMatch[1] && colMatch[1] in currentData) {
+          delete currentData[colMatch[1]];
+        } else if (error.code === '42703' || error.message?.includes('does not exist')) {
+          // Safe ultimate fallback if regex didn't match
+          currentData = {
+            name: (payload.name || '').trim(),
+          };
+          if (effectiveTaxRate !== undefined) {
+            currentData.tax_rate_percent = effectiveTaxRate;
           }
         } else {
-          return { success: false, error: wsError.message };
+          break;
         }
+      }
+
+      if (lastErr) {
+        return { success: false, error: lastErr.message };
       }
     }
 

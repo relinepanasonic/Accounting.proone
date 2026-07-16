@@ -1,36 +1,62 @@
 import React from 'react';
+import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { InvoicePDFDocument, InvoiceItemData } from '@/components/invoices/InvoicePDFDocument';
+import { InvoicePDFDocument, type InvoiceItemData } from '@/components/invoices/InvoicePDFDocument';
 
 export const dynamic = 'force-dynamic';
 
-interface InvoiceDetailPageProps {
+interface QuotationPageProps {
   params: Promise<{ id: string }>;
 }
 
-export default async function InvoiceDetailPage({ params }: InvoiceDetailPageProps) {
-  const resolvedParams = await params;
-  const { id } = resolvedParams;
+export default async function QuotationDetailPage({ params }: QuotationPageProps) {
+  const { id } = await params;
   const supabase = await createClient();
 
-  // 1. Fetch parent invoice
-  const { data: inv } = await supabase
-    .from('invoices')
+  // 1. Try fetching from dedicated quotations table
+  let quoObj: any = null;
+  let lineItems: any[] = [];
+  let clientObj: any = null;
+
+  const { data: quoData } = await supabase
+    .from('quotations')
     .select('*, clients(*)')
     .eq('id', id)
     .single();
 
-  // 2. Fetch line items
-  const { data: lineItems } = await supabase
-    .from('invoice_line_items')
-    .select('*')
-    .eq('invoice_id', id)
-    .order('sort_order', { ascending: true });
+  if (quoData) {
+    quoObj = quoData;
+    clientObj = Array.isArray(quoObj.clients) ? quoObj.clients[0] : quoObj.clients;
+    const { data: items } = await supabase
+      .from('quotation_line_items')
+      .select('*')
+      .eq('quotation_id', id)
+      .order('sort_order', { ascending: true });
+    lineItems = items || [];
+  } else {
+    // 2. Fallback: check if stored inside invoices table with status = 'quotation'
+    const { data: invData } = await supabase
+      .from('invoices')
+      .select('*, clients(*)')
+      .eq('id', id)
+      .single();
 
-  const clientObj = Array.isArray(inv?.clients) ? inv?.clients[0] : inv?.clients;
-  const workspaceId = inv?.workspace_id || '';
+    if (!invData) {
+      return notFound();
+    }
+    quoObj = invData;
+    clientObj = Array.isArray(quoObj.clients) ? quoObj.clients[0] : quoObj.clients;
+    const { data: items } = await supabase
+      .from('invoice_line_items')
+      .select('*')
+      .eq('invoice_id', id)
+      .order('sort_order', { ascending: true });
+    lineItems = items || [];
+  }
 
-  // 3. Fetch workspace and bank accounts
+  const workspaceId = quoObj.workspace_id || '';
+
+  // 3. Fetch workspace Brand ID details and bank accounts
   let wsObj: any = null;
   let bankAccounts: any[] = [];
   if (workspaceId) {
@@ -51,22 +77,22 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
     }
   }
 
-  const invoiceNumber = inv?.invoice_number || 'INV-2026-004';
-  const issueDate = inv?.issue_date
-    ? new Date(inv.issue_date).toLocaleDateString('en-GB', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-      })
-    : '16 Jul, 2026';
-
-  const invoiceDate = inv?.created_at
-    ? new Date(inv.created_at).toLocaleDateString('en-GB', {
+  const quoteNumber = quoObj.quotation_number || quoObj.invoice_number || 'QUO-2026-001';
+  const issueDate = quoObj.issue_date
+    ? new Date(quoObj.issue_date).toLocaleDateString('en-GB', {
         day: '2-digit',
         month: 'short',
         year: 'numeric',
       })
     : '15 Jul, 2026';
+
+  const validUntil = quoObj.valid_until || quoObj.due_date
+    ? new Date(quoObj.valid_until || quoObj.due_date).toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      })
+    : '30 Jul, 2026';
 
   const clientName = clientObj?.name || 'Richard H. Jonas';
   const clientBrand = clientObj?.company_name || clientObj?.company || '';
@@ -75,44 +101,34 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
   const clientPhone = clientObj?.phone || '+1-002/555-0153';
   const clientEmail = clientObj?.email || '';
 
-  const items =
+  const items: InvoiceItemData[] =
     lineItems && lineItems.length > 0
-      ? lineItems.map((l: any) => ({
-          id: l.id,
-          deliveryDate: invoiceDate,
+      ? lineItems.map((l: any, idx: number) => ({
+          id: l.id || `item-${idx}`,
+          deliveryDate: issueDate,
           description: l.description,
           unitPrice: Number(l.unit_price || 0),
-          quantity: Number(l.quantity || 1),
-          total: Number(l.unit_price || 0) * Number(l.quantity || 1),
+          quantity: 1,
+          total: Number(l.unit_price || 0),
         }))
       : [
           {
             id: '1',
-            deliveryDate: invoiceDate,
+            deliveryDate: issueDate,
             description: 'TikTok Live Commerce Monthly Production Retainer',
-            unitPrice: 85000000,
+            unitPrice: 35000000,
             quantity: 1,
-            total: 85000000,
+            total: 35000000,
           },
           {
             id: '2',
-            deliveryDate: invoiceDate,
+            deliveryDate: issueDate,
             description: 'Custom HD Video Creator Package (40 Ads Production)',
-            unitPrice: 1621750,
-            quantity: 40,
-            total: 64870000,
+            unitPrice: 48000000,
+            quantity: 1,
+            total: 48000000,
           },
         ];
-
-  const subtotal = items.reduce((acc, item) => acc + item.total, 0);
-
-  const isTaxReg =
-    wsObj?.is_tax_registered !== undefined && wsObj?.is_tax_registered !== null
-      ? Boolean(wsObj.is_tax_registered)
-      : Number(wsObj?.tax_rate_percent || 0) > 0;
-  const taxRate = wsObj?.tax_rate_percent !== undefined ? Number(wsObj.tax_rate_percent) : (isTaxReg ? 11 : 0);
-  const taxAmount = isTaxReg ? Math.round(subtotal * (taxRate / 100)) : 0;
-  const grandTotal = subtotal + taxAmount;
 
   const workspaceBrand = {
     name: wsObj?.name || 'PROFESSOR TOKO ONLINE',
@@ -122,17 +138,17 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
     email: wsObj?.email || 'billing@professortokoonline.com',
     website: wsObj?.website || 'www.professortokoonline.com',
     address: '1377 Maxwell Farm Road, Reno, CA 89502',
-    isTaxRegistered: isTaxReg,
-    taxRatePercent: taxRate,
+    isTaxRegistered: Boolean(wsObj?.is_tax_registered),
+    taxRatePercent: wsObj?.tax_rate_percent ? Number(wsObj.tax_rate_percent) : 0,
     bankAccounts: bankAccounts,
   };
 
   return (
     <InvoicePDFDocument
-      invoiceNumber={invoiceNumber}
-      accountNumber={`#${invoiceNumber}`}
-      invoiceDate={invoiceDate}
-      issueDate={issueDate}
+      invoiceNumber={quoteNumber}
+      accountNumber={`#${quoteNumber}`}
+      invoiceDate={issueDate}
+      issueDate={validUntil}
       clientName={clientName}
       clientBrand={clientBrand}
       clientContact={clientContact}
@@ -140,11 +156,11 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
       clientPhone={clientPhone}
       clientEmail={clientEmail}
       items={items}
-      subtotal={subtotal}
-      taxAmount={taxAmount}
-      grandTotal={grandTotal}
+      subtotal={0}
+      taxAmount={0}
+      grandTotal={0}
       workspaceBrand={workspaceBrand}
-      documentType="INVOICE"
+      documentType="QUOTATION"
     />
   );
 }

@@ -38,6 +38,11 @@ interface WorkspaceDetailTabsProps {
   workspaceName: string;
   isTaxRegistered: boolean;
   taxRatePercent: number;
+  logoUrl?: string;
+  tagline?: string;
+  phone?: string;
+  email?: string;
+  website?: string;
   bankAccounts: BankAccountItem[];
   products: CatalogProduct[];
   isCurrentActive: boolean;
@@ -48,6 +53,11 @@ export function WorkspaceDetailTabs({
   workspaceName: initialName,
   isTaxRegistered: initialTaxRegistered,
   taxRatePercent: initialTaxRate,
+  logoUrl: initialLogoUrl = '',
+  tagline: initialTagline = '',
+  phone: initialPhone = '',
+  email: initialEmail = '',
+  website: initialWebsite = '',
   bankAccounts: initialBankAccounts,
   products: initialProducts,
   isCurrentActive,
@@ -57,10 +67,15 @@ export function WorkspaceDetailTabs({
   // Navigation State (ordered: Product List -> Bank Account -> Tax)
   const [activeTab, setActiveTab] = useState<'catalog' | 'banking' | 'identity'>('catalog');
 
-  // Tab 1: Identity State
+  // Tab 1: Identity & Brand State
   const [name, setName] = useState(initialName);
   const [isTaxRegistered, setIsTaxRegistered] = useState(initialTaxRegistered);
   const [taxRatePercent, setTaxRatePercent] = useState(initialTaxRate || 11);
+  const [logoUrl, setLogoUrl] = useState(initialLogoUrl);
+  const [tagline, setTagline] = useState(initialTagline);
+  const [phone, setPhone] = useState(initialPhone);
+  const [email, setEmail] = useState(initialEmail);
+  const [website, setWebsite] = useState(initialWebsite);
   const [identityMsg, setIdentityMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [identityPending, startIdentityTransition] = useTransition();
 
@@ -98,6 +113,11 @@ export function WorkspaceDetailTabs({
         name,
         isTaxRegistered,
         taxRatePercent: effectiveTaxRate,
+        logoUrl,
+        tagline,
+        phone,
+        email,
+        website,
       });
 
       if (res.success) {
@@ -416,6 +436,90 @@ export function WorkspaceDetailTabs({
                 disabled={identityPending}
                 className="w-full bg-black/60 border border-yellow-600/30 rounded-2xl px-4 py-3.5 text-sm text-white font-sans focus:outline-none focus:border-[#d4af37] transition-all"
               />
+            </div>
+
+            {/* BRAND IDENTITY BOX: Logo | Tagline | Mobile phone | Email | Website */}
+            <div className="p-5 rounded-2xl bg-black/40 border border-yellow-600/20 space-y-5">
+              <div className="border-b border-yellow-600/20 pb-3">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[#f5d77f] font-mono">
+                  BRAND IDENTITY PARAMETERS (FOR INVOICES & QUOTATIONS)
+                </h3>
+                <p className="text-[11px] text-zinc-400 font-sans mt-0.5">
+                  These details auto-fill onto PDF Invoices, Quotations, and client pitches generated from this workspace.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1.5">
+                    LOGO URL (IMAGE PATH OR DIRECT LINK)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="/logo (8).png or https://..."
+                    value={logoUrl}
+                    onChange={(e) => setLogoUrl(e.target.value)}
+                    disabled={identityPending}
+                    className="w-full bg-black border border-yellow-600/30 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#d4af37] transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1.5">
+                    BRAND TAGLINE / SUBTITLE
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="EXECUTIVE E-COMMERCE & CREATOR ACCOUNTING"
+                    value={tagline}
+                    onChange={(e) => setTagline(e.target.value)}
+                    disabled={identityPending}
+                    className="w-full bg-black border border-yellow-600/30 rounded-xl px-3.5 py-2.5 text-xs text-white font-sans focus:outline-none focus:border-[#d4af37] transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1.5">
+                    MOBILE PHONE / CONTACT NUMBER
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="+62 811-XXXX-XXXX"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    disabled={identityPending}
+                    className="w-full bg-black border border-yellow-600/30 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#d4af37] transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1.5">
+                    OFFICIAL EMAIL ADDRESS
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="billing@yourbrand.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    disabled={identityPending}
+                    className="w-full bg-black border border-yellow-600/30 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#d4af37] transition-all"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1.5">
+                    WEBSITE URL
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="www.yourdomain.com"
+                    value={website}
+                    onChange={(e) => setWebsite(e.target.value)}
+                    disabled={identityPending}
+                    className="w-full bg-black border border-yellow-600/30 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#d4af37] transition-all"
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Official Tax Registration Toggle */}

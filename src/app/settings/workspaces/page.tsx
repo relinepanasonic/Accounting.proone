@@ -21,7 +21,7 @@ export default async function WorkspacesMasterPage() {
   if (user) {
     const { data: memberRows, error } = await supabase
       .from('workspace_members')
-      .select('workspace_id, role, workspaces (id, name, is_tax_registered, tax_rate_percent)')
+      .select('workspace_id, role, workspaces (*)')
       .eq('user_id', user.id);
 
     if (!error && memberRows && memberRows.length > 0) {
@@ -29,12 +29,16 @@ export default async function WorkspacesMasterPage() {
         .map((m: any) => {
           const wsObj = Array.isArray(m.workspaces) ? m.workspaces[0] : m.workspaces;
           if (!wsObj?.id) return null;
+          const isTaxReg =
+            wsObj.is_tax_registered !== undefined && wsObj.is_tax_registered !== null
+              ? Boolean(wsObj.is_tax_registered)
+              : Number(wsObj.tax_rate_percent || 0) > 0;
           return {
             id: wsObj.id,
             name: wsObj.name || 'Enterprise Tenant',
             role: (m.role as string) || 'accounting',
-            isTaxRegistered: Boolean(wsObj.is_tax_registered),
-            taxRatePercent: wsObj.tax_rate_percent !== undefined ? Number(wsObj.tax_rate_percent) : 11,
+            isTaxRegistered: isTaxReg,
+            taxRatePercent: wsObj.tax_rate_percent !== undefined ? Number(wsObj.tax_rate_percent) : (isTaxReg ? 11 : 0),
           };
         })
         .filter(Boolean) as WorkspaceMasterItem[];

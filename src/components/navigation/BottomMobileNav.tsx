@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   ArrowDownLeft,
   ArrowUpRight,
+  FileText,
   BookOpen,
   Settings,
 } from 'lucide-react';
@@ -27,6 +28,11 @@ const MOBILE_NAV_ITEMS: MobileNavItem[] = [
     name: 'Invoices',
     href: '/invoices',
     icon: <ArrowDownLeft className="w-5 h-5" />,
+  },
+  {
+    name: 'Quotes',
+    href: '/quotations',
+    icon: <FileText className="w-5 h-5" />,
   },
   {
     name: 'Expenses',

@@ -39,8 +39,16 @@ export default async function WorkspaceDetailPage({ params }: WorkspaceDetailPag
 
   const workspaceName =
     ws?.name || wsContext.availableWorkspaces?.find((w) => w.id === targetId)?.name || 'Enterprise Tenant';
-  const isTaxRegistered = Boolean(ws?.is_tax_registered);
-  const taxRatePercent = ws?.tax_rate_percent !== undefined ? Number(ws.tax_rate_percent) : 11;
+  const isTaxRegistered =
+    ws?.is_tax_registered !== undefined && ws?.is_tax_registered !== null
+      ? Boolean(ws.is_tax_registered)
+      : Number(ws?.tax_rate_percent || 0) > 0;
+  const taxRatePercent = ws?.tax_rate_percent !== undefined ? Number(ws.tax_rate_percent) : (isTaxRegistered ? 11 : 0);
+  const logoUrl = ws?.company_logo_url || ws?.logo_url || '';
+  const tagline = ws?.tagline || '';
+  const phone = ws?.phone || '';
+  const email = ws?.email || '';
+  const website = ws?.website || '';
 
   // Process bank accounts data
   let bankAccounts: BankAccountItem[] = [];
@@ -84,6 +92,11 @@ export default async function WorkspaceDetailPage({ params }: WorkspaceDetailPag
       workspaceName={workspaceName}
       isTaxRegistered={isTaxRegistered}
       taxRatePercent={taxRatePercent}
+      logoUrl={logoUrl}
+      tagline={tagline}
+      phone={phone}
+      email={email}
+      website={website}
       bankAccounts={bankAccounts}
       products={productList}
       isCurrentActive={isCurrentActive}

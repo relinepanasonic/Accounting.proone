@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   ArrowDownLeft,
   ArrowUpRight,
+  FileText,
   Users,
   Box,
   BookOpen,
@@ -38,6 +39,12 @@ const NAV_ITEMS: NavItem[] = [
     href: '/invoices',
     icon: <ArrowDownLeft className="w-4 h-4" />,
     badge: 'Income',
+  },
+  {
+    name: 'Quotations',
+    href: '/quotations',
+    icon: <FileText className="w-4 h-4" />,
+    badge: 'Pitch',
   },
   {
     name: 'Expenses',

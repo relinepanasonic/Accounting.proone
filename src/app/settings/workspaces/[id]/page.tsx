@@ -65,7 +65,7 @@ export default async function WorkspaceDetailPage({ params }: WorkspaceDetailPag
     if (lines.length > 0) {
       bankAccounts = lines.map((line: string, idx: number) => ({
         id: `temp-legacy-${idx}`,
-        bank_name: idx === 0 ? 'Primary Bank Account' : `Secondary Bank (${idx + 1})`,
+        bank_name: idx === 0 ? 'Bank Account' : `Bank Account (${idx + 1})`,
         account_number: line.trim(),
         account_name: workspaceName,
         is_default: idx === 0,

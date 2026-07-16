@@ -205,6 +205,8 @@ export async function duplicateInvoice(invoiceId: string) {
         subtotal: orig.subtotal,
         total_amount: orig.total_amount,
         notes: orig.notes,
+        bank_account_id: orig.bank_account_id || null,
+        payment_instructions: orig.payment_instructions || null,
       })
       .select('id')
       .single();
@@ -252,7 +254,71 @@ export async function toggleInvoiceStatus(invoiceId: string, currentStatus: stri
       return { success: false, error: error.message };
     }
 
+    // Double-entry ledger integration: watch COA and affect COA Bank Account when paid
+    if (nextStatus === 'paid') {
+      const { data: inv } = await supabase.from('invoices').select('*').eq('id', invoiceId).single();
+      if (inv) {
+        let chosenBank: any = null;
+        if (inv.bank_account_id && inv.bank_account_id !== 'all' && inv.bank_account_id !== 'custom') {
+          const { data: bankRes } = await supabase.from('workspace_bank_accounts').select('*').eq('id', inv.bank_account_id).single();
+          if (bankRes) chosenBank = bankRes;
+        }
+        if (!chosenBank) {
+          const { data: firstBank } = await supabase.from('workspace_bank_accounts').select('*').eq('workspace_id', workspaceId).order('is_default', { ascending: false }).limit(1);
+          if (firstBank && firstBank.length > 0) chosenBank = firstBank[0];
+        }
+        const debitAccountName = chosenBank ? `${chosenBank.bank_name} (${chosenBank.account_number})` : 'Operating Cash Account';
+        const debitAccountCode = chosenBank?.coa_account_code || '1010';
+        const jeNumber = `JE-INV-PAY-${inv.invoice_number}`;
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        // Clean up any prior payment JE for this invoice just in case
+        await supabase.from('journal_entries').delete().eq('workspace_id', workspaceId).eq('entry_number', jeNumber);
+
+        const { data: jeData } = await supabase
+          .from('journal_entries')
+          .insert({
+            workspace_id: workspaceId,
+            entry_number: jeNumber,
+            entry_date: todayStr,
+            description: `Customer payment received into bank account [${debitAccountName}] for Invoice #${inv.invoice_number}`,
+            status: 'posted',
+            source_module: 'invoices',
+            total_amount: inv.total_amount || 0,
+          })
+          .select('id')
+          .single();
+
+        if (jeData?.id) {
+          await supabase.from('journal_entry_lines').insert([
+            {
+              workspace_id: workspaceId,
+              journal_entry_id: jeData.id,
+              account_name: debitAccountName,
+              account_code: debitAccountCode,
+              debit_amount: Number(inv.total_amount || 0),
+              credit_amount: 0,
+            },
+            {
+              workspace_id: workspaceId,
+              journal_entry_id: jeData.id,
+              account_name: 'Accounts Receivable',
+              account_code: '1200',
+              debit_amount: 0,
+              credit_amount: Number(inv.total_amount || 0),
+            },
+          ]);
+        }
+      }
+    } else {
+      const { data: inv } = await supabase.from('invoices').select('invoice_number').eq('id', invoiceId).single();
+      if (inv?.invoice_number) {
+        await supabase.from('journal_entries').delete().eq('workspace_id', workspaceId).eq('entry_number', `JE-INV-PAY-${inv.invoice_number}`);
+      }
+    }
+
     revalidatePath('/invoices');
+    revalidatePath('/ledger');
     revalidatePath('/');
     return { success: true, newStatus: nextStatus };
   } catch (err: any) {

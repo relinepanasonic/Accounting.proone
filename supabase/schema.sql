@@ -397,6 +397,8 @@ CREATE TABLE IF NOT EXISTS public.workspace_bank_accounts (
     account_number TEXT NOT NULL,
     account_name TEXT NOT NULL,
     is_default BOOLEAN NOT NULL DEFAULT false,
+    coa_account_code TEXT DEFAULT '1010',
+    coa_account_name TEXT DEFAULT 'Operating Cash Account',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

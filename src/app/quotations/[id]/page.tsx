@@ -67,15 +67,38 @@ export default async function QuotationDetailPage({ params }: QuotationPageProps
       supabase.from('workspace_bank_accounts').select('*').eq('workspace_id', workspaceId).order('is_default', { ascending: false }),
     ]);
     if (!wsObj) wsObj = wsRes.data;
-    if (accountsRes.data && accountsRes.data.length > 0) {
-      bankAccounts = accountsRes.data;
-    } else if (wsObj?.payment_instructions) {
-      const lines = wsObj.payment_instructions.split('\n').filter((l: string) => l.trim().length > 0);
-      bankAccounts = lines.map((l: string, idx: number) => ({
-        bank_name: idx === 0 ? 'Bank Account' : `Bank (${idx + 1})`,
-        account_number: l.trim(),
-        account_name: wsObj.name || 'Company Account',
-      }));
+
+    // Check if a specific bank account or custom instructions were chosen for this quotation
+    if (quoObj?.bank_account_id && quoObj.bank_account_id !== 'all' && quoObj.bank_account_id !== 'custom') {
+      let chosen = accountsRes.data?.find((a: any) => a.id === quoObj.bank_account_id);
+      if (!chosen) {
+        const { data: singleRes } = await supabase.from('workspace_bank_accounts').select('*').eq('id', quoObj.bank_account_id).single();
+        if (singleRes) chosen = singleRes;
+      }
+      if (chosen) {
+        bankAccounts = [chosen];
+      }
+    } else if (quoObj?.payment_instructions && quoObj?.bank_account_id === 'custom') {
+      bankAccounts = [
+        {
+          bank_name: 'Payment Instructions',
+          account_number: quoObj.payment_instructions,
+          account_name: wsObj?.name || 'Company Account',
+        },
+      ];
+    }
+
+    if (bankAccounts.length === 0) {
+      if (accountsRes.data && accountsRes.data.length > 0) {
+        bankAccounts = accountsRes.data;
+      } else if (wsObj?.payment_instructions) {
+        const lines = wsObj.payment_instructions.split('\n').filter((l: string) => l.trim().length > 0);
+        bankAccounts = lines.map((l: string, idx: number) => ({
+          bank_name: idx === 0 ? 'Bank Account' : `Bank (${idx + 1})`,
+          account_number: l.trim(),
+          account_name: wsObj.name || 'Company Account',
+        }));
+      }
     }
   }
 

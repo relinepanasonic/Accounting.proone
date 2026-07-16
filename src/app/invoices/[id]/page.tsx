@@ -39,15 +39,38 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
       supabase.from('workspace_bank_accounts').select('*').eq('workspace_id', workspaceId).order('is_default', { ascending: false }),
     ]);
     if (!wsObj) wsObj = wsRes.data;
-    if (accountsRes.data && accountsRes.data.length > 0) {
-      bankAccounts = accountsRes.data;
-    } else if (wsObj?.payment_instructions) {
-      const lines = wsObj.payment_instructions.split('\n').filter((l: string) => l.trim().length > 0);
-      bankAccounts = lines.map((l: string, idx: number) => ({
-        bank_name: idx === 0 ? 'Bank Account' : `Bank (${idx + 1})`,
-        account_number: l.trim(),
-        account_name: wsObj.name || 'Company Account',
-      }));
+
+    // Check if a specific bank account or custom instructions were chosen for this invoice
+    if (inv?.bank_account_id && inv.bank_account_id !== 'all' && inv.bank_account_id !== 'custom') {
+      let chosen = accountsRes.data?.find((a: any) => a.id === inv.bank_account_id);
+      if (!chosen) {
+        const { data: singleRes } = await supabase.from('workspace_bank_accounts').select('*').eq('id', inv.bank_account_id).single();
+        if (singleRes) chosen = singleRes;
+      }
+      if (chosen) {
+        bankAccounts = [chosen];
+      }
+    } else if (inv?.payment_instructions && inv?.bank_account_id === 'custom') {
+      bankAccounts = [
+        {
+          bank_name: 'Payment Instructions',
+          account_number: inv.payment_instructions,
+          account_name: wsObj?.name || 'Company Account',
+        },
+      ];
+    }
+
+    if (bankAccounts.length === 0) {
+      if (accountsRes.data && accountsRes.data.length > 0) {
+        bankAccounts = accountsRes.data;
+      } else if (wsObj?.payment_instructions) {
+        const lines = wsObj.payment_instructions.split('\n').filter((l: string) => l.trim().length > 0);
+        bankAccounts = lines.map((l: string, idx: number) => ({
+          bank_name: idx === 0 ? 'Bank Account' : `Bank (${idx + 1})`,
+          account_number: l.trim(),
+          account_name: wsObj.name || 'Company Account',
+        }));
+      }
     }
   }
 

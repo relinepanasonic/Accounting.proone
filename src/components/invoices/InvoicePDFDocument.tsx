@@ -304,12 +304,24 @@ export function InvoicePDFDocument({
                 </h4>
                 <div className="mt-2 text-zinc-600 space-y-1">
                   {workspaceBrand?.bankAccounts && workspaceBrand.bankAccounts.length > 0 ? (
-                    workspaceBrand.bankAccounts.map((acc, i) => (
-                      <div key={i}>
-                        <strong className="text-[#1e2536]">{acc.bank_name}:</strong>{' '}
-                        {acc.account_number} <span className="text-zinc-500">({acc.account_name})</span>
-                      </div>
-                    ))
+                    workspaceBrand.bankAccounts.map((acc, i) => {
+                      const rawName = acc.bank_name || 'Bank Account';
+                      const cleanName = rawName
+                        .replace(/Primary Bank Account/gi, 'Bank Account')
+                        .replace(/Secondary Bank Account/gi, 'Bank Account')
+                        .replace(/Primary Bank/gi, 'Bank Account')
+                        .replace(/Secondary Bank\s*\(\d+\)/gi, 'Bank Account')
+                        .replace(/Primary\s+and\s+secondary/gi, 'Bank Account')
+                        .replace(/^Primary\s+/gi, '')
+                        .replace(/^Secondary\s+/gi, '')
+                        .trim() || 'Bank Account';
+                      return (
+                        <div key={i}>
+                          <strong className="text-[#1e2536]">{cleanName}:</strong>{' '}
+                          {acc.account_number} <span className="text-zinc-500">({acc.account_name})</span>
+                        </div>
+                      );
+                    })
                   ) : (
                     <div>
                       <strong className="text-[#1e2536]">Bank Transfer:</strong> Please refer to official company instructions upon invoice confirmation.

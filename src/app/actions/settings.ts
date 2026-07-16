@@ -60,9 +60,13 @@ export async function saveWorkspaceSettings(payload: {
   isTaxRegistered?: boolean;
   taxRatePercent?: number;
   logoUrl?: string;
+  brandTagline?: string;
   tagline?: string;
+  contactPhone?: string;
   phone?: string;
+  officialEmail?: string;
   email?: string;
+  websiteUrl?: string;
   website?: string;
   bankAccounts?: BankAccountItem[];
 }) {
@@ -81,9 +85,13 @@ export async function saveWorkspaceSettings(payload: {
       payload.isTaxRegistered !== undefined ||
       payload.taxRatePercent !== undefined ||
       payload.logoUrl !== undefined ||
+      payload.brandTagline !== undefined ||
       payload.tagline !== undefined ||
+      payload.contactPhone !== undefined ||
       payload.phone !== undefined ||
+      payload.officialEmail !== undefined ||
       payload.email !== undefined ||
+      payload.websiteUrl !== undefined ||
       payload.website !== undefined
     ) {
       const effectiveTaxRate =
@@ -101,10 +109,26 @@ export async function saveWorkspaceSettings(payload: {
         updatePayload.company_logo_url = payload.logoUrl.trim();
         updatePayload.logo_url = payload.logoUrl.trim();
       }
-      if (payload.tagline !== undefined) updatePayload.tagline = payload.tagline.trim();
-      if (payload.phone !== undefined) updatePayload.phone = payload.phone.trim();
-      if (payload.email !== undefined) updatePayload.email = payload.email.trim();
-      if (payload.website !== undefined) updatePayload.website = payload.website.trim();
+      if (payload.brandTagline !== undefined || payload.tagline !== undefined) {
+        const val = (payload.brandTagline ?? payload.tagline ?? '').trim();
+        updatePayload.brand_tagline = val;
+        updatePayload.tagline = val;
+      }
+      if (payload.contactPhone !== undefined || payload.phone !== undefined) {
+        const val = (payload.contactPhone ?? payload.phone ?? '').trim();
+        updatePayload.contact_phone = val;
+        updatePayload.phone = val;
+      }
+      if (payload.officialEmail !== undefined || payload.email !== undefined) {
+        const val = (payload.officialEmail ?? payload.email ?? '').trim();
+        updatePayload.official_email = val;
+        updatePayload.email = val;
+      }
+      if (payload.websiteUrl !== undefined || payload.website !== undefined) {
+        const val = (payload.websiteUrl ?? payload.website ?? '').trim();
+        updatePayload.website_url = val;
+        updatePayload.website = val;
+      }
 
       let currentData = { ...updatePayload };
       let lastErr = null;
@@ -135,6 +159,10 @@ export async function saveWorkspaceSettings(payload: {
         ) {
           // Strip new columns progressively if regex didn't match
           const optionalCols = [
+            'brand_tagline',
+            'contact_phone',
+            'official_email',
+            'website_url',
             'email',
             'phone',
             'website',

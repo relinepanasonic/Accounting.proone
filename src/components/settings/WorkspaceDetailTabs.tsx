@@ -115,9 +115,13 @@ export function WorkspaceDetailTabs({
         isTaxRegistered,
         taxRatePercent: effectiveTaxRate,
         logoUrl,
+        brandTagline: tagline,
         tagline,
+        contactPhone: phone,
         phone,
+        officialEmail: email,
         email,
+        websiteUrl: website,
         website,
       });
 

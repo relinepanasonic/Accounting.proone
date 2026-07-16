@@ -44,11 +44,11 @@ export default async function WorkspaceDetailPage({ params }: WorkspaceDetailPag
       ? Boolean(ws.is_tax_registered)
       : Number(ws?.tax_rate_percent || 0) > 0;
   const taxRatePercent = ws?.tax_rate_percent !== undefined ? Number(ws.tax_rate_percent) : (isTaxRegistered ? 11 : 0);
-  const logoUrl = ws?.company_logo_url || ws?.logo_url || '';
-  const tagline = ws?.tagline || '';
-  const phone = ws?.phone || '';
-  const email = ws?.email || '';
-  const website = ws?.website || '';
+  const logoUrl = ws?.logo_url || ws?.company_logo_url || '';
+  const tagline = ws?.brand_tagline || ws?.tagline || '';
+  const phone = ws?.contact_phone || ws?.phone || '';
+  const email = ws?.official_email || ws?.email || '';
+  const website = ws?.website_url || ws?.website || '';
 
   // Process bank accounts data
   let bankAccounts: BankAccountItem[] = [];

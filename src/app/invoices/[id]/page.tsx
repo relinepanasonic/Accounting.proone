@@ -68,11 +68,11 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
       })
     : '15 Jul, 2026';
 
-  const clientName = clientObj?.name || 'Richard H. Jonas';
+  const clientName = clientObj?.name || 'Client Payee';
   const clientBrand = clientObj?.company_name || clientObj?.company || '';
-  const clientContact = clientObj?.contact_name || clientObj?.name || 'Account Manager';
-  const clientAddress = clientObj?.billing_address || clientObj?.company || '5551 West Street, Ankeny, IA 50023';
-  const clientPhone = clientObj?.phone || '+1-002/555-0153';
+  const clientContact = clientObj?.contact_name || clientObj?.name || '';
+  const clientAddress = clientObj?.billing_address || clientObj?.address || '';
+  const clientPhone = clientObj?.phone || '';
   const clientEmail = clientObj?.email || '';
 
   const items =
@@ -85,24 +85,7 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
           quantity: Number(l.quantity || 1),
           total: Number(l.unit_price || 0) * Number(l.quantity || 1),
         }))
-      : [
-          {
-            id: '1',
-            deliveryDate: invoiceDate,
-            description: 'TikTok Live Commerce Monthly Production Retainer',
-            unitPrice: 85000000,
-            quantity: 1,
-            total: 85000000,
-          },
-          {
-            id: '2',
-            deliveryDate: invoiceDate,
-            description: 'Custom HD Video Creator Package (40 Ads Production)',
-            unitPrice: 1621750,
-            quantity: 40,
-            total: 64870000,
-          },
-        ];
+      : [];
 
   const subtotal = items.reduce((acc, item) => acc + item.total, 0);
 
@@ -115,13 +98,13 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
   const grandTotal = subtotal + taxAmount;
 
   const workspaceBrand = {
-    name: wsObj?.name || 'PROFESSOR TOKO ONLINE',
-    logoUrl: wsObj?.company_logo_url || wsObj?.logo_url || '',
-    tagline: wsObj?.tagline || 'EXECUTIVE E-COMMERCE & CREATOR ACCOUNTING',
-    phone: wsObj?.phone || '+1-202-555-0199 / +62-811-TOKO-PRO',
-    email: wsObj?.email || 'billing@professortokoonline.com',
-    website: wsObj?.website || 'www.professortokoonline.com',
-    address: '1377 Maxwell Farm Road, Reno, CA 89502',
+    name: wsObj?.name || 'Workspace Enterprise',
+    logoUrl: wsObj?.logo_url || wsObj?.company_logo_url || '',
+    tagline: wsObj?.brand_tagline || wsObj?.tagline || '',
+    phone: wsObj?.contact_phone || wsObj?.phone || '',
+    email: wsObj?.official_email || wsObj?.email || '',
+    website: wsObj?.website_url || wsObj?.website || '',
+    address: wsObj?.billing_address || wsObj?.address || '',
     isTaxRegistered: isTaxReg,
     taxRatePercent: taxRate,
     bankAccounts: bankAccounts,

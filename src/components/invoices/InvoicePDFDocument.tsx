@@ -49,37 +49,20 @@ export interface InvoiceDocumentProps {
 }
 
 export function InvoicePDFDocument({
-  invoiceNumber = 'INV-2026-004',
-  accountNumber = '#25 212 512',
-  invoiceDate = '15 Jul, 2026',
+  invoiceNumber = 'INV-2026-001',
+  accountNumber = '#INV-2026-001',
+  invoiceDate = '16 Jul, 2026',
   issueDate = '16 Jul, 2026',
-  clientName = 'Richard H. Jonas',
+  clientName = 'Client Payee',
   clientBrand = '',
-  clientContact = 'Account Manager',
-  clientAddress = '5551 West Street, Ankeny, IA 50023',
-  clientPhone = '+1-002/555-0153',
+  clientContact = '',
+  clientAddress = '',
+  clientPhone = '',
   clientEmail = '',
-  items = [
-    {
-      id: '1',
-      deliveryDate: '15 Jul, 2026',
-      description: 'TikTok Live Commerce Monthly Production Retainer',
-      unitPrice: 85000000,
-      quantity: 1,
-      total: 85000000,
-    },
-    {
-      id: '2',
-      deliveryDate: '15 Jul, 2026',
-      description: 'Custom HD Video Creator Package (40 Ads Production)',
-      unitPrice: 1621750,
-      quantity: 40,
-      total: 64870000,
-    },
-  ],
-  subtotal = 149870000,
-  taxAmount = 16485700,
-  grandTotal = 166355700,
+  items = [],
+  subtotal = 0,
+  taxAmount = 0,
+  grandTotal = 0,
   workspaceBrand,
   documentType = 'INVOICE',
 }: Partial<InvoiceDocumentProps>) {
@@ -102,12 +85,12 @@ export function InvoicePDFDocument({
     window.print();
   };
 
-  const brandName = workspaceBrand?.name || 'PROFESSOR TOKO ONLINE';
-  const brandTagline = workspaceBrand?.tagline || 'EXECUTIVE E-COMMERCE & CREATOR ACCOUNTING';
-  const brandAddress = workspaceBrand?.address || '1377 Maxwell Farm Road, Reno, CA 89502';
-  const brandPhone = workspaceBrand?.phone || '+1-202-555-0199 / +62-811-TOKO-PRO';
-  const brandWebsite = workspaceBrand?.website || 'www.professortokoonline.com';
-  const brandEmail = workspaceBrand?.email || 'billing@professortokoonline.com';
+  const brandName = workspaceBrand?.name || 'Workspace Enterprise';
+  const brandTagline = workspaceBrand?.tagline || '';
+  const brandAddress = workspaceBrand?.address || '';
+  const brandPhone = workspaceBrand?.phone || '';
+  const brandWebsite = workspaceBrand?.website || '';
+  const brandEmail = workspaceBrand?.email || '';
 
   return (
     <div className="min-h-screen bg-[#0b0c10] py-8 px-4 sm:px-8 print:p-0 print:bg-white text-zinc-800">

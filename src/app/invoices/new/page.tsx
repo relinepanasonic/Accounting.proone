@@ -13,6 +13,7 @@ export default async function NewInvoicePage() {
 
   const { data: clients } = await supabase.from('clients').select('id, name').eq('workspace_id', activeWorkspaceId);
   const { data: products } = await supabase.from('products').select('*').eq('workspace_id', activeWorkspaceId);
+  const { data: bankAccounts } = await supabase.from('workspace_bank_accounts').select('*').eq('workspace_id', activeWorkspaceId).order('is_default', { ascending: false });
 
   const clientList = clients || [];
   const productList = products || [];
@@ -47,7 +48,7 @@ export default async function NewInvoicePage() {
         </Link>
       </div>
 
-      <NewInvoiceForm clients={clientList} products={productList} />
+      <NewInvoiceForm clients={clientList} products={productList} bankAccounts={bankAccounts || []} />
     </div>
   );
 }

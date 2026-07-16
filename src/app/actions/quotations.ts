@@ -10,6 +10,8 @@ export interface CreateQuotationPayload {
   issueDate: string;
   validUntil: string;
   notes?: string;
+  bankAccountId?: string;
+  paymentInstructions?: string;
   lineItems: Array<{
     description: string;
     unitPrice: number;
@@ -36,19 +38,31 @@ export async function createQuotation(payload: CreateQuotationPayload): Promise<
     }
 
     // Try inserting into dedicated quotations table
-    const { data: quo, error: quoError } = await supabase
+    const quoInsertData: any = {
+      workspace_id: workspaceId,
+      client_id: payload.clientId,
+      quotation_number: payload.quotationNumber || `QUO-2026-${Math.floor(100 + Math.random() * 900)}`,
+      status: 'draft',
+      issue_date: payload.issueDate,
+      valid_until: payload.validUntil,
+      notes: payload.notes || null,
+    };
+    if (payload.bankAccountId) quoInsertData.bank_account_id = payload.bankAccountId;
+    if (payload.paymentInstructions) quoInsertData.payment_instructions = payload.paymentInstructions;
+
+    let { data: quo, error: quoError } = await supabase
       .from('quotations')
-      .insert({
-        workspace_id: workspaceId,
-        client_id: payload.clientId,
-        quotation_number: payload.quotationNumber || `QUO-2026-${Math.floor(100 + Math.random() * 900)}`,
-        status: 'draft',
-        issue_date: payload.issueDate,
-        valid_until: payload.validUntil,
-        notes: payload.notes || null,
-      })
+      .insert(quoInsertData)
       .select('id')
       .single();
+
+    if (quoError && (quoError.code === '42703' || quoError.message?.includes('does not exist') || quoError.message?.includes('Could not find the'))) {
+      delete quoInsertData.bank_account_id;
+      delete quoInsertData.payment_instructions;
+      const ret = await supabase.from('quotations').insert(quoInsertData).select('id').single();
+      quo = ret.data;
+      quoError = ret.error;
+    }
 
     if (!quoError && quo) {
       const lineItemsData = payload.lineItems.map((item, idx) => ({
@@ -66,21 +80,33 @@ export async function createQuotation(payload: CreateQuotationPayload): Promise<
 
     // Fallback if quotations table is not yet created in Supabase: store in invoices table with status = 'quotation'
     const totalAmount = payload.lineItems.reduce((acc: number, item: any) => acc + (Number(item.unitPrice) || 0), 0);
-    const { data: fallbackInv, error: invError } = await supabase
+    const fallbackInsertData: any = {
+      workspace_id: workspaceId,
+      client_id: payload.clientId,
+      invoice_number: payload.quotationNumber || `QUO-2026-${Math.floor(100 + Math.random() * 900)}`,
+      status: 'quotation',
+      issue_date: payload.issueDate,
+      due_date: payload.validUntil,
+      subtotal: totalAmount,
+      total_amount: totalAmount,
+      notes: '[QUOTATION] ' + (payload.notes || ''),
+    };
+    if (payload.bankAccountId) fallbackInsertData.bank_account_id = payload.bankAccountId;
+    if (payload.paymentInstructions) fallbackInsertData.payment_instructions = payload.paymentInstructions;
+
+    let { data: fallbackInv, error: invError } = await supabase
       .from('invoices')
-      .insert({
-        workspace_id: workspaceId,
-        client_id: payload.clientId,
-        invoice_number: payload.quotationNumber || `QUO-2026-${Math.floor(100 + Math.random() * 900)}`,
-        status: 'quotation',
-        issue_date: payload.issueDate,
-        due_date: payload.validUntil,
-        subtotal: totalAmount,
-        total_amount: totalAmount,
-        notes: '[QUOTATION] ' + (payload.notes || ''),
-      })
+      .insert(fallbackInsertData)
       .select('id')
       .single();
+
+    if (invError && (invError.code === '42703' || invError.message?.includes('does not exist') || invError.message?.includes('Could not find the'))) {
+      delete fallbackInsertData.bank_account_id;
+      delete fallbackInsertData.payment_instructions;
+      const ret = await supabase.from('invoices').insert(fallbackInsertData).select('id').single();
+      fallbackInv = ret.data;
+      invError = ret.error;
+    }
 
     if (invError || !fallbackInv) {
       return {

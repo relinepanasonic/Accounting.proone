@@ -99,6 +99,8 @@ CREATE TABLE IF NOT EXISTS public.invoices (
     payment_link_url TEXT,
     public_view_token TEXT UNIQUE NOT NULL DEFAULT encode(gen_random_bytes(16), 'hex'),
     notes TEXT,
+    bank_account_id TEXT,
+    payment_instructions TEXT,
     is_recurring_template BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),

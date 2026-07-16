@@ -13,6 +13,7 @@ export default async function NewQuotationPage() {
 
   const { data: clients } = await supabase.from('clients').select('id, name').eq('workspace_id', workspaceId);
   const { data: products } = await supabase.from('products').select('*').eq('workspace_id', workspaceId);
+  const { data: bankAccounts } = await supabase.from('workspace_bank_accounts').select('*').eq('workspace_id', workspaceId).order('is_default', { ascending: false });
 
   const clientList = clients || [];
   const productList = products || [];
@@ -46,7 +47,7 @@ export default async function NewQuotationPage() {
         </Link>
       </div>
 
-      <NewQuotationForm clients={clientList} products={productList} />
+      <NewQuotationForm clients={clientList} products={productList} bankAccounts={bankAccounts || []} />
     </div>
   );
 }

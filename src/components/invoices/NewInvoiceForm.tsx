@@ -2,7 +2,7 @@
 
 import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Trash2, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Check, AlertCircle, Loader2, Calendar, Building2 } from 'lucide-react';
 import Link from 'next/link';
 import { createInvoice } from '@/app/actions/invoices';
 import { RupiahInput } from '@/components/ui/RupiahInput';
@@ -22,12 +22,21 @@ export interface CatalogProductOption {
   unit_price: number;
 }
 
+export interface BankAccountOption {
+  id: string;
+  bank_name: string;
+  account_number: string;
+  account_name: string;
+  is_default?: boolean;
+}
+
 interface NewInvoiceFormProps {
   clients: Array<{ id: string; name: string }>;
   products?: CatalogProductOption[];
+  bankAccounts?: BankAccountOption[];
 }
 
-export function NewInvoiceForm({ clients, products = [] }: NewInvoiceFormProps) {
+export function NewInvoiceForm({ clients, products = [], bankAccounts = [] }: NewInvoiceFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -42,39 +51,26 @@ export function NewInvoiceForm({ clients, products = [] }: NewInvoiceFormProps) 
   const [issueDate, setIssueDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState(getNet15Date);
   const [notes, setNotes] = useState('');
+  const [bankAccountId, setBankAccountId] = useState('all');
+  const [customPaymentInstructions, setCustomPaymentInstructions] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const [lineItems, setLineItems] = useState<LineItem[]>([
-    {
-      id: '1',
-      description: 'TikTok Live Commerce Monthly Production Retainer',
-      quantity: 1,
-      unitPrice: 85000000,
-    },
-    {
-      id: '2',
-      description: 'Custom HD Video Creator Package (40 Ads)',
-      quantity: 40,
-      unitPrice: 1621750,
-    },
-  ]);
+  const [lineItems, setLineItems] = useState<LineItem[]>([]);
 
   const handleAddLineItem = () => {
     setLineItems((prev) => [
       ...prev,
       {
-        id: Math.random().toString(),
-        description: 'New Deliverable Line Item',
+        id: Math.random().toString(36).substring(2, 9),
+        description: '',
         quantity: 1,
-        unitPrice: 1000,
+        unitPrice: 0,
       },
     ]);
   };
 
   const handleRemoveItem = (id: string) => {
-    if (lineItems.length > 1) {
-      setLineItems((prev) => prev.filter((i) => i.id !== id));
-    }
+    setLineItems((prev) => prev.filter((i) => i.id !== id));
   };
 
   const handleUpdateItem = (
@@ -112,8 +108,8 @@ export function NewInvoiceForm({ clients, products = [] }: NewInvoiceFormProps) 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!clientId) {
-      setErrorMsg('Please select a client.');
+    if (lineItems.length === 0) {
+      setErrorMsg('Please add at least one deliverable line item before saving.');
       return;
     }
 
@@ -126,6 +122,8 @@ export function NewInvoiceForm({ clients, products = [] }: NewInvoiceFormProps) 
           issueDate,
           dueDate,
           notes,
+          bankAccountId: bankAccountId !== 'all' ? bankAccountId : undefined,
+          paymentInstructions: bankAccountId === 'custom' ? customPaymentInstructions : undefined,
           lineItems: lineItems.map((l) => ({
             description: l.description,
             quantity: Number(l.quantity),
@@ -180,42 +178,47 @@ export function NewInvoiceForm({ clients, products = [] }: NewInvoiceFormProps) 
 
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-2">
-              Invoice Reference ID *
+              Invoice Reference Number *
             </label>
             <input
               type="text"
               required
               value={invoiceNumber}
               onChange={(e) => setInvoiceNumber(e.target.value)}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-[#f5d77f] font-mono font-bold focus:outline-none focus:border-[#d4af37]"
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm font-mono text-[#f5d77f] focus:outline-none focus:border-[#d4af37]"
             />
           </div>
         </div>
 
-        {/* Issue Date & Due Date */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-zinc-800/80">
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-2">
               Issue Date
             </label>
-            <input
-              type="date"
-              value={issueDate}
-              onChange={(e) => setIssueDate(e.target.value)}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#d4af37] font-mono"
-            />
+            <div className="relative">
+              <input
+                type="date"
+                value={issueDate}
+                onChange={(e) => setIssueDate(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#d4af37] font-mono [color-scheme:dark]"
+              />
+              <Calendar className="w-4 h-4 text-[#d4af37] absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
           </div>
 
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-2">
               Due Date (Auto Net-15 Terms)
             </label>
-            <input
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-[#f5d77f] focus:outline-none focus:border-[#d4af37] font-mono"
-            />
+            <div className="relative">
+              <input
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-[#f5d77f] focus:outline-none focus:border-[#d4af37] font-mono [color-scheme:dark]"
+              />
+              <Calendar className="w-4 h-4 text-[#d4af37] absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
           </div>
         </div>
       </div>
@@ -241,88 +244,106 @@ export function NewInvoiceForm({ clients, products = [] }: NewInvoiceFormProps) 
           </button>
         </div>
 
-        <div className="space-y-3">
-          {lineItems.map((item, idx) => {
-            const rowTotal = item.quantity * item.unitPrice;
-            return (
-              <div
-                key={item.id}
-                className="grid grid-cols-12 gap-3 items-center p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80"
-              >
-                <div className="col-span-12 md:col-span-5 space-y-1.5">
-                  {products && products.length > 0 && (
-                    <select
-                      onChange={(e) => handleSelectProduct(item.id, e.target.value)}
-                      defaultValue=""
-                      className="w-full bg-zinc-900/90 border border-[#d4af37]/40 rounded-lg px-2.5 py-1 text-[11px] font-mono text-[#f5d77f] focus:outline-none focus:border-[#d4af37]"
-                    >
-                      <option value="" disabled>
-                        ⚡ AUTO-FILL FROM CATALOG...
-                      </option>
-                      {products.map((prod) => (
-                        <option key={prod.id} value={prod.id}>
-                          {prod.name} • Rp {Number(prod.unit_price).toLocaleString('id-ID')}
+        {lineItems.length === 0 ? (
+          <div className="text-center py-10 px-4 border border-dashed border-zinc-800 rounded-xl bg-zinc-950/40">
+            <p className="text-xs text-zinc-400 font-mono mb-3">
+              No deliverable line items added yet. Click &quot;+ ADD ITEM&quot; to begin.
+            </p>
+            <button
+              type="button"
+              onClick={handleAddLineItem}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#d4af37]/20 border border-[#d4af37] text-xs font-bold text-[#f5d77f] hover:bg-[#d4af37]/30 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              <span>ADD FIRST ITEM</span>
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {lineItems.map((item) => {
+              const rowTotal = item.quantity * item.unitPrice;
+              return (
+                <div
+                  key={item.id}
+                  className="grid grid-cols-12 gap-3 items-center p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80"
+                >
+                  <div className="col-span-12 md:col-span-5 space-y-1.5">
+                    {products && products.length > 0 && (
+                      <select
+                        onChange={(e) => handleSelectProduct(item.id, e.target.value)}
+                        defaultValue=""
+                        className="w-full bg-zinc-900/90 border border-[#d4af37]/40 rounded-lg px-2.5 py-1 text-[11px] font-mono text-[#f5d77f] focus:outline-none focus:border-[#d4af37]"
+                      >
+                        <option value="" disabled>
+                          ⚡ AUTO-FILL FROM CATALOG...
                         </option>
-                      ))}
-                      <option value="custom">-- Custom / Manual Override --</option>
-                    </select>
-                  )}
-                  <BulletTextarea
-                    rows={3}
-                    required
-                    placeholder="Automatic bullet points..."
-                    value={item.description}
-                    onChange={(val) =>
-                      handleUpdateItem(item.id, 'description', val)
-                    }
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#d4af37] font-sans whitespace-pre-line"
-                  />
-                </div>
+                        {products.map((prod) => (
+                          <option key={prod.id} value={prod.id}>
+                            {prod.name} • Rp {Number(prod.unit_price).toLocaleString('id-ID')}
+                          </option>
+                        ))}
+                        <option value="custom">-- Custom / Manual Override --</option>
+                      </select>
+                    )}
+                    <BulletTextarea
+                      rows={3}
+                      required
+                      placeholder="Automatic bullet points..."
+                      value={item.description}
+                      onChange={(val) =>
+                        handleUpdateItem(item.id, 'description', val)
+                      }
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#d4af37] font-sans whitespace-pre-line"
+                    />
+                  </div>
 
-                <div className="col-span-4 md:col-span-2">
-                  <input
-                    type="number"
-                    min="1"
-                    required
-                    value={item.quantity}
-                    onChange={(e) =>
-                      handleUpdateItem(item.id, 'quantity', Number(e.target.value))
-                    }
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs font-mono text-center text-white focus:outline-none focus:border-[#d4af37]"
-                  />
-                </div>
+                  <div className="col-span-4 md:col-span-2">
+                    <input
+                      type="number"
+                      min="1"
+                      required
+                      value={item.quantity}
+                      onChange={(e) =>
+                        handleUpdateItem(
+                          item.id,
+                          'quantity',
+                          Math.max(1, Number(e.target.value))
+                        )
+                      }
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs font-mono text-center text-white focus:outline-none focus:border-[#d4af37]"
+                    />
+                  </div>
 
-                <div className="col-span-5 md:col-span-3">
-                  <RupiahInput
-                    required
-                    value={item.unitPrice}
-                    onChange={(e) =>
-                      handleUpdateItem(item.id, 'unitPrice', Number(e.target.value))
-                    }
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs font-mono text-right text-[#f5d77f] focus:outline-none focus:border-[#d4af37]"
-                  />
-                </div>
+                  <div className="col-span-5 md:col-span-3">
+                    <RupiahInput
+                      required
+                      value={item.unitPrice}
+                      onChange={(e) =>
+                        handleUpdateItem(item.id, 'unitPrice', Number(e.target.value))
+                      }
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs font-mono text-right text-[#f5d77f] focus:outline-none focus:border-[#d4af37]"
+                    />
+                  </div>
 
-                <div className="col-span-2 md:col-span-1 text-right text-xs font-mono font-bold text-zinc-300">
-                  Rp {Math.round(rowTotal).toLocaleString('id-ID')}
-                </div>
+                  <div className="col-span-2 md:col-span-1 text-right text-xs font-mono font-bold text-zinc-300">
+                    Rp {Math.round(rowTotal).toLocaleString('id-ID')}
+                  </div>
 
-                <div className="col-span-1 text-right">
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveItem(item.id)}
-                    disabled={lineItems.length <= 1}
-                    className="p-1.5 rounded-lg text-zinc-500 hover:text-red-400 disabled:opacity-30 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="col-span-1 text-right">
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveItem(item.id)}
+                      className="p-1.5 rounded-lg text-zinc-500 hover:text-red-400 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
 
-        {/* Live Grand Total Bottom Strip */}
         <div className="pt-4 border-t border-zinc-800 flex items-center justify-between">
           <span className="text-xs font-mono uppercase text-zinc-400">
             TOTAL INVOICE AMOUNT
@@ -333,8 +354,62 @@ export function NewInvoiceForm({ clients, products = [] }: NewInvoiceFormProps) 
         </div>
       </div>
 
-      {/* Footer Submission Actions */}
-      {/* Footer Submission Actions (Mobile-First responsive flex & touch target height >=44px) */}
+      <div className="gold-glass-panel rounded-2xl p-6 space-y-4">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-200 border-b border-zinc-800 pb-3 flex items-center gap-2">
+          <Building2 className="w-4 h-4 text-[#d4af37]" />
+          <span>PAYMENT & BANK DISBURSEMENT INSTRUCTIONS</span>
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-2">
+              Bank Payment Account Option
+            </label>
+            <select
+              value={bankAccountId}
+              onChange={(e) => setBankAccountId(e.target.value)}
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-[#f5d77f] focus:outline-none focus:border-[#d4af37] font-sans"
+            >
+              <option value="all">Display All Workspace Bank Accounts (Default)</option>
+              {bankAccounts?.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.bank_name} - {b.account_number} ({b.account_name})
+                </option>
+              ))}
+              <option value="custom">Custom Bank Instructions / Override...</option>
+            </select>
+          </div>
+
+          {bankAccountId === 'custom' && (
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#f5d77f] mb-2">
+                Custom Payment Instructions
+              </label>
+              <textarea
+                rows={2}
+                value={customPaymentInstructions}
+                onChange={(e) => setCustomPaymentInstructions(e.target.value)}
+                placeholder="Enter exact bank account details or transfer notes to show on this invoice..."
+                className="w-full bg-zinc-950 border border-[#d4af37]/60 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-[#d4af37] font-mono"
+              />
+            </div>
+          )}
+
+          <div className={bankAccountId === 'custom' ? 'md:col-span-2' : ''}>
+            <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-2">
+              Additional Notes & Terms (Optional)
+            </label>
+            <textarea
+              rows={2}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Special notes or contractual terms displayed at the bottom of the invoice..."
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-[#d4af37] font-sans"
+            />
+          </div>
+        </div>
+      </div>
+
       <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-3">
         <Link
           href="/invoices"

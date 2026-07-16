@@ -70,3 +70,18 @@
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(212, 175, 55, 0.6);
 }
+
+/* Bright Gold/White Native Calendar Picker Icon */
+input[type="date"] {
+  color-scheme: dark;
+}
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  filter: invert(80%) sepia(65%) saturate(800%) hue-rotate(360deg) brightness(115%) contrast(110%);
+  opacity: 0.95;
+  transition: all 0.2s ease;
+}
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  transform: scale(1.15);
+}

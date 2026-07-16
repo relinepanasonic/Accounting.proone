@@ -9,6 +9,8 @@ export interface CreateInvoicePayload {
   issueDate: string;
   dueDate: string;
   notes?: string;
+  bankAccountId?: string;
+  paymentInstructions?: string;
   lineItems: Array<{
     description: string;
     quantity: number;
@@ -73,21 +75,31 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
     let invoiceError: any = null;
 
     for (let attempt = 0; attempt < 5; attempt++) {
-      const res = await supabase
+      const insertData: any = {
+        workspace_id: workspaceId,
+        client_id: payload.clientId,
+        invoice_number: invoiceNumberToUse,
+        status: 'draft',
+        issue_date: payload.issueDate,
+        due_date: payload.dueDate,
+        subtotal: totalAmount,
+        total_amount: totalAmount,
+        notes: payload.notes || null,
+      };
+      if (payload.bankAccountId) insertData.bank_account_id = payload.bankAccountId;
+      if (payload.paymentInstructions) insertData.payment_instructions = payload.paymentInstructions;
+
+      let res = await supabase
         .from('invoices')
-        .insert({
-          workspace_id: workspaceId,
-          client_id: payload.clientId,
-          invoice_number: invoiceNumberToUse,
-          status: 'draft',
-          issue_date: payload.issueDate,
-          due_date: payload.dueDate,
-          subtotal: totalAmount,
-          total_amount: totalAmount,
-          notes: payload.notes || null,
-        })
+        .insert(insertData)
         .select('id')
         .single();
+
+      if (res.error && (res.error.code === '42703' || res.error.message?.includes('does not exist') || res.error.message?.includes('Could not find the'))) {
+        delete insertData.bank_account_id;
+        delete insertData.payment_instructions;
+        res = await supabase.from('invoices').insert(insertData).select('id').single();
+      }
 
       invoice = res.data;
       invoiceError = res.error;

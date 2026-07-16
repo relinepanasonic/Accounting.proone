@@ -2,11 +2,11 @@
 
 import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Trash2, Check, AlertCircle, Loader2, Package, Sparkles } from 'lucide-react';
+import { Plus, Trash2, Check, AlertCircle, Loader2, Package, Calendar, Building2 } from 'lucide-react';
 import { createQuotation } from '@/app/actions/quotations';
 import { RupiahInput } from '@/components/ui/RupiahInput';
 import { BulletTextarea } from '@/components/ui/BulletTextarea';
-import type { CatalogProductOption } from '@/components/invoices/NewInvoiceForm';
+import type { CatalogProductOption, BankAccountOption } from '@/components/invoices/NewInvoiceForm';
 
 interface QuotationItem {
   id: string;
@@ -17,9 +17,10 @@ interface QuotationItem {
 interface NewQuotationFormProps {
   clients: Array<{ id: string; name: string }>;
   products?: CatalogProductOption[];
+  bankAccounts?: BankAccountOption[];
 }
 
-export function NewQuotationForm({ clients, products = [] }: NewQuotationFormProps) {
+export function NewQuotationForm({ clients, products = [], bankAccounts = [] }: NewQuotationFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -34,20 +35,11 @@ export function NewQuotationForm({ clients, products = [] }: NewQuotationFormPro
   const [issueDate, setIssueDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [validUntil, setValidUntil] = useState(getNext30DaysDate);
   const [notes, setNotes] = useState('');
+  const [bankAccountId, setBankAccountId] = useState('all');
+  const [customPaymentInstructions, setCustomPaymentInstructions] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const [lineItems, setLineItems] = useState<QuotationItem[]>([
-    {
-      id: '1',
-      description: '• TikTok & Reels Short-Form Video Package (15 Creative Deliverables)\n• Concept, Scripting, Filming & Professional Post-Production\n• 2 Rounds of Revisions per Deliverable',
-      unitPrice: 35000000,
-    },
-    {
-      id: '2',
-      description: '• Executive E-Commerce Account Strategy & Live Stream Management\n• Dedicated Host & Technical Production Setup\n• Real-time Sales Analytics Optimization',
-      unitPrice: 48000000,
-    },
-  ]);
+  const [lineItems, setLineItems] = useState<QuotationItem[]>([]);
 
   const handleAddLineItem = () => {
     setLineItems((prev) => [
@@ -61,10 +53,6 @@ export function NewQuotationForm({ clients, products = [] }: NewQuotationFormPro
   };
 
   const handleRemoveLineItem = (id: string) => {
-    if (lineItems.length <= 1) {
-      setErrorMsg('At least one deliverable pitch item is required.');
-      return;
-    }
     setLineItems((prev) => prev.filter((item) => item.id !== id));
   };
 
@@ -87,8 +75,8 @@ export function NewQuotationForm({ clients, products = [] }: NewQuotationFormPro
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!clientId) {
-      setErrorMsg('Please select a prospective client or payee.');
+    if (lineItems.length === 0) {
+      setErrorMsg('Please add at least one deliverable pitch item before saving.');
       return;
     }
 
@@ -101,6 +89,8 @@ export function NewQuotationForm({ clients, products = [] }: NewQuotationFormPro
           issueDate,
           validUntil,
           notes,
+          bankAccountId: bankAccountId !== 'all' ? bankAccountId : undefined,
+          paymentInstructions: bankAccountId === 'custom' ? customPaymentInstructions : undefined,
           lineItems: lineItems.map((l) => ({
             description: l.description,
             unitPrice: Number(l.unitPrice) || 0,
@@ -138,15 +128,12 @@ export function NewQuotationForm({ clients, products = [] }: NewQuotationFormPro
           <h2 className="text-xs font-bold uppercase tracking-wider text-[#f5d77f] flex items-center gap-2 font-mono">
             <span>PROSPECTIVE CLIENT & PITCH PARAMETERS</span>
           </h2>
-          <span className="text-[10px] font-mono text-zinc-400 bg-zinc-900 px-2.5 py-1 rounded-full border border-zinc-800">
-            NO TOTALS CALCULATED (PITCH MENU)
-          </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="sm:col-span-2">
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1.5 font-sans">
-              PROSPECTIVE CLIENT / PAYEE *
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1.5 font-mono">
+              SELECT PROSPECTIVE CLIENT *
             </label>
             <select
               required
@@ -166,7 +153,26 @@ export function NewQuotationForm({ clients, products = [] }: NewQuotationFormPro
 
           <div>
             <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1.5 font-mono">
-              QUOTATION REF NO *
+              ISSUE DATE *
+            </label>
+            <div className="relative">
+              <input
+                type="date"
+                required
+                value={issueDate}
+                onChange={(e) => setIssueDate(e.target.value)}
+                disabled={isPending}
+                className="w-full bg-black/80 border border-yellow-600/30 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#d4af37] transition-all [color-scheme:dark]"
+              />
+              <Calendar className="w-4 h-4 text-[#d4af37] absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1.5 font-mono">
+              QUOTATION REFERENCE ID *
             </label>
             <input
               type="text"
@@ -182,14 +188,17 @@ export function NewQuotationForm({ clients, products = [] }: NewQuotationFormPro
             <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1.5 font-mono">
               VALID UNTIL *
             </label>
-            <input
-              type="date"
-              required
-              value={validUntil}
-              onChange={(e) => setValidUntil(e.target.value)}
-              disabled={isPending}
-              className="w-full bg-black/80 border border-yellow-600/30 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#d4af37] transition-all"
-            />
+            <div className="relative">
+              <input
+                type="date"
+                required
+                value={validUntil}
+                onChange={(e) => setValidUntil(e.target.value)}
+                disabled={isPending}
+                className="w-full bg-black/80 border border-yellow-600/30 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#d4af37] transition-all [color-scheme:dark]"
+              />
+              <Calendar className="w-4 h-4 text-[#d4af37] absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
           </div>
         </div>
       </div>
@@ -234,7 +243,7 @@ export function NewQuotationForm({ clients, products = [] }: NewQuotationFormPro
         </div>
       )}
 
-      {/* DELIVERABLE PITCH LIST (MENU ITEMS WITHOUT QUANTITY OR TOTAL) */}
+      {/* DELIVERABLE PITCH LIST */}
       <div className="gold-glass-panel rounded-2xl p-6 space-y-6">
         <div className="border-b border-zinc-800 pb-3 flex items-center justify-between">
           <div>
@@ -254,58 +263,131 @@ export function NewQuotationForm({ clients, products = [] }: NewQuotationFormPro
           </button>
         </div>
 
-        <div className="space-y-4">
-          {lineItems.map((item, idx) => (
-            <div
-              key={item.id}
-              className="p-4 rounded-xl bg-black/60 border border-zinc-800/80 space-y-3 relative group hover:border-[#d4af37]/40 transition-colors"
+        {lineItems.length === 0 ? (
+          <div className="text-center py-10 px-4 border border-dashed border-zinc-800 rounded-xl bg-zinc-950/40">
+            <p className="text-xs text-zinc-400 font-mono mb-3">
+              No deliverable pitch items added yet. Click &quot;ADD PITCH ITEM&quot; or choose from catalog to begin.
+            </p>
+            <button
+              type="button"
+              onClick={handleAddLineItem}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#d4af37]/20 border border-[#d4af37] text-xs font-bold text-[#f5d77f] hover:bg-[#d4af37]/30 transition-colors"
             >
-              <div className="flex items-center justify-between text-xs text-zinc-400 font-mono">
-                <span className="font-bold text-[#f5d77f]">PITCH DELIVERABLE #{idx + 1}</span>
-                <button
-                  type="button"
-                  onClick={() => handleRemoveLineItem(item.id)}
-                  className="text-zinc-500 hover:text-red-400 transition-colors p-1"
-                  title="Remove Pitch Item"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
-                <div className="md:col-span-3">
-                  <label className="block text-[10px] uppercase text-zinc-400 font-mono mb-1">
-                    DELIVERABLE SCOPE & BULLET POINTS *
-                  </label>
-                  <BulletTextarea
-                    required
-                    rows={4}
-                    value={item.description}
-                    onChange={(val) => handleItemChange(item.id, 'description', val)}
-                    disabled={isPending}
-                    placeholder="• Scope detail 1&#10;• Scope detail 2"
-                    className="text-xs"
-                  />
+              <Plus className="w-4 h-4" />
+              <span>ADD FIRST PITCH ITEM</span>
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {lineItems.map((item, idx) => (
+              <div
+                key={item.id}
+                className="p-4 rounded-xl bg-black/60 border border-zinc-800/80 space-y-3 relative group hover:border-[#d4af37]/40 transition-colors"
+              >
+                <div className="flex items-center justify-between text-xs text-zinc-400 font-mono">
+                  <span className="font-bold text-[#f5d77f]">PITCH DELIVERABLE #{idx + 1}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveLineItem(item.id)}
+                    className="text-zinc-500 hover:text-red-400 transition-colors p-1"
+                    title="Remove Pitch Item"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
 
-                <div>
-                  <label className="block text-[10px] uppercase text-zinc-400 font-mono mb-1">
-                    INVESTMENT RATE (IDR) *
-                  </label>
-                  <RupiahInput
-                    required
-                    value={item.unitPrice}
-                    onChange={(e: any) => handleItemChange(item.id, 'unitPrice', e.target.value)}
-                    disabled={isPending}
-                    className="text-xs py-2.5 font-mono font-bold text-[#f5d77f]"
-                  />
-                  <p className="text-[10px] text-zinc-500 mt-1 font-sans">
-                    Rate per package/unit. No grand total is computed.
-                  </p>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
+                  <div className="md:col-span-3">
+                    <label className="block text-[10px] uppercase text-zinc-400 font-mono mb-1">
+                      DELIVERABLE SCOPE & BULLET POINTS *
+                    </label>
+                    <BulletTextarea
+                      required
+                      rows={4}
+                      value={item.description}
+                      onChange={(val) => handleItemChange(item.id, 'description', val)}
+                      disabled={isPending}
+                      placeholder="• Scope detail 1&#10;• Scope detail 2"
+                      className="text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase text-zinc-400 font-mono mb-1">
+                      INVESTMENT RATE (IDR) *
+                    </label>
+                    <RupiahInput
+                      required
+                      value={item.unitPrice}
+                      onChange={(e: any) => handleItemChange(item.id, 'unitPrice', e.target.value)}
+                      disabled={isPending}
+                      className="text-xs py-2.5 font-mono font-bold text-[#f5d77f]"
+                    />
+                    <p className="text-[10px] text-zinc-500 mt-1 font-sans">
+                      Rate per package/unit. No grand total is computed.
+                    </p>
+                  </div>
                 </div>
               </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Payment Instructions & Notes Panel */}
+      <div className="gold-glass-panel rounded-2xl p-6 space-y-4">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-200 border-b border-zinc-800 pb-3 flex items-center gap-2">
+          <Building2 className="w-4 h-4 text-[#d4af37]" />
+          <span>PAYMENT & BANK DISBURSEMENT INSTRUCTIONS</span>
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-2">
+              Bank Payment Account Option
+            </label>
+            <select
+              value={bankAccountId}
+              onChange={(e) => setBankAccountId(e.target.value)}
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-[#f5d77f] focus:outline-none focus:border-[#d4af37] font-sans"
+            >
+              <option value="all">Display All Workspace Bank Accounts (Default)</option>
+              {bankAccounts?.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.bank_name} - {b.account_number} ({b.account_name})
+                </option>
+              ))}
+              <option value="custom">Custom Bank Instructions / Override...</option>
+            </select>
+          </div>
+
+          {bankAccountId === 'custom' && (
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#f5d77f] mb-2">
+                Custom Payment Instructions
+              </label>
+              <textarea
+                rows={2}
+                value={customPaymentInstructions}
+                onChange={(e) => setCustomPaymentInstructions(e.target.value)}
+                placeholder="Enter exact bank account details or transfer notes to show on this quotation..."
+                className="w-full bg-zinc-950 border border-[#d4af37]/60 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-[#d4af37] font-mono"
+              />
             </div>
-          ))}
+          )}
+
+          <div className={bankAccountId === 'custom' ? 'md:col-span-2' : ''}>
+            <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-2">
+              Additional Notes & Terms (Optional)
+            </label>
+            <textarea
+              rows={2}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Special notes or contractual terms displayed at the bottom of the proposal..."
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-[#d4af37] font-sans"
+            />
+          </div>
         </div>
       </div>
 

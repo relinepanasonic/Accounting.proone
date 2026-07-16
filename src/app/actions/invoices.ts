@@ -86,22 +86,47 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
       0
     );
 
-    // 4a. Inject workspace_id into parent invoices payload
-    const { data: invoice, error: invoiceError } = await supabase
-      .from('invoices')
-      .insert({
-        workspace_id: workspaceId,
-        client_id: payload.clientId,
-        invoice_number: payload.invoiceNumber || `INV-2026-${Math.floor(100 + Math.random() * 900)}`,
-        status: 'draft',
-        issue_date: payload.issueDate,
-        due_date: payload.dueDate,
-        subtotal: totalAmount,
-        total_amount: totalAmount,
-        notes: payload.notes || null,
-      })
-      .select('id')
-      .single();
+    // 4a. Inject workspace_id into parent invoices payload, with auto-retry on duplicate key collision
+    let invoiceNumberToUse = payload.invoiceNumber || `INV-2026-${Math.floor(100 + Math.random() * 900)}`;
+    let invoice: any = null;
+    let invoiceError: any = null;
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const res = await supabase
+        .from('invoices')
+        .insert({
+          workspace_id: workspaceId,
+          client_id: payload.clientId,
+          invoice_number: invoiceNumberToUse,
+          status: 'draft',
+          issue_date: payload.issueDate,
+          due_date: payload.dueDate,
+          subtotal: totalAmount,
+          total_amount: totalAmount,
+          notes: payload.notes || null,
+        })
+        .select('id')
+        .single();
+
+      invoice = res.data;
+      invoiceError = res.error;
+
+      if (!invoiceError && invoice) {
+        break;
+      }
+
+      // If duplicate invoice_number unique constraint collision occurs, append unique suffix and retry
+      if (
+        invoiceError?.code === '23505' ||
+        invoiceError?.message?.includes('duplicate key') ||
+        invoiceError?.message?.includes('uq_workspace_invoice_number')
+      ) {
+        const randomSuffix = Math.floor(100 + Math.random() * 900);
+        invoiceNumberToUse = `${payload.invoiceNumber || 'INV'}-${randomSuffix}`;
+      } else {
+        break; // If it's a different error, stop retrying
+      }
+    }
 
     if (invoiceError || !invoice) {
       return {
@@ -239,5 +264,37 @@ export async function toggleInvoiceStatus(invoiceId: string, currentStatus: stri
     return { success: true, newStatus: nextStatus };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Error toggling status.' };
+  }
+}
+
+/**
+ * Server Action: Permanently Delete Invoice and its Line Items
+ */
+export async function deleteInvoice(invoiceId: string) {
+  try {
+    const supabase = await createClient();
+    const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+
+    await supabase
+      .from('invoice_line_items')
+      .delete()
+      .eq('invoice_id', invoiceId)
+      .eq('workspace_id', workspaceId);
+
+    const { error } = await supabase
+      .from('invoices')
+      .delete()
+      .eq('id', invoiceId)
+      .eq('workspace_id', workspaceId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/invoices');
+    revalidatePath('/');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Error deleting invoice.' };
   }
 }

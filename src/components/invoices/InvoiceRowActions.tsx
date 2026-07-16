@@ -2,8 +2,8 @@
 
 import React, { useTransition } from 'react';
 import Link from 'next/link';
-import { Copy, CheckCircle, Clock, FileText } from 'lucide-react';
-import { duplicateInvoice, toggleInvoiceStatus } from '@/app/actions/invoices';
+import { Copy, CheckCircle, Clock, FileText, Trash2 } from 'lucide-react';
+import { duplicateInvoice, toggleInvoiceStatus, deleteInvoice } from '@/app/actions/invoices';
 
 interface InvoiceRowActionsProps {
   id: string;
@@ -32,6 +32,18 @@ export function InvoiceRowActions({ id, status }: InvoiceRowActionsProps) {
         console.error(err);
       }
     });
+  };
+
+  const handleDelete = () => {
+    if (confirm('Are you sure you want to permanently delete this invoice and its line items?')) {
+      startTransition(async () => {
+        try {
+          await deleteInvoice(id);
+        } catch (err) {
+          console.error(err);
+        }
+      });
+    }
   };
 
   return (
@@ -77,6 +89,16 @@ export function InvoiceRowActions({ id, status }: InvoiceRowActionsProps) {
         className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-[#d4af37]/50 text-zinc-400 hover:text-[#f5d77f] transition-all duration-200"
       >
         <Copy className="w-3.5 h-3.5" />
+      </button>
+
+      {/* Delete Invoice Action */}
+      <button
+        onClick={handleDelete}
+        disabled={isPending}
+        title="Permanently Delete Invoice"
+        className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-red-500/50 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"
+      >
+        <Trash2 className="w-3.5 h-3.5" />
       </button>
     </div>
   );

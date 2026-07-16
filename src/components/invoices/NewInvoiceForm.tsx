@@ -38,7 +38,7 @@ export function NewInvoiceForm({ clients, products = [] }: NewInvoiceFormProps) 
   };
 
   const [clientId, setClientId] = useState(clients[0]?.id || '');
-  const [invoiceNumber, setInvoiceNumber] = useState('INV-2026-004');
+  const [invoiceNumber, setInvoiceNumber] = useState(() => `INV-2026-${Math.floor(100 + Math.random() * 900)}`);
   const [issueDate, setIssueDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState(getNet15Date);
   const [notes, setNotes] = useState('');

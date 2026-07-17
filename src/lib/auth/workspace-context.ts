@@ -60,10 +60,37 @@ export async function getAuthenticatedWorkspaceContext(
 
   // 1. Authenticated User flow
   if (user) {
-    const { data: memberRows } = await supabaseClient
+    // Auto-link any pending email invitations right when the staff member logs in
+    if (user.email) {
+      try {
+        await supabaseClient
+          .from('workspace_members')
+          .update({ user_id: user.id })
+          .ilike('email', user.email.trim())
+          .is('user_id', null);
+      } catch {
+        // Can be ignored during read-only or render pass
+      }
+    }
+
+    let memberRows: any[] | null = null;
+    const { data: byUser } = await supabaseClient
       .from('workspace_members')
       .select('workspace_id, role, workspaces (id, name)')
       .eq('user_id', user.id);
+
+    if (byUser && byUser.length > 0) {
+      memberRows = byUser;
+    } else if (user.email) {
+      const { data: byEmail } = await supabaseClient
+        .from('workspace_members')
+        .select('workspace_id, role, workspaces (id, name)')
+        .ilike('email', user.email.trim());
+
+      if (byEmail && byEmail.length > 0) {
+        memberRows = byEmail;
+      }
+    }
 
     if (memberRows && memberRows.length > 0) {
       const allowedWorkspaces: WorkspaceTenantInfo[] = memberRows.map((m: any) => {
@@ -102,9 +129,47 @@ export async function getAuthenticatedWorkspaceContext(
         availableWorkspaces: allowedWorkspaces,
       };
     }
+
+    // If user is logged in but has no membership rows yet, query all real workspaces from the database
+    // so they never see fake seed/dummy workspaces like "Professor Toko Online HQ"!
+    const { data: realWorkspaces } = await supabaseClient
+      .from('workspaces')
+      .select('id, name')
+      .order('created_at', { ascending: true });
+
+    if (realWorkspaces && realWorkspaces.length > 0) {
+      const allowedRealWorkspaces: WorkspaceTenantInfo[] = realWorkspaces.map((w: any) => ({
+        id: w.id,
+        name: w.name || 'Enterprise Tenant',
+        role: 'accounting', // Default staff role
+      }));
+
+      const matched = allowedRealWorkspaces.find((w) => w.id === cookieWorkspaceId);
+      const active = matched || allowedRealWorkspaces[0];
+
+      if (!matched) {
+        try {
+          cookieStore.set('active_workspace_id', active.id, {
+            path: '/',
+            maxAge: 60 * 60 * 24 * 365,
+            sameSite: 'lax',
+          });
+        } catch {}
+      }
+
+      return {
+        userId: user.id,
+        userName: resolvedName,
+        userEmail: resolvedEmail,
+        activeWorkspaceId: active.id,
+        activeWorkspaceName: active.name,
+        role: active.role,
+        availableWorkspaces: allowedRealWorkspaces,
+      };
+    }
   }
 
-  // 2. Fallback Seed / Preview Flow (Supports multi-tenant switching in development)
+  // 2. Fallback Seed / Preview Flow (Only used when no user is logged in and no real database workspaces exist)
   const matchedSeed = SEED_WORKSPACES.find((w) => w.id === cookieWorkspaceId) || SEED_WORKSPACES[0];
 
   return {

@@ -19,12 +19,25 @@ export default async function WorkspacesMasterPage() {
   let masterList: WorkspaceMasterItem[] = [];
 
   if (user) {
-    const { data: memberRows, error } = await supabase
+    let memberRows: any[] | null = null;
+    const { data: byUser, error } = await supabase
       .from('workspace_members')
       .select('workspace_id, role, workspaces (*)')
       .eq('user_id', user.id);
 
-    if (!error && memberRows && memberRows.length > 0) {
+    if (!error && byUser && byUser.length > 0) {
+      memberRows = byUser;
+    } else if (user.email) {
+      const { data: byEmail } = await supabase
+        .from('workspace_members')
+        .select('workspace_id, role, workspaces (*)')
+        .ilike('email', user.email.trim());
+      if (byEmail && byEmail.length > 0) {
+        memberRows = byEmail;
+      }
+    }
+
+    if (memberRows && memberRows.length > 0) {
       masterList = memberRows
         .map((m: any) => {
           const wsObj = Array.isArray(m.workspaces) ? m.workspaces[0] : m.workspaces;
@@ -45,15 +58,36 @@ export default async function WorkspacesMasterPage() {
     }
   }
 
-  // Fallback if no memberships returned or running in preview seed mode
-  if (masterList.length === 0 && wsContext.availableWorkspaces) {
-    masterList = wsContext.availableWorkspaces.map((w) => ({
-      id: w.id,
-      name: w.name,
-      role: w.role,
-      isTaxRegistered: false,
-      taxRatePercent: 11,
-    }));
+  // If no explicit memberships found, fetch all real workspaces from database before ever using seed!
+  if (masterList.length === 0) {
+    const { data: realWs } = await supabase
+      .from('workspaces')
+      .select('*')
+      .order('created_at', { ascending: true });
+
+    if (realWs && realWs.length > 0) {
+      masterList = realWs.map((wsObj: any) => {
+        const isTaxReg =
+          wsObj.is_tax_registered !== undefined && wsObj.is_tax_registered !== null
+            ? Boolean(wsObj.is_tax_registered)
+            : Number(wsObj.tax_rate_percent || 0) > 0;
+        return {
+          id: wsObj.id,
+          name: wsObj.name || 'Enterprise Tenant',
+          role: 'accounting',
+          isTaxRegistered: isTaxReg,
+          taxRatePercent: wsObj.tax_rate_percent !== undefined ? Number(wsObj.tax_rate_percent) : (isTaxReg ? 11 : 0),
+        };
+      });
+    } else if (wsContext.availableWorkspaces) {
+      masterList = wsContext.availableWorkspaces.map((w) => ({
+        id: w.id,
+        name: w.name,
+        role: w.role,
+        isTaxRegistered: false,
+        taxRatePercent: 11,
+      }));
+    }
   }
 
   return <WorkspacesMasterList workspaces={masterList} activeWorkspaceId={activeId} />;

@@ -719,10 +719,25 @@ export async function inviteTeamMember(payload: {
       return { success: false, error: 'Member email is required.' };
     }
 
+    let targetUserId = null;
+    try {
+      const { data: existingUser } = await supabase
+        .from('workspace_members')
+        .select('user_id')
+        .ilike('email', payload.email.trim())
+        .not('user_id', 'is', null)
+        .limit(1);
+      if (existingUser && existingUser.length > 0) {
+        targetUserId = existingUser[0].user_id;
+      }
+    } catch {}
+
     const { error } = await supabase.from('workspace_members').insert({
       workspace_id: workspaceId,
       role: payload.role,
-      user_id: null, // Pending auth linkage
+      user_id: targetUserId,
+      email: payload.email.toLowerCase().trim(),
+      display_name: payload.name.trim(),
     });
 
     if (error) {

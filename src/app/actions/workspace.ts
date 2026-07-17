@@ -122,6 +122,8 @@ export async function createWorkspace(workspaceName: string) {
       workspace_id: newWs.id,
       user_id: user.id,
       role: 'superadmin',
+      email: user.email?.toLowerCase() || null,
+      display_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Superadmin',
     });
 
     if (memberError) {

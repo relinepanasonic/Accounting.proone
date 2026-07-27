@@ -55,33 +55,53 @@ export function ReconciliationHUD({ systemRecords }: ReconciliationHUDProps) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      const lines = text.split('\n').filter((l) => l.trim().length > 0);
-      const parsed: BankLine[] = [];
-
-      lines.slice(1).forEach((line, idx) => {
-        const cols = line.split(',');
-        if (cols.length >= 3) {
-          const amt = parseFloat(cols[2].trim());
-          if (!isNaN(amt)) {
-            parsed.push({
-              id: `csv-${idx}`,
-              date: cols[0].trim(),
-              description: cols[1].trim(),
-              amount: amt,
-            });
+    if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+      startTransition(async () => {
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+          const res = await fetch('/api/v1/reconcile/parse-pdf', {
+            method: 'POST',
+            body: formData,
+          });
+          const result = await res.json();
+          if (result.success && result.data.length > 0) {
+            setBankLines(result.data);
+            setSelectedBankId(result.data[0].id);
           }
+        } catch (err) {
+          console.error('PDF Parse Error:', err);
         }
       });
+    } else {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const text = event.target?.result as string;
+        const lines = text.split('\n').filter((l) => l.trim().length > 0);
+        const parsed: BankLine[] = [];
 
-      if (parsed.length > 0) {
-        setBankLines(parsed);
-        setSelectedBankId(parsed[0].id);
-      }
-    };
-    reader.readAsText(file);
+        lines.slice(1).forEach((line, idx) => {
+          const cols = line.split(',');
+          if (cols.length >= 3) {
+            const amt = parseFloat(cols[2].trim());
+            if (!isNaN(amt)) {
+              parsed.push({
+                id: `csv-${idx}`,
+                date: cols[0].trim(),
+                description: cols[1].trim(),
+                amount: amt,
+              });
+            }
+          }
+        });
+
+        if (parsed.length > 0) {
+          setBankLines(parsed);
+          setSelectedBankId(parsed[0].id);
+        }
+      };
+      reader.readAsText(file);
+    }
   };
 
   const activeBankLine = bankLines.find((b) => b.id === selectedBankId);
@@ -129,10 +149,10 @@ export function ReconciliationHUD({ systemRecords }: ReconciliationHUDProps) {
           </div>
         </div>
 
-        <label className="cursor-pointer inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-zinc-950 border border-[#d4af37]/40 hover:border-[#f5d77f] text-xs font-bold text-[#f5d77f] transition-all">
+        <label className={`cursor-pointer inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-zinc-950 border border-[#d4af37]/40 hover:border-[#f5d77f] text-xs font-bold text-[#f5d77f] transition-all ${isPending ? 'opacity-50 pointer-events-none' : ''}`}>
           <UploadCloud className="w-4 h-4" />
-          <span>UPLOAD STATEMENT (.CSV)</span>
-          <input type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
+          <span>{isPending ? 'PARSING PDF...' : 'UPLOAD STATEMENT (.CSV / .PDF)'}</span>
+          <input type="file" accept=".csv, .pdf" onChange={handleFileUpload} className="hidden" />
         </label>
       </div>
 
@@ -154,7 +174,7 @@ export function ReconciliationHUD({ systemRecords }: ReconciliationHUDProps) {
               {bankLines.length === 0 ? (
                 <div className="p-8 text-center text-zinc-500 font-mono text-xs border border-dashed border-zinc-800 rounded-xl space-y-2">
                   <div className="text-white font-bold">NO BANK FEED TRANSACTIONS LOADED</div>
-                  <div className="text-[10px] text-zinc-400 font-sans">Click "UPLOAD STATEMENT (.CSV)" above to import bank feed items.</div>
+                  <div className="text-[10px] text-zinc-400 font-sans">Click "UPLOAD STATEMENT" above to import Bank Jago PDFs or standard CSVs.</div>
                 </div>
               ) : (
                 bankLines.map((bank) => {

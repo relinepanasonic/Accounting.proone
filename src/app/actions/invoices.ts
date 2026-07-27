@@ -16,6 +16,7 @@ export interface CreateInvoicePayload {
     quantity: number;
     unitPrice: number;
   }>;
+  isHistorical?: boolean;
 }
 
 export interface InvoiceActionResult {

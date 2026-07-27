@@ -16,7 +16,7 @@ const CATEGORY_OPTIONS = [
   'Creator Partnerships & Ads',
 ];
 
-export function NewExpenseForm() {
+export function NewExpenseForm({ isHistorical = false }: { isHistorical?: boolean }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -41,14 +41,21 @@ export function NewExpenseForm() {
     setErrorMsg(null);
     startTransition(async () => {
       try {
+        const finalNotes = isHistorical ? `[HISTORICAL_OPENING_BALANCE] ${notes}` : notes;
         await createExpense({
           vendor,
           category,
           dueDate,
           amount: Number(amount),
-          notes,
+          notes: finalNotes,
+          isHistorical,
         });
-        router.push('/expenses');
+        
+        if (isHistorical) {
+          router.push('/settings/opening-balances');
+        } else {
+          router.push('/expenses');
+        }
       } catch (err: any) {
         setErrorMsg(err.message || 'Failed to record expense');
       }

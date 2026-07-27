@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Building2, Users, ShieldAlert } from 'lucide-react';
+import { Building2, Users, ShieldAlert, BookOpen } from 'lucide-react';
 
 export function SettingsNav() {
   const pathname = usePathname();
@@ -26,6 +26,12 @@ export function SettingsNav() {
       href: '/settings/team',
       icon: ShieldAlert,
       description: 'Superadmin, Accounting & Admin role matrix',
+    },
+    {
+      label: 'OPENING BALANCES',
+      href: '/settings/opening-balances',
+      icon: BookOpen,
+      description: 'Saldo Awal, Historical Migration & Equity',
     },
   ];
 

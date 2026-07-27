@@ -1,0 +1,86 @@
+import React from 'react';
+import Link from 'next/link';
+import { BookOpen, AlertTriangle, ArrowRight } from 'lucide-react';
+import { BankOpeningBalanceForm } from '@/components/settings/BankOpeningBalanceForm';
+
+export const dynamic = 'force-dynamic';
+
+export default function OpeningBalancesPage() {
+  return (
+    <div className="space-y-6 max-w-4xl">
+      <div className="gold-glass-panel border-orange-500/30 rounded-2xl p-6">
+        <div className="flex gap-4 items-start">
+          <div className="w-10 h-10 rounded-full bg-orange-500/10 border border-orange-500/30 flex items-center justify-center shrink-0">
+            <AlertTriangle className="w-5 h-5 text-orange-400" />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-1">Historical Migration Engine</h2>
+            <p className="text-xs text-zinc-400 font-sans leading-relaxed">
+              Use this command center to set up your company's Saldo Awal. These actions create special journal entries that credit 
+              <span className="text-[#f5d77f] font-mono mx-1">Retained Earnings / Historical Equity</span> instead of current-year P&L, 
+              ensuring your first year in ProOne starts perfectly balanced without artificially inflating revenue or expenses.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Bank Balances */}
+        <div className="gold-glass-panel rounded-2xl p-6 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-black text-white uppercase tracking-wider">1. Bank & Cash</h3>
+              <span className="px-2 py-0.5 rounded bg-zinc-900 text-zinc-400 text-[9px] font-mono border border-zinc-800">SALDO AWAL KAS</span>
+            </div>
+            <p className="text-xs text-zinc-400 mb-6">
+              Enter the starting balances of your bank accounts on the day before you transitioned to ProOne.
+            </p>
+            <BankOpeningBalanceForm />
+          </div>
+        </div>
+
+        {/* Historical A/R & A/P */}
+        <div className="space-y-6 flex flex-col">
+          {/* Piutang */}
+          <div className="gold-glass-panel rounded-2xl p-6 flex-1 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-black text-white uppercase tracking-wider">2. Accounts Receivable</h3>
+                <span className="px-2 py-0.5 rounded bg-zinc-900 text-zinc-400 text-[9px] font-mono border border-zinc-800">PIUTANG</span>
+              </div>
+              <p className="text-[11px] text-zinc-400 mb-4">
+                Log unpaid invoices from your previous system. They will be tracked in A/R but will bypass current-year Revenue.
+              </p>
+            </div>
+            <Link 
+              href="/invoices/new?historical=true"
+              className="w-full py-2.5 rounded-xl border border-[#d4af37]/30 text-[#f5d77f] text-xs font-bold uppercase tracking-widest text-center hover:bg-[#d4af37]/10 transition-colors flex items-center justify-center gap-2"
+            >
+              Add Historical Invoice <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+          {/* Hutang */}
+          <div className="gold-glass-panel rounded-2xl p-6 flex-1 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-black text-white uppercase tracking-wider">3. Accounts Payable</h3>
+                <span className="px-2 py-0.5 rounded bg-zinc-900 text-zinc-400 text-[9px] font-mono border border-zinc-800">HUTANG</span>
+              </div>
+              <p className="text-[11px] text-zinc-400 mb-4">
+                Log unpaid vendor bills from your previous system. They will be tracked in A/P but will bypass current-year Expenses.
+              </p>
+            </div>
+            <Link 
+              href="/expenses/new?historical=true"
+              className="w-full py-2.5 rounded-xl border border-red-500/30 text-red-400 text-xs font-bold uppercase tracking-widest text-center hover:bg-red-500/10 transition-colors flex items-center justify-center gap-2"
+            >
+              Add Historical Bill <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}

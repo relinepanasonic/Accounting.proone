@@ -34,9 +34,10 @@ interface NewInvoiceFormProps {
   clients: Array<{ id: string; name: string }>;
   products?: CatalogProductOption[];
   bankAccounts?: BankAccountOption[];
+  isHistorical?: boolean;
 }
 
-export function NewInvoiceForm({ clients, products = [], bankAccounts = [] }: NewInvoiceFormProps) {
+export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHistorical = false }: NewInvoiceFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -116,14 +117,16 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [] }: Ne
     setErrorMsg(null);
     startTransition(async () => {
       try {
+        const finalNotes = isHistorical ? `[HISTORICAL_OPENING_BALANCE] ${notes}` : notes;
         const res = await createInvoice({
           clientId,
           invoiceNumber,
           issueDate,
           dueDate,
-          notes,
+          notes: finalNotes,
           bankAccountId: bankAccountId !== 'all' ? bankAccountId : undefined,
           paymentInstructions: bankAccountId === 'custom' ? customPaymentInstructions : undefined,
+          isHistorical,
           lineItems: lineItems.map((l) => ({
             description: l.description,
             quantity: Number(l.quantity),

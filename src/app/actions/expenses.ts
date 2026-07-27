@@ -9,6 +9,7 @@ export interface CreateExpensePayload {
   dueDate: string;
   amount: number;
   notes?: string;
+  isHistorical?: boolean;
 }
 
 export async function createExpense(payload: CreateExpensePayload) {
@@ -25,9 +26,11 @@ export async function createExpense(payload: CreateExpensePayload) {
       ? workspaces[0].id
       : '11111111-1111-1111-1111-111111111111';
 
+  const finalDescription = payload.notes ? `${payload.vendor} - ${payload.notes}` : payload.vendor;
+
   const { error } = await supabase.from('transactions').insert({
     workspace_id: workspaceId,
-    description: payload.vendor,
+    description: finalDescription,
     category: payload.category,
     amount: payload.amount,
     due_date: payload.dueDate,

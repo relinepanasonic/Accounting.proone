@@ -1,11 +1,11 @@
 import React from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Receipt } from 'lucide-react';
+import { ArrowLeft, Receipt, AlertTriangle } from 'lucide-react';
 import { NewExpenseForm } from '@/components/expenses/NewExpenseForm';
 
 export const dynamic = 'force-dynamic';
 
-export default function NewExpensePage() {
+export default function NewExpensePage({ searchParams }: { searchParams: { historical?: string } }) {
   return (
     <div className="max-w-[1200px] mx-auto px-6 py-8 space-y-6">
       {/* Header Bar */}
@@ -29,7 +29,21 @@ export default function NewExpensePage() {
         </div>
       </div>
 
-      <NewExpenseForm />
+      {searchParams.historical === 'true' && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center shrink-0">
+            <AlertTriangle className="w-4 h-4 text-red-400" />
+          </div>
+          <div>
+            <h3 className="text-xs font-bold text-white uppercase">Historical Opening Balance Mode</h3>
+            <p className="text-[10px] text-zinc-400 font-sans">
+              This bill will be logged as historical Hutang. It will debit Retained Earnings and will NOT artificially inflate current-year expenses.
+            </p>
+          </div>
+        </div>
+      )}
+
+      <NewExpenseForm isHistorical={searchParams.historical === 'true'} />
     </div>
   );
 }

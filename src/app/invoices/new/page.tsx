@@ -1,13 +1,13 @@
 import React from 'react';
 import Link from 'next/link';
-import { ArrowLeft, FileText, Package } from 'lucide-react';
+import { ArrowLeft, FileText, Package, AlertTriangle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { NewInvoiceForm } from '@/components/invoices/NewInvoiceForm';
 
 export const dynamic = 'force-dynamic';
 
-export default async function NewInvoicePage() {
+export default async function NewInvoicePage({ searchParams }: { searchParams: { historical?: string } }) {
   const supabase = await createClient();
   const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
@@ -48,7 +48,21 @@ export default async function NewInvoicePage() {
         </Link>
       </div>
 
-      <NewInvoiceForm clients={clientList} products={productList} bankAccounts={bankAccounts || []} />
+      {searchParams.historical === 'true' && (
+        <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-4 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center shrink-0">
+            <AlertTriangle className="w-4 h-4 text-orange-400" />
+          </div>
+          <div>
+            <h3 className="text-xs font-bold text-white uppercase">Historical Opening Balance Mode</h3>
+            <p className="text-[10px] text-zinc-400 font-sans">
+              This invoice will be logged as historical Piutang. It will credit Retained Earnings and will NOT artificially inflate current-year revenue.
+            </p>
+          </div>
+        </div>
+      )}
+
+      <NewInvoiceForm clients={clientList} products={productList} bankAccounts={bankAccounts || []} isHistorical={searchParams.historical === 'true'} />
     </div>
   );
 }

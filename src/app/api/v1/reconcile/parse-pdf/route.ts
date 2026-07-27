@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs'; // Ensure this runs in standard Node, not Edge
+export const dynamic = 'force-dynamic'; // Prevent Next.js from statically rendering and crashing on canvas DOMMatrix
 
 export async function POST(request: Request) {
   try {
     // Dynamically import to avoid Next.js build-time DOM/Canvas polyfill issues
-    const pdfParse = (await import('pdf-parse')).default || require('pdf-parse');
+    const pdfModule = await import('pdf-parse');
+    const pdfParse = (pdfModule as any).default || pdfModule;
     
     const formData = await request.formData();
     const file = formData.get('file') as File;

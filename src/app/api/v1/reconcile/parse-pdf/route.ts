@@ -87,6 +87,13 @@ export async function POST(request: Request) {
       }
     }
 
+    if (transactions.length === 0) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'No transactions found. Raw extraction snippet for debugging: ' + text.substring(0, 500) 
+      });
+    }
+
     return NextResponse.json({ success: true, data: transactions });
 
   } catch (error: any) {

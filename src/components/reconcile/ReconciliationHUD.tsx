@@ -65,11 +65,15 @@ export function ReconciliationHUD({ systemRecords }: ReconciliationHUDProps) {
             body: formData,
           });
           const result = await res.json();
-          if (result.success && result.data.length > 0) {
+          if (result.success && result.data && result.data.length > 0) {
             setBankLines(result.data);
             setSelectedBankId(result.data[0].id);
+          } else {
+            alert(result.error || 'No transactions found in this PDF. Please ensure it is a valid Bank Jago statement.');
+            console.error('PDF Parse Error Details:', result);
           }
-        } catch (err) {
+        } catch (err: any) {
+          alert('Network or Server Error: ' + err.message);
           console.error('PDF Parse Error:', err);
         }
       });

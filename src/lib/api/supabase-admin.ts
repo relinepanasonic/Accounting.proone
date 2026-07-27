@@ -23,11 +23,13 @@ export function createAdminClient() {
  * Ensures we only query data for this specific tenant.
  */
 export async function getNewwaveWorkspaceId(supabaseAdmin: any): Promise<string> {
+  // Query by name using ILIKE to catch variations like "New Wave Live Specialist"
   const { data, error } = await supabaseAdmin
     .from('workspaces')
     .select('id')
-    .eq('slug', 'new-wave-agency')
-    .single();
+    .ilike('name', '%New Wave%')
+    .limit(1)
+    .maybeSingle();
 
   if (error || !data) {
     throw new Error('Could not find Newwave workspace in database.');

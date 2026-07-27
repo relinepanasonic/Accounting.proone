@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     const text = data.text;
 
     // Bank Jago Extraction Logic
-    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const lines = text.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 0);
     const transactions = [];
 
     const dateRegex = /^\d{2}\s[A-Za-z]{3}\s\d{4}$/; // e.g. "06 Jan 2026"
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
         if (!remarks) {
           const types = ["Outgoing Transfer", "Incoming Transfer", "QRIS Payment", "Interest", "Tax on Interest"];
           for (const t of types) {
-            if (chunk.find(c => c.includes(t))) {
+            if (chunk.find((c: string) => c.includes(t))) {
               remarks = t;
               break;
             }

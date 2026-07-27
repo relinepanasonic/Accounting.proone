@@ -276,7 +276,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: { mo
           {/* Month Filter Form */}
           <form method="GET" className="flex items-center gap-2 bg-black/40 border border-zinc-800/80 p-1.5 rounded-full px-4">
             <Calendar className="w-3.5 h-3.5 text-zinc-400" />
-            <select name="month" defaultValue={targetMonth} className="bg-transparent text-xs text-white focus:outline-none font-mono cursor-pointer">
+            <select name="month" defaultValue={targetMonth} className="bg-transparent text-xs text-white focus:outline-none font-mono cursor-pointer [&>option]:bg-zinc-900 [&>option]:text-white">
               <option value="01">Jan</option>
               <option value="02">Feb</option>
               <option value="03">Mar</option>
@@ -290,7 +290,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: { mo
               <option value="11">Nov</option>
               <option value="12">Dec</option>
             </select>
-            <select name="year" defaultValue={targetYear} className="bg-transparent text-xs text-white focus:outline-none font-mono cursor-pointer ml-1">
+            <select name="year" defaultValue={targetYear} className="bg-transparent text-xs text-white focus:outline-none font-mono cursor-pointer ml-1 [&>option]:bg-zinc-900 [&>option]:text-white">
               <option value="2025">2025</option>
               <option value="2026">2026</option>
             </select>

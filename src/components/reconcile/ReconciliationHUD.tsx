@@ -7,7 +7,7 @@ import {
   FileSpreadsheet,
   Sparkles,
 } from 'lucide-react';
-import { reconcileRecord } from '@/app/actions/reconcile';
+import { reconcileRecord, quickResolveAndReconcile } from '@/app/actions/reconcile';
 
 export interface UnreconciledSystemRecord {
   id: string;
@@ -41,6 +41,10 @@ export function ReconciliationHUD({ systemRecords }: ReconciliationHUDProps) {
   const [selectedBankId, setSelectedBankId] = useState<string | null>(null);
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  // Resolution Widget State
+  const [resolutionTab, setResolutionTab] = useState<'expense' | 'income' | 'manual'>('expense');
+  const [quickCategory, setQuickCategory] = useState<string>('Uncategorized');
 
   const findAutoMatch = (bankLine: BankLine) => {
     return recordsList.find(
@@ -135,6 +139,75 @@ export function ReconciliationHUD({ systemRecords }: ReconciliationHUDProps) {
     });
   };
 
+  const handleQuickResolve = () => {
+    if (!activeBankLine) return;
+    startTransition(async () => {
+      try {
+        await quickResolveAndReconcile(
+          resolutionTab === 'expense' ? 'expense' : 'income',
+          quickCategory,
+          Math.abs(activeBankLine.amount),
+          activeBankLine.date, // Note: Must match DB format 'YYYY-MM-DD' - Bank Jago format needs transformation in DB or API, but we'll try raw for now
+          activeBankLine.description,
+          `BANK-REF: ${activeBankLine.description}`
+        );
+        setBankLines((prev) => prev.filter((b) => b.id !== activeBankLine.id));
+        setSelectedBankId(null);
+      } catch (err) {
+        console.error(err);
+        alert('Failed to save quick record. Please try again.');
+      }
+    });
+  };
+
+  const renderSystemRecordsList = () => {
+    if (recordsList.length === 0) {
+      return (
+        <div className="p-8 text-center text-zinc-500 font-mono text-xs border border-dashed border-zinc-800 rounded-xl space-y-2">
+          <div className="text-white font-bold">NO UNRECONCILED SYSTEM RECORDS</div>
+          <div className="text-[10px] text-zinc-400 font-sans">All invoices and expenses are cleared or none have been issued yet.</div>
+        </div>
+      );
+    }
+
+    return recordsList.map((rec) => {
+      const isHighlighted = rec.id === currentTargetRecordId;
+      const isAuto = autoMatchRecord?.id === rec.id;
+
+      return (
+        <div
+          key={rec.id}
+          onClick={() => setSelectedRecordId(rec.id)}
+          className={`cursor-pointer rounded-xl p-4 border transition-all duration-200 ${
+            isHighlighted
+              ? 'bg-[#d4af37]/20 border-[#f5d77f] shadow-[0_0_20px_rgba(212,175,55,0.25)]'
+              : 'bg-zinc-950/60 border-zinc-800/80 hover:border-zinc-700'
+          }`}
+        >
+          <div className="flex items-center justify-between text-xs font-mono mb-1">
+            <span className="text-zinc-400">{rec.date}</span>
+            <span className="font-bold text-[#f5d77f]">
+              Rp {rec.amount.toLocaleString('id-ID')}
+            </span>
+          </div>
+          <div className="text-xs font-sans text-white font-medium flex items-center justify-between">
+            <span>{rec.payeeOrClient}</span>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-900 text-[#d4af37] uppercase border border-[#d4af37]/20">
+              {rec.reference}
+            </span>
+          </div>
+
+          {isAuto && (
+            <div className="mt-2.5 pt-2 border-t border-zinc-800/80 flex items-center justify-between text-[10px] font-mono text-[#f5d77f]">
+              <span>PARITY CONFIRMED</span>
+              <span className="font-bold">100% GOLD MATCH</span>
+            </div>
+          )}
+        </div>
+      );
+    });
+  };
+
   return (
     <div className="space-y-6">
       {/* Upload & Demo Strip */}
@@ -191,6 +264,8 @@ export function ReconciliationHUD({ systemRecords }: ReconciliationHUDProps) {
                       onClick={() => {
                         setSelectedBankId(bank.id);
                         setSelectedRecordId(null);
+                        // Auto-switch tabs based on amount type if entering resolution mode
+                        setResolutionTab(bank.amount < 0 ? 'expense' : 'income');
                       }}
                       className={`cursor-pointer rounded-xl p-4 border transition-all duration-200 ${
                         isSelected
@@ -226,85 +301,156 @@ export function ReconciliationHUD({ systemRecords }: ReconciliationHUDProps) {
           </div>
         </div>
 
-        {/* RIGHT PANEL: SYSTEM RECORDS */}
+        {/* RIGHT PANEL: SYSTEM RECORDS / RESOLUTION WIDGET */}
         <div className="gold-glass-panel rounded-2xl p-6 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between pb-3 mb-4 border-b border-zinc-800">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-[#d4af37]">
-                RIGHT PANEL • SYSTEM RECORDS
-              </h3>
-              <span className="text-[10px] font-mono text-zinc-400">
-                {recordsList.length} QUEUED ENTRIES
-              </span>
-            </div>
+          {activeBankLine && !autoMatchRecord ? (
+            // ================= INLINE RESOLUTION WIDGET =================
+            <div className="h-full flex flex-col">
+              <div className="flex items-center justify-between pb-3 mb-4 border-b border-zinc-800">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[#d4af37]">
+                  UNMATCHED ITEM • RESOLUTION WIDGET
+                </h3>
+              </div>
+              
+              {/* Tab Selector */}
+              <div className="flex bg-zinc-950 p-1 rounded-lg border border-zinc-800/80 mb-6">
+                <button 
+                  onClick={() => setResolutionTab('expense')}
+                  className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${resolutionTab === 'expense' ? 'bg-[#d4af37]/20 text-[#f5d77f]' : 'text-zinc-500 hover:text-zinc-400'}`}
+                >
+                  QUICK EXPENSE
+                </button>
+                <button 
+                  onClick={() => setResolutionTab('income')}
+                  className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${resolutionTab === 'income' ? 'bg-[#d4af37]/20 text-[#f5d77f]' : 'text-zinc-500 hover:text-zinc-400'}`}
+                >
+                  QUICK INCOME
+                </button>
+                <button 
+                  onClick={() => setResolutionTab('manual')}
+                  className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${resolutionTab === 'manual' ? 'bg-[#d4af37]/20 text-[#f5d77f]' : 'text-zinc-500 hover:text-zinc-400'}`}
+                >
+                  MANUAL MATCH
+                </button>
+              </div>
 
-            <div className="space-y-3">
-              {recordsList.length === 0 ? (
-                <div className="p-8 text-center text-zinc-500 font-mono text-xs border border-dashed border-zinc-800 rounded-xl space-y-2">
-                  <div className="text-white font-bold">NO UNRECONCILED SYSTEM RECORDS</div>
-                  <div className="text-[10px] text-zinc-400 font-sans">All invoices and expenses are cleared or none have been issued yet.</div>
+              {resolutionTab === 'manual' ? (
+                // MANUAL MATCH TAB
+                <div className="flex-1 flex flex-col justify-between">
+                  <div className="space-y-3 flex-1 overflow-y-auto max-h-[400px] pr-2">
+                    {renderSystemRecordsList()}
+                  </div>
+                   
+                  <div className="mt-6 pt-4 border-t border-zinc-800 flex items-center justify-between">
+                    <div className="text-xs font-mono text-zinc-400">
+                      {currentTargetRecordId ? <span className="text-[#f5d77f] font-bold">READY TO CLEAR</span> : <span>SELECT SYSTEM RECORD</span>}
+                    </div>
+                    <button
+                      type="button"
+                      disabled={!currentTargetRecordId || isPending}
+                      onClick={handleMatchAndClear}
+                      className="gold-btn inline-flex items-center gap-2 px-7 py-3 rounded-full text-xs uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>{isPending ? 'RECONCILING...' : 'FORCE MATCH & CLEAR'}</span>
+                    </button>
+                  </div>
                 </div>
               ) : (
-                recordsList.map((rec) => {
-                  const isHighlighted = rec.id === currentTargetRecordId;
-                  const isAuto = autoMatchRecord?.id === rec.id;
-
-                  return (
-                    <div
-                      key={rec.id}
-                      onClick={() => setSelectedRecordId(rec.id)}
-                      className={`cursor-pointer rounded-xl p-4 border transition-all duration-200 ${
-                        isHighlighted
-                          ? 'bg-[#d4af37]/20 border-[#f5d77f] shadow-[0_0_20px_rgba(212,175,55,0.25)]'
-                          : 'bg-zinc-950/60 border-zinc-800/80 hover:border-zinc-700'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between text-xs font-mono mb-1">
-                        <span className="text-zinc-400">{rec.date}</span>
-                        <span className="font-bold text-[#f5d77f]">
-                          Rp {rec.amount.toLocaleString('id-ID')}
-                        </span>
-                      </div>
-                      <div className="text-xs font-sans text-white font-medium flex items-center justify-between">
-                        <span>{rec.payeeOrClient}</span>
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-900 text-[#d4af37] uppercase border border-[#d4af37]/20">
-                          {rec.reference}
-                        </span>
-                      </div>
-
-                      {isAuto && (
-                        <div className="mt-2.5 pt-2 border-t border-zinc-800/80 flex items-center justify-between text-[10px] font-mono text-[#f5d77f]">
-                          <span>PARITY CONFIRMED</span>
-                          <span className="font-bold">100% GOLD MATCH</span>
-                        </div>
-                      )}
+                // QUICK EXPENSE / INCOME TAB
+                <div className="flex-1 flex flex-col justify-between">
+                  <div className="space-y-4">
+                    <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
+                       <div className="text-[10px] uppercase text-zinc-500 mb-1">Date</div>
+                       <div className="text-sm text-white font-mono">{activeBankLine.date}</div>
                     </div>
-                  );
-                })
+                    <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
+                       <div className="text-[10px] uppercase text-zinc-500 mb-1">Amount</div>
+                       <div className="text-sm font-bold text-[#f5d77f] font-mono">
+                          Rp {Math.abs(activeBankLine.amount).toLocaleString('id-ID')}
+                       </div>
+                    </div>
+                    <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
+                       <div className="text-[10px] uppercase text-zinc-500 mb-1">Description / Source</div>
+                       <div className="text-sm text-white">{activeBankLine.description}</div>
+                    </div>
+                    <div className="space-y-2">
+                       <label className="text-[10px] uppercase text-zinc-500 ml-1">Category</label>
+                       <select 
+                         value={quickCategory}
+                         onChange={(e) => setQuickCategory(e.target.value)}
+                         className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#d4af37]/50"
+                       >
+                         <option value="Uncategorized">Uncategorized</option>
+                         <option value="Marketing & Advertising">Marketing & Advertising</option>
+                         <option value="Office Supplies">Office Supplies</option>
+                         <option value="Bank Fees">Bank Fees</option>
+                         <option value="Software Subscriptions">Software Subscriptions</option>
+                         <option value="Travel">Travel</option>
+                         <option value="Meals & Entertainment">Meals & Entertainment</option>
+                         <option value="Utilities">Utilities</option>
+                         <option value="Contractors">Contractors</option>
+                         <option value="Taxes">Taxes</option>
+                         <option value="Other Income">Other Income</option>
+                       </select>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 pt-4 border-t border-zinc-800 flex items-center justify-between">
+                    <div className="text-xs font-mono text-zinc-400">
+                      <span className="text-[#f5d77f] font-bold">READY TO CREATE & CLEAR</span>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={handleQuickResolve}
+                      className="gold-btn inline-flex items-center gap-2 px-7 py-3 rounded-full text-xs uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      <span>{isPending ? 'PROCESSING...' : 'SAVE & RECONCILE'}</span>
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
-          </div>
-
-          {/* ACTION BUTTON HUD */}
-          <div className="mt-6 pt-4 border-t border-zinc-800 flex items-center justify-between">
-            <div className="text-xs font-mono text-zinc-400">
-              {activeBankLine && currentTargetRecordId ? (
-                <span className="text-[#f5d77f] font-bold">READY TO CLEAR</span>
-              ) : (
-                <span>SELECT BANK & SYSTEM RECORD</span>
-              )}
+          ) : (
+            // ================= NORMAL SYSTEM RECORDS VIEW =================
+            <div className="h-full flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between pb-3 mb-4 border-b border-zinc-800">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#d4af37]">
+                    RIGHT PANEL • SYSTEM RECORDS
+                  </h3>
+                  <span className="text-[10px] font-mono text-zinc-400">
+                    {recordsList.length} QUEUED ENTRIES
+                  </span>
+                </div>
+                <div className="space-y-3 overflow-y-auto max-h-[500px] pr-2">
+                  {renderSystemRecordsList()}
+                </div>
+              </div>
+              
+              {/* ACTION BUTTON HUD */}
+              <div className="mt-6 pt-4 border-t border-zinc-800 flex items-center justify-between">
+                <div className="text-xs font-mono text-zinc-400">
+                  {activeBankLine && currentTargetRecordId ? (
+                    <span className="text-[#f5d77f] font-bold">READY TO CLEAR</span>
+                  ) : (
+                    <span>SELECT BANK & SYSTEM RECORD</span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  disabled={!activeBankLine || !currentTargetRecordId || isPending}
+                  onClick={handleMatchAndClear}
+                  className="gold-btn inline-flex items-center gap-2 px-7 py-3 rounded-full text-xs uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>{isPending ? 'RECONCILING...' : 'MATCH & CLEAR RECORD'}</span>
+                </button>
+              </div>
             </div>
-
-            <button
-              type="button"
-              disabled={!activeBankLine || !currentTargetRecordId || isPending}
-              onClick={handleMatchAndClear}
-              className="gold-btn inline-flex items-center gap-2 px-7 py-3 rounded-full text-xs uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>{isPending ? 'RECONCILING...' : 'MATCH & CLEAR RECORD'}</span>
-            </button>
-          </div>
+          )}
         </div>
       </div>
     </div>

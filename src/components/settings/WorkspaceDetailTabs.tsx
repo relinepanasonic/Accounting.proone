@@ -435,7 +435,7 @@ export function WorkspaceDetailTabs({
           }`}
         >
           <Sliders className={`w-4 h-4 ${activeTab === 'identity' ? 'text-black' : 'text-[#d4af37]'}`} />
-          <span>Tax</span>
+          <span>Business Profile</span>
         </button>
       </div>
 

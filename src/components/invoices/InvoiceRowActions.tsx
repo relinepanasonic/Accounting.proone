@@ -5,29 +5,58 @@ import Link from 'next/link';
 import { Copy, CheckCircle, Clock, FileText, Trash2 } from 'lucide-react';
 import { duplicateInvoice, toggleInvoiceStatus, deleteInvoice } from '@/app/actions/invoices';
 
-interface InvoiceRowActionsProps {
+interface InvoiceActionProps {
   id: string;
-  status: string;
+  status?: string;
 }
 
-export function InvoiceRowActions({ id, status }: InvoiceRowActionsProps) {
+export function InvoiceStatusToggle({ id, status }: InvoiceActionProps) {
   const [isPending, startTransition] = useTransition();
-  const isPaid = status.toLowerCase() === 'paid';
+  const isPaid = status?.toLowerCase() === 'paid';
 
-  const handleDuplicate = () => {
+  const handleToggleStatus = () => {
     startTransition(async () => {
       try {
-        await duplicateInvoice(id);
+        await toggleInvoiceStatus(id, status || 'draft');
       } catch (err) {
         console.error(err);
       }
     });
   };
 
-  const handleToggleStatus = () => {
+  return (
+    <button
+      onClick={handleToggleStatus}
+      disabled={isPending}
+      title="Toggle Invoice Status"
+      className={`inline-flex items-center justify-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-mono uppercase transition-all duration-200 min-w-[80px] ${
+        isPaid
+          ? 'bg-[#d4af37]/15 border border-[#d4af37]/50 text-[#f5d77f] hover:bg-[#d4af37]/25 shadow-[0_0_12px_rgba(212,175,55,0.25)]'
+          : 'bg-zinc-900 border border-[#d4af37]/30 text-[#d4af37] hover:border-[#f5d77f]'
+      } ${isPending ? 'opacity-50 cursor-not-allowed' : ''}`}
+    >
+      {isPaid ? (
+        <>
+          <CheckCircle className="w-3 h-3 text-[#f5d77f]" />
+          <span>PAID</span>
+        </>
+      ) : (
+        <>
+          <Clock className="w-3 h-3 text-[#d4af37]" />
+          <span>PENDING</span>
+        </>
+      )}
+    </button>
+  );
+}
+
+export function InvoiceActionGroup({ id }: InvoiceActionProps) {
+  const [isPending, startTransition] = useTransition();
+
+  const handleDuplicate = () => {
     startTransition(async () => {
       try {
-        await toggleInvoiceStatus(id, status);
+        await duplicateInvoice(id);
       } catch (err) {
         console.error(err);
       }
@@ -48,30 +77,6 @@ export function InvoiceRowActions({ id, status }: InvoiceRowActionsProps) {
 
   return (
     <div className="inline-flex items-center gap-2">
-      {/* Status Toggle Button in Brushed Gold */}
-      <button
-        onClick={handleToggleStatus}
-        disabled={isPending}
-        title="Toggle Invoice Status"
-        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-mono uppercase transition-all duration-200 ${
-          isPaid
-            ? 'bg-[#d4af37]/15 border border-[#d4af37]/50 text-[#f5d77f] hover:bg-[#d4af37]/25 shadow-[0_0_12px_rgba(212,175,55,0.25)]'
-            : 'bg-zinc-900 border border-[#d4af37]/30 text-[#d4af37] hover:border-[#f5d77f]'
-        } ${isPending ? 'opacity-50 cursor-not-allowed' : ''}`}
-      >
-        {isPaid ? (
-          <>
-            <CheckCircle className="w-3 h-3 text-[#f5d77f]" />
-            <span>PAID</span>
-          </>
-        ) : (
-          <>
-            <Clock className="w-3 h-3 text-[#d4af37]" />
-            <span>PENDING</span>
-          </>
-        )}
-      </button>
-
       {/* View PDF / Print Invoice Action */}
       <Link
         href={`/invoices/${id}`}

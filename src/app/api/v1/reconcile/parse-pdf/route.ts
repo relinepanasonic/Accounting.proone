@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
-const pdfParse = require('pdf-parse');
+
+export const runtime = 'nodejs'; // Ensure this runs in standard Node, not Edge
 
 export async function POST(request: Request) {
   try {
+    // Dynamically import to avoid Next.js build-time DOM/Canvas polyfill issues
+    const pdfParse = (await import('pdf-parse')).default || require('pdf-parse');
+    
     const formData = await request.formData();
     const file = formData.get('file') as File;
 

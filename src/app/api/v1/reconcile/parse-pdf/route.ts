@@ -27,11 +27,26 @@ export async function POST(request: Request) {
       pdfParser.parseBuffer(buffer);
     });
 
+    if (!pdfData || (!pdfData.formImage && !pdfData.Pages)) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Unknown pdf2json structure. Keys: ' + (pdfData ? Object.keys(pdfData).join(', ') : 'null')
+      });
+    }
+
+    const pages = pdfData.formImage ? pdfData.formImage.Pages : pdfData.Pages;
+    if (!pages) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Pages array not found. formImage keys: ' + (pdfData.formImage ? Object.keys(pdfData.formImage).join(', ') : 'none')
+      });
+    }
+
     const transactions: any[] = [];
     const allLines: string[] = [];
 
     // Reconstruct visual lines by grouping text elements by Y coordinate
-    for (const page of pdfData.formImage.Pages) {
+    for (const page of pages) {
       const yGroups: Record<number, { x: number; text: string }[]> = {};
       
       for (const item of page.Texts) {

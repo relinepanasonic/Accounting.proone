@@ -93,93 +93,65 @@ async function PayrollPersonnelGrid() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {displayRecords.map((item) => {
-        const totalPayout = item.base_salary + item.bonus_amount;
-        const isPaid = item.status.toLowerCase() === 'paid';
-
-        return (
-          <div
-            key={item.id}
-            className="gold-glass-panel gold-glass-panel-hover rounded-2xl p-6 flex flex-col justify-between"
-          >
-            {/* Top Personnel Header */}
-            <div>
-              <div className="flex items-start justify-between gap-3 mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-[#f5d77f] via-[#d4af37] to-[#997319] flex items-center justify-center font-black text-black text-sm shadow-[0_0_15px_rgba(212,175,55,0.35)]">
-                    {item.employee_name
-                      .split(' ')
-                      .map((n) => n[0])
-                      .join('')
-                      .slice(0, 2)}
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-white group-hover:text-[#f5d77f] transition-colors">
-                      {item.employee_name}
-                    </h3>
-                    <p className="text-[11px] text-zinc-400 font-sans">
-                      {item.role_title}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Status Dot in Brushed Gold */}
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-mono uppercase bg-black/70 border border-[#d4af37]/30">
-                  <span
-                    className={`w-2 h-2 rounded-full ${
-                      isPaid
-                        ? 'bg-[#f5d77f] shadow-[0_0_8px_#f5d77f]'
-                        : 'bg-[#d4af37] shadow-[0_0_8px_#d4af37]'
-                    }`}
-                  />
-                  <span className="text-[#f5d77f] font-bold">
-                    {item.status}
-                  </span>
-                </span>
-              </div>
-
-              {/* Department Tag */}
-              <div className="mb-5">
-                <span className="text-[10px] px-2.5 py-0.5 rounded bg-zinc-900/90 text-[#d4af37] font-mono uppercase border border-[#d4af37]/20">
-                  DEPT: {item.department}
-                </span>
-              </div>
-
-              {/* Salary & Bonus Breakdown */}
-              <div className="space-y-2 p-3 rounded-xl bg-black/50 border border-zinc-800/80 font-mono text-xs">
-                <div className="flex justify-between text-zinc-400">
-                  <span>Base Salary:</span>
-                  <span className="text-zinc-200">Rp {item.base_salary.toLocaleString('id-ID')}</span>
-                </div>
-                <div className="flex justify-between text-zinc-400">
-                  <span>Performance Bonus:</span>
-                  <span className="text-[#f5d77f]">+Rp {item.bonus_amount.toLocaleString('id-ID')}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Bottom Total Payout */}
-            <div className="mt-6 pt-4 border-t border-[#d4af37]/20 flex items-center justify-between">
-              <div>
-                <span className="text-[9px] font-mono text-zinc-400 uppercase block">
-                  NET PAYOUT
-                </span>
-                <span className="text-lg font-black font-mono text-[#f5d77f] drop-shadow-[0_0_10px_rgba(245,215,127,0.45)]">
-                  Rp {totalPayout.toLocaleString('id-ID')}
-                </span>
-              </div>
-
-              <div className="text-right">
-                <span className="text-[9px] font-mono text-zinc-500 block">PERIOD END</span>
-                <span className="text-[10px] font-mono text-zinc-300">
-                  {item.pay_period_end}
-                </span>
-              </div>
-            </div>
-          </div>
-        );
-      })}
+        <div className="gold-glass-panel rounded-2xl overflow-x-auto">
+          <table className="w-full text-left border-collapse whitespace-nowrap">
+            <thead>
+              <tr className="border-b border-zinc-800 bg-zinc-950/50">
+                <th className="px-6 py-4 text-[10px] font-mono text-zinc-400 uppercase tracking-wider">Personnel</th>
+                <th className="px-6 py-4 text-[10px] font-mono text-zinc-400 uppercase tracking-wider">Dept</th>
+                <th className="px-6 py-4 text-[10px] font-mono text-zinc-400 uppercase tracking-wider text-right">Base Salary</th>
+                <th className="px-6 py-4 text-[10px] font-mono text-zinc-400 uppercase tracking-wider text-right">Bonus</th>
+                <th className="px-6 py-4 text-[10px] font-mono text-[#d4af37] uppercase tracking-wider text-right">Net Payout</th>
+                <th className="px-6 py-4 text-[10px] font-mono text-zinc-400 uppercase tracking-wider text-center">Period End</th>
+                <th className="px-6 py-4 text-[10px] font-mono text-zinc-400 uppercase tracking-wider text-right">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-800/60">
+              {displayRecords.map((item) => {
+                const totalPayout = item.base_salary + item.bonus_amount;
+                const isPaid = item.status.toLowerCase() === 'paid';
+                
+                return (
+                  <tr key={item.id} className="hover:bg-[#d4af37]/5 transition-colors group">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#f5d77f] via-[#d4af37] to-[#997319] flex items-center justify-center font-black text-black text-xs shadow-[0_0_15px_rgba(212,175,55,0.2)] shrink-0">
+                          {item.employee_name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-white group-hover:text-[#f5d77f] transition-colors">{item.employee_name}</h3>
+                          <p className="text-[11px] text-zinc-400 font-sans">{item.role_title}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-[10px] px-2.5 py-0.5 rounded bg-zinc-900/90 text-[#d4af37] font-mono uppercase border border-[#d4af37]/20">
+                        {item.department}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right text-xs font-mono text-zinc-300">
+                      Rp {item.base_salary.toLocaleString('id-ID')}
+                    </td>
+                    <td className="px-6 py-4 text-right text-xs font-mono text-[#f5d77f]">
+                      {item.bonus_amount > 0 ? `+Rp ${item.bonus_amount.toLocaleString('id-ID')}` : '-'}
+                    </td>
+                    <td className="px-6 py-4 text-right text-sm font-black font-mono text-[#f5d77f] drop-shadow-[0_0_8px_rgba(245,215,127,0.3)]">
+                      Rp {totalPayout.toLocaleString('id-ID')}
+                    </td>
+                    <td className="px-6 py-4 text-center text-[10px] font-mono text-zinc-400">
+                      {item.pay_period_end}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-mono uppercase bg-black/70 border border-[#d4af37]/30">
+                        <span className={`w-2 h-2 rounded-full ${isPaid ? 'bg-[#f5d77f] shadow-[0_0_8px_#f5d77f]' : 'bg-[#d4af37] shadow-[0_0_8px_#d4af37]'}`} />
+                        <span className="text-[#f5d77f] font-bold">{item.status}</span>
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

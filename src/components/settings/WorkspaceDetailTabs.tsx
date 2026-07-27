@@ -23,6 +23,7 @@ import {
   Copy,
   X,
   UploadCloud,
+  BookOpen,
 } from 'lucide-react';
 import {
   saveWorkspaceSettings,
@@ -33,6 +34,7 @@ import {
   type BankAccountItem,
 } from '@/app/actions/settings';
 import type { CatalogProduct } from '@/components/settings/CatalogManager';
+import { OpeningBalancesTab } from '@/components/settings/OpeningBalancesTab';
 
 interface WorkspaceDetailTabsProps {
   targetWorkspaceId: string;
@@ -66,7 +68,7 @@ export function WorkspaceDetailTabs({
   const router = useRouter();
 
   // Navigation State (ordered: Product List -> Bank Account -> Tax)
-  const [activeTab, setActiveTab] = useState<'catalog' | 'banking' | 'identity'>('catalog');
+  const [activeTab, setActiveTab] = useState<'catalog' | 'banking' | 'identity' | 'opening-balances'>('catalog');
 
   // Tab 1: Identity & Brand State
   const [name, setName] = useState(initialName);
@@ -436,6 +438,19 @@ export function WorkspaceDetailTabs({
         >
           <Sliders className={`w-4 h-4 ${activeTab === 'identity' ? 'text-black' : 'text-[#d4af37]'}`} />
           <span>Business Profile</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('opening-balances')}
+          className={`flex-1 min-w-[150px] py-3 px-5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2.5 transition-all duration-300 ${
+            activeTab === 'opening-balances'
+              ? 'bg-gradient-to-r from-[#d4af37] to-[#f5d77f] text-black shadow-[0_0_20px_rgba(212,175,55,0.4)] font-extrabold'
+              : 'text-zinc-400 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <BookOpen className={`w-4 h-4 ${activeTab === 'opening-balances' ? 'text-black' : 'text-[#d4af37]'}`} />
+          <span>Opening Balances</span>
         </button>
       </div>
 
@@ -1209,6 +1224,12 @@ export function WorkspaceDetailTabs({
             )}
           </div>
         </div>
+      )}
+      {/* ========================================================================= */}
+      {/* TAB 4: OPENING BALANCES */}
+      {/* ========================================================================= */}
+      {activeTab === 'opening-balances' && (
+        <OpeningBalancesTab />
       )}
     </div>
   );

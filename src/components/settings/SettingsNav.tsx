@@ -27,12 +27,6 @@ export function SettingsNav() {
       icon: ShieldAlert,
       description: 'Superadmin, Accounting & Admin role matrix',
     },
-    {
-      label: 'OPENING BALANCES',
-      href: '/settings/opening-balances',
-      icon: BookOpen,
-      description: 'Saldo Awal, Historical Migration & Equity',
-    },
   ];
 
   return (

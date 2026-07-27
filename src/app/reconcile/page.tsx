@@ -46,7 +46,7 @@ async function ReconciliationCore() {
     );
   }
 
-  const [invoicesRes, transactionsRes] = await Promise.all([
+  const [invoicesRes, transactionsRes, payrollRes] = await Promise.all([
     supabase
       .from('invoices')
       .select('id, invoice_number, total_amount, issue_date, clients(name), reconciled')
@@ -57,10 +57,16 @@ async function ReconciliationCore() {
       .select('id, description, amount, due_date, category, reconciled')
       .or('reconciled.is.null,reconciled.eq.false')
       .order('due_date', { ascending: false }),
+    supabase
+      .from('payroll')
+      .select('id, employee_name, total_payment, pay_period_end, status')
+      .eq('status', 'draft')
+      .order('pay_period_end', { ascending: false }),
   ]);
 
   const rawInvoices = invoicesRes.data || [];
   const rawTransactions = transactionsRes.data || [];
+  const rawPayroll = payrollRes.data || [];
 
   const systemRecords: UnreconciledSystemRecord[] = [
     ...rawInvoices.map((inv) => {
@@ -81,6 +87,14 @@ async function ReconciliationCore() {
       payeeOrClient: tx.description || 'Vendor Payee',
       date: tx.due_date || '2026-07-07',
       amount: Number(tx.amount || 0),
+    })),
+    ...rawPayroll.map((pr) => ({
+      id: pr.id,
+      type: 'payroll' as const,
+      reference: 'PAYROLL-RUN',
+      payeeOrClient: pr.employee_name || 'Employee',
+      date: pr.pay_period_end || '2026-01-25',
+      amount: Number(pr.total_payment || 0),
     })),
   ];
 

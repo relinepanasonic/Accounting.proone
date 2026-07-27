@@ -11,7 +11,7 @@ import { reconcileRecord, quickResolveAndReconcile } from '@/app/actions/reconci
 
 export interface UnreconciledSystemRecord {
   id: string;
-  type: 'invoice' | 'expense';
+  type: 'invoice' | 'expense' | 'payroll';
   reference: string;
   payeeOrClient: string;
   date: string;
@@ -382,7 +382,7 @@ export function ReconciliationHUD({ systemRecords }: ReconciliationHUDProps) {
                          className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#d4af37]/50"
                        >
                          <option value="Uncategorized">Uncategorized</option>
-                         <option value="Salary / Payroll">Salary / Payroll</option>
+                         <option value="Contractor / Informal Wages">Contractor / Informal Wages</option>
                          <option value="Marketing & Advertising">Marketing & Advertising</option>
                          <option value="Office Supplies">Office Supplies</option>
                          <option value="Bank Fees">Bank Fees</option>

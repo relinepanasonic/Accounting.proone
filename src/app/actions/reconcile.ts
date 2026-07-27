@@ -6,25 +6,42 @@ import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 
 export async function reconcileRecord(
   recordId: string,
-  recordType: 'invoice' | 'expense',
+  recordType: 'invoice' | 'expense' | 'payroll',
   bankReference: string
 ) {
   const supabase = await createClient();
-  const table = recordType === 'invoice' ? 'invoices' : 'transactions';
+  
+  if (recordType === 'payroll') {
+    const { error } = await supabase
+      .from('payroll')
+      .update({
+        status: 'paid',
+        payment_date: new Date().toISOString().split('T')[0],
+        notes: `PAID VIA RECONCILIATION - ${bankReference}`,
+      })
+      .eq('id', recordId);
 
-  const { error } = await supabase
-    .from(table)
-    .update({
-      reconciled: true,
-      bank_reference: bankReference || 'BANK-MATCHED',
-    })
-    .eq('id', recordId);
+    if (error) {
+      console.error('Error reconciling payroll:', error);
+      throw new Error('Failed to reconcile payroll');
+    }
+  } else {
+    const table = recordType === 'invoice' ? 'invoices' : 'transactions';
+    const { error } = await supabase
+      .from(table)
+      .update({
+        reconciled: true,
+        bank_reference: bankReference || 'BANK-MATCHED',
+      })
+      .eq('id', recordId);
 
-  if (error) {
-    console.error('Error reconciling record:', error);
-    throw new Error('Failed to reconcile record');
+    if (error) {
+      console.error('Error reconciling record:', error);
+      throw new Error('Failed to reconcile record');
+    }
   }
 
+  revalidatePath('/payroll');
   revalidatePath('/reconcile');
   revalidatePath('/invoices');
   revalidatePath('/expenses');

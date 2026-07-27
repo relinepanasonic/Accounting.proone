@@ -154,5 +154,4 @@ export async function syncNewWavePayroll(month: string, year: string) {
   }
 
   revalidatePath('/payroll');
-  return { success: true };
 }

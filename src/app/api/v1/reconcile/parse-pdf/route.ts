@@ -10,125 +10,105 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const file = formData.get('file') as File;
 
-    if (!file || file.type !== 'application/pdf' && !file.name.endsWith('.pdf')) {
+    if (!file || (file.type !== 'application/pdf' && !file.name.endsWith('.pdf'))) {
       return NextResponse.json({ error: 'Invalid file format. Please upload a PDF.' }, { status: 400 });
     }
 
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Extract text using pdf2json in JSON mode (preserves X/Y coordinates)
-    const pdfData: any = await new Promise((resolve, reject) => {
-      const pdfParser = new PDFParser(); // No arguments = JSON mode
+    // Use pdf2json's raw text mode (2nd arg = 1 enables raw text extraction)
+    const rawText: string = await new Promise((resolve, reject) => {
+      const pdfParser = new PDFParser(null, 1);
       pdfParser.on("pdfParser_dataError", (errData: any) => reject(new Error(errData.parserError)));
-      pdfParser.on("pdfParser_dataReady", (data: any) => {
-        resolve(data);
+      pdfParser.on("pdfParser_dataReady", () => {
+        resolve(pdfParser.getRawTextContent());
       });
       pdfParser.parseBuffer(buffer);
     });
 
-    if (!pdfData || (!pdfData.formImage && !pdfData.Pages)) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Unknown pdf2json structure. Keys: ' + (pdfData ? Object.keys(pdfData).join(', ') : 'null')
-      });
-    }
+    // getRawTextContent uses \t as column separator and \n as line separator
+    // Page breaks look like: "----------------Page (1) Break----------------"
+    // Clean the text: remove page-break markers, split into lines
+    const cleanedText = rawText.replace(/[-]+Page\s*\(\d+\)\s*Break[-]+/g, '');
+    
+    // Split by newline, clean whitespace
+    const rawLines = cleanedText.split('\n')
+      .map((l: string) => l.replace(/\t/g, ' ').trim())
+      .filter((l: string) => l.length > 0);
 
-    const pages = pdfData.formImage ? pdfData.formImage.Pages : pdfData.Pages;
-    if (!pages) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Pages array not found. formImage keys: ' + (pdfData.formImage ? Object.keys(pdfData.formImage).join(', ') : 'none')
-      });
-    }
+    // Bank Jago transaction lines look like:
+    // "06 Jan 2026 09:27  NICO WINARTA JAPAR  Outgoing Transfer  Beli kulkas gading  -1.311.000  16.338.930,32"
+    // But each visual row in the PDF is grouped across multiple rawLines because:
+    // Row 1: Date + Source/Destination + Amount + Balance
+    // Row 2: Time + BankCode + TransactionID
+    // We need to find lines starting with a date pattern
 
+    const dateRegex = /^(\d{2}\s[A-Za-z]{3}\s\d{4})\s+(.*)/;
+    const timeIdRegex = /^\d{2}:\d{2}\s/;
     const transactions: any[] = [];
-    const allLines: string[] = [];
 
-    // Reconstruct visual lines by grouping text elements by Y coordinate
-    for (const page of pages) {
-      const yGroups: Record<number, { x: number; text: string }[]> = {};
+    for (let i = 0; i < rawLines.length; i++) {
+      const line = rawLines[i];
+      const dateMatch = line.match(dateRegex);
       
-      for (const item of page.Texts) {
-        const textStr = decodeURIComponent(item.R[0].T);
-        const y = Math.round(item.y * 2) / 2; // Group by nearest 0.5 to handle slight baseline shifts
-        if (!yGroups[y]) yGroups[y] = [];
-        yGroups[y].push({ x: item.x, text: textStr });
+      if (!dateMatch) continue;
+
+      const dateStr = dateMatch[1];   // e.g. "06 Jan 2026"
+      const rest = dateMatch[2];      // everything after the date
+
+      // rest looks like: "NICO WINARTA JAPAR  Outgoing Transfer  Beli kulkas gading  -1.311.000  16.338.930,32"
+      // Find the next line — should be time + bank reference
+      let sourceBankInfo = '';
+      if (i + 1 < rawLines.length && timeIdRegex.test(rawLines[i + 1])) {
+        sourceBankInfo = rawLines[i + 1];
       }
 
-      const sortedY = Object.keys(yGroups).map(Number).sort((a, b) => a - b);
-      for (const y of sortedY) {
-        // Sort items left-to-right
-        const items = yGroups[y].sort((a, b) => a.x - b.x);
-        // Join with a special separator to make parsing easy, or just spaces
-        const lineText = items.map(i => i.text).join('   '); 
-        allLines.push(lineText);
+      // Extract all Indonesian-format numbers from end of line
+      // Number format: -1.311.000 or 16.338.930,32
+      const numRegex = /([-+]?\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?)/g;
+      const matches = rest.match(numRegex);
+
+      if (!matches || matches.length < 2) continue;
+
+      // Last number = Balance, second-to-last = Amount
+      const amountStr = matches[matches.length - 2];
+      const cleanAmt = amountStr.replace(/\./g, '').replace(/,/g, '.');
+      const amount = parseFloat(cleanAmt);
+
+      if (isNaN(amount)) continue;
+
+      // Body is everything before the amount+balance at end
+      const amtIndex = rest.lastIndexOf(amountStr);
+      const bodyStr = rest.substring(0, amtIndex).trim();
+
+      // bodyStr: "NICO WINARTA JAPAR  Outgoing Transfer  Beli kulkas gading"
+      // Split body by 2+ spaces to get columns
+      const parts = bodyStr.split(/\s{2,}/).map(p => p.trim()).filter(p => p.length > 0);
+      
+      let sourceDest = parts[0] || 'Unknown';
+      // Check the sourceBankInfo line for bank name (part after time)
+      const bankParts = sourceBankInfo.split(/\s{2,}/).map(p => p.trim()).filter(p => p.length > 0);
+      if (bankParts.length >= 2 && !bankParts[1].startsWith('ID#')) {
+        sourceDest += ` (${bankParts[1]})`;
       }
-    }
 
-    const dateRegex = /^(\d{2}\s[A-Za-z]{3}\s\d{4})/; // Starts with Date, e.g. "06 Jan 2026"
+      // Notes = everything after source + transfer type (usually index 2 onwards)
+      const notes = parts.length > 2 ? parts.slice(2).join(' ') : (parts[1] || 'No notes');
 
-    for (let i = 0; i < allLines.length; i++) {
-      const line = allLines[i];
-      if (dateRegex.test(line)) {
-        // We found a main transaction line!
-        // Visual Example: "26 Jan 2026   DEWI PUSPITA SARI   Outgoing Transfer   gaji dewi   -4.510.000   5.192.930,32"
-        // Sometimes notes are missing: "13 Jan 2026   Kopi Kenangan   QRIS Payment   -59.000   15.059.930,32"
-        
-        const dateMatch = line.match(dateRegex);
-        if (!dateMatch) continue;
-        const dateStr = dateMatch[1];
-
-        // The next line in the PDF usually contains the Time, Bank, and ID
-        // Example: "13:27   BNI 1788900858   ID# 260126JAGBIDJA00122621"
-        let nextLine = '';
-        if (i + 1 < allLines.length && !dateRegex.test(allLines[i+1])) {
-          nextLine = allLines[i+1];
-        }
-
-        // Extract Amount and Balance from the end of the main line
-        const numRegex = /([-+]?\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?)/g;
-        const matches = line.match(numRegex);
-        
-        if (matches && matches.length >= 2) {
-          const amountStr = matches[matches.length - 2];
-          const cleanAmountStr = amountStr.replace(/\./g, '').replace(/,/g, '.');
-          const amount = parseFloat(cleanAmountStr);
-
-          // Everything between Date and Amount is the Description/Notes
-          const bodyStr = line.substring(dateStr.length, line.lastIndexOf(amountStr)).trim();
-          
-          // Let's break the bodyStr into pieces using our '   ' separator
-          const parts = bodyStr.split('   ').map(p => p.trim()).filter(p => p.length > 0);
-          
-          let sourceDest = parts[0] || 'Unknown';
-          let remarks = parts.length > 1 ? parts.slice(1).join(' ') : '';
-          
-          // If the next line has bank details (e.g. BNI 1788900858), append it to sourceDest
-          // The next line parts
-          const nextParts = nextLine.split('   ').map(p => p.trim()).filter(p => p.length > 0);
-          if (nextParts.length >= 2) {
-            // nextParts[0] is usually time (13:27)
-            // nextParts[1] is usually Bank (BNI 1788900858)
-            if (!nextParts[1].includes('ID#')) {
-              sourceDest += ` - ${nextParts[1]}`;
-            }
-          }
-
-          transactions.push({
-            id: `jago-${Date.now()}-${Math.random().toString(36).substring(7)}`,
-            date: dateStr,
-            description: `${sourceDest} | ${remarks || 'No notes'}`,
-            amount: amount
-          });
-        }
-      }
+      transactions.push({
+        id: `jago-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+        date: dateStr,
+        description: `${sourceDest} | ${notes}`,
+        amount: amount,
+      });
     }
 
     if (transactions.length === 0) {
+      // Return first 30 lines of cleaned text for debugging
       return NextResponse.json({ 
         success: false, 
-        error: 'No transactions found. Raw extraction snippet for debugging: \n' + allLines.slice(0, 20).join('\n')
+        error: 'No transactions found. Cleaned lines:\n' + rawLines.slice(0, 30).join('\n')
       });
     }
 

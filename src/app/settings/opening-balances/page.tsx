@@ -81,6 +81,30 @@ export default function OpeningBalancesPage() {
         </div>
 
       </div>
+
+      {/* Advanced Journal Section */}
+      <div className="gold-glass-panel border-[#d4af37]/30 rounded-2xl p-6 flex flex-col sm:flex-row gap-6 justify-between items-center mt-6">
+        <div className="flex-1">
+          <div className="flex items-center gap-3 mb-2">
+            <h3 className="text-sm font-black text-white uppercase tracking-wider">4. Advanced Opening Journal</h3>
+            <span className="px-2 py-0.5 rounded bg-zinc-900 text-zinc-400 text-[9px] font-mono border border-zinc-800">MODAL & ASET TETAP</span>
+          </div>
+          <p className="text-xs text-zinc-400 font-sans max-w-xl">
+            Need to enter Capital (Modal), Fixed Assets (Peralatan), Bank Loans, Inventory, or Tax Liabilities? 
+            Use the Advanced Journal to input your entire Balance Sheet manually. 
+            <strong> Total Debits MUST equal Total Credits.</strong>
+          </p>
+        </div>
+        <div className="shrink-0 w-full sm:w-auto">
+          <Link 
+            href="/settings/opening-balances/advanced"
+            className="w-full sm:w-auto gold-btn px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2"
+          >
+            <BookOpen className="w-4 h-4" />
+            Advanced Journal
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

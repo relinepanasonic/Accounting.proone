@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Plus, Trash2, Check, AlertCircle, Loader2, Calendar, Building2 } from 'lucide-react';
 import Link from 'next/link';
 import { createInvoice } from '@/app/actions/invoices';
+import { createClientRecord } from '@/app/actions/settings';
 import { RupiahInput } from '@/components/ui/RupiahInput';
 import { BulletTextarea } from '@/components/ui/BulletTextarea';
 
@@ -31,7 +32,7 @@ export interface BankAccountOption {
 }
 
 interface NewInvoiceFormProps {
-  clients: Array<{ id: string; name: string }>;
+  clients: Array<{ id: string; name: string, company_name?: string }>;
   products?: CatalogProductOption[];
   bankAccounts?: BankAccountOption[];
   isHistorical?: boolean;
@@ -47,7 +48,14 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
     return d.toISOString().split('T')[0];
   };
 
-  const [clientId, setClientId] = useState(clients[0]?.id || '');
+  const [localClients, setLocalClients] = useState(clients);
+  const [clientId, setClientId] = useState(clients.length === 1 ? clients[0].id : '');
+  const [isQuotation, setIsQuotation] = useState(false);
+  
+  // Quick Add Client State
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [quickAddName, setQuickAddName] = useState('');
+  const [isQuickAdding, setIsQuickAdding] = useState(false);
   const [invoiceNumber, setInvoiceNumber] = useState(() => `INV-2026-${Math.floor(100 + Math.random() * 900)}`);
   const [issueDate, setIssueDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState(getNet15Date);
@@ -107,7 +115,30 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
     0
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleQuickAddClient = async () => {
+    if (!quickAddName.trim()) return;
+    setIsQuickAdding(true);
+    try {
+      const res = await createClientRecord({
+        name: quickAddName,
+        contactType: 'client'
+      });
+      if (res.success && res.client) {
+        setLocalClients(prev => [...prev, res.client]);
+        setClientId(res.client.id);
+        setShowQuickAdd(false);
+        setQuickAddName('');
+      } else {
+        setErrorMsg(res.error || 'Failed to create client');
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Error creating client');
+    } finally {
+      setIsQuickAdding(false);
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent, submitAsQuotation: boolean = false) => {
     e.preventDefault();
     if (lineItems.length === 0) {
       setErrorMsg('Please add at least one deliverable line item before saving.');
@@ -127,6 +158,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
           bankAccountId: bankAccountId !== 'all' ? bankAccountId : undefined,
           paymentInstructions: bankAccountId === 'custom' ? customPaymentInstructions : undefined,
           isHistorical,
+          isQuotation: submitAsQuotation,
           lineItems: lineItems.map((l) => ({
             description: l.description,
             quantity: Number(l.quantity),
@@ -151,7 +183,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 max-w-4xl mx-auto">
+    <form onSubmit={(e) => handleSubmit(e, false)} className="space-y-6 max-w-4xl mx-auto">
       {errorMsg && (
         <div className="flex items-center gap-3 p-4 rounded-xl bg-[#d4af37]/15 border border-[#d4af37]/60 text-[#f5d77f] text-xs font-mono shadow-[0_0_20px_rgba(212,175,55,0.25)]">
           <AlertCircle className="w-5 h-5 shrink-0 text-[#f5d77f]" />
@@ -163,17 +195,57 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
       <div className="gold-glass-panel rounded-2xl p-6 space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-2">
-              Select Client Payee *
-            </label>
+            <div className="flex gap-2 items-center mb-2">
+              <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300">
+                Select Client <span className="text-red-500">*</span>
+              </label>
+              <button 
+                type="button" 
+                onClick={() => setShowQuickAdd(!showQuickAdd)}
+                className="text-[10px] uppercase font-bold text-[#d4af37] hover:text-[#f5d77f] px-2 py-0.5 rounded border border-[#d4af37]/30 bg-[#d4af37]/10"
+              >
+                + Quick Add
+              </button>
+            </div>
+            
+            {showQuickAdd && (
+              <div className="flex gap-2 mb-3 bg-black/40 p-2 rounded-xl border border-zinc-800">
+                <input 
+                  type="text"
+                  placeholder="Client Name..."
+                  value={quickAddName}
+                  onChange={(e) => setQuickAddName(e.target.value)}
+                  className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-sm text-white focus:border-[#d4af37] focus:outline-none"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  disabled={isQuickAdding || !quickAddName.trim()}
+                  onClick={handleQuickAddClient}
+                  className="bg-[#d4af37] text-black px-3 py-1.5 rounded-lg text-xs font-bold uppercase disabled:opacity-50"
+                >
+                  {isQuickAdding ? '...' : 'Save'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowQuickAdd(false)}
+                  className="bg-zinc-800 text-zinc-400 px-3 py-1.5 rounded-lg text-xs font-bold uppercase"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+            
             <select
               value={clientId}
               onChange={(e) => setClientId(e.target.value)}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#d4af37] font-sans"
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#d4af37]"
+              required
             >
-              {clients.map((c) => (
+              <option value="">-- Choose Client Profile --</option>
+              {localClients.map((c: any) => (
                 <option key={c.id} value={c.id}>
-                  {c.name}
+                  {c.name} {c.company_name && c.company_name !== c.name ? `(${c.company_name})` : ''}
                 </option>
               ))}
             </select>
@@ -421,6 +493,15 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
           Cancel
         </Link>
         <button
+          type="button"
+          disabled={isPending}
+          onClick={(e) => handleSubmit(e, true)}
+          className="border border-[#d4af37] text-[#d4af37] hover:bg-[#d4af37]/10 inline-flex items-center justify-center gap-2.5 px-6 py-3 min-h-[44px] rounded-full text-xs uppercase tracking-wider disabled:opacity-75 transition-all"
+        >
+          {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          <span className="font-extrabold">SAVE QUOTATION</span>
+        </button>
+        <button
           type="submit"
           disabled={isPending}
           className="gold-btn inline-flex items-center justify-center gap-2.5 px-8 py-3 min-h-[44px] rounded-full text-xs uppercase tracking-wider disabled:opacity-75 transition-all shadow-[0_0_20px_rgba(212,175,55,0.4)]"
@@ -431,7 +512,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
             <Check className="w-4 h-4 text-black" />
           )}
           <span className="font-extrabold">
-            {isPending ? 'GENERATING INVOICE...' : 'SAVE & GENERATE INVOICE'}
+            {isPending ? 'GENERATING...' : 'SAVE INVOICE'}
           </span>
         </button>
       </div>

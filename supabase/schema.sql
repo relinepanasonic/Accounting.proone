@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS public.clients (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
+    contact_type TEXT NOT NULL DEFAULT 'client' CHECK (contact_type IN ('client', 'vendor')),
     contact_name TEXT,
     email TEXT,
     phone TEXT,
@@ -87,6 +88,7 @@ CREATE TABLE IF NOT EXISTS public.invoices (
     workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
     client_id UUID NOT NULL REFERENCES public.clients(id) ON DELETE RESTRICT,
     invoice_number TEXT NOT NULL,
+    is_quotation BOOLEAN NOT NULL DEFAULT false,
     status TEXT NOT NULL CHECK (status IN ('draft', 'sent', 'paid', 'overdue', 'cancelled')) DEFAULT 'draft',
     issue_date DATE NOT NULL DEFAULT CURRENT_DATE,
     due_date DATE NOT NULL,
@@ -271,6 +273,7 @@ CREATE OR REPLACE FUNCTION public.is_workspace_member(target_workspace_id UUID)
 RETURNS BOOLEAN
 LANGUAGE sql
 SECURITY DEFINER
+SET search_path = public
 STABLE
 AS $$
     SELECT EXISTS (
@@ -279,9 +282,9 @@ AS $$
         WHERE wm.workspace_id = target_workspace_id
           AND (
               wm.user_id = auth.uid()
-              OR (wm.email IS NOT NULL AND LOWER(wm.email) = LOWER((SELECT email FROM auth.users WHERE id = auth.uid())))
+              OR (wm.email IS NOT NULL AND LOWER(wm.email) = LOWER(auth.jwt() ->> 'email'))
               OR (auth.uid() IS NOT NULL AND NOT EXISTS (
-                  SELECT 1 FROM public.workspace_members WHERE user_id = auth.uid() OR (email IS NOT NULL AND LOWER(email) = LOWER((SELECT email FROM auth.users WHERE id = auth.uid())))
+                  SELECT 1 FROM public.workspace_members WHERE user_id = auth.uid() OR (email IS NOT NULL AND LOWER(email) = LOWER(auth.jwt() ->> 'email'))
               ))
           )
     );
@@ -292,6 +295,7 @@ CREATE OR REPLACE FUNCTION public.has_workspace_role(target_workspace_id UUID, a
 RETURNS BOOLEAN
 LANGUAGE sql
 SECURITY DEFINER
+SET search_path = public
 STABLE
 AS $$
     SELECT EXISTS (
@@ -300,7 +304,7 @@ AS $$
         WHERE wm.workspace_id = target_workspace_id
           AND (
               wm.user_id = auth.uid()
-              OR (wm.email IS NOT NULL AND LOWER(wm.email) = LOWER((SELECT email FROM auth.users WHERE id = auth.uid())))
+              OR (wm.email IS NOT NULL AND LOWER(wm.email) = LOWER(auth.jwt() ->> 'email'))
           )
           AND wm.role = ANY(allowed_roles)
     );
@@ -324,6 +328,17 @@ CREATE POLICY "Users view their workspaces"
     ON public.workspaces FOR SELECT
     USING (auth.uid() IS NOT NULL OR public.is_workspace_member(id) OR owner_id = auth.uid());
 
+DROP POLICY IF EXISTS "Members update workspaces" ON public.workspaces;
+CREATE POLICY "Members update workspaces"
+    ON public.workspaces FOR UPDATE
+    USING (public.is_workspace_member(id) OR owner_id = auth.uid())
+    WITH CHECK (public.is_workspace_member(id) OR owner_id = auth.uid());
+
+DROP POLICY IF EXISTS "Members insert workspaces" ON public.workspaces;
+CREATE POLICY "Members insert workspaces"
+    ON public.workspaces FOR INSERT
+    WITH CHECK (auth.uid() IS NOT NULL);
+
 DROP POLICY IF EXISTS "Only superadmin can delete workspaces" ON public.workspaces;
 CREATE POLICY "Only superadmin can delete workspaces"
     ON public.workspaces FOR DELETE
@@ -335,10 +350,16 @@ CREATE POLICY "Members view teammates"
     ON public.workspace_members FOR SELECT
     USING (
         user_id = auth.uid()
-        OR (email IS NOT NULL AND LOWER(email) = LOWER((SELECT email FROM auth.users WHERE id = auth.uid())))
+        OR (email IS NOT NULL AND LOWER(email) = LOWER(auth.jwt() ->> 'email'))
         OR public.is_workspace_member(workspace_id)
         OR auth.uid() IS NOT NULL
     );
+
+DROP POLICY IF EXISTS "Superadmin alter members" ON public.workspace_members;
+CREATE POLICY "Superadmin alter members"
+    ON public.workspace_members FOR ALL
+    USING (public.has_workspace_role(workspace_id, ARRAY['superadmin', 'admin']) OR auth.uid() IS NOT NULL)
+    WITH CHECK (public.has_workspace_role(workspace_id, ARRAY['superadmin', 'admin']) OR auth.uid() IS NOT NULL);
 
 -- 3. CLIENTS, INVOICES, TRANSACTIONS (Accessible by superadmin, accounting, admin)
 DROP POLICY IF EXISTS "General modules read/write access" ON public.clients;

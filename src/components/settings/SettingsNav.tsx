@@ -16,10 +16,10 @@ export function SettingsNav() {
       description: 'Enterprise tenants, identity & tax profiles',
     },
     {
-      label: 'CLIENTS CRM',
-      href: '/settings/clients',
+      label: 'CONTACTS CRM',
+      href: '/settings/contacts',
       icon: Users,
-      description: 'Payees, contacts & billing profiles',
+      description: 'Manage clients and vendors',
     },
     {
       label: 'TEAM & RBAC CLEARANCE',

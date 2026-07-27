@@ -11,12 +11,13 @@ export interface CreateInvoicePayload {
   notes?: string;
   bankAccountId?: string;
   paymentInstructions?: string;
+  isHistorical?: boolean;
+  isQuotation?: boolean;
   lineItems: Array<{
     description: string;
     quantity: number;
     unitPrice: number;
   }>;
-  isHistorical?: boolean;
 }
 
 export interface InvoiceActionResult {
@@ -80,6 +81,7 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
         workspace_id: workspaceId,
         client_id: payload.clientId,
         invoice_number: invoiceNumberToUse,
+        is_quotation: payload.isQuotation || false,
         status: 'draft',
         issue_date: payload.issueDate,
         due_date: payload.dueDate,

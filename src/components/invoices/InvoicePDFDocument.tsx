@@ -97,7 +97,7 @@ export function InvoicePDFDocument({
       {/* Top Controls Strip (Hidden in Print/PDF mode) */}
       <div className="max-w-[850px] mx-auto mb-6 flex items-center justify-between no-print">
         <Link
-          href={isQuotation ? '/quotations' : '/invoices'}
+          href="/invoices"
           className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-900 border border-[#d4af37]/30 text-[#f5d77f] hover:bg-[#d4af37]/15 text-xs font-bold transition-all"
         >
           <ArrowLeft className="w-4 h-4" />

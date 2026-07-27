@@ -551,8 +551,9 @@ export async function duplicateProduct(productId: string, targetWorkspaceId?: st
  */
 export async function createClientRecord(payload: {
   name: string;
-  contactPerson: string;
-  email: string;
+  contactPerson?: string;
+  email?: string;
+  contactType?: 'client' | 'vendor';
 }) {
   try {
     const supabase = await createClient();
@@ -568,6 +569,7 @@ export async function createClientRecord(payload: {
       contact_name: payload.contactPerson?.trim() || null,
       company_name: payload.name.trim(),
       email: payload.email?.trim() || null,
+      contact_type: payload.contactType || 'client',
     };
 
     let { data: inserted, error } = await supabase

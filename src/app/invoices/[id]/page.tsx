@@ -150,7 +150,7 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
       taxAmount={taxAmount}
       grandTotal={grandTotal}
       workspaceBrand={workspaceBrand}
-      documentType="INVOICE"
+      documentType={inv?.is_quotation ? 'QUOTATION' : 'INVOICE'}
     />
   );
 }

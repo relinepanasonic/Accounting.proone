@@ -9,20 +9,24 @@ export interface ClientRecord {
   name: string;
   company?: string;
   email?: string;
+  contactType?: 'client' | 'vendor';
 }
 
-interface ClientCrmManagerProps {
+interface ContactCrmManagerProps {
   initialClients: ClientRecord[];
   currentUserRole?: string;
 }
 
-export function ClientCrmManager({ initialClients, currentUserRole }: ClientCrmManagerProps) {
+export function ContactCrmManager({ initialClients, currentUserRole }: ContactCrmManagerProps) {
   const [clients, setClients] = useState<ClientRecord[]>(initialClients);
   const [name, setName] = useState('');
   const [contactPerson, setContactPerson] = useState('');
   const [email, setEmail] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  const [activeTab, setActiveTab] = useState<'client' | 'vendor'>('client');
+  const [contactType, setContactType] = useState<'client' | 'vendor'>('client');
 
   // Edit modal state
   const [editingClient, setEditingClient] = useState<ClientRecord | null>(null);
@@ -48,6 +52,7 @@ export function ClientCrmManager({ initialClients, currentUserRole }: ClientCrmM
           name,
           contactPerson,
           email,
+          contactType,
         });
 
         if (!res.success) {
@@ -60,6 +65,7 @@ export function ClientCrmManager({ initialClients, currentUserRole }: ClientCrmM
               name,
               company: contactPerson || name,
               email,
+              contactType,
             },
             ...prev,
           ]);
@@ -146,7 +152,7 @@ export function ClientCrmManager({ initialClients, currentUserRole }: ClientCrmM
           <div className="flex items-center gap-2">
             <Building2 className="w-4 h-4 text-[#d4af37]" />
             <h3 className="text-xs font-bold uppercase tracking-wider text-white">
-              ONBOARD NEW CLIENT
+              ONBOARD NEW ACCOUNT
             </h3>
           </div>
           {currentUserRole && (
@@ -204,6 +210,20 @@ export function ClientCrmManager({ initialClients, currentUserRole }: ClientCrmM
               className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-300 focus:outline-none focus:border-[#d4af37]"
             />
           </div>
+
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1">
+              ACCOUNT TYPE
+            </label>
+            <select
+              value={contactType}
+              onChange={(e) => setContactType(e.target.value as 'client' | 'vendor')}
+              className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-300 focus:outline-none focus:border-[#d4af37]"
+            >
+              <option value="client">Client (Piutang)</option>
+              <option value="vendor">Vendor (Hutang)</option>
+            </select>
+          </div>
         </div>
 
         <button
@@ -216,30 +236,49 @@ export function ClientCrmManager({ initialClients, currentUserRole }: ClientCrmM
           ) : (
             <Plus className="w-4 h-4 text-black" />
           )}
-          <span>REGISTER CLIENT ACCOUNT</span>
+          <span>REGISTER ACCOUNT</span>
         </button>
       </form>
 
       {/* Clients CRM Table */}
       <div className="gold-glass-panel rounded-3xl p-6 lg:col-span-2 space-y-4">
-        <div className="border-b border-[#d4af37]/20 pb-3 flex items-center justify-between flex-wrap gap-2">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-white">
-            CLIENT DIRECTORY & BILLING PROFILES ({clients.length} ACCOUNTS)
-          </h3>
-          <span className="text-[10px] font-mono text-[#f5d77f]">
-            {isSuperAdmin ? '⚡ SUPERADMIN CLEARANCE: EDIT / DELETE ENABLED' : '🔒 VIEW & INVOICING READY'}
-          </span>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#d4af37]/20 pb-4">
+          <div>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
+              <Users className="w-4 h-4 text-[#d4af37]" />
+              CRM DIRECTORY
+            </h3>
+            <p className="text-[10px] text-zinc-400 mt-1">
+              Manage your clients and vendors profiles.
+            </p>
+          </div>
+          <div className="flex bg-zinc-900 rounded-xl p-1 border border-zinc-800">
+            <button 
+              type="button"
+              onClick={() => setActiveTab('client')}
+              className={`px-3 py-1.5 text-[10px] font-bold uppercase rounded-lg transition-colors ${activeTab === 'client' ? 'bg-[#d4af37] text-black' : 'text-zinc-400 hover:text-white'}`}
+            >
+              Clients
+            </button>
+            <button 
+              type="button"
+              onClick={() => setActiveTab('vendor')}
+              className={`px-3 py-1.5 text-[10px] font-bold uppercase rounded-lg transition-colors ${activeTab === 'vendor' ? 'bg-orange-600 text-white' : 'text-zinc-400 hover:text-white'}`}
+            >
+              Vendors
+            </button>
+          </div>
         </div>
 
-        {clients.length === 0 ? (
+        {clients.filter(c => (c.contactType || 'client') === activeTab).length === 0 ? (
           <div className="py-16 text-center border border-dashed border-zinc-800/80 rounded-2xl my-4 space-y-3">
             <div className="w-12 h-12 rounded-full bg-[#d4af37]/10 border border-[#d4af37]/30 flex items-center justify-center mx-auto text-[#f5d77f]">
               <Users className="w-6 h-6" />
             </div>
             <div>
-              <h4 className="text-sm font-bold text-white uppercase tracking-wider">No Client Profiles Recorded Yet</h4>
+              <h4 className="text-sm font-bold text-white uppercase tracking-wider">No {activeTab}s Recorded Yet</h4>
               <p className="text-xs text-zinc-400 font-sans mt-1 max-w-md mx-auto">
-                Register your agency or enterprise clients using the form on the left. Once registered, they are instantly selectable across your Invoice Generator and Accounts Receivable HUD.
+                Register your contacts using the form on the left.
               </p>
             </div>
           </div>
@@ -251,11 +290,11 @@ export function ClientCrmManager({ initialClients, currentUserRole }: ClientCrmM
                   <th className="py-3 px-3">COMPANY NAME</th>
                   <th className="py-3 px-3">CONTACT PERSON</th>
                   <th className="py-3 px-3">BILLING EMAIL</th>
-                  {isSuperAdmin && <th className="py-3 px-3 text-right">ACTIONS (SUPERADMIN)</th>}
+                  {isSuperAdmin && <th className="py-3 px-3 text-right">ACTIONS</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-900 text-xs">
-                {clients.map((c) => (
+                {clients.filter(c => (c.contactType || 'client') === activeTab).map((c) => (
                   <tr key={c.id} className="hover:bg-zinc-900/40 transition-colors group">
                     <td className="py-3.5 px-3 font-bold text-white group-hover:text-[#f5d77f] transition-colors">
                       {c.name}
@@ -268,7 +307,7 @@ export function ClientCrmManager({ initialClients, currentUserRole }: ClientCrmM
                           <button
                             type="button"
                             onClick={() => handleOpenEdit(c)}
-                            title="Edit Client Profile"
+                            title="Edit Profile"
                             className="p-1.5 rounded-lg bg-zinc-900/80 border border-zinc-800 text-zinc-300 hover:text-[#f5d77f] hover:border-[#d4af37]/60 transition-all"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
@@ -277,7 +316,7 @@ export function ClientCrmManager({ initialClients, currentUserRole }: ClientCrmM
                             type="button"
                             disabled={deletingId === c.id}
                             onClick={() => {
-                              if (confirm(`Are you sure you want to permanently delete client "${c.name}"?`)) {
+                              if (confirm(`Are you sure you want to permanently delete "${c.name}"?`)) {
                                 handleDelete(c.id);
                               }
                             }}

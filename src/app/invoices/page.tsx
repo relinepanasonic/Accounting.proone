@@ -13,7 +13,7 @@ async function InvoicesTableServer() {
 
   const { data: invoices } = await supabase
     .from('invoices')
-    .select('id, invoice_number, status, total_amount, issue_date, due_date, client_id, clients(name, contact_name), invoice_line_items(description)')
+    .select('id, invoice_number, is_quotation, status, total_amount, issue_date, due_date, client_id, clients(name, contact_name), invoice_line_items(description)')
     .eq('workspace_id', activeWorkspaceId)
     .order('created_at', { ascending: false });
 
@@ -32,6 +32,7 @@ async function InvoicesTableServer() {
             amount: `Rp ${Number(inv.total_amount || 0).toLocaleString('id-ID')}`,
             dueDate: inv.due_date ? new Date(inv.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—',
             packageName: firstPackage,
+            isQuotation: inv.is_quotation,
             status: inv.status || 'draft',
           };
         })
@@ -118,7 +119,13 @@ async function InvoicesTableServer() {
                     <div className="text-[10px] text-emerald-500 font-sans font-semibold mt-0.5">Terima Rp 0</div>
                   </td>
                   <td className="py-3 px-3 text-center">
-                    <InvoiceStatusToggle id={inv.id} status={inv.status} />
+                    {inv.isQuotation ? (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 font-bold text-[10px] tracking-widest uppercase">
+                        QUOTATION
+                      </span>
+                    ) : (
+                      <InvoiceStatusToggle id={inv.id} status={inv.status} />
+                    )}
                   </td>
                   <td className="py-3 px-3 text-center">
                     <InvoiceActionGroup id={inv.id} />

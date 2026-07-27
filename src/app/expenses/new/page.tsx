@@ -1,11 +1,24 @@
 import React from 'react';
 import Link from 'next/link';
+import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { ArrowLeft, Receipt, AlertTriangle } from 'lucide-react';
 import { NewExpenseForm } from '@/components/expenses/NewExpenseForm';
 
 export const dynamic = 'force-dynamic';
 
-export default function NewExpensePage({ searchParams }: { searchParams: { historical?: string } }) {
+export default async function NewExpensePage({ searchParams }: { searchParams: { historical?: string } }) {
+  const supabase = await createClient();
+  const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+
+  const { data: clientsData } = await supabase
+    .from('clients')
+    .select('id, name, company_name, contact_type')
+    .eq('workspace_id', activeWorkspaceId)
+    .order('name', { ascending: true });
+
+  const isHistorical = searchParams?.historical === 'true';
+
   return (
     <div className="max-w-[1200px] mx-auto px-6 py-8 space-y-6">
       {/* Header Bar */}
@@ -43,7 +56,7 @@ export default function NewExpensePage({ searchParams }: { searchParams: { histo
         </div>
       )}
 
-      <NewExpenseForm isHistorical={searchParams.historical === 'true'} />
+        <NewExpenseForm isHistorical={isHistorical} contacts={clientsData || []} />
     </div>
   );
 }

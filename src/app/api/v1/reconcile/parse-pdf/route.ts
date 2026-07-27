@@ -19,7 +19,7 @@ export async function POST(request: Request) {
 
     // Extract text using pdf2json
     const text: string = await new Promise((resolve, reject) => {
-      const pdfParser = new PDFParser(this, 1);
+      const pdfParser = new PDFParser(null, 1);
       pdfParser.on("pdfParser_dataError", (errData: any) => reject(new Error(errData.parserError)));
       pdfParser.on("pdfParser_dataReady", () => {
         resolve(pdfParser.getRawTextContent());

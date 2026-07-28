@@ -51,6 +51,52 @@ async function getAuthenticatedWorkspaceContext(supabase: any): Promise<{
   };
 }
 
+async function syncInvoiceToNewWave(invoiceId: string, supabase: any) {
+  try {
+    const apiKey = process.env.ACCOUNTING_API_KEY || process.env.NEWWAVE_INTEGRATION_TOKEN;
+    if (!apiKey) return;
+
+    const { data: inv } = await supabase
+      .from('invoices')
+      .select('*, clients(*), invoice_line_items(*)')
+      .eq('id', invoiceId)
+      .single();
+
+    if (!inv) return;
+    
+    const clientName = Array.isArray(inv.clients) ? inv.clients[0]?.name : inv.clients?.name;
+
+    const payload = {
+      source: 'proone',
+      external_id: inv.id,
+      invoice_number: inv.invoice_number,
+      client_name: clientName || 'Unknown Client',
+      issue_date: inv.issue_date,
+      due_date: inv.due_date,
+      total_amount: Number(inv.total_amount || 0),
+      status: inv.status,
+      is_quotation: inv.is_quotation,
+      notes: inv.notes,
+      line_items: Array.isArray(inv.invoice_line_items) ? inv.invoice_line_items : (inv.invoice_line_items ? [inv.invoice_line_items] : [])
+    };
+
+    const res = await fetch('https://app.newwave.id/api/accounting/invoices', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(payload)
+    });
+    
+    if (!res.ok) {
+      console.warn('New Wave sync returned non-ok status:', res.status, await res.text().catch(() => ''));
+    }
+  } catch (err) {
+    console.warn('Failed to sync invoice to New Wave:', err);
+  }
+}
+
 export async function updateInvoice(payload: UpdateInvoicePayload): Promise<InvoiceActionResult> {
   try {
     const supabase = await createClient();
@@ -120,6 +166,8 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
     if (linesError) {
       return { success: false, error: 'Invoice updated, but line items failed to save.' };
     }
+
+    await syncInvoiceToNewWave(payload.id, supabase);
 
     revalidatePath('/invoices');
     revalidatePath(`/invoices/${payload.id}`);
@@ -237,6 +285,8 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
         error: `Database error inserting line items: ${lineItemsError.message}`,
       };
     }
+
+    await syncInvoiceToNewWave(invoice.id, supabase);
 
     revalidatePath('/invoices');
     revalidatePath('/');
@@ -406,6 +456,8 @@ export async function toggleInvoiceStatus(invoiceId: string, currentStatus: stri
       }
     }
 
+    await syncInvoiceToNewWave(invoiceId, supabase);
+
     revalidatePath('/invoices');
     revalidatePath('/ledger');
     revalidatePath('/');
@@ -494,6 +546,8 @@ export async function recordInvoicePayment(invoiceId: string, amount: number, pa
     }).eq('id', invoiceId);
 
     if (invErr) throw new Error('Failed to update invoice balance.');
+
+    await syncInvoiceToNewWave(invoiceId, supabase);
 
     revalidatePath('/invoices');
     revalidatePath(`/invoices/${invoiceId}`);

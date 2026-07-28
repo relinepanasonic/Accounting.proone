@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
+import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 
 export interface BankAccountItem {
@@ -735,17 +736,47 @@ export async function inviteTeamMember(payload: {
     }
 
     let targetUserId = null;
+    let inviteError = null;
+
+    // Use service_role client to invite user
+    const adminSupabase = createAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    );
+
     try {
-      const { data: existingUser } = await supabase
-        .from('workspace_members')
-        .select('user_id')
-        .ilike('email', payload.email.trim())
-        .not('user_id', 'is', null)
-        .limit(1);
-      if (existingUser && existingUser.length > 0) {
-        targetUserId = existingUser[0].user_id;
+      const { data: inviteData, error: adminErr } = await adminSupabase.auth.admin.inviteUserByEmail(payload.email.trim(), {
+        data: { full_name: payload.name.trim() }
+      });
+      
+      if (adminErr) {
+        if (adminErr.message.includes('already exists') || adminErr.status === 422) {
+          // User already exists, try to look up their ID
+          const { data: usersData } = await adminSupabase.auth.admin.listUsers();
+          const existingUser = usersData.users.find(u => u.email === payload.email.trim());
+          if (existingUser) {
+            targetUserId = existingUser.id;
+          } else {
+            inviteError = 'User already exists but could not find ID.';
+          }
+        } else {
+          inviteError = adminErr.message;
+        }
+      } else if (inviteData?.user) {
+        targetUserId = inviteData.user.id;
       }
-    } catch {}
+    } catch (e: any) {
+      inviteError = e.message;
+    }
+
+    if (inviteError) {
+      return { success: false, error: `Failed to create invite: ${inviteError}` };
+    }
+
+    if (!targetUserId) {
+      return { success: false, error: 'Failed to generate user ID for invite.' };
+    }
 
     const { error } = await supabase.from('workspace_members').insert({
       workspace_id: workspaceId,

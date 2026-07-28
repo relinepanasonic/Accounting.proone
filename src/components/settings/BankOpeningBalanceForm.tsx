@@ -3,8 +3,9 @@
 import React, { useRef, useState } from 'react';
 import { saveBankOpeningBalances } from '@/app/actions/opening-balances';
 import { Landmark, CheckCircle2 } from 'lucide-react';
+import type { BankAccountItem } from '@/app/actions/settings';
 
-export function BankOpeningBalanceForm() {
+export function BankOpeningBalanceForm({ bankAccounts = [] }: { bankAccounts?: BankAccountItem[] }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [isSuccess, setIsSuccess] = useState(false);
 
@@ -28,12 +29,27 @@ export function BankOpeningBalanceForm() {
       
       <div>
         <label className="block text-[10px] font-mono text-zinc-500 uppercase mb-1">Asset Account Name (e.g., Bank Jago)</label>
-        <input 
-          name="bankName"
-          required
-          placeholder="e.g. Bank BCA 1234..."
-          className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#d4af37]/50"
-        />
+        {bankAccounts.length > 0 ? (
+          <select
+            name="bankName"
+            required
+            className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#d4af37]/50"
+          >
+            <option value="">-- Select Bank Account --</option>
+            {bankAccounts.map((bank, i) => (
+              <option key={bank.id || i} value={`${bank.bank_name} ${bank.account_number}`}>
+                {bank.bank_name} - {bank.account_number} ({bank.account_name})
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input 
+            name="bankName"
+            required
+            placeholder="e.g. Bank BCA 1234... (No banks found in settings)"
+            className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#d4af37]/50"
+          />
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-4">

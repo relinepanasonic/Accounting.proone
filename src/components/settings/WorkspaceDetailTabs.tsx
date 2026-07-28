@@ -1229,7 +1229,7 @@ export function WorkspaceDetailTabs({
       {/* TAB 4: OPENING BALANCES */}
       {/* ========================================================================= */}
       {activeTab === 'opening-balances' && (
-        <OpeningBalancesTab />
+        <OpeningBalancesTab bankAccounts={accounts} />
       )}
     </div>
   );

@@ -5,8 +5,9 @@ import Link from 'next/link';
 import { BookOpen, AlertTriangle, ArrowRight, ArrowLeft } from 'lucide-react';
 import { BankOpeningBalanceForm } from '@/components/settings/BankOpeningBalanceForm';
 import { AdvancedJournalForm } from '@/components/settings/AdvancedJournalForm';
+import type { BankAccountItem } from '@/app/actions/settings';
 
-export function OpeningBalancesTab() {
+export function OpeningBalancesTab({ bankAccounts = [] }: { bankAccounts?: BankAccountItem[] }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   if (showAdvanced) {
@@ -87,7 +88,7 @@ export function OpeningBalancesTab() {
               <p className="text-xs text-zinc-400 mb-6">
                 Enter the starting balances of your bank accounts on the day before you transitioned to ProOne.
               </p>
-              <BankOpeningBalanceForm />
+              <BankOpeningBalanceForm bankAccounts={bankAccounts} />
             </div>
           </div>
 

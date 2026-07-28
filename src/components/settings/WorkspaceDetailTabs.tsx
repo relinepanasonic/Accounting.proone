@@ -97,10 +97,14 @@ export function WorkspaceDetailTabs({
   const [newProdName, setNewProdName] = useState('');
   const [newProdDesc, setNewProdDesc] = useState('');
   const [newProdPrice, setNewProdPrice] = useState('85000000');
+  const [newProdQuantity, setNewProdQuantity] = useState('1');
+  const [newProdScale, setNewProdScale] = useState('pc');
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [editProdName, setEditProdName] = useState('');
   const [editProdDesc, setEditProdDesc] = useState('');
   const [editProdPrice, setEditProdPrice] = useState('0');
+  const [editProdQuantity, setEditProdQuantity] = useState('1');
+  const [editProdScale, setEditProdScale] = useState('pc');
   const [catalogMsg, setCatalogMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [catalogPending, startCatalogTransition] = useTransition();
 
@@ -252,6 +256,8 @@ export function WorkspaceDetailTabs({
         name: newProdName.trim(),
         description: newProdDesc.trim(),
         unitPrice: Number(newProdPrice) || 0,
+        quantity: Number(newProdQuantity) || 1,
+        scale: newProdScale || 'pc',
       });
 
       if (res.success) {
@@ -261,6 +267,8 @@ export function WorkspaceDetailTabs({
             name: newProdName.trim(),
             description: newProdDesc.trim() || undefined,
             unit_price: Number(newProdPrice) || 0,
+            quantity: Number(newProdQuantity) || 1,
+            scale: newProdScale || 'pc',
           },
           ...prev,
         ]);
@@ -269,6 +277,8 @@ export function WorkspaceDetailTabs({
         setNewProdName('');
         setNewProdDesc('');
         setNewProdPrice('1000000');
+        setNewProdQuantity('1');
+        setNewProdScale('pc');
         router.refresh();
       } else {
         setCatalogMsg({ type: 'error', text: res.error || 'Failed to add product.' });
@@ -300,6 +310,8 @@ export function WorkspaceDetailTabs({
         name: editProdName.trim(),
         description: editProdDesc,
         unitPrice: Number(editProdPrice) || 0,
+        quantity: Number(editProdQuantity) || 1,
+        scale: editProdScale || 'pc',
       });
       if (res.success) {
         setCatalogItems((prev) =>
@@ -310,6 +322,8 @@ export function WorkspaceDetailTabs({
                   name: editProdName.trim(),
                   description: editProdDesc,
                   unit_price: Number(editProdPrice) || 0,
+                  quantity: Number(editProdQuantity) || 1,
+                  scale: editProdScale || 'pc',
                 }
               : p
           )
@@ -997,7 +1011,7 @@ export function WorkspaceDetailTabs({
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
-                  <div className="md:col-span-3">
+                  <div className="md:col-span-12">
                     <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1.5 font-mono">
                       SERVICE / DELIVERABLE NAME *
                     </label>
@@ -1036,6 +1050,33 @@ export function WorkspaceDetailTabs({
                       onChange={(e) => setNewProdPrice(e.target.value)}
                       className="w-full bg-black border border-yellow-600/30 rounded-xl px-3.5 py-2.5 text-xs font-mono text-[#f5d77f] focus:outline-none focus:border-[#d4af37]"
                     />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1.5 font-mono">QTT</label>
+                    <input
+                      type="number"
+                      min="1"
+                      required
+                      value={newProdQuantity}
+                      onChange={(e) => setNewProdQuantity(e.target.value)}
+                      className="w-full bg-black border border-yellow-600/30 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-[#d4af37]"
+                    />
+                  </div>
+
+                  <div className="md:col-span-1">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1.5 font-mono">SCALE</label>
+                    <select
+                      value={newProdScale}
+                      onChange={(e) => setNewProdScale(e.target.value)}
+                      className="w-full bg-black border border-yellow-600/30 rounded-xl px-2 py-2 text-xs font-mono text-white focus:outline-none focus:border-[#d4af37]"
+                    >
+                      <option value="pc">pc</option>
+                      <option value="month">month</option>
+                      <option value="day">day</option>
+                      <option value="hour">hour</option>
+                      <option value="jam">jam</option>
+                    </select>
                   </div>
                 </div>
 
@@ -1086,6 +1127,7 @@ export function WorkspaceDetailTabs({
                   <thead>
                     <tr className="border-b border-yellow-600/20 bg-black/60 text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400">
                       <th className="py-4 px-6">SERVICE NAME & DESCRIPTION</th>
+                      <th className="py-4 px-6 text-right">DEFAULT QTT</th>
                       <th className="py-4 px-6 text-right">UNIT PRICE (IDR)</th>
                       <th className="py-4 px-6 text-right w-24">ACTIONS</th>
                     </tr>
@@ -1122,6 +1164,32 @@ export function WorkspaceDetailTabs({
                             </div>
                           </td>
                           <td className="py-4 px-6 text-right align-top">
+                            <div className="flex gap-2 justify-end mb-3">
+                              <div className="w-20">
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-300 mb-1 font-mono text-right">QTT</label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={editProdQuantity}
+                                  onChange={(e) => setEditProdQuantity(e.target.value)}
+                                  className="w-full bg-black border border-yellow-600/40 rounded-xl px-2 py-1.5 text-xs font-mono text-white text-center focus:outline-none focus:border-[#d4af37]"
+                                />
+                              </div>
+                              <div className="w-24">
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-300 mb-1 font-mono text-left">SCALE</label>
+                                <select
+                                  value={editProdScale}
+                                  onChange={(e) => setEditProdScale(e.target.value)}
+                                  className="w-full bg-black border border-yellow-600/40 rounded-xl px-2 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-[#d4af37]"
+                                >
+                                  <option value="pc">pc</option>
+                                  <option value="month">month</option>
+                                  <option value="day">day</option>
+                                  <option value="hour">hour</option>
+                                  <option value="jam">jam</option>
+                                </select>
+                              </div>
+                            </div>
                             <div>
                               <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-300 mb-1 font-mono text-right">
                                 UNIT PRICE (IDR / RP) *
@@ -1165,18 +1233,19 @@ export function WorkspaceDetailTabs({
                           key={item.id}
                           className="hover:bg-white/5 transition-colors group"
                         >
-                          <td className="py-4 px-6 min-w-[280px]">
-                            <div className="font-bold text-sm text-white font-sans group-hover:text-[#f5d77f] transition-colors">
-                              {item.name}
-                            </div>
+                          <td className="py-4 px-6">
+                            <div className="font-bold text-white font-sans">{item.name}</div>
                             <DescriptionBullets
                               description={item.description}
                               allBullets={true}
                               isDark={true}
-                              className="mt-1.5 max-w-xl"
+                              className="mt-1.5"
                             />
                           </td>
-                          <td className="py-4 px-6 text-right font-mono font-bold text-sm text-[#f5d77f] whitespace-nowrap">
+                          <td className="py-4 px-6 text-right font-mono font-medium text-zinc-300 whitespace-nowrap">
+                            {item.quantity || 1} {item.scale || 'pc'}
+                          </td>
+                          <td className="py-4 px-6 text-right font-mono font-bold text-[#f5d77f] whitespace-nowrap">
                             Rp {Number(item.unit_price || 0).toLocaleString('id-ID')}
                           </td>
                           <td className="py-4 px-6 text-right whitespace-nowrap">
@@ -1197,6 +1266,8 @@ export function WorkspaceDetailTabs({
                                   setEditProdName(item.name);
                                   setEditProdDesc(item.description || '');
                                   setEditProdPrice(String(item.unit_price || 0));
+                                  setEditProdQuantity((item.quantity || 1).toString());
+                                  setEditProdScale(item.scale || 'pc');
                                 }}
                                 disabled={catalogPending}
                                 title="Edit Product"

@@ -23,6 +23,8 @@ export interface CatalogProductOption {
   name: string;
   description?: string;
   unit_price: number;
+  quantity?: number;
+  scale?: string;
 }
 
 export interface BankAccountOption {
@@ -110,6 +112,8 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                 packageName: prod.name,
                 description: prod.description || '',
                 unitPrice: Number(prod.unit_price),
+                quantity: Number(prod.quantity) || 1,
+                scale: prod.scale || 'pc',
               }
             : item
         )

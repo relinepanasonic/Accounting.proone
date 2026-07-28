@@ -409,6 +409,8 @@ export async function createProduct(payload: {
   name: string;
   description: string;
   unitPrice: number;
+  quantity?: number;
+  scale?: string;
 }) {
   try {
     const supabase = await createClient();
@@ -424,6 +426,8 @@ export async function createProduct(payload: {
       name: payload.name,
       description: payload.description || null,
       unit_price: Number(payload.unitPrice) || 0,
+      quantity: Number(payload.quantity) || 1,
+      scale: payload.scale || 'pc',
     });
 
     if (error) {
@@ -473,6 +477,8 @@ export async function updateProduct(payload: {
   name: string;
   description: string;
   unitPrice: number;
+  quantity?: number;
+  scale?: string;
 }) {
   try {
     const supabase = await createClient();
@@ -486,6 +492,8 @@ export async function updateProduct(payload: {
         name: payload.name,
         description: payload.description || null,
         unit_price: Number(payload.unitPrice) || 0,
+        quantity: Number(payload.quantity) || 1,
+        scale: payload.scale || 'pc',
       })
       .eq('id', payload.id);
 
@@ -529,6 +537,8 @@ export async function duplicateProduct(productId: string, targetWorkspaceId?: st
       name: `${item.name} (Copy)`,
       description: item.description || null,
       unit_price: Number(item.unit_price) || 0,
+      quantity: Number(item.quantity) || 1,
+      scale: item.scale || 'pc',
     }).select('*').single();
 
     if (error) {

@@ -12,6 +12,8 @@ export interface CatalogProduct {
   name: string;
   description?: string;
   unit_price: number;
+  quantity?: number;
+  scale?: string;
 }
 
 interface CatalogManagerProps {
@@ -24,10 +26,14 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [unitPrice, setUnitPrice] = useState('85000000');
+  const [quantity, setQuantity] = useState('1');
+  const [scale, setScale] = useState('pc');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editDesc, setEditDesc] = useState('');
   const [editPrice, setEditPrice] = useState('0');
+  const [editQuantity, setEditQuantity] = useState('1');
+  const [editScale, setEditScale] = useState('pc');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -43,6 +49,8 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
           name,
           description,
           unitPrice: Number(unitPrice) || 0,
+          quantity: Number(quantity) || 1,
+          scale: scale || 'pc',
         });
 
         if (!res.success) {
@@ -54,12 +62,16 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
               name,
               description,
               unit_price: Number(unitPrice) || 0,
+              quantity: Number(quantity) || 1,
+              scale: scale || 'pc',
             },
             ...prev,
           ]);
           setName('');
           setDescription('');
           setUnitPrice('1000000');
+          setQuantity('1');
+          setScale('pc');
         }
       } catch (err: any) {
         setErrorMsg(err?.message || 'Error saving item');
@@ -83,12 +95,14 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
         name: editName.trim(),
         description: editDesc,
         unitPrice: Number(editPrice) || 0,
+        quantity: Number(editQuantity) || 1,
+        scale: editScale || 'pc',
       });
       if (res.success) {
         setProducts((prev) =>
           prev.map((p) =>
             p.id === id
-              ? { ...p, name: editName.trim(), description: editDesc, unit_price: Number(editPrice) || 0 }
+              ? { ...p, name: editName.trim(), description: editDesc, unit_price: Number(editPrice) || 0, quantity: Number(editQuantity) || 1, scale: editScale || 'pc' }
               : p
           )
         );
@@ -132,7 +146,7 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
-          <div className="md:col-span-3">
+          <div className="md:col-span-12">
             <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1">
               SERVICE / ITEM NAME *
             </label>
@@ -161,7 +175,7 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
 
           <div className="md:col-span-3">
             <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1">
-              UNIT PRICE (IDR / RP) *
+              UNIT PRICE (IDR) *
             </label>
             <RupiahInput
               required
@@ -170,6 +184,33 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
               onChange={(e) => setUnitPrice(e.target.value)}
               className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-3 py-2 text-xs font-mono text-[#f5d77f] focus:outline-none focus:border-[#d4af37]"
             />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1">QTT</label>
+            <input
+              type="number"
+              min="1"
+              required
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-[#d4af37]"
+            />
+          </div>
+
+          <div className="md:col-span-1">
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1">SCALE</label>
+            <select
+              value={scale}
+              onChange={(e) => setScale(e.target.value)}
+              className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-2 py-2 text-xs font-mono text-white focus:outline-none focus:border-[#d4af37]"
+            >
+              <option value="pc">pc</option>
+              <option value="month">month</option>
+              <option value="day">day</option>
+              <option value="hour">hour</option>
+              <option value="jam">jam</option>
+            </select>
           </div>
         </div>
 
@@ -201,6 +242,7 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
             <thead>
               <tr className="border-b border-zinc-800 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
                 <th className="py-3 px-3">SERVICE NAME & DESCRIPTION</th>
+                <th className="py-3 px-3 text-right">DEFAULT QTT</th>
                 <th className="py-3 px-3 text-right">UNIT PRICE (RP)</th>
                 <th className="py-3 px-3 text-right w-16">ACTION</th>
               </tr>
@@ -237,6 +279,32 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
                       </div>
                     </td>
                     <td className="py-3 px-3 text-right align-top">
+                      <div className="flex gap-2 justify-end mb-3">
+                        <div className="w-20">
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-300 mb-1 text-right">QTT</label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={editQuantity}
+                            onChange={(e) => setEditQuantity(e.target.value)}
+                            className="w-full bg-black border border-yellow-600/40 rounded-xl px-2 py-1.5 text-xs font-mono text-white text-center focus:outline-none focus:border-[#d4af37]"
+                          />
+                        </div>
+                        <div className="w-24">
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-300 mb-1 text-left">SCALE</label>
+                          <select
+                            value={editScale}
+                            onChange={(e) => setEditScale(e.target.value)}
+                            className="w-full bg-black border border-yellow-600/40 rounded-xl px-2 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-[#d4af37]"
+                          >
+                            <option value="pc">pc</option>
+                            <option value="month">month</option>
+                            <option value="day">day</option>
+                            <option value="hour">hour</option>
+                            <option value="jam">jam</option>
+                          </select>
+                        </div>
+                      </div>
                       <div>
                         <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-300 mb-1 text-right">
                           UNIT PRICE (RP) *
@@ -244,7 +312,7 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
                         <RupiahInput
                           value={editPrice}
                           onChange={(e) => setEditPrice(e.target.value)}
-                          className="w-40 bg-black border border-yellow-600/40 rounded-xl px-2.5 py-1.5 text-xs font-mono text-[#f5d77f] text-right focus:outline-none focus:border-[#d4af37] ml-auto"
+                          className="w-44 bg-black border border-yellow-600/40 rounded-xl px-2.5 py-1.5 text-xs font-mono text-[#f5d77f] text-right focus:outline-none focus:border-[#d4af37] ml-auto"
                         />
                       </div>
                     </td>
@@ -280,6 +348,9 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
                         className="mt-1"
                       />
                     </td>
+                    <td className="py-3.5 px-3 text-right font-mono font-medium text-zinc-300">
+                      {item.quantity || 1} {item.scale || 'pc'}
+                    </td>
                     <td className="py-3.5 px-3 text-right font-mono font-bold text-[#f5d77f]">
                       Rp {Number(item.unit_price).toLocaleString('id-ID')}
                     </td>
@@ -298,7 +369,9 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
                             setEditingId(item.id);
                             setEditName(item.name);
                             setEditDesc(item.description || '');
-                            setEditPrice(String(item.unit_price || 0));
+                            setEditPrice(item.unit_price.toString());
+                            setEditQuantity((item.quantity || 1).toString());
+                            setEditScale(item.scale || 'pc');
                           }}
                           disabled={isPending}
                           className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-[#f5d77f]/50 text-zinc-500 hover:text-[#f5d77f] transition-colors"

@@ -66,18 +66,24 @@ async function syncInvoiceToNewWave(invoiceId: string, supabase: any): Promise<{
     
     const clientName = Array.isArray(inv.clients) ? inv.clients[0]?.name : inv.clients?.name;
 
+    const rawLineItems = Array.isArray(inv.invoice_line_items) ? inv.invoice_line_items : (inv.invoice_line_items ? [inv.invoice_line_items] : []);
+
     const payload = {
       source: 'proone',
       external_id: inv.id,
       invoice_number: inv.invoice_number,
-      client_name: clientName || 'Unknown Client',
-      issue_date: inv.issue_date,
+      brand: clientName || 'Unknown Client',
+      invoice_date: inv.issue_date,
       due_date: inv.due_date,
-      total_amount: Number(inv.total_amount || 0),
       status: inv.status,
-      is_quotation: inv.is_quotation,
       notes: inv.notes,
-      line_items: Array.isArray(inv.invoice_line_items) ? inv.invoice_line_items : (inv.invoice_line_items ? [inv.invoice_line_items] : [])
+      items: rawLineItems.map((item: any) => ({
+        name: item.package_name || 'Service Item',
+        description: item.description,
+        scale: item.scale || 'pc',
+        qty: Number(item.quantity) || 1,
+        price: Number(item.unit_price) || 0,
+      }))
     };
 
     const res = await fetch('https://app.newwave.id/api/accounting/invoices', {

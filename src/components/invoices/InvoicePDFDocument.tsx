@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowLeft, Printer } from 'lucide-react';
+import { ArrowLeft, Printer, DollarSign, X, Loader2, Check } from 'lucide-react';
 import { ProfessorTokoOnlineLogo } from '@/components/invoices/ProfessorTokoOnlineLogo';
 import { DescriptionBullets } from '@/components/ui/DescriptionBullets';
+import { recordInvoicePayment } from '@/app/actions/invoices';
 
 export interface InvoiceItemData {
   id: string;
@@ -30,6 +31,7 @@ export interface WorkspaceBrandInfo {
 }
 
 export interface InvoiceDocumentProps {
+  invoiceId?: string;
   invoiceNumber: string;
   accountNumber: string;
   invoiceDate: string;
@@ -44,11 +46,14 @@ export interface InvoiceDocumentProps {
   subtotal: number;
   taxAmount: number;
   grandTotal: number;
+  amountPaid?: number;
+  payments?: any[];
   workspaceBrand?: WorkspaceBrandInfo;
   documentType?: 'INVOICE' | 'QUOTATION';
 }
 
 export function InvoicePDFDocument({
+  invoiceId,
   invoiceNumber = 'INV-2026-001',
   accountNumber = '#INV-2026-001',
   invoiceDate = '16 Jul, 2026',
@@ -63,10 +68,33 @@ export function InvoicePDFDocument({
   subtotal = 0,
   taxAmount = 0,
   grandTotal = 0,
+  amountPaid = 0,
+  payments = [],
   workspaceBrand,
   documentType = 'INVOICE',
 }: Partial<InvoiceDocumentProps>) {
   const isQuotation = documentType === 'QUOTATION';
+  const balanceDue = Math.max(0, grandTotal - amountPaid);
+
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState<number | ''>(balanceDue || 0);
+  const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [paymentMethod, setPaymentMethod] = useState('Bank Transfer');
+  const [isPending, startTransition] = useTransition();
+
+  const handleRecordPayment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!invoiceId || !paymentAmount) return;
+    
+    startTransition(async () => {
+      const res = await recordInvoicePayment(invoiceId, Number(paymentAmount), paymentDate, paymentMethod);
+      if (res.success) {
+        setShowPaymentModal(false);
+      } else {
+        alert(res.error);
+      }
+    });
+  };
 
   // Format default filename: NoInvDateClientName.pdf
   useEffect(() => {
@@ -105,6 +133,18 @@ export function InvoicePDFDocument({
         </Link>
 
         <div className="flex items-center gap-3">
+          {!isQuotation && invoiceId && balanceDue > 0 && (
+            <button
+              onClick={() => {
+                setPaymentAmount(balanceDue);
+                setShowPaymentModal(true);
+              }}
+              className="bg-emerald-600 hover:bg-emerald-500 inline-flex items-center gap-2 px-6 py-2.5 rounded-full text-xs font-extrabold uppercase tracking-wider text-white shadow-[0_0_20px_rgba(16,185,129,0.2)] transition-all"
+            >
+              <DollarSign className="w-4 h-4" />
+              <span>RECORD PAYMENT</span>
+            </button>
+          )}
           <button
             onClick={handlePrintPDF}
             className="gold-btn inline-flex items-center gap-2 px-6 py-2.5 rounded-full text-xs font-extrabold uppercase tracking-wider shadow-[0_0_20px_rgba(212,175,55,0.4)] transition-all hover:scale-105"
@@ -114,6 +154,70 @@ export function InvoicePDFDocument({
           </button>
         </div>
       </div>
+
+      {showPaymentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 no-print">
+          <form onSubmit={handleRecordPayment} className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl relative">
+            <button
+              type="button"
+              onClick={() => setShowPaymentModal(false)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-zinc-900 flex items-center justify-center text-zinc-400 hover:text-white"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <h2 className="text-sm font-bold uppercase tracking-wider text-white mb-6 flex items-center gap-2">
+              <DollarSign className="w-4 h-4 text-emerald-500" /> Record Payment
+            </h2>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">Amount Paid (Rp)</label>
+                <input
+                  type="number"
+                  required
+                  value={paymentAmount}
+                  onChange={e => setPaymentAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-emerald-500 font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">Payment Date</label>
+                <input
+                  type="date"
+                  required
+                  value={paymentDate}
+                  onChange={e => setPaymentDate(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-emerald-500 font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">Method</label>
+                <select
+                  value={paymentMethod}
+                  onChange={e => setPaymentMethod(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="Bank Transfer">Bank Transfer</option>
+                  <option value="Cash">Cash</option>
+                  <option value="Check">Check</option>
+                  <option value="Credit Card">Credit Card</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-8">
+              <button
+                type="submit"
+                disabled={isPending}
+                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs uppercase tracking-wider py-3.5 rounded-xl disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                Confirm Payment
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* A4/Letter Document Container */}
       <div className="max-w-[850px] mx-auto bg-white shadow-2xl overflow-hidden print:shadow-none print:max-w-none print:w-full font-sans text-[#2d3748]">
@@ -285,6 +389,29 @@ export function InvoicePDFDocument({
                     Rp {(grandTotal || 0).toLocaleString('id-ID')}
                   </span>
                 </div>
+                
+                {/* PAYMENT HISTORY & BALANCE DUE */}
+                {payments && payments.length > 0 && (
+                  <div className="pt-2 pb-1 border-b border-zinc-200 border-dashed">
+                    <span className="font-serif text-zinc-500 uppercase tracking-widest text-[10px]">Payment History</span>
+                    {payments.map((p, i) => (
+                      <div key={i} className="flex justify-between py-1 px-2 text-zinc-600">
+                        <span>Payment {i + 1} <span className="text-[10px] text-zinc-400">({new Date(p.transaction_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })})</span></span>
+                        <span className="font-mono text-[#1e2536]">Rp {Number(p.amount).toLocaleString('id-ID')}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {amountPaid > 0 && (
+                  <div className="flex justify-between items-center bg-[#1e2536] text-white font-bold py-2.5 px-4 text-sm mt-2 shadow-sm">
+                    <span className="font-serif tracking-wider uppercase">
+                      BALANCE DUE
+                    </span>
+                    <span className="font-mono text-base">
+                      Rp {balanceDue.toLocaleString('id-ID')}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           ) : (

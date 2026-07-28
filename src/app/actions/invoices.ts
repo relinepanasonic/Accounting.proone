@@ -360,3 +360,61 @@ export async function deleteInvoice(invoiceId: string) {
     return { success: false, error: err?.message || 'Error deleting invoice.' };
   }
 }
+
+/**
+ * Server Action: Record Payment against an Invoice
+ */
+export async function recordInvoicePayment(invoiceId: string, amount: number, paymentDate: string, paymentMethod: string, reference?: string) {
+  try {
+    const supabase = await createClient();
+    const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+
+    // 1. Fetch current invoice state
+    const { data: inv, error: fetchErr } = await supabase
+      .from('invoices')
+      .select('id, invoice_number, amount_paid, total_amount, client_id, status')
+      .eq('id', invoiceId)
+      .eq('workspace_id', workspaceId)
+      .single();
+
+    if (fetchErr || !inv) throw new Error('Invoice not found.');
+
+    const newAmountPaid = Number(inv.amount_paid) + amount;
+    const isFullyPaid = newAmountPaid >= Number(inv.total_amount);
+    
+    // Determine new status (we keep it simple, if not fully paid it might remain 'sent' or 'draft', if fully paid it becomes 'paid')
+    const newStatus = isFullyPaid ? 'paid' : (inv.status === 'draft' ? 'sent' : inv.status);
+
+    // 2. Insert Transaction
+    const { error: txErr } = await supabase.from('transactions').insert({
+      workspace_id: workspaceId,
+      type: 'income',
+      category: 'Client Payment',
+      amount: amount,
+      transaction_date: paymentDate,
+      description: `Payment for ${inv.invoice_number}${reference ? ' - ' + reference : ''}`,
+      client_id: inv.client_id,
+      invoice_id: inv.id,
+      payment_method: paymentMethod
+    });
+
+    if (txErr) throw new Error('Failed to create payment transaction.');
+
+    // 3. Update Invoice
+    const { error: invErr } = await supabase.from('invoices').update({
+      amount_paid: newAmountPaid,
+      status: newStatus,
+      updated_at: new Date().toISOString()
+    }).eq('id', invoiceId);
+
+    if (invErr) throw new Error('Failed to update invoice balance.');
+
+    revalidatePath('/invoices');
+    revalidatePath(`/invoices/${invoiceId}`);
+    revalidatePath('/ledger');
+    
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Error recording payment.' };
+  }
+}

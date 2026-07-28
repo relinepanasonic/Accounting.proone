@@ -16,7 +16,7 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
   // 1. Fetch parent invoice with relational joins
   const { data: inv } = await supabase
     .from('invoices')
-    .select('*, clients(*), invoice_line_items(*), workspaces(*)')
+    .select('*, clients(*), invoice_line_items(*), workspaces(*), transactions(*)')
     .eq('id', id)
     .single();
 
@@ -133,8 +133,15 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
     bankAccounts: bankAccounts,
   };
 
+  const payments = Array.isArray(inv?.transactions) 
+    ? inv.transactions.filter((t: any) => t.type === 'income').sort((a: any, b: any) => new Date(a.transaction_date).getTime() - new Date(b.transaction_date).getTime())
+    : [];
+
   return (
     <InvoicePDFDocument
+      invoiceId={id}
+      amountPaid={Number(inv?.amount_paid || 0)}
+      payments={payments}
       invoiceNumber={invoiceNumber}
       accountNumber={`#${invoiceNumber}`}
       invoiceDate={invoiceDate}

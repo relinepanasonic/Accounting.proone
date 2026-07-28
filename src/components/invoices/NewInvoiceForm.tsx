@@ -500,11 +500,18 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
               className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-[#f5d77f] focus:outline-none focus:border-[#d4af37] font-sans"
             >
               <option value="all">Display All Workspace Bank Accounts (Default)</option>
-              {bankAccounts?.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.bank_name} - {b.account_number} ({b.account_name})
-                </option>
-              ))}
+              {bankAccounts?.map((b) => {
+                const cleanName = b.bank_name
+                  .replace(/Primary Bank Account - /gi, '')
+                  .replace(/Secondary Bank \(\d+\) - /gi, '')
+                  .replace(/Secondary Bank Account/gi, 'Bank Account')
+                  .trim();
+                return (
+                  <option key={b.id} value={b.id}>
+                    {cleanName} | {b.account_number} | {b.account_name}
+                  </option>
+                );
+              })}
               <option value="custom">Custom Bank Instructions / Override...</option>
             </select>
           </div>

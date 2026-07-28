@@ -49,6 +49,12 @@ export function InvoiceTableClient({ initialInvoices }: { initialInvoices: Invoi
 
   const todayStr = new Date().toISOString().split('T')[0];
 
+  const uniqueClients = useMemo(() => {
+    const clients = new Set<string>();
+    initialInvoices.forEach(inv => clients.add(inv.clientName));
+    return Array.from(clients).sort();
+  }, [initialInvoices]);
+
   const processedInvoices = useMemo(() => {
     let filtered = initialInvoices.filter((inv) => {
       // 1. Hide expired quotations automatically
@@ -106,13 +112,16 @@ export function InvoiceTableClient({ initialInvoices }: { initialInvoices: Invoi
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 p-4 rounded-xl bg-zinc-900/50 border border-zinc-800">
         <div>
           <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Search Client</label>
-          <input 
-            type="text"
-            placeholder="Type client name..."
+          <select 
             value={filterClient}
             onChange={(e) => setFilterClient(e.target.value)}
             className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[#d4af37]"
-          />
+          >
+            <option value="">All Clients</option>
+            {uniqueClients.map(client => (
+              <option key={client} value={client}>{client}</option>
+            ))}
+          </select>
         </div>
         <div>
           <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Issue Month</label>

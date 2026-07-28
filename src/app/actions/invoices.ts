@@ -22,6 +22,10 @@ export interface CreateInvoicePayload {
   }[];
 }
 
+export interface UpdateInvoicePayload extends CreateInvoicePayload {
+  id: string;
+}
+
 export interface InvoiceActionResult {
   success: boolean;
   invoiceId?: string;
@@ -45,6 +49,84 @@ async function getAuthenticatedWorkspaceContext(supabase: any): Promise<{
     userId: ctx.userId || 'seed-user',
     workspaceId: ctx.activeWorkspaceId,
   };
+}
+
+export async function updateInvoice(payload: UpdateInvoicePayload): Promise<InvoiceActionResult> {
+  try {
+    const supabase = await createClient();
+    const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+
+    if (!payload.id) {
+      return { success: false, error: 'Invoice ID is required for updating.' };
+    }
+    if (!payload.clientId) {
+      return { success: false, error: 'Client Payee is required.' };
+    }
+    if (!payload.lineItems || payload.lineItems.length === 0) {
+      return { success: false, error: 'At least one deliverable line item is required.' };
+    }
+
+    const totalAmount = payload.lineItems.reduce(
+      (acc: number, item: any) => acc + (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0),
+      0
+    );
+
+    const updateData: any = {
+      client_id: payload.clientId,
+      invoice_number: payload.invoiceNumber,
+      is_quotation: payload.isQuotation || false,
+      issue_date: payload.issueDate,
+      due_date: payload.dueDate,
+      subtotal: totalAmount,
+      total_amount: totalAmount,
+      notes: payload.notes || null,
+      bank_account_id: payload.bankAccountId || null,
+      payment_instructions: payload.paymentInstructions || null,
+    };
+
+    const { error: updateError } = await supabase
+      .from('invoices')
+      .update(updateData)
+      .eq('id', payload.id)
+      .eq('workspace_id', workspaceId);
+
+    if (updateError) {
+      return { success: false, error: updateError.message };
+    }
+
+    // Delete existing line items
+    const { error: deleteError } = await supabase
+      .from('invoice_line_items')
+      .delete()
+      .eq('invoice_id', payload.id);
+
+    if (deleteError) {
+      console.warn('Failed to delete old line items:', deleteError);
+    }
+
+    // Insert new line items
+    const lineItemsData = payload.lineItems.map((item) => ({
+      invoice_id: payload.id,
+      package_name: item.packageName || null,
+      description: item.description,
+      quantity: item.quantity,
+      scale: item.scale || 'pc',
+      unit_price: item.unitPrice,
+      total_price: (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0),
+    }));
+
+    const { error: linesError } = await supabase.from('invoice_line_items').insert(lineItemsData);
+    if (linesError) {
+      return { success: false, error: 'Invoice updated, but line items failed to save.' };
+    }
+
+    revalidatePath('/invoices');
+    revalidatePath(`/invoices/${payload.id}`);
+    
+    return { success: true, invoiceId: payload.id };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'A fatal anomaly occurred while updating the invoice.' };
+  }
 }
 
 /**

@@ -4,7 +4,7 @@ import React, { useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, Trash2, Check, AlertCircle, Loader2, Calendar, Building2 } from 'lucide-react';
 import Link from 'next/link';
-import { createInvoice } from '@/app/actions/invoices';
+import { createInvoice, updateInvoice } from '@/app/actions/invoices';
 import { createClientRecord } from '@/app/actions/settings';
 import { RupiahInput } from '@/components/ui/RupiahInput';
 import { BulletTextarea } from '@/components/ui/BulletTextarea';
@@ -38,9 +38,10 @@ interface NewInvoiceFormProps {
   products?: CatalogProductOption[];
   bankAccounts?: BankAccountOption[];
   isHistorical?: boolean;
+  initialData?: any;
 }
 
-export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHistorical = false }: NewInvoiceFormProps) {
+export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHistorical = false, initialData }: NewInvoiceFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -51,23 +52,23 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
   };
 
   const [localClients, setLocalClients] = useState(clients);
-  const [clientId, setClientId] = useState(clients.length === 1 ? clients[0].id : '');
+  const [clientId, setClientId] = useState(initialData?.clientId || (clients.length === 1 ? clients[0].id : ''));
   const searchParams = useSearchParams();
-  const [isQuotation, setIsQuotation] = useState(() => searchParams.get('type') === 'quotation');
+  const [isQuotation, setIsQuotation] = useState(() => initialData ? initialData.isQuotation : searchParams.get('type') === 'quotation');
   
   // Quick Add Client State
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [quickAddName, setQuickAddName] = useState('');
   const [isQuickAdding, setIsQuickAdding] = useState(false);
-  const [invoiceNumber, setInvoiceNumber] = useState(() => `INV-2026-${Math.floor(100 + Math.random() * 900)}`);
-  const [issueDate, setIssueDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [dueDate, setDueDate] = useState(getNet15Date);
-  const [notes, setNotes] = useState('');
-  const [bankAccountId, setBankAccountId] = useState('all');
-  const [customPaymentInstructions, setCustomPaymentInstructions] = useState('');
+  const [invoiceNumber, setInvoiceNumber] = useState(() => initialData?.invoiceNumber || `INV-2026-${Math.floor(100 + Math.random() * 900)}`);
+  const [issueDate, setIssueDate] = useState(() => initialData?.issueDate || new Date().toISOString().split('T')[0]);
+  const [dueDate, setDueDate] = useState(() => initialData?.dueDate || getNet15Date());
+  const [notes, setNotes] = useState(initialData?.notes || '');
+  const [bankAccountId, setBankAccountId] = useState(initialData?.bankAccountId || 'all');
+  const [customPaymentInstructions, setCustomPaymentInstructions] = useState(initialData?.paymentInstructions || '');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const [lineItems, setLineItems] = useState<LineItem[]>([]);
+  const [lineItems, setLineItems] = useState<LineItem[]>(initialData?.lineItems || []);
 
   const handleAddLineItem = () => {
     setLineItems((prev) => [
@@ -154,33 +155,51 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
     setErrorMsg(null);
     startTransition(async () => {
       try {
-        const finalNotes = isHistorical ? `[HISTORICAL_OPENING_BALANCE] ${notes}` : notes;
-        const res = await createInvoice({
-          clientId,
-          invoiceNumber,
-          issueDate,
-          dueDate,
-          notes: finalNotes,
-          bankAccountId: bankAccountId !== 'all' ? bankAccountId : undefined,
-          paymentInstructions: bankAccountId === 'custom' ? customPaymentInstructions : undefined,
-          isHistorical,
-          isQuotation: submitAsQuotation,
-          lineItems: lineItems.map((l) => ({
-            description: l.description,
-            quantity: Number(l.quantity),
-            unitPrice: Number(l.unitPrice),
-          })),
-        });
-
-        if (!res.success) {
-          setErrorMsg(res.error || 'Failed to create invoice. Please verify your workspace permission.');
-          return;
-        }
-
-        if (res.invoiceId) {
-          router.push(`/invoices/${res.invoiceId}`);
+        if (initialData) {
+          const res = await updateInvoice({
+            id: initialData.id,
+            clientId,
+            invoiceNumber,
+            issueDate,
+            dueDate,
+            notes,
+            bankAccountId: bankAccountId === 'all' ? undefined : bankAccountId,
+            paymentInstructions: customPaymentInstructions,
+            isQuotation: submitAsQuotation,
+            lineItems: lineItems.map((l) => ({
+              description: l.description,
+              quantity: Number(l.quantity),
+              unitPrice: Number(l.unitPrice),
+            })),
+          });
+          if (res.success) {
+            router.push(`/invoices/${res.invoiceId}`);
+          } else {
+            setErrorMsg(res.error || 'Failed to update invoice');
+          }
         } else {
-          router.push('/invoices');
+          const finalNotes = isHistorical ? `[HISTORICAL_OPENING_BALANCE] ${notes}` : notes;
+          const res = await createInvoice({
+            clientId,
+            invoiceNumber,
+            issueDate,
+            dueDate,
+            notes: finalNotes,
+            bankAccountId: bankAccountId !== 'all' ? bankAccountId : undefined,
+            paymentInstructions: bankAccountId === 'custom' ? customPaymentInstructions : undefined,
+            isHistorical,
+            isQuotation: submitAsQuotation,
+            lineItems: lineItems.map((l) => ({
+              description: l.description,
+              quantity: Number(l.quantity),
+              unitPrice: Number(l.unitPrice),
+            })),
+          });
+          if (res.success) {
+            router.push(`/invoices/${res.invoiceId}`);
+          } else {
+            setErrorMsg(res.error || 'Failed to create invoice. Please verify your workspace permission.');
+          }
         }
       } catch (err: any) {
         setErrorMsg(err?.message || 'An unexpected error occurred while saving.');
@@ -522,11 +541,11 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
           className="border border-[#d4af37] text-[#d4af37] hover:bg-[#d4af37]/10 inline-flex items-center justify-center gap-2.5 px-6 py-3 min-h-[44px] rounded-full text-xs uppercase tracking-wider disabled:opacity-75 transition-all"
         >
           {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-          <span className="font-extrabold">SAVE QUOTATION</span>
+          <span className="font-extrabold">{initialData ? 'UPDATE QUOTATION' : 'SAVE QUOTATION'}</span>
         </button>
         <button
           type="submit"
-          disabled={isPending}
+          disabled={isPending || !clientId}
           className="gold-btn inline-flex items-center justify-center gap-2.5 px-8 py-3 min-h-[44px] rounded-full text-xs uppercase tracking-wider disabled:opacity-75 transition-all shadow-[0_0_20px_rgba(212,175,55,0.4)]"
         >
           {isPending ? (
@@ -535,7 +554,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
             <Check className="w-4 h-4 text-black" />
           )}
           <span className="font-extrabold">
-            {isPending ? 'GENERATING...' : 'SAVE INVOICE'}
+            {isPending ? 'GENERATING...' : (initialData ? 'UPDATE INVOICE' : 'SAVE INVOICE')}
           </span>
         </button>
       </div>

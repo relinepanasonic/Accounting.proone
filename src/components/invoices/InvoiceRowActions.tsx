@@ -2,7 +2,7 @@
 
 import React, { useTransition } from 'react';
 import Link from 'next/link';
-import { Copy, CheckCircle, Clock, FileText, Trash2 } from 'lucide-react';
+import { Copy, CheckCircle, Clock, FileText, Trash2, Edit2 } from 'lucide-react';
 import { duplicateInvoice, toggleInvoiceStatus, deleteInvoice } from '@/app/actions/invoices';
 
 interface InvoiceActionProps {
@@ -84,6 +84,15 @@ export function InvoiceActionGroup({ id }: InvoiceActionProps) {
         className="p-1.5 rounded-lg bg-zinc-900 border border-[#d4af37]/30 hover:border-[#d4af37] text-[#f5d77f] hover:scale-105 transition-all duration-200"
       >
         <FileText className="w-3.5 h-3.5" />
+      </Link>
+
+      {/* Edit Invoice Action */}
+      <Link
+        href={`/invoices/${id}/edit`}
+        title="Edit Invoice"
+        className="p-1.5 rounded-lg bg-zinc-900 border border-blue-500/30 hover:border-blue-400 text-blue-400 hover:scale-105 transition-all duration-200"
+      >
+        <Edit2 className="w-3.5 h-3.5" />
       </Link>
 
       {/* Duplicate Invoice Action in Brushed Gold */}

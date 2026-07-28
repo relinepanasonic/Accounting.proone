@@ -686,6 +686,9 @@ export async function deleteClientRecord(clientId: string) {
       .eq('workspace_id', workspaceId);
 
     if (error) {
+      if (error.code === '23503') {
+        return { success: false, error: 'Cannot delete this contact because they have existing invoices. Please delete the associated invoices first.' };
+      }
       return { success: false, error: error.message };
     }
 

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, Trash2, Check, AlertCircle, Loader2, Calendar, Building2 } from 'lucide-react';
 import Link from 'next/link';
 import { createInvoice } from '@/app/actions/invoices';
@@ -52,7 +52,8 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
 
   const [localClients, setLocalClients] = useState(clients);
   const [clientId, setClientId] = useState(clients.length === 1 ? clients[0].id : '');
-  const [isQuotation, setIsQuotation] = useState(false);
+  const searchParams = useSearchParams();
+  const [isQuotation, setIsQuotation] = useState(() => searchParams.get('type') === 'quotation');
   
   // Quick Add Client State
   const [showQuickAdd, setShowQuickAdd] = useState(false);

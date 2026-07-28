@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, FileText, Package, AlertTriangle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
@@ -62,7 +62,9 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: {
         </div>
       )}
 
-      <NewInvoiceForm clients={clientList} products={productList} bankAccounts={bankAccounts || []} isHistorical={searchParams.historical === 'true'} />
+      <Suspense fallback={<div className="h-40 bg-zinc-900 rounded-xl animate-pulse" />}>
+        <NewInvoiceForm clients={clientList} products={productList} bankAccounts={bankAccounts || []} isHistorical={searchParams.historical === 'true'} />
+      </Suspense>
     </div>
   );
 }

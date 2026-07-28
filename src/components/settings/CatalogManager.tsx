@@ -240,11 +240,12 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-zinc-800 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                <th className="py-3 px-3">SERVICE NAME & DESCRIPTION</th>
-                <th className="py-3 px-3 text-right">DEFAULT QTT</th>
-                <th className="py-3 px-3 text-right">UNIT PRICE (RP)</th>
-                <th className="py-3 px-3 text-right w-16">ACTION</th>
+              <tr className="border-b border-yellow-600/20 bg-black/60 text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400">
+                <th className="py-4 px-6">SERVICE NAME & DESCRIPTION</th>
+                <th className="py-4 px-6 text-right">DEFAULT QTT</th>
+                <th className="py-4 px-6 text-right">UNIT PRICE (IDR)</th>
+                <th className="py-4 px-6 text-right">PRODUCT PRICE</th>
+                <th className="py-4 px-6 text-right w-24">ACTIONS</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-900 text-xs">
@@ -278,7 +279,7 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
                         </div>
                       </div>
                     </td>
-                    <td className="py-3 px-3 text-right align-top">
+                    <td className="py-3 px-3 text-right align-top" colSpan={2}>
                       <div className="flex gap-2 justify-end mb-3">
                         <div className="w-20">
                           <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-300 mb-1 text-right">QTT</label>
@@ -353,6 +354,9 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
                     </td>
                     <td className="py-3.5 px-3 text-right font-mono font-bold text-[#f5d77f]">
                       Rp {Number(item.unit_price).toLocaleString('id-ID')}
+                    </td>
+                    <td className="py-3.5 px-3 text-right font-mono font-extrabold text-[#d4af37]">
+                      Rp {(Number(item.quantity || 1) * Number(item.unit_price || 0)).toLocaleString('id-ID')}
                     </td>
                     <td className="py-3.5 px-3 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1.5">

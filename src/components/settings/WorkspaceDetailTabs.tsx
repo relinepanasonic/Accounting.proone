@@ -1129,6 +1129,7 @@ export function WorkspaceDetailTabs({
                       <th className="py-4 px-6">SERVICE NAME & DESCRIPTION</th>
                       <th className="py-4 px-6 text-right">DEFAULT QTT</th>
                       <th className="py-4 px-6 text-right">UNIT PRICE (IDR)</th>
+                      <th className="py-4 px-6 text-right">PRODUCT PRICE</th>
                       <th className="py-4 px-6 text-right w-24">ACTIONS</th>
                     </tr>
                   </thead>
@@ -1163,7 +1164,7 @@ export function WorkspaceDetailTabs({
                               </div>
                             </div>
                           </td>
-                          <td className="py-4 px-6 text-right align-top">
+                          <td className="py-4 px-6 text-right align-top" colSpan={2}>
                             <div className="flex gap-2 justify-end mb-3">
                               <div className="w-20">
                                 <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-300 mb-1 font-mono text-right">QTT</label>
@@ -1247,6 +1248,9 @@ export function WorkspaceDetailTabs({
                           </td>
                           <td className="py-4 px-6 text-right font-mono font-bold text-[#f5d77f] whitespace-nowrap">
                             Rp {Number(item.unit_price || 0).toLocaleString('id-ID')}
+                          </td>
+                          <td className="py-4 px-6 text-right font-mono font-extrabold text-[#d4af37] whitespace-nowrap">
+                            Rp {(Number(item.quantity || 1) * Number(item.unit_price || 0)).toLocaleString('id-ID')}
                           </td>
                           <td className="py-4 px-6 text-right whitespace-nowrap">
                             <div className="flex items-center justify-end gap-2">

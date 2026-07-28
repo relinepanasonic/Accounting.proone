@@ -55,6 +55,29 @@ export function InvoiceTableClient({ initialInvoices }: { initialInvoices: Invoi
     return Array.from(clients).sort();
   }, [initialInvoices]);
 
+  const uniqueIssueMonths = useMemo(() => {
+    const months = new Set<string>();
+    initialInvoices.forEach(inv => {
+      if (inv.rawIssueDate) months.add(inv.rawIssueDate.substring(0, 7)); // YYYY-MM
+    });
+    return Array.from(months).sort().reverse(); // Newest first
+  }, [initialInvoices]);
+
+  const uniqueDueMonths = useMemo(() => {
+    const months = new Set<string>();
+    initialInvoices.forEach(inv => {
+      if (inv.rawDueDate) months.add(inv.rawDueDate.substring(0, 7)); // YYYY-MM
+    });
+    return Array.from(months).sort().reverse(); // Newest first
+  }, [initialInvoices]);
+
+  const formatMonth = (yyyyMm: string) => {
+    if (!yyyyMm) return '';
+    const [year, month] = yyyyMm.split('-');
+    const date = new Date(Number(year), Number(month) - 1);
+    return date.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  };
+
   const processedInvoices = useMemo(() => {
     let filtered = initialInvoices.filter((inv) => {
       // 1. Hide expired quotations automatically
@@ -125,21 +148,29 @@ export function InvoiceTableClient({ initialInvoices }: { initialInvoices: Invoi
         </div>
         <div>
           <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Issue Month</label>
-          <input 
-            type="month"
+          <select 
             value={filterIssueMonth}
             onChange={(e) => setFilterIssueMonth(e.target.value)}
             className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[#d4af37]"
-          />
+          >
+            <option value="">All Months</option>
+            {uniqueIssueMonths.map(month => (
+              <option key={month} value={month}>{formatMonth(month)}</option>
+            ))}
+          </select>
         </div>
         <div>
           <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Due Month</label>
-          <input 
-            type="month"
+          <select 
             value={filterDueMonth}
             onChange={(e) => setFilterDueMonth(e.target.value)}
             className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[#d4af37]"
-          />
+          >
+            <option value="">All Months</option>
+            {uniqueDueMonths.map(month => (
+              <option key={month} value={month}>{formatMonth(month)}</option>
+            ))}
+          </select>
         </div>
         <div>
           <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Status</label>

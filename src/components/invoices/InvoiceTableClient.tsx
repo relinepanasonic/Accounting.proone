@@ -17,11 +17,12 @@ interface InvoiceData {
   dueDate: string;
   rawDueDate: string;
   packageName: string;
+  packageQtt: string;
   isQuotation: boolean;
   status: string;
 }
 
-type SortField = 'invoiceNumber' | 'rawIssueDate' | 'clientName' | 'rawDueDate' | 'packageName' | 'rawAmount' | 'status';
+type SortField = 'invoiceNumber' | 'rawIssueDate' | 'clientName' | 'rawDueDate' | 'packageName' | 'packageQtt' | 'rawAmount' | 'status';
 type SortOrder = 'asc' | 'desc';
 
 export function InvoiceTableClient({ initialInvoices }: { initialInvoices: InvoiceData[] }) {
@@ -220,6 +221,9 @@ export function InvoiceTableClient({ initialInvoices }: { initialInvoices: Invoi
                 <th className="py-3 px-3 cursor-pointer select-none group" onClick={() => handleSort('packageName')}>
                   <div className="flex items-center justify-between">Package {getSortIcon('packageName')}</div>
                 </th>
+                <th className="py-3 px-3 cursor-pointer select-none group" onClick={() => handleSort('packageQtt')}>
+                  <div className="flex items-center justify-between">Qtt {getSortIcon('packageQtt')}</div>
+                </th>
                 <th className="py-3 px-3 cursor-pointer select-none group" onClick={() => handleSort('rawAmount')}>
                   <div className="flex items-center justify-end gap-2">Amount Billed {getSortIcon('rawAmount')}</div>
                 </th>
@@ -255,6 +259,9 @@ export function InvoiceTableClient({ initialInvoices }: { initialInvoices: Invoi
                   </td>
                   <td className="py-3 px-3 text-zinc-400 font-sans">
                     {inv.packageName}
+                  </td>
+                  <td className="py-3 px-3 text-zinc-400 font-sans font-medium">
+                    {inv.packageQtt}
                   </td>
                   <td className="py-3 px-3 text-right">
                     <div className="text-sm font-extrabold text-[#f5d77f] drop-shadow-[0_0_10px_rgba(245,215,127,0.35)]">

@@ -14,7 +14,7 @@ async function InvoicesTableServer() {
 
   const { data: invoices } = await supabase
     .from('invoices')
-    .select('id, invoice_number, is_quotation, status, total_amount, issue_date, due_date, client_id, clients(name, contact_name), invoice_line_items(description)')
+    .select('id, invoice_number, is_quotation, status, total_amount, issue_date, due_date, client_id, clients(name, contact_name), invoice_line_items(description, quantity, scale)')
     .eq('workspace_id', activeWorkspaceId)
     .order('created_at', { ascending: false });
 
@@ -24,6 +24,7 @@ async function InvoicesTableServer() {
           const clientObj = Array.isArray(inv.clients) ? inv.clients[0] : inv.clients;
           const lineItems = Array.isArray(inv.invoice_line_items) ? inv.invoice_line_items : (inv.invoice_line_items ? [inv.invoice_line_items] : []);
           const firstPackage = lineItems.length > 0 ? lineItems[0].description : '—';
+          const firstPackageQtt = lineItems.length > 0 ? `${Number(lineItems[0].quantity)} ${lineItems[0].scale || ''}`.trim() : '—';
           return {
             id: inv.id,
             invoiceNumber: inv.invoice_number,
@@ -36,6 +37,7 @@ async function InvoicesTableServer() {
             dueDate: inv.due_date ? new Date(inv.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—',
             rawDueDate: inv.due_date || '',
             packageName: firstPackage,
+            packageQtt: firstPackageQtt,
             isQuotation: inv.is_quotation,
             status: inv.status || 'draft',
           };

@@ -105,14 +105,15 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
     }
 
     // Insert new line items
-    const lineItemsData = payload.lineItems.map((item) => ({
+    const lineItemsData = payload.lineItems.map((item, idx) => ({
+      workspace_id: workspaceId,
       invoice_id: payload.id,
       package_name: item.packageName || null,
-      description: item.description,
-      quantity: item.quantity,
+      description: item.description || 'Deliverable Item',
+      quantity: Number(item.quantity) || 1,
       scale: item.scale || 'pc',
-      unit_price: item.unitPrice,
-      total_price: (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0),
+      unit_price: Number(item.unitPrice) || 0,
+      sort_order: idx + 1,
     }));
 
     const { error: linesError } = await supabase.from('invoice_line_items').insert(lineItemsData);

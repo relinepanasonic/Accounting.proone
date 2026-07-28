@@ -51,10 +51,10 @@ async function getAuthenticatedWorkspaceContext(supabase: any): Promise<{
   };
 }
 
-async function syncInvoiceToNewWave(invoiceId: string, supabase: any) {
+async function syncInvoiceToNewWave(invoiceId: string, supabase: any): Promise<{ success: boolean; error?: string }> {
   try {
     const apiKey = process.env.ACCOUNTING_API_KEY || process.env.NEWWAVE_INTEGRATION_TOKEN;
-    if (!apiKey) return;
+    if (!apiKey) return { success: false, error: 'API Key missing (ACCOUNTING_API_KEY or NEWWAVE_INTEGRATION_TOKEN)' };
 
     const { data: inv } = await supabase
       .from('invoices')
@@ -62,7 +62,7 @@ async function syncInvoiceToNewWave(invoiceId: string, supabase: any) {
       .eq('id', invoiceId)
       .single();
 
-    if (!inv) return;
+    if (!inv) return { success: false, error: 'Invoice not found in database for sync.' };
     
     const clientName = Array.isArray(inv.clients) ? inv.clients[0]?.name : inv.clients?.name;
 
@@ -90,10 +90,15 @@ async function syncInvoiceToNewWave(invoiceId: string, supabase: any) {
     });
     
     if (!res.ok) {
-      console.warn('New Wave sync returned non-ok status:', res.status, await res.text().catch(() => ''));
+      const errText = await res.text().catch(() => '');
+      console.warn('New Wave sync returned non-ok status:', res.status, errText);
+      return { success: false, error: `New Wave API error (${res.status}): ${errText}` };
     }
-  } catch (err) {
+    
+    return { success: true };
+  } catch (err: any) {
     console.warn('Failed to sync invoice to New Wave:', err);
+    return { success: false, error: err?.message || 'Network error pushing to New Wave' };
   }
 }
 
@@ -167,11 +172,14 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
       return { success: false, error: 'Invoice updated, but line items failed to save.' };
     }
 
-    await syncInvoiceToNewWave(payload.id, supabase);
+    const syncRes = await syncInvoiceToNewWave(payload.id, supabase);
 
     revalidatePath('/invoices');
     revalidatePath(`/invoices/${payload.id}`);
     
+    if (syncRes && !syncRes.success) {
+      return { success: true, invoiceId: payload.id, error: `Saved locally, but New Wave sync failed: ${syncRes.error}` };
+    }
     return { success: true, invoiceId: payload.id };
   } catch (err: any) {
     return { success: false, error: err?.message || 'A fatal anomaly occurred while updating the invoice.' };
@@ -286,10 +294,14 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
       };
     }
 
-    await syncInvoiceToNewWave(invoice.id, supabase);
+    const syncRes = await syncInvoiceToNewWave(invoice.id, supabase);
 
     revalidatePath('/invoices');
     revalidatePath('/');
+    
+    if (syncRes && !syncRes.success) {
+      return { success: true, invoiceId: invoice.id, error: `Saved locally, but New Wave sync failed: ${syncRes.error}` };
+    }
     return { success: true, invoiceId: invoice.id };
   } catch (err: any) {
     console.error('Exception in createInvoice:', err);

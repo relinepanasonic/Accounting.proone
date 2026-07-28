@@ -171,13 +171,17 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
             paymentInstructions: customPaymentInstructions,
             isQuotation: submitAsQuotation,
             lineItems: lineItems.map((l) => ({
+              packageName: l.packageName,
               description: l.description,
               quantity: Number(l.quantity),
+              scale: l.scale,
               unitPrice: Number(l.unitPrice),
             })),
           });
-          if (res.success) {
+          if (res.success && !res.error) {
             router.push(`/invoices/${res.invoiceId}`);
+          } else if (res.success && res.error) {
+            setErrorMsg(res.error); // Show the warning without redirecting, or redirect after 3 seconds? We'll just stay on page so they can read it
           } else {
             setErrorMsg(res.error || 'Failed to update invoice');
           }
@@ -194,13 +198,17 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
             isHistorical,
             isQuotation: submitAsQuotation,
             lineItems: lineItems.map((l) => ({
+              packageName: l.packageName,
               description: l.description,
               quantity: Number(l.quantity),
+              scale: l.scale,
               unitPrice: Number(l.unitPrice),
             })),
           });
-          if (res.success) {
+          if (res.success && !res.error) {
             router.push(`/invoices/${res.invoiceId}`);
+          } else if (res.success && res.error) {
+            setErrorMsg(res.error);
           } else {
             setErrorMsg(res.error || 'Failed to create invoice. Please verify your workspace permission.');
           }

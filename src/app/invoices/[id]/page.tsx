@@ -103,9 +103,11 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
       ? lineItems.map((l: any) => ({
           id: l.id,
           deliveryDate: invoiceDate,
+          packageName: l.package_name || null,
           description: l.description,
           unitPrice: Number(l.unit_price || 0),
           quantity: Number(l.quantity || 1),
+          scale: l.scale || null,
           total: Number(l.unit_price || 0) * Number(l.quantity || 1),
         }))
       : [];

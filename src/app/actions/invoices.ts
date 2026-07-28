@@ -13,11 +13,13 @@ export interface CreateInvoicePayload {
   paymentInstructions?: string;
   isHistorical?: boolean;
   isQuotation?: boolean;
-  lineItems: Array<{
+  lineItems: {
+    packageName?: string;
     description: string;
     quantity: number;
+    scale?: string;
     unitPrice: number;
-  }>;
+  }[];
 }
 
 export interface InvoiceActionResult {
@@ -131,12 +133,13 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
       };
     }
 
-    // 4b. Inject workspace_id into every item in invoice_line_items array
     const lineItemsData = payload.lineItems.map((item, idx) => ({
       workspace_id: workspaceId,
       invoice_id: invoice.id,
+      package_name: item.packageName || null,
       description: item.description || 'Deliverable Item',
       quantity: Number(item.quantity) || 1,
+      scale: item.scale || 'pc',
       unit_price: Number(item.unitPrice) || 0,
       sort_order: idx + 1,
     }));

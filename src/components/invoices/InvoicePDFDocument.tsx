@@ -11,9 +11,11 @@ import { recordInvoicePayment } from '@/app/actions/invoices';
 export interface InvoiceItemData {
   id: string;
   deliveryDate: string;
+  packageName?: string | null;
   description: string;
   unitPrice: number;
   quantity: number;
+  scale?: string | null;
   total: number;
 }
 
@@ -322,7 +324,7 @@ export function InvoicePDFDocument({
               <thead>
                 <tr className="border-y-2 border-[#1e2536] text-[#1e2536] uppercase text-[10px] tracking-wider font-bold font-serif">
                   <th className="py-3 px-2 w-28">{isQuotation ? 'PERIOD' : 'DATE'}</th>
-                  <th className="py-3 px-2">{isQuotation ? 'DELIVERABLE / SERVICE PITCH' : 'ITEM DESCRIPTION'}</th>
+                  <th className="py-3 px-2">{isQuotation ? 'DELIVERABLE / SERVICE PITCH' : 'PACKAGE & DESCRIPTION'}</th>
                   <th className="py-3 px-2 text-right">{isQuotation ? 'UNIT INVESTMENT' : 'UNIT PRICE'}</th>
                   {!isQuotation && <th className="py-3 px-2 text-center w-16">QTY</th>}
                   {!isQuotation && <th className="py-3 px-2 text-right">TOTAL</th>}
@@ -335,6 +337,11 @@ export function InvoicePDFDocument({
                       {item.deliveryDate}
                     </td>
                     <td className="py-4 px-2 font-medium text-[#1e2536]">
+                      {item.packageName && (
+                        <div className="font-bold text-[#c5a059] uppercase tracking-wider text-[11px] mb-1">
+                          {item.packageName}
+                        </div>
+                      )}
                       <DescriptionBullets
                         description={item.description}
                         isDark={false}
@@ -346,7 +353,7 @@ export function InvoicePDFDocument({
                     </td>
                     {!isQuotation && (
                       <td className="py-4 px-2 text-center font-mono font-semibold">
-                        {item.quantity}
+                        {item.quantity} <span className="text-[10px] text-zinc-400 font-sans ml-0.5">{item.scale || 'pc'}</span>
                       </td>
                     )}
                     {!isQuotation && (

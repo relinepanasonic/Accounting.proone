@@ -11,8 +11,10 @@ import { BulletTextarea } from '@/components/ui/BulletTextarea';
 
 interface LineItem {
   id: string;
+  packageName: string;
   description: string;
   quantity: number;
+  scale: string;
   unitPrice: number;
 }
 
@@ -71,8 +73,10 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
       ...prev,
       {
         id: Math.random().toString(36).substring(2, 9),
+        packageName: '',
         description: '',
         quantity: 1,
+        scale: 'pc',
         unitPrice: 0,
       },
     ]);
@@ -101,8 +105,9 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
           item.id === rowId
             ? {
                 ...item,
-                description: prod.description ? `${prod.name}\n${prod.description}` : prod.name,
-                unitPrice: Number(prod.unit_price) || 0,
+                packageName: prod.name,
+                description: prod.description || '',
+                unitPrice: Number(prod.unit_price),
               }
             : item
         )
@@ -360,6 +365,13 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                         <option value="custom">-- Custom / Manual Override --</option>
                       </select>
                     )}
+                    <input
+                      type="text"
+                      placeholder="Package Name (e.g. Bronze Package)"
+                      value={item.packageName}
+                      onChange={(e) => handleUpdateItem(item.id, 'packageName', e.target.value)}
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-bold text-white focus:outline-none focus:border-[#d4af37]"
+                    />
                     <BulletTextarea
                       rows={3}
                       required
@@ -372,7 +384,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                     />
                   </div>
 
-                  <div className="col-span-4 md:col-span-2">
+                  <div className="col-span-4 md:col-span-2 flex gap-1">
                     <input
                       type="number"
                       min="1"
@@ -385,8 +397,18 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                           Math.max(1, Number(e.target.value))
                         )
                       }
-                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs font-mono text-center text-white focus:outline-none focus:border-[#d4af37]"
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1.5 text-xs font-mono text-center text-white focus:outline-none focus:border-[#d4af37]"
                     />
+                    <select
+                      value={item.scale || 'pc'}
+                      onChange={(e) => handleUpdateItem(item.id, 'scale', e.target.value)}
+                      className="bg-zinc-900 border border-zinc-800 rounded-lg px-1 py-1.5 text-xs font-mono text-zinc-400 focus:outline-none focus:border-[#d4af37]"
+                    >
+                      <option value="pc">pc</option>
+                      <option value="month">month</option>
+                      <option value="day">day</option>
+                      <option value="hour">hour</option>
+                    </select>
                   </div>
 
                   <div className="col-span-5 md:col-span-3">

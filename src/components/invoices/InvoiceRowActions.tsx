@@ -90,7 +90,7 @@ export function InvoiceActionGroup({ id }: InvoiceActionProps) {
       <Link
         href={`/invoices/${id}/edit`}
         title="Edit Invoice"
-        className="p-1.5 rounded-lg bg-zinc-900 border border-blue-500/30 hover:border-blue-400 text-blue-400 hover:scale-105 transition-all duration-200"
+        className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-700 hover:border-[#d4af37] text-zinc-400 hover:text-[#f5d77f] hover:scale-105 transition-all duration-200"
       >
         <Edit2 className="w-3.5 h-3.5" />
       </Link>

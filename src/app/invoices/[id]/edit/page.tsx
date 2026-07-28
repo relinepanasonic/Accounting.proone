@@ -8,7 +8,10 @@ import { NewInvoiceForm } from '@/components/invoices/NewInvoiceForm';
 
 export const dynamic = 'force-dynamic';
 
-export default async function EditInvoicePage({ params }: { params: { id: string } }) {
+export default async function EditInvoicePage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params;
+  const { id } = resolvedParams;
+
   const supabase = await createClient();
   const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
@@ -19,7 +22,7 @@ export default async function EditInvoicePage({ params }: { params: { id: string
       *,
       invoice_line_items (*)
     `)
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('workspace_id', activeWorkspaceId)
     .single();
 

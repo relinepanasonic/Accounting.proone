@@ -1,5 +1,6 @@
 'use server';
 
+import { headers } from 'next/headers';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 
@@ -24,9 +25,12 @@ export async function generateInviteLink(formData: {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  // Determine the redirect URL. Use NEXT_PUBLIC_SITE_URL if set, else fall back to the Supabase project URL pattern.
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL?.replace('.supabase.co', '.vercel.app');
-  const redirectTo = `${siteUrl}/set-password`;
+  // Derive the site URL from the incoming request headers — works on any host with no env var needed.
+  const headersList = await headers();
+  const host = headersList.get('host') || 'localhost:3000';
+  const proto = headersList.get('x-forwarded-proto') || 'http';
+  const siteUrl = `${proto}://${host}`;
+  const redirectTo = `${siteUrl}/auth/confirm`;
 
   // 1. Generate an invite link via Supabase Admin API
   const { data, error: genError } = await adminClient.auth.admin.generateLink({

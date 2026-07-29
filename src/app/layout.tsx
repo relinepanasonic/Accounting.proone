@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { CyberSidebar } from '@/components/navigation/CyberSidebar';
 import { BottomMobileNav } from '@/components/navigation/BottomMobileNav';
+import { NavigationShell } from '@/components/navigation/NavigationShell';
 import { PWAInit } from '@/components/PWAInit';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 
@@ -43,16 +44,12 @@ export default async function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className="bg-[#0b0c10] text-zinc-100 antialiased selection:bg-[#d4af37] selection:text-black flex min-h-screen">
-        {/* Persistent Luxury Gold Left Sidebar (Desktop: lg:flex, Mobile: hidden) */}
-        <CyberSidebar workspaceContext={wsContext} />
-
-        {/* Main Content Area (Bottom padding pb-16 on small screens for PWA bottom nav) */}
-        <main className="flex-1 overflow-x-hidden overflow-y-auto pb-20 lg:pb-0">
+        <NavigationShell
+          sidebar={<CyberSidebar workspaceContext={wsContext} />}
+          bottomNav={<BottomMobileNav />}
+        >
           {children}
-        </main>
-
-        {/* PWA Mobile Bottom Tab Navigation Bar (Mobile: flex, Desktop: hidden) */}
-        <BottomMobileNav />
+        </NavigationShell>
 
         {/* PWA Service Worker Registration */}
         <PWAInit />

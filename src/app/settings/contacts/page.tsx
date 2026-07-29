@@ -12,7 +12,6 @@ export default async function ClientsSettingsPage() {
   const { data: clients } = await supabase
     .from('clients')
     .select('*')
-    .eq('workspace_id', wsCtx.activeWorkspaceId)
     .order('name', { ascending: true });
 
   const clientList: ClientRecord[] = (clients || []).map((c: any) => ({

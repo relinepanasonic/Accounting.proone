@@ -575,7 +575,6 @@ export async function createClientRecord(payload: {
     }
 
     const insertObj: any = {
-      workspace_id: workspaceId,
       name: payload.name.trim(),
       contact_name: payload.contactPerson?.trim() || null,
       company_name: payload.name.trim(),
@@ -594,7 +593,6 @@ export async function createClientRecord(payload: {
       const fallbackRes = await supabase
         .from('clients')
         .insert({
-          workspace_id: workspaceId,
           name: payload.name.trim(),
           email: payload.email?.trim() || null,
         })
@@ -630,7 +628,7 @@ export async function updateClientRecord(payload: {
     const supabase = await createClient();
     const { workspaceId, role } = await resolveWorkspaceContext(supabase);
 
-    if (role !== 'superadmin') {
+    if (!['superadmin', 'founder'].includes(role)) {
       return { success: false, error: 'Access denied: Only Superadmin can edit client profiles.' };
     }
 
@@ -649,8 +647,7 @@ export async function updateClientRecord(payload: {
     let { error } = await supabase
       .from('clients')
       .update(updateObj)
-      .eq('id', payload.id)
-      .eq('workspace_id', workspaceId);
+      .eq('id', payload.id);
 
     if (error && (error.message?.includes('column') || error.code === '42703')) {
       const { error: fallbackErr } = await supabase
@@ -660,8 +657,7 @@ export async function updateClientRecord(payload: {
           email: payload.email?.trim() || null,
           updated_at: new Date().toISOString(),
         })
-        .eq('id', payload.id)
-        .eq('workspace_id', workspaceId);
+        .eq('id', payload.id);
       if (fallbackErr) {
         return { success: false, error: fallbackErr.message };
       }
@@ -686,15 +682,14 @@ export async function deleteClientRecord(clientId: string) {
     const supabase = await createClient();
     const { workspaceId, role } = await resolveWorkspaceContext(supabase);
 
-    if (role !== 'superadmin') {
+    if (!['superadmin', 'founder'].includes(role)) {
       return { success: false, error: 'Access denied: Only Superadmin can delete client profiles.' };
     }
 
     const { error } = await supabase
       .from('clients')
       .delete()
-      .eq('id', clientId)
-      .eq('workspace_id', workspaceId);
+      .eq('id', clientId);
 
     if (error) {
       if (error.code === '23503') {

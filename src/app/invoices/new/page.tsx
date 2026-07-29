@@ -11,7 +11,7 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: {
   const supabase = await createClient();
   const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
-  const { data: clients } = await supabase.from('clients').select('id, name').eq('workspace_id', activeWorkspaceId);
+  const { data: clients } = await supabase.from('clients').select('id, name').order('name', { ascending: true });
   const { data: products } = await supabase.from('products').select('*').eq('workspace_id', activeWorkspaceId);
   const { data: bankAccounts } = await supabase.from('workspace_bank_accounts').select('*').eq('workspace_id', activeWorkspaceId).order('is_default', { ascending: false });
 

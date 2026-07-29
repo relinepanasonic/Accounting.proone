@@ -14,7 +14,6 @@ export default async function NewExpensePage({ searchParams }: { searchParams: {
   const { data: clientsData } = await supabase
     .from('clients')
     .select('id, name, company_name, contact_type')
-    .eq('workspace_id', activeWorkspaceId)
     .order('name', { ascending: true });
 
   const isHistorical = searchParams?.historical === 'true';

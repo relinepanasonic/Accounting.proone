@@ -3,6 +3,15 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 
+export interface LineItem {
+  packageName?: string;
+  description: string;
+  quantity: number;
+  scale?: string;
+  unitPrice: number;
+  discountAmount?: number;
+}
+
 export interface CreateInvoicePayload {
   clientId: string;
   invoiceNumber: string;
@@ -13,13 +22,8 @@ export interface CreateInvoicePayload {
   paymentInstructions?: string;
   isHistorical?: boolean;
   isQuotation?: boolean;
-  lineItems: {
-    packageName?: string;
-    description: string;
-    quantity: number;
-    scale?: string;
-    unitPrice: number;
-  }[];
+  discountAmount?: number;
+  lineItems: LineItem[];
 }
 
 export interface UpdateInvoicePayload extends CreateInvoicePayload {
@@ -77,13 +81,17 @@ async function syncInvoiceToNewWave(invoiceId: string, supabase: any): Promise<{
       due_date: inv.due_date,
       status: inv.status,
       notes: inv.notes,
-      items: rawLineItems.map((item: any) => ({
-        name: item.package_name || 'Service Item',
-        description: item.description,
-        scale: item.scale || 'pc',
-        qty: Number(item.quantity) || 1,
-        price: Number(item.unit_price) || 0,
-      }))
+      items: rawLineItems.map((item: any) => {
+        const discountedPrice = Number(item.unit_price) - ((Number(item.discount_amount) || 0) / Number(item.quantity));
+        return {
+          name: item.package_name || 'Service Item',
+          description: item.description,
+          is_free: false,
+          scale: item.scale || 'pc',
+          qty: Number(item.quantity) || 1,
+          price: Math.max(0, discountedPrice)
+        };
+      })
     };
 
     const res = await fetch('https://app.newwave.id/api/accounting/invoices', {
@@ -123,10 +131,12 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
       return { success: false, error: 'At least one deliverable line item is required.' };
     }
 
-    const totalAmount = payload.lineItems.reduce(
-      (acc: number, item: any) => acc + (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0),
+    const subtotal = payload.lineItems.reduce(
+      (acc: number, item: any) => acc + (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0) - (Number(item.discountAmount) || 0),
       0
     );
+    const globalDiscount = Number(payload.discountAmount) || 0;
+    const totalAmount = Math.max(0, subtotal - globalDiscount);
 
     const updateData: any = {
       client_id: payload.clientId,
@@ -134,11 +144,13 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
       is_quotation: payload.isQuotation || false,
       issue_date: payload.issueDate,
       due_date: payload.dueDate,
-      subtotal: totalAmount,
+      subtotal: subtotal,
       total_amount: totalAmount,
+      discount_amount: globalDiscount,
       notes: payload.notes || null,
       bank_account_id: payload.bankAccountId || null,
       payment_instructions: payload.paymentInstructions || null,
+      updated_at: new Date().toISOString(),
     };
 
     const { error: updateError } = await supabase
@@ -170,6 +182,7 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
       quantity: Number(item.quantity) || 1,
       scale: item.scale || 'pc',
       unit_price: Number(item.unitPrice) || 0,
+      discount_amount: Number(item.discountAmount) || 0,
       sort_order: idx + 1,
     }));
 
@@ -213,10 +226,12 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
     }
 
     // Calculate Subtotal & Total
-    const totalAmount = payload.lineItems.reduce(
-      (acc: number, item: any) => acc + (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0),
+    const subtotal = payload.lineItems.reduce(
+      (acc: number, item: any) => acc + (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0) - (Number(item.discountAmount) || 0),
       0
     );
+    const globalDiscount = Number(payload.discountAmount) || 0;
+    const totalAmount = Math.max(0, subtotal - globalDiscount);
 
     // 4a. Inject workspace_id into parent invoices payload, with auto-retry on duplicate key collision
     let invoiceNumberToUse = payload.invoiceNumber || `INV-2026-${Math.floor(100 + Math.random() * 900)}`;
@@ -232,8 +247,9 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
         status: 'draft',
         issue_date: payload.issueDate,
         due_date: payload.dueDate,
-        subtotal: totalAmount,
+        subtotal: subtotal,
         total_amount: totalAmount,
+        discount_amount: globalDiscount,
         notes: payload.notes || null,
       };
       if (payload.bankAccountId) insertData.bank_account_id = payload.bankAccountId;
@@ -286,6 +302,7 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
       quantity: Number(item.quantity) || 1,
       scale: item.scale || 'pc',
       unit_price: Number(item.unitPrice) || 0,
+      discount_amount: Number(item.discountAmount) || 0,
       sort_order: idx + 1,
     }));
 

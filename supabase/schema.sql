@@ -100,6 +100,7 @@ CREATE TABLE IF NOT EXISTS public.invoices (
     currency TEXT NOT NULL DEFAULT 'USD',
     payment_link_url TEXT,
     public_view_token TEXT UNIQUE NOT NULL DEFAULT encode(gen_random_bytes(16), 'hex'),
+    discount_amount NUMERIC(12, 2) DEFAULT 0.00,
     notes TEXT,
     bank_account_id TEXT,
     payment_instructions TEXT,
@@ -119,7 +120,8 @@ CREATE TABLE IF NOT EXISTS public.invoice_line_items (
     description TEXT NOT NULL,
     quantity NUMERIC(10, 2) NOT NULL DEFAULT 1.00,
     unit_price NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
-    amount NUMERIC(12, 2) GENERATED ALWAYS AS (quantity * unit_price) STORED,
+    discount_amount NUMERIC(12, 2) DEFAULT 0.00,
+    amount NUMERIC(12, 2) GENERATED ALWAYS AS (quantity * unit_price - COALESCE(discount_amount, 0.00)) STORED,
     sort_order INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

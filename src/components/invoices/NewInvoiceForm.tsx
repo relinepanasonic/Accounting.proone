@@ -16,6 +16,7 @@ interface LineItem {
   quantity: number;
   scale: string;
   unitPrice: number;
+  discountAmount?: number;
 }
 
 export interface CatalogProductOption {
@@ -65,6 +66,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
   const [invoiceNumber, setInvoiceNumber] = useState(() => initialData?.invoiceNumber || `INV-2026-${Math.floor(100 + Math.random() * 900)}`);
   const [issueDate, setIssueDate] = useState(() => initialData?.issueDate || new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState(() => initialData?.dueDate || getNet15Date());
+  const [globalDiscount, setGlobalDiscount] = useState<number>(initialData?.discountAmount || 0);
   const [notes, setNotes] = useState(initialData?.notes || '');
   const [bankAccountId, setBankAccountId] = useState(initialData?.bankAccountId || 'all');
   const [customPaymentInstructions, setCustomPaymentInstructions] = useState(initialData?.paymentInstructions || '');
@@ -82,6 +84,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
         quantity: 1,
         scale: 'pc',
         unitPrice: 0,
+        discountAmount: 0,
       },
     ]);
   };
@@ -114,6 +117,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                 unitPrice: Number(prod.unit_price),
                 quantity: Number(prod.quantity) || 1,
                 scale: prod.scale || 'pc',
+                discountAmount: 0,
               }
             : item
         )
@@ -121,10 +125,12 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
     }
   };
 
-  const grandTotal = lineItems.reduce(
-    (acc, item) => acc + item.quantity * item.unitPrice,
+  const subTotal = lineItems.reduce(
+    (acc, item) => acc + item.quantity * item.unitPrice - (item.discountAmount || 0),
     0
   );
+
+  const grandTotal = Math.max(0, subTotal - globalDiscount);
 
   const handleQuickAddClient = async () => {
     if (!quickAddName.trim()) return;
@@ -169,19 +175,21 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
             notes,
             bankAccountId: bankAccountId === 'all' ? undefined : bankAccountId,
             paymentInstructions: customPaymentInstructions,
-            isQuotation: submitAsQuotation,
+            discountAmount: globalDiscount,
             lineItems: lineItems.map((l) => ({
               packageName: l.packageName,
               description: l.description,
               quantity: Number(l.quantity),
               scale: l.scale,
               unitPrice: Number(l.unitPrice),
+              discountAmount: Number(l.discountAmount) || 0,
             })),
+            isQuotation: submitAsQuotation,
           });
           if (res.success && !res.error) {
             router.push(`/invoices/${res.invoiceId}`);
           } else if (res.success && res.error) {
-            setErrorMsg(res.error); // Show the warning without redirecting, or redirect after 3 seconds? We'll just stay on page so they can read it
+            setErrorMsg(res.error);
           } else {
             setErrorMsg(res.error || 'Failed to update invoice');
           }
@@ -195,15 +203,17 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
             notes: finalNotes,
             bankAccountId: bankAccountId !== 'all' ? bankAccountId : undefined,
             paymentInstructions: bankAccountId === 'custom' ? customPaymentInstructions : undefined,
-            isHistorical,
-            isQuotation: submitAsQuotation,
+            discountAmount: globalDiscount,
             lineItems: lineItems.map((l) => ({
               packageName: l.packageName,
               description: l.description,
               quantity: Number(l.quantity),
               scale: l.scale,
               unitPrice: Number(l.unitPrice),
+              discountAmount: Number(l.discountAmount) || 0,
             })),
+            isHistorical,
+            isQuotation: submitAsQuotation,
           });
           if (res.success && !res.error) {
             router.push(`/invoices/${res.invoiceId}`);
@@ -372,14 +382,21 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
           </div>
         ) : (
           <div className="space-y-3">
+            {/* HEADER ROW */}
+            <div className="grid grid-cols-12 gap-4 text-xs font-bold text-[#d4af37]/60 tracking-wider mb-2 px-2 hidden md:grid">
+                <div className="col-span-3">ITEM / SERVICE</div>
+                <div className="col-span-3">DESCRIPTION</div>
+                <div className="col-span-2 text-center">QTY & PRICE</div>
+                <div className="col-span-3 text-right">DISCOUNT & TOTAL</div>
+                <div className="col-span-1 text-center"></div>
+            </div>
             {lineItems.map((item) => {
-              const rowTotal = item.quantity * item.unitPrice;
               return (
                 <div
                   key={item.id}
                   className="grid grid-cols-12 gap-3 items-center p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80"
                 >
-                  <div className="col-span-12 md:col-span-5 space-y-1.5">
+                  <div className="col-span-12 md:col-span-3 space-y-1.5">
                     {products && products.length > 0 && (
                       <select
                         onChange={(e) => handleSelectProduct(item.id, e.target.value)}
@@ -399,11 +416,14 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                     )}
                     <input
                       type="text"
-                      placeholder="Package Name (e.g. Bronze Package)"
+                      placeholder="Package Name"
                       value={item.packageName}
                       onChange={(e) => handleUpdateItem(item.id, 'packageName', e.target.value)}
                       className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-bold text-white focus:outline-none focus:border-[#d4af37]"
                     />
+                  </div>
+                  
+                  <div className="col-span-12 md:col-span-3">
                     <BulletTextarea
                       rows={3}
                       required
@@ -416,49 +436,50 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                     />
                   </div>
 
-                  <div className="col-span-4 md:col-span-2 flex gap-1">
-                    <input
-                      type="number"
-                      min="1"
-                      required
-                      value={item.quantity}
-                      onChange={(e) =>
-                        handleUpdateItem(
-                          item.id,
-                          'quantity',
-                          Math.max(1, Number(e.target.value))
-                        )
-                      }
-                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1.5 text-xs font-mono text-center text-white focus:outline-none focus:border-[#d4af37]"
-                    />
-                    <select
-                      value={item.scale || 'pc'}
-                      onChange={(e) => handleUpdateItem(item.id, 'scale', e.target.value)}
-                      className="bg-zinc-900 border border-zinc-800 rounded-lg px-1 py-1.5 text-xs font-mono text-zinc-400 focus:outline-none focus:border-[#d4af37]"
-                    >
-                      <option value="pc">pc</option>
-                      <option value="month">month</option>
-                      <option value="day">day</option>
-                      <option value="hour">hour</option>
-                    </select>
-                  </div>
-
-                  <div className="col-span-5 md:col-span-3">
+                  <div className="col-span-12 md:col-span-2 flex flex-col gap-2">
+                    <div className="md:hidden text-xs font-bold text-[#d4af37]/60">QTY & PRICE</div>
+                    <div className="flex gap-2">
+                        <input
+                        type="number"
+                        min="1"
+                        required
+                        value={item.quantity}
+                        onChange={(e) => handleUpdateItem(item.id, 'quantity', Math.max(1, Number(e.target.value)))}
+                        className="w-16 bg-black/40 border border-[#d4af37]/20 rounded-lg px-2 py-2 text-[#f5d77f] focus:outline-none focus:border-[#d4af37]/50"
+                        />
+                        <select
+                        value={item.scale || 'pc'}
+                        onChange={(e) => handleUpdateItem(item.id, 'scale', e.target.value)}
+                        className="flex-1 bg-black/40 border border-[#d4af37]/20 rounded-lg px-2 py-2 text-[#f5d77f] focus:outline-none focus:border-[#d4af37]/50 text-sm"
+                        >
+                        <option value="pc">Pc</option>
+                        <option value="hour">Hour</option>
+                        <option value="day">Day</option>
+                        <option value="month">Month</option>
+                        </select>
+                    </div>
                     <RupiahInput
-                      required
-                      value={item.unitPrice}
-                      onChange={(e) =>
-                        handleUpdateItem(item.id, 'unitPrice', Number(e.target.value))
-                      }
-                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs font-mono text-right text-[#f5d77f] focus:outline-none focus:border-[#d4af37]"
+                        value={item.unitPrice}
+                        onChange={(e: any) => handleUpdateItem(item.id, 'unitPrice', Number(e.target.value) || 0)}
+                        placeholder="Unit Price"
+                        className="w-full bg-black/40 border border-[#d4af37]/20 rounded-lg px-3 py-2 text-[#f5d77f] focus:outline-none focus:border-[#d4af37]/50"
                     />
                   </div>
 
-                  <div className="col-span-2 md:col-span-1 text-right text-xs font-mono font-bold text-zinc-300">
-                    Rp {Math.round(rowTotal).toLocaleString('id-ID')}
+                  <div className="col-span-12 md:col-span-3 flex flex-col items-end gap-2 text-[#f5d77f] font-mono justify-start">
+                    <div className="md:hidden text-xs font-bold text-[#d4af37]/60 w-full text-left">DISC. & TOTAL</div>
+                    <RupiahInput
+                        value={item.discountAmount || 0}
+                        onChange={(e: any) => handleUpdateItem(item.id, 'discountAmount', Number(e.target.value) || 0)}
+                        placeholder="Discount"
+                        className="w-full text-right bg-black/40 border border-red-500/30 rounded-lg px-2 py-1.5 text-red-400 focus:outline-none focus:border-red-500/60 text-sm"
+                    />
+                    <div className="pt-2 w-full text-right bg-black/20 rounded-lg px-3 py-2 border border-[#d4af37]/10">
+                        Rp {(item.quantity * item.unitPrice - (item.discountAmount || 0)).toLocaleString('id-ID')}
+                    </div>
                   </div>
-
-                  <div className="col-span-1 text-right">
+                  
+                  <div className="col-span-12 md:col-span-1 flex justify-end">
                     <button
                       type="button"
                       onClick={() => handleRemoveItem(item.id)}
@@ -470,17 +491,27 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                 </div>
               );
             })}
+            {/* SUMMARY */}
+            <div className="flex flex-col items-end pt-4 border-t border-[#d4af37]/20 gap-3">
+                <div className="flex justify-between w-full md:w-1/3 items-center">
+                <span className="text-sm text-[#d4af37]/60">Subtotal:</span>
+                <span className="font-mono text-[#f5d77f]">Rp {subTotal.toLocaleString('id-ID')}</span>
+                </div>
+                <div className="flex justify-between w-full md:w-1/3 items-center">
+                <span className="text-sm text-red-400/80">Invoice Discount:</span>
+                <RupiahInput
+                    value={globalDiscount}
+                    onChange={(e: any) => setGlobalDiscount(Number(e.target.value) || 0)}
+                    className="w-32 bg-black/40 border border-red-500/30 rounded-lg px-2 py-1 text-red-400 text-right font-mono text-sm focus:outline-none focus:border-red-500/60"
+                />
+                </div>
+                <div className="flex justify-between w-full md:w-1/3 items-center pt-3 border-t border-[#d4af37]/20">
+                <span className="text-lg font-bold text-[#d4af37]">Grand Total:</span>
+                <span className="text-xl font-mono font-bold text-white">Rp {grandTotal.toLocaleString('id-ID')}</span>
+                </div>
+            </div>
           </div>
         )}
-
-        <div className="pt-4 border-t border-zinc-800 flex items-center justify-between">
-          <span className="text-xs font-mono uppercase text-zinc-400">
-            TOTAL INVOICE AMOUNT
-          </span>
-          <span className="text-2xl font-black font-mono text-[#f5d77f] drop-shadow-[0_0_12px_rgba(245,215,127,0.4)]">
-            Rp {grandTotal.toLocaleString('id-ID')}
-          </span>
-        </div>
       </div>
 
       <div className="gold-glass-panel rounded-2xl p-6 space-y-4">

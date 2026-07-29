@@ -10,19 +10,19 @@ export function SettingsNav() {
 
   const tabs = [
     {
-      label: 'WORKSPACES',
+      label: 'WORKSPACE',
       href: '/settings/workspaces',
       icon: Building2,
       description: 'Enterprise tenants, identity & tax profiles',
     },
     {
-      label: 'CONTACTS CRM',
+      label: 'CONTACT',
       href: '/settings/contacts',
       icon: Users,
       description: 'Manage clients and vendors',
     },
     {
-      label: 'TEAM & RBAC CLEARANCE',
+      label: 'USER',
       href: '/settings/team',
       icon: ShieldAlert,
       description: 'Superadmin, Accounting & Admin role matrix',

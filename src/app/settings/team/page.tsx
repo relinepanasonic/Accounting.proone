@@ -50,50 +50,35 @@ export default async function TeamSettingsPage() {
     );
   }
 
-  const { data: rawMembers } = await supabase
+  let queryClient = supabase;
+  if (currentUserRole === 'founder') {
+    const { createClient: createAdminClient } = await import('@supabase/supabase-js');
+    queryClient = createAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    ) as any;
+  }
+
+  const { data: rawMembers } = await queryClient
     .from('workspace_members')
     .select('id, role, user_id')
     .eq('workspace_id', activeWorkspaceId)
     .order('created_at', { ascending: true });
 
-  const { data: profiles } = await supabase
+  const { data: profiles } = await queryClient
     .from('profiles')
     .select('id, email, full_name');
 
-  const fallbackMembers: TeamMemberRecord[] = [
-    {
-      id: 'm-1',
-      email: 'professortokoonline@gmail.com',
-      name: 'Professor Toko Online (Owner)',
-      role: 'superadmin',
-    },
-    {
-      id: 'm-2',
-      email: 'accounting@professortokoonline.com',
-      name: 'Siska Handayani (Lead Accountant)',
-      role: 'accounting',
-    },
-    {
-      id: 'm-3',
-      email: 'ops@professortokoonline.com',
-      name: 'Budi Hartono (Ops Admin)',
-      role: 'admin',
-    },
-  ];
-
-  const memberList: TeamMemberRecord[] =
-    rawMembers && rawMembers.length > 0
-      ? rawMembers.map((m: any, idx: number) => {
-          const profile = profiles?.find((p) => p.id === m.user_id);
-          return {
-            id: m.id,
-            email: profile?.email || `staff-${idx + 1}@professortokoonline.com`,
-            name: profile?.full_name || `Workspace Staff #${idx + 1}`,
-            role: m.role || 'accounting',
-            isCurrentUser: user?.id === m.user_id,
-          };
-        })
-      : fallbackMembers;
+  const memberList: TeamMemberRecord[] = (rawMembers || []).map((m: any, idx: number) => {
+    const profile = profiles?.find((p) => p.id === m.user_id);
+    return {
+      id: m.id,
+      email: profile?.email || `staff-${idx + 1}@professortokoonline.com`,
+      name: profile?.full_name || `Workspace Staff #${idx + 1}`,
+      role: m.role || 'accounting',
+      isCurrentUser: user?.id === m.user_id,
+    };
+  });
 
   return <TeamManager initialMembers={memberList} currentUserRole={currentUserRole} />;
 }

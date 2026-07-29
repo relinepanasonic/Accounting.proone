@@ -68,9 +68,6 @@ export function WorkspacesMasterList({
             <Building2 className="w-5 h-5 text-[#d4af37]" />
             <span>ENTERPRISE TENANT DIRECTORY ({workspaces.length})</span>
           </h2>
-          <p className="text-xs text-[#d4af37] font-mono mt-1">
-            SELECT A TENANT TO ACCESS ITS MASTER CONTROL PANEL OR REGISTER A NEW LEGAL ENTITY
-          </p>
         </div>
 
         <button

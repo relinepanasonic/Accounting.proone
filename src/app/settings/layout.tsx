@@ -24,11 +24,8 @@ export default function SettingsLayout({
           <div>
             <h1 className="text-lg font-extrabold tracking-wider uppercase text-white flex items-center gap-2.5">
               <Settings className="w-5 h-5 text-[#d4af37]" />
-              <span>SYSTEM SETTINGS MODULE • EXECUTIVE CONFIGURATION COMMAND</span>
+              <span>Settings</span>
             </h1>
-            <p className="text-xs text-[#d4af37] font-mono">
-              WORKSPACE IDENTITY • PRODUCT CATALOG • CLIENT CRM • TEAM RBAC CLEARANCE
-            </p>
           </div>
         </div>
       </div>

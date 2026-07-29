@@ -9,6 +9,7 @@ export interface TeamMemberRecord {
   email: string;
   name?: string;
   role: 'superadmin' | 'accounting' | 'admin';
+  isCurrentUser?: boolean;
 }
 
 interface TeamManagerProps {
@@ -234,7 +235,14 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
               {members.map((m) => (
                 <tr key={m.id} className="hover:bg-zinc-900/40 transition-colors">
                   <td className="py-3.5 px-3">
-                    <div className="font-bold text-white">{m.name || m.email}</div>
+                    <div className="font-bold text-white flex items-center gap-2">
+                      {m.name || m.email}
+                      {m.isCurrentUser && (
+                        <span className="bg-[#d4af37]/20 text-[#f5d77f] text-[9px] px-1.5 py-0.5 rounded uppercase tracking-widest border border-[#d4af37]/30">
+                          YOU
+                        </span>
+                      )}
+                    </div>
                     <div className="text-[11px] text-zinc-400 font-mono">{m.email}</div>
                   </td>
                   <td className="py-3.5 px-3">
@@ -279,7 +287,7 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
                     ) : (
                       <>
                         <span className="text-[10px] font-mono text-emerald-400">ACTIVE SESSION</span>
-                        {currentUserRole === 'superadmin' && (
+                        {currentUserRole === 'superadmin' && !m.isCurrentUser && (
                           <>
                             <button
                               onClick={() => {

@@ -48,6 +48,10 @@ export default async function TeamSettingsPage() {
     .select('id, role, user_id')
     .order('created_at', { ascending: true });
 
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, email, full_name');
+
   const fallbackMembers: TeamMemberRecord[] = [
     {
       id: 'm-1',
@@ -71,12 +75,16 @@ export default async function TeamSettingsPage() {
 
   const memberList: TeamMemberRecord[] =
     rawMembers && rawMembers.length > 0
-      ? rawMembers.map((m: any, idx: number) => ({
-          id: m.id,
-          email: m.email || `staff-${idx + 1}@professortokoonline.com`,
-          name: m.name || `Workspace Staff #${idx + 1}`,
-          role: m.role || 'accounting',
-        }))
+      ? rawMembers.map((m: any, idx: number) => {
+          const profile = profiles?.find((p) => p.id === m.user_id);
+          return {
+            id: m.id,
+            email: profile?.email || `staff-${idx + 1}@professortokoonline.com`,
+            name: profile?.full_name || `Workspace Staff #${idx + 1}`,
+            role: m.role || 'accounting',
+            isCurrentUser: user?.id === m.user_id,
+          };
+        })
       : fallbackMembers;
 
   return <TeamManager initialMembers={memberList} currentUserRole={currentUserRole} />;

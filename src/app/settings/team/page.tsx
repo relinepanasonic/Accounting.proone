@@ -69,16 +69,27 @@ export default async function TeamSettingsPage() {
     .from('profiles')
     .select('id, email, full_name');
 
-  const memberList: TeamMemberRecord[] = (rawMembers || []).map((m: any, idx: number) => {
-    const profile = profiles?.find((p) => p.id === m.user_id);
-    return {
-      id: m.id,
-      email: profile?.email || `staff-${idx + 1}@professortokoonline.com`,
-      name: profile?.full_name || `Workspace Staff #${idx + 1}`,
-      role: m.role || 'accounting',
-      isCurrentUser: user?.id === m.user_id,
-    };
-  });
+  const memberList: TeamMemberRecord[] = (rawMembers || [])
+    .map((m: any, idx: number) => {
+      const profile = profiles?.find((p) => p.id === m.user_id);
+      const email = profile?.email || `staff-${idx + 1}@professortokoonline.com`;
+      const isFounderUser = email.toLowerCase() === 'nicojapar@gmail.com';
+      
+      return {
+        id: m.id,
+        email,
+        name: profile?.full_name || `Workspace Staff #${idx + 1}`,
+        role: isFounderUser ? 'founder' : (m.role || 'accounting'),
+        isCurrentUser: user?.id === m.user_id,
+      };
+    })
+    .filter((m: any) => {
+      // Superadmins cannot see founders in the UI. Only founders see founders.
+      if (currentUserRole !== 'founder' && m.role === 'founder') {
+        return false;
+      }
+      return true;
+    });
 
   return <TeamManager initialMembers={memberList} currentUserRole={currentUserRole} />;
 }

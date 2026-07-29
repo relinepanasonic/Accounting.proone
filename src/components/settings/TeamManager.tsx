@@ -9,7 +9,7 @@ export interface TeamMemberRecord {
   id: string;
   email: string;
   name?: string;
-  role: 'superadmin' | 'accounting' | 'admin';
+  role: 'superadmin' | 'accounting' | 'admin' | 'founder';
   isCurrentUser?: boolean;
 }
 
@@ -103,6 +103,8 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
 
   const getRoleBadgeColor = (r: string) => {
     switch (r) {
+      case 'founder':
+        return 'bg-[#d4af37]/30 border-[#d4af37] text-[#f5d77f] font-extrabold shadow-[0_0_10px_rgba(212,175,55,0.3)]';
       case 'superadmin':
         return 'bg-[#d4af37]/20 border-[#d4af37] text-[#f5d77f]';
       case 'accounting':
@@ -285,7 +287,7 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
                           m.role
                         )}`}
                       >
-                        {m.role === 'superadmin' && m.isCurrentUser && currentUserRole === 'founder' ? 'FOUNDER' : m.role}
+                        {m.role}
                       </span>
                     )}
                   </td>
@@ -310,7 +312,7 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
                     ) : (
                       <>
                         <span className="text-[10px] font-mono text-emerald-400">ACTIVE SESSION</span>
-                        {(currentUserRole === 'superadmin' || currentUserRole === 'founder') && (
+                        {(currentUserRole === 'superadmin' || currentUserRole === 'founder') && m.role !== 'founder' && !m.isCurrentUser && (
                           <>
                             <button
                               onClick={() => {

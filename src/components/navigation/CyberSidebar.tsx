@@ -26,6 +26,7 @@ interface NavItem {
   href: string;
   icon: React.ReactNode;
   badge?: string;
+  allowedRoles: string[]; // which roles can see this item
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -33,53 +34,62 @@ const NAV_ITEMS: NavItem[] = [
     name: 'Dashboard',
     href: '/',
     icon: <LayoutDashboard className="w-4 h-4" />,
+    allowedRoles: ['founder', 'superadmin', 'accounting'],
   },
   {
     name: 'Invoices',
     href: '/invoices',
     icon: <ArrowDownLeft className="w-4 h-4" />,
     badge: 'Income',
+    allowedRoles: ['founder', 'superadmin', 'accounting', 'admin'],
   },
   {
     name: 'Quotations',
     href: '/quotations',
     icon: <FileText className="w-4 h-4" />,
     badge: 'Pitch',
+    allowedRoles: ['founder', 'superadmin', 'accounting'],
   },
   {
     name: 'Expenses',
     href: '/expenses',
     icon: <ArrowUpRight className="w-4 h-4" />,
     badge: 'Bills',
+    allowedRoles: ['founder', 'superadmin', 'accounting', 'admin'],
   },
   {
     name: 'Team Payroll',
     href: '/payroll',
     icon: <Users className="w-4 h-4" />,
     badge: 'Salaries',
+    allowedRoles: ['founder', 'superadmin', 'accounting'],
   },
   {
     name: 'Assets',
     href: '/assets',
     icon: <Box className="w-4 h-4" />,
     badge: 'Deprec.',
+    allowedRoles: ['founder', 'superadmin', 'accounting'],
   },
   {
     name: 'Activity Ledger',
     href: '/ledger',
     icon: <BookOpen className="w-4 h-4" />,
     badge: 'Live',
+    allowedRoles: ['founder', 'superadmin', 'accounting'],
   },
   {
     name: 'Bank Reconcile',
     href: '/reconcile',
     icon: <CheckSquare className="w-4 h-4" />,
     badge: 'Match',
+    allowedRoles: ['founder', 'superadmin', 'accounting'],
   },
   {
     name: 'Settings & Users',
     href: '/settings',
     icon: <Settings className="w-4 h-4" />,
+    allowedRoles: ['founder', 'superadmin'],
   },
 ];
 
@@ -175,7 +185,7 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
 
         {/* Navigation Menu Links */}
         <nav className="p-3 space-y-1">
-          {NAV_ITEMS.map((item) => {
+          {NAV_ITEMS.filter(item => item.allowedRoles.includes(activeRole)).map((item) => {
             const isActive =
               item.href === '/'
                 ? pathname === '/'

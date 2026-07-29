@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useTransition } from 'react';
-import { UserPlus, ShieldAlert, ShieldCheck, Loader2, AlertCircle, Check, Trash2, Edit2, X, Save } from 'lucide-react';
-import { inviteTeamMember, deleteTeamMember, updateTeamMemberRole } from '@/app/actions/settings';
+import { UserPlus, ShieldAlert, ShieldCheck, Loader2, AlertCircle, Check, Trash2, Edit2, X, Save, Copy, Link2 } from 'lucide-react';
+import { generateInviteLink } from '@/app/actions/invite';
+import { deleteTeamMember, updateTeamMemberRole } from '@/app/actions/settings';
 
 export interface TeamMemberRecord {
   id: string;
@@ -20,11 +21,13 @@ interface TeamManagerProps {
 export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProps) {
   const [members, setMembers] = useState<TeamMemberRecord[]>(initialMembers);
   const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [name, setName] = useState('');
   const [role, setRole] = useState<'superadmin' | 'accounting' | 'admin'>('accounting');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editRole, setEditRole] = useState<'superadmin' | 'accounting' | 'admin'>('accounting');
   const [isPending, startTransition] = useTransition();
@@ -64,16 +67,18 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
 
   const handleInvite = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) return;
+    if (!email || !username || !name) return;
     setErrorMsg(null);
     setSuccessMsg(null);
+    setInviteLink(null);
+    setLinkCopied(false);
 
     startTransition(async () => {
       try {
-        const res = await inviteTeamMember({ email, name, role });
+        const res = await generateInviteLink({ email, username, fullName: name, role });
 
         if (!res.success) {
-          setErrorMsg(res.error || 'Failed to invite member.');
+          setErrorMsg(res.error || 'Failed to generate invite link.');
         } else {
           setMembers((prev) => [
             {
@@ -84,17 +89,14 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
             },
             ...prev,
           ]);
-          if (res.inviteLink) {
-            setInviteLink(res.inviteLink);
-            setSuccessMsg(`Workspace clearance granted for ${email}. Copy the magic link below and send it to them to log in instantly!`);
-          } else {
-            setSuccessMsg(`Workspace clearance granted for ${email}. They can now log in using their email.`);
-          }
+          setInviteLink(res.link || null);
+          setSuccessMsg(`Invite link generated for ${email}. Copy the link below and send it to them. They will set their own password on first login.`);
           setEmail('');
+          setUsername('');
           setName('');
         }
       } catch (err: any) {
-        setErrorMsg(err?.message || 'Error inviting member');
+        setErrorMsg(err?.message || 'Error generating invite link');
       }
     });
   };
@@ -133,22 +135,28 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
 
         {successMsg && (
           <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/40 text-emerald-400 text-xs flex flex-col gap-3">
-            <div className="flex items-center gap-2 font-mono">
-              <Check className="w-4 h-4 shrink-0" />
+            <div className="flex items-start gap-2 font-mono">
+              <Check className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{successMsg}</span>
             </div>
             {inviteLink && (
-              <div className="bg-emerald-950/50 p-2 rounded-lg border border-emerald-500/20 flex items-center justify-between gap-2">
-                <code className="text-[10px] break-all truncate">{inviteLink}</code>
+              <div className="bg-black/40 p-2.5 rounded-xl border border-emerald-500/20 flex flex-col gap-2">
+                <div className="flex items-center gap-1.5 text-[10px] text-emerald-300 font-mono">
+                  <Link2 className="w-3 h-3" />
+                  INVITE LINK
+                </div>
+                <code className="text-[10px] break-all text-zinc-300 leading-relaxed">{inviteLink}</code>
                 <button
                   type="button"
                   onClick={() => {
                     navigator.clipboard.writeText(inviteLink);
-                    alert('Link copied to clipboard!');
+                    setLinkCopied(true);
+                    setTimeout(() => setLinkCopied(false), 3000);
                   }}
-                  className="px-2 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 rounded text-[10px] font-bold tracking-wider transition-colors shrink-0"
+                  className="self-start inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/35 text-emerald-300 rounded-lg text-[10px] font-bold tracking-wider transition-colors"
                 >
-                  COPY LINK
+                  <Copy className="w-3 h-3" />
+                  {linkCopied ? 'COPIED!' : 'COPY LINK'}
                 </button>
               </div>
             )}
@@ -158,12 +166,12 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
         <div className="space-y-3">
           <div>
             <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1">
-              STAFF / MEMBER EMAIL *
+              EMAIL *
             </label>
             <input
               type="email"
               required
-              placeholder="e.g. finance@professortokoonline.com"
+              placeholder="e.g. siska@company.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#d4af37]"
@@ -172,11 +180,26 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
 
           <div>
             <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1">
-              FULL NAME / TITLE
+              USERNAME *
             </label>
             <input
               type="text"
-              placeholder="e.g. Siska Handayani (Accounting Lead)"
+              required
+              placeholder="e.g. siska.handayani"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-300 focus:outline-none focus:border-[#d4af37]"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1">
+              FULL NAME *
+            </label>
+            <input
+              type="text"
+              required
+              placeholder="e.g. Siska Handayani"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-300 focus:outline-none focus:border-[#d4af37]"
@@ -201,15 +224,15 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
 
         <button
           type="submit"
-          disabled={isPending}
+          disabled={isPending || !email || !username || !name}
           className="gold-btn w-full inline-flex items-center justify-center gap-2 py-3 rounded-full text-xs font-extrabold uppercase tracking-wider shadow-[0_0_20px_rgba(212,175,55,0.3)] disabled:opacity-50"
         >
           {isPending ? (
             <Loader2 className="w-4 h-4 animate-spin text-black" />
           ) : (
-            <ShieldCheck className="w-4 h-4 text-black" />
+            <Link2 className="w-4 h-4 text-black" />
           )}
-          <span>INVITE STAFF MEMBER</span>
+          <span>{isPending ? 'GENERATING...' : 'GENERATE INVITE LINK'}</span>
         </button>
       </form>
 

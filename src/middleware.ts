@@ -41,6 +41,8 @@ export async function middleware(request: NextRequest) {
   const isPublicPath =
     pathname.startsWith('/login') ||
     pathname.startsWith('/register') ||
+    pathname.startsWith('/set-password') ||
+    pathname.startsWith('/auth/') ||
     pathname.startsWith('/api/');
 
   if (!user && !isPublicPath) {

@@ -1,6 +1,7 @@
 import React from 'react';
 import { ShieldAlert } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { TeamManager, type TeamMemberRecord } from '@/components/settings/TeamManager';
 
 export const dynamic = 'force-dynamic';
@@ -12,16 +13,22 @@ export default async function TeamSettingsPage() {
   } = await supabase.auth.getUser();
 
   let currentUserRole = 'superadmin';
+  let activeWorkspaceId = '11111111-1111-1111-1111-111111111111';
 
-  if (user) {
+  const wsCtx = await getAuthenticatedWorkspaceContext();
+  if (wsCtx && wsCtx.activeWorkspaceId) {
+    currentUserRole = wsCtx.role;
+    activeWorkspaceId = wsCtx.activeWorkspaceId;
+  } else if (user) {
     const { data: memberRow } = await supabase
       .from('workspace_members')
-      .select('role')
+      .select('role, workspace_id')
       .eq('user_id', user.id)
       .limit(1);
 
     if (memberRow && memberRow.length > 0) {
       currentUserRole = memberRow[0].role;
+      activeWorkspaceId = memberRow[0].workspace_id;
     }
   }
 
@@ -46,6 +53,7 @@ export default async function TeamSettingsPage() {
   const { data: rawMembers } = await supabase
     .from('workspace_members')
     .select('id, role, user_id')
+    .eq('workspace_id', activeWorkspaceId)
     .order('created_at', { ascending: true });
 
   const { data: profiles } = await supabase

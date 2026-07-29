@@ -383,110 +383,125 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
         ) : (
           <div className="space-y-3">
             {/* HEADER ROW */}
-            <div className="grid grid-cols-12 gap-4 text-xs font-bold text-[#d4af37]/60 tracking-wider mb-2 px-2 hidden md:grid">
-                <div className="col-span-3">ITEM / SERVICE</div>
-                <div className="col-span-3">DESCRIPTION</div>
-                <div className="col-span-2 text-center">QTY & PRICE</div>
-                <div className="col-span-3 text-right">DISCOUNT & TOTAL</div>
-                <div className="col-span-1 text-center"></div>
+            <div className="grid grid-cols-12 gap-3 text-[10px] font-bold text-[#d4af37]/60 tracking-wider mb-2 px-2 hidden md:grid uppercase">
+                <div className="col-span-3">Item / Service</div>
+                <div className="col-span-3">Description</div>
+                <div className="col-span-2">Qty</div>
+                <div className="col-span-2">Unit Price</div>
+                <div className="col-span-2 text-right pr-8">Total</div>
             </div>
             {lineItems.map((item) => {
               return (
                 <div
                   key={item.id}
-                  className="grid grid-cols-12 gap-2 items-start p-2 rounded-xl bg-zinc-950/60 border border-zinc-800/80"
+                  className="flex flex-col gap-2 p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80 mb-2 relative"
                 >
-                  <div className="col-span-12 md:col-span-3 space-y-1.5">
-                    {products && products.length > 0 && (
-                      <select
-                        onChange={(e) => handleSelectProduct(item.id, e.target.value)}
-                        defaultValue=""
-                        className="w-full bg-zinc-900/90 border border-[#d4af37]/40 rounded-lg px-2.5 py-1 text-[11px] font-mono text-[#f5d77f] focus:outline-none focus:border-[#d4af37]"
-                      >
-                        <option value="" disabled>
-                          ⚡ AUTO-FILL FROM CATALOG...
-                        </option>
-                        {products.map((prod) => (
-                          <option key={prod.id} value={prod.id}>
-                            {prod.name} • Rp {Number(prod.unit_price).toLocaleString('id-ID')}
-                          </option>
-                        ))}
-                        <option value="custom">-- Custom / Manual Override --</option>
-                      </select>
-                    )}
-                    <input
-                      type="text"
-                      placeholder="Package Name"
-                      value={item.packageName}
-                      onChange={(e) => handleUpdateItem(item.id, 'packageName', e.target.value)}
-                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-bold text-white focus:outline-none focus:border-[#d4af37]"
-                    />
-                  </div>
-                  
-                  <div className="col-span-12 md:col-span-3">
-                    <BulletTextarea
-                      rows={2}
-                      required
-                      placeholder="Automatic bullet points..."
-                      value={item.description}
-                      onChange={(val) =>
-                        handleUpdateItem(item.id, 'description', val)
-                      }
-                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-[11px] text-white focus:outline-none focus:border-[#d4af37] font-sans whitespace-pre-line leading-snug"
-                    />
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveItem(item.id)}
+                    className="absolute top-3 right-3 p-1.5 text-zinc-500 hover:text-red-400 transition-colors bg-zinc-900/50 rounded-lg hover:bg-zinc-800"
+                    title="Remove Item"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
 
-                  <div className="col-span-12 md:col-span-2 flex flex-col gap-2">
-                    <div className="md:hidden text-xs font-bold text-[#d4af37]/60">QTY & PRICE</div>
-                    <div className="flex gap-2">
-                        <input
-                        type="number"
-                        min="1"
-                        required
-                        value={item.quantity}
-                        onChange={(e) => handleUpdateItem(item.id, 'quantity', Math.max(1, Number(e.target.value)))}
-                        className="w-14 bg-black/40 border border-[#d4af37]/20 rounded-lg px-2 py-1.5 text-[#f5d77f] focus:outline-none focus:border-[#d4af37]/50 text-xs"
-                        />
+                  <div className="grid grid-cols-12 gap-3 items-start pr-10">
+                    <div className="col-span-12 md:col-span-3 space-y-1.5">
+                      {products && products.length > 0 && (
                         <select
-                        value={item.scale || 'pc'}
-                        onChange={(e) => handleUpdateItem(item.id, 'scale', e.target.value)}
-                        className="flex-1 bg-black/40 border border-[#d4af37]/20 rounded-lg px-1.5 py-1.5 text-[#f5d77f] focus:outline-none focus:border-[#d4af37]/50 text-xs"
+                          onChange={(e) => handleSelectProduct(item.id, e.target.value)}
+                          defaultValue=""
+                          className="w-full bg-zinc-900/90 border border-[#d4af37]/40 rounded-lg px-2.5 py-1 text-[11px] font-mono text-[#f5d77f] focus:outline-none focus:border-[#d4af37]"
                         >
-                        <option value="pc">Pc</option>
-                        <option value="hour">Hour</option>
-                        <option value="day">Day</option>
-                        <option value="month">Month</option>
+                          <option value="" disabled>
+                            ⚡ AUTO-FILL FROM CATALOG...
+                          </option>
+                          {products.map((prod) => (
+                            <option key={prod.id} value={prod.id}>
+                              {prod.name} • Rp {Number(prod.unit_price).toLocaleString('id-ID')}
+                            </option>
+                          ))}
+                          <option value="custom">-- Custom / Manual Override --</option>
                         </select>
+                      )}
+                      <input
+                        type="text"
+                        placeholder="Package Name"
+                        value={item.packageName}
+                        onChange={(e) => handleUpdateItem(item.id, 'packageName', e.target.value)}
+                        className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs font-bold text-white focus:outline-none focus:border-[#d4af37]"
+                      />
                     </div>
-                    <RupiahInput
-                        value={item.unitPrice}
-                        onChange={(e: any) => handleUpdateItem(item.id, 'unitPrice', Number(e.target.value) || 0)}
-                        placeholder="Unit Price"
-                        className="w-full bg-black/40 border border-[#d4af37]/20 rounded-lg px-2.5 py-1.5 text-[#f5d77f] focus:outline-none focus:border-[#d4af37]/50 text-xs"
-                    />
+                    
+                    <div className="col-span-12 md:col-span-3">
+                      <BulletTextarea
+                        rows={2}
+                        required
+                        placeholder="Automatic bullet points..."
+                        value={item.description}
+                        onChange={(val) =>
+                          handleUpdateItem(item.id, 'description', val)
+                        }
+                        className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-[11px] text-white focus:outline-none focus:border-[#d4af37] font-sans whitespace-pre-line leading-snug"
+                      />
+                    </div>
+
+                    <div className="col-span-12 md:col-span-2 flex flex-col gap-1.5">
+                      <div className="md:hidden text-[10px] font-bold text-[#d4af37]/60">QTY & UNIT</div>
+                      <div className="flex gap-1">
+                          <input
+                          type="number"
+                          min="1"
+                          required
+                          value={item.quantity}
+                          onChange={(e) => handleUpdateItem(item.id, 'quantity', Math.max(1, Number(e.target.value)))}
+                          className="w-14 bg-black/40 border border-[#d4af37]/20 rounded-lg px-2 py-1.5 text-[#f5d77f] focus:outline-none focus:border-[#d4af37]/50 text-xs text-center"
+                          />
+                          <select
+                          value={item.scale || 'pc'}
+                          onChange={(e) => handleUpdateItem(item.id, 'scale', e.target.value)}
+                          className="flex-1 bg-black/40 border border-[#d4af37]/20 rounded-lg px-1 py-1.5 text-[#f5d77f] focus:outline-none focus:border-[#d4af37]/50 text-xs"
+                          >
+                          <option value="pc">Pc</option>
+                          <option value="hour">Hour</option>
+                          <option value="day">Day</option>
+                          <option value="month">Month</option>
+                          </select>
+                      </div>
+                    </div>
+
+                    <div className="col-span-12 md:col-span-2 flex flex-col gap-1.5">
+                      <div className="md:hidden text-[10px] font-bold text-[#d4af37]/60">UNIT PRICE</div>
+                      <RupiahInput
+                          value={item.unitPrice}
+                          onChange={(e: any) => handleUpdateItem(item.id, 'unitPrice', Number(e.target.value) || 0)}
+                          placeholder="Price"
+                          className="w-full bg-black/40 border border-[#d4af37]/20 rounded-lg px-2.5 py-1.5 text-[#f5d77f] focus:outline-none focus:border-[#d4af37]/50 text-xs"
+                      />
+                    </div>
+
+                    <div className="col-span-12 md:col-span-2 flex flex-col items-end justify-start">
+                      <div className="md:hidden text-[10px] font-bold text-[#d4af37]/60 w-full text-left mb-1">BASE TOTAL</div>
+                      <div className="text-xs font-mono text-zinc-400 mt-1 md:mt-2">
+                          Rp {(item.quantity * item.unitPrice).toLocaleString('id-ID')}
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="col-span-12 md:col-span-3 flex flex-col items-end gap-1 text-[#f5d77f] font-mono justify-start">
-                    <div className="md:hidden text-[10px] font-bold text-[#d4af37]/60 w-full text-left">DISC. & TOTAL</div>
-                    <RupiahInput
-                        value={item.discountAmount || 0}
-                        onChange={(e: any) => handleUpdateItem(item.id, 'discountAmount', Number(e.target.value) || 0)}
-                        placeholder="Discount"
-                        className="w-full text-right bg-black/40 border border-[#d4af37]/20 rounded-lg px-2 py-1.5 text-white focus:outline-none focus:border-[#d4af37]/50 text-xs"
-                    />
-                    <div className="w-full text-right px-2 py-1 text-sm font-bold tracking-tight">
+                  {/* Discount Row */}
+                  <div className="flex justify-end items-center gap-3 pt-2 mt-1 border-t border-zinc-800/50 pr-10">
+                    <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Discount</span>
+                    <div className="w-28 md:w-32">
+                      <RupiahInput
+                          value={item.discountAmount || 0}
+                          onChange={(e: any) => handleUpdateItem(item.id, 'discountAmount', Number(e.target.value) || 0)}
+                          placeholder="Discount"
+                          className="w-full text-right bg-black/40 border border-[#d4af37]/20 rounded-lg px-2 py-1 text-white focus:outline-none focus:border-[#d4af37]/50 text-xs"
+                      />
+                    </div>
+                    <div className="w-28 text-right text-sm font-bold text-[#f5d77f]">
                         Rp {(item.quantity * item.unitPrice - (item.discountAmount || 0)).toLocaleString('id-ID')}
                     </div>
-                  </div>
-                  
-                  <div className="col-span-12 md:col-span-1 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveItem(item.id)}
-                      className="p-1.5 rounded-lg text-zinc-500 hover:text-red-400 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
                   </div>
                 </div>
               );

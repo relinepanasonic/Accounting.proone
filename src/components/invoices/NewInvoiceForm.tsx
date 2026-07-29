@@ -394,7 +394,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
               return (
                 <div
                   key={item.id}
-                  className="grid grid-cols-12 gap-3 items-center p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80"
+                  className="grid grid-cols-12 gap-2 items-start p-2 rounded-xl bg-zinc-950/60 border border-zinc-800/80"
                 >
                   <div className="col-span-12 md:col-span-3 space-y-1.5">
                     {products && products.length > 0 && (
@@ -425,14 +425,14 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                   
                   <div className="col-span-12 md:col-span-3">
                     <BulletTextarea
-                      rows={3}
+                      rows={2}
                       required
                       placeholder="Automatic bullet points..."
                       value={item.description}
                       onChange={(val) =>
                         handleUpdateItem(item.id, 'description', val)
                       }
-                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#d4af37] font-sans whitespace-pre-line"
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-[11px] text-white focus:outline-none focus:border-[#d4af37] font-sans whitespace-pre-line leading-snug"
                     />
                   </div>
 
@@ -445,12 +445,12 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                         required
                         value={item.quantity}
                         onChange={(e) => handleUpdateItem(item.id, 'quantity', Math.max(1, Number(e.target.value)))}
-                        className="w-16 bg-black/40 border border-[#d4af37]/20 rounded-lg px-2 py-2 text-[#f5d77f] focus:outline-none focus:border-[#d4af37]/50"
+                        className="w-14 bg-black/40 border border-[#d4af37]/20 rounded-lg px-2 py-1.5 text-[#f5d77f] focus:outline-none focus:border-[#d4af37]/50 text-xs"
                         />
                         <select
                         value={item.scale || 'pc'}
                         onChange={(e) => handleUpdateItem(item.id, 'scale', e.target.value)}
-                        className="flex-1 bg-black/40 border border-[#d4af37]/20 rounded-lg px-2 py-2 text-[#f5d77f] focus:outline-none focus:border-[#d4af37]/50 text-sm"
+                        className="flex-1 bg-black/40 border border-[#d4af37]/20 rounded-lg px-1.5 py-1.5 text-[#f5d77f] focus:outline-none focus:border-[#d4af37]/50 text-xs"
                         >
                         <option value="pc">Pc</option>
                         <option value="hour">Hour</option>
@@ -462,19 +462,19 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                         value={item.unitPrice}
                         onChange={(e: any) => handleUpdateItem(item.id, 'unitPrice', Number(e.target.value) || 0)}
                         placeholder="Unit Price"
-                        className="w-full bg-black/40 border border-[#d4af37]/20 rounded-lg px-3 py-2 text-[#f5d77f] focus:outline-none focus:border-[#d4af37]/50"
+                        className="w-full bg-black/40 border border-[#d4af37]/20 rounded-lg px-2.5 py-1.5 text-[#f5d77f] focus:outline-none focus:border-[#d4af37]/50 text-xs"
                     />
                   </div>
 
-                  <div className="col-span-12 md:col-span-3 flex flex-col items-end gap-2 text-[#f5d77f] font-mono justify-start">
-                    <div className="md:hidden text-xs font-bold text-[#d4af37]/60 w-full text-left">DISC. & TOTAL</div>
+                  <div className="col-span-12 md:col-span-3 flex flex-col items-end gap-1 text-[#f5d77f] font-mono justify-start">
+                    <div className="md:hidden text-[10px] font-bold text-[#d4af37]/60 w-full text-left">DISC. & TOTAL</div>
                     <RupiahInput
                         value={item.discountAmount || 0}
                         onChange={(e: any) => handleUpdateItem(item.id, 'discountAmount', Number(e.target.value) || 0)}
                         placeholder="Discount"
-                        className="w-full text-right bg-black/40 border border-red-500/30 rounded-lg px-2 py-1.5 text-red-400 focus:outline-none focus:border-red-500/60 text-sm"
+                        className="w-full text-right bg-black/40 border border-[#d4af37]/20 rounded-lg px-2 py-1.5 text-white focus:outline-none focus:border-[#d4af37]/50 text-xs"
                     />
-                    <div className="pt-2 w-full text-right bg-black/20 rounded-lg px-3 py-2 border border-[#d4af37]/10">
+                    <div className="w-full text-right px-2 py-1 text-sm font-bold tracking-tight">
                         Rp {(item.quantity * item.unitPrice - (item.discountAmount || 0)).toLocaleString('id-ID')}
                     </div>
                   </div>

@@ -2,13 +2,13 @@
 
 import React, { useState, useTransition } from 'react';
 import Image from 'next/image';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { AlertCircle, Loader2, Lock, Mail, KeyRound, ShieldCheck } from 'lucide-react';
-import { ProfessorTokoOnlineLogo } from '@/components/invoices/ProfessorTokoOnlineLogo';
-import { signInAction } from '@/app/actions/auth';
+import { AlertCircle, Loader2, Lock, Mail, User, ShieldCheck } from 'lucide-react';
+import { signUpAction } from '@/app/actions/auth';
 
-export function LoginForm() {
-  const [identifier, setIdentifier] = useState('professortokoonline@gmail.com');
+export function RegisterForm() {
+  const [fullName, setFullName] = useState('');
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -22,23 +22,17 @@ export function LoginForm() {
 
     startTransition(async () => {
       try {
-        const result = await signInAction(formData);
+        const result = await signUpAction(formData);
         if (result && !result.success) {
-          setErrorMsg(result.error || 'Authentication failed. Please verify your email and password.');
+          setErrorMsg(result.error || 'Registration failed. Please try again.');
         }
       } catch (err: any) {
-        // NEXT_REDIRECT is thrown by redirect('/') upon successful sign-in
         if (err?.message?.includes('NEXT_REDIRECT') || err?.digest?.includes('NEXT_REDIRECT')) {
           return;
         }
-        setErrorMsg(err?.message || 'Failed to authenticate.');
+        setErrorMsg(err?.message || 'Failed to register.');
       }
     });
-  };
-
-  const handleQuickFillDemo = () => {
-    setIdentifier('professortokoonline@gmail.com');
-    setPassword('SuperAdmin2026!');
   };
 
   return (
@@ -60,10 +54,10 @@ export function LoginForm() {
             />
           </div>
           <h1 className="text-2xl font-extrabold tracking-wider uppercase text-white font-serif">
-            PROFESSOR TOKO ONLINE
+            NEW RECRUIT
           </h1>
           <p className="text-[10px] font-mono text-[#f5d77f] tracking-[0.2em] uppercase mt-1">
-            EXECUTIVE SAAS ACCOUNTING SUITE • RBAC CLEARANCE
+            ESTABLISH YOUR SECURITY CLEARANCE
           </p>
         </div>
 
@@ -72,44 +66,79 @@ export function LoginForm() {
           <div className="flex items-start gap-3 p-4 mb-6 rounded-xl bg-[#d4af37]/15 border border-[#d4af37]/70 text-[#f5d77f] text-xs font-mono shadow-[0_0_20px_rgba(212,175,55,0.25)] relative z-10">
             <AlertCircle className="w-5 h-5 shrink-0 text-[#f5d77f] mt-0.5" />
             <div className="space-y-0.5">
-              <div className="font-bold uppercase tracking-wider">CLEARANCE DENIED</div>
+              <div className="font-bold uppercase tracking-wider">REGISTRATION ERROR</div>
               <div className="text-zinc-300 font-sans">{errorMsg}</div>
             </div>
           </div>
         )}
 
-        {/* Login Form */}
+        {/* Registration Form */}
         <form onSubmit={handleSubmit} className="space-y-5 relative z-10">
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-2">
-              EMAIL ADDRESS OR USERNAME *
+              FULL NAME *
             </label>
             <div className="relative">
-              <Mail className="absolute left-3.5 top-3.5 w-4 h-4 text-[#d4af37]/70" />
+              <User className="absolute left-3.5 top-3.5 w-4 h-4 text-[#d4af37]/70" />
               <input
                 type="text"
-                name="identifier"
+                name="fullName"
                 required
-                value={identifier}
-                onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="name@professortokoonline.com or username"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="John Doe"
                 className="w-full bg-zinc-950/90 border border-zinc-800/90 rounded-xl pl-10 pr-4 py-3 text-xs text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] transition-all"
               />
             </div>
           </div>
 
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300">
-                SECURITY PASSPHRASE *
-              </label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-2">
+              USERNAME *
+            </label>
+            <div className="relative">
+              <User className="absolute left-3.5 top-3.5 w-4 h-4 text-[#d4af37]/70" />
+              <input
+                type="text"
+                name="username"
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="johndoe123"
+                className="w-full bg-zinc-950/90 border border-zinc-800/90 rounded-xl pl-10 pr-4 py-3 text-xs text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] transition-all"
+              />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-2">
+              EXECUTIVE EMAIL ID *
+            </label>
+            <div className="relative">
+              <Mail className="absolute left-3.5 top-3.5 w-4 h-4 text-[#d4af37]/70" />
+              <input
+                type="email"
+                name="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="name@professortokoonline.com"
+                className="w-full bg-zinc-950/90 border border-zinc-800/90 rounded-xl pl-10 pr-4 py-3 text-xs text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] transition-all"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-2">
+              SECURITY PASSPHRASE *
+            </label>
             <div className="relative">
               <Lock className="absolute left-3.5 top-3.5 w-4 h-4 text-[#d4af37]/70" />
               <input
                 type="password"
                 name="password"
                 required
+                minLength={6}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••••••"
@@ -128,17 +157,17 @@ export function LoginForm() {
             ) : (
               <ShieldCheck className="w-4 h-4 text-black" />
             )}
-            <span>{isPending ? 'AUTHENTICATING SESSION...' : 'SECURE SIGN IN'}</span>
+            <span>{isPending ? 'ESTABLISHING CLEARANCE...' : 'CREATE ACCOUNT'}</span>
           </button>
         </form>
 
         <div className="mt-6 pt-5 border-t border-[#d4af37]/20 flex items-center justify-between text-[11px] relative z-10">
-          <span className="text-zinc-500 font-mono">NEW RECRUIT?</span>
+          <span className="text-zinc-500 font-mono">ALREADY HAVE CLEARANCE?</span>
           <a
-            href="/register"
+            href="/login"
             className="text-[#f5d77f] hover:underline font-mono inline-flex items-center gap-1 font-bold tracking-widest"
           >
-            CREATE ACCOUNT
+            SECURE SIGN IN
           </a>
         </div>
       </div>

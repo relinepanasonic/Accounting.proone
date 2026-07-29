@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { createClient as createAdminClient } from '@supabase/supabase-js';
 
 export interface AuthActionResult {
   success: boolean;
@@ -10,23 +11,44 @@ export interface AuthActionResult {
 }
 
 /**
- * Server Action: Sign in user with email and password
+ * Server Action: Sign in user with email or username and password
  */
-export async function signInWithEmail(formData: FormData): Promise<AuthActionResult> {
-  const email = (formData.get('email') || '').toString().trim();
+export async function signInAction(formData: FormData): Promise<AuthActionResult> {
+  const identifier = (formData.get('identifier') || formData.get('email') || '').toString().trim();
   const password = (formData.get('password') || '').toString();
 
-  if (!email || !password) {
+  if (!identifier || !password) {
     return {
       success: false,
-      error: 'Please enter both your email address and password.',
+      error: 'Please enter both your email/username and password.',
     };
   }
 
   const supabase = await createClient();
+  let emailToUse = identifier;
+
+  // If the identifier doesn't look like an email (no @ symbol), try to look it up in profiles
+  if (!identifier.includes('@')) {
+    const adminSupabase = createAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+    
+    const { data: profile } = await adminSupabase
+      .from('profiles')
+      .select('email')
+      .eq('username', identifier)
+      .single();
+      
+    if (profile?.email) {
+      emailToUse = profile.email;
+    } else {
+      return { success: false, error: 'Username not found.' };
+    }
+  }
 
   const { error } = await supabase.auth.signInWithPassword({
-    email,
+    email: emailToUse,
     password,
   });
 
@@ -37,6 +59,68 @@ export async function signInWithEmail(formData: FormData): Promise<AuthActionRes
     };
   }
 
+  revalidatePath('/', 'layout');
+  redirect('/');
+}
+
+/**
+ * Server Action: Register a new user
+ */
+export async function signUpAction(formData: FormData): Promise<AuthActionResult> {
+  const email = (formData.get('email') || '').toString().trim();
+  const username = (formData.get('username') || '').toString().trim();
+  const fullName = (formData.get('fullName') || '').toString().trim();
+  const password = (formData.get('password') || '').toString();
+
+  if (!email || !username || !fullName || !password) {
+    return { success: false, error: 'Please fill out all fields.' };
+  }
+
+  if (password.length < 6) {
+    return { success: false, error: 'Password must be at least 6 characters.' };
+  }
+
+  const adminSupabase = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
+  // Check if username is taken
+  const { data: existingProfile } = await adminSupabase
+    .from('profiles')
+    .select('id')
+    .eq('username', username)
+    .single();
+
+  if (existingProfile) {
+    return { success: false, error: 'That username is already taken. Please choose another.' };
+  }
+
+  const supabase = await createClient();
+  const { data: authData, error: authError } = await supabase.auth.signUp({
+    email,
+    password,
+  });
+
+  if (authError) {
+    return { success: false, error: authError.message };
+  }
+
+  if (authData.user) {
+    // Insert into profiles
+    const { error: profileError } = await adminSupabase.from('profiles').insert({
+      id: authData.user.id,
+      email,
+      username,
+      full_name: fullName,
+    });
+
+    if (profileError) {
+      return { success: false, error: 'Account created, but profile setup failed: ' + profileError.message };
+    }
+  }
+
+  // Next.js redirect doesn't work inside try/catch if you catch the NEXT_REDIRECT error, but we're not catching here.
   revalidatePath('/', 'layout');
   redirect('/');
 }

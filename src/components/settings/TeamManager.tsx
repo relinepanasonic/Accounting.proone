@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useTransition } from 'react';
-import { UserPlus, ShieldAlert, ShieldCheck, Loader2, AlertCircle, Check } from 'lucide-react';
-import { inviteTeamMember } from '@/app/actions/settings';
+import { UserPlus, ShieldAlert, ShieldCheck, Loader2, AlertCircle, Check, Trash2, Edit2, X, Save } from 'lucide-react';
+import { inviteTeamMember, deleteTeamMember, updateTeamMemberRole } from '@/app/actions/settings';
 
 export interface TeamMemberRecord {
   id: string;
@@ -24,7 +24,42 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editRole, setEditRole] = useState<'superadmin' | 'accounting' | 'admin'>('accounting');
   const [isPending, startTransition] = useTransition();
+
+  const handleDelete = (id: string) => {
+    if (!confirm('Are you sure you want to revoke clearance for this member?')) return;
+    
+    startTransition(async () => {
+      try {
+        const res = await deleteTeamMember({ memberId: id });
+        if (res.success) {
+          setMembers((prev) => prev.filter((m) => m.id !== id));
+        } else {
+          setErrorMsg(res.error || 'Failed to remove member.');
+        }
+      } catch (err: any) {
+        setErrorMsg(err.message || 'Error removing member.');
+      }
+    });
+  };
+
+  const handleUpdateRole = (id: string) => {
+    startTransition(async () => {
+      try {
+        const res = await updateTeamMemberRole({ memberId: id, role: editRole });
+        if (res.success) {
+          setMembers((prev) => prev.map((m) => (m.id === id ? { ...m, role: editRole } : m)));
+          setEditingId(null);
+        } else {
+          setErrorMsg(res.error || 'Failed to update role.');
+        }
+      } catch (err: any) {
+        setErrorMsg(err.message || 'Error updating role.');
+      }
+    });
+  };
 
   const handleInvite = (e: React.FormEvent) => {
     e.preventDefault();
@@ -192,7 +227,7 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
               <tr className="border-b border-zinc-800 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
                 <th className="py-3 px-3">MEMBER IDENTITY</th>
                 <th className="py-3 px-3">SECURITY CLEARANCE ROLE</th>
-                <th className="py-3 px-3 text-right">STATUS</th>
+                <th className="py-3 px-3 text-right">STATUS / ACTIONS</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-900 text-xs">
@@ -203,16 +238,70 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
                     <div className="text-[11px] text-zinc-400 font-mono">{m.email}</div>
                   </td>
                   <td className="py-3.5 px-3">
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase border ${getRoleBadgeColor(
-                        m.role
-                      )}`}
-                    >
-                      {m.role}
-                    </span>
+                    {editingId === m.id ? (
+                      <select
+                        value={editRole}
+                        onChange={(e) => setEditRole(e.target.value as any)}
+                        className="bg-black/50 border border-[#d4af37]/30 text-[#f5d77f] text-[10px] rounded px-2 py-1 font-mono uppercase focus:outline-none"
+                      >
+                        <option value="superadmin">SUPERADMIN</option>
+                        <option value="accounting">ACCOUNTING</option>
+                        <option value="admin">ADMIN</option>
+                      </select>
+                    ) : (
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase border ${getRoleBadgeColor(
+                          m.role
+                        )}`}
+                      >
+                        {m.role}
+                      </span>
+                    )}
                   </td>
-                  <td className="py-3.5 px-3 text-right">
-                    <span className="text-[10px] font-mono text-emerald-400">ACTIVE SESSION</span>
+                  <td className="py-3.5 px-3 text-right flex items-center justify-end gap-3 h-full pt-4">
+                    {editingId === m.id ? (
+                      <>
+                        <button
+                          onClick={() => handleUpdateRole(m.id)}
+                          className="text-emerald-400 hover:text-emerald-300 transition-colors"
+                          title="Save Role"
+                        >
+                          <Save className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setEditingId(null)}
+                          className="text-zinc-500 hover:text-zinc-400 transition-colors"
+                          title="Cancel"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-[10px] font-mono text-emerald-400">ACTIVE SESSION</span>
+                        {currentUserRole === 'superadmin' && (
+                          <>
+                            <button
+                              onClick={() => {
+                                setEditingId(m.id);
+                                setEditRole(m.role);
+                              }}
+                              className="text-[#d4af37]/60 hover:text-[#f5d77f] transition-colors ml-2"
+                              title="Edit Role"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(m.id)}
+                              className="text-red-900 hover:text-red-500 transition-colors"
+                              title="Revoke Clearance"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        )}
+                      </>
+                    )}
                   </td>
                 </tr>
               ))}

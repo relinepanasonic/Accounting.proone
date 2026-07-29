@@ -799,6 +799,78 @@ export async function inviteTeamMember(payload: {
     revalidatePath('/settings/team');
     return { success: true, inviteLink: actionLink };
   } catch (err: any) {
+    console.error('Invite error:', err);
     return { success: false, error: err?.message || 'Failed to invite team member.' };
+  }
+}
+
+/**
+ * Server Action: Update a team member's role
+ */
+export async function updateTeamMemberRole(payload: { memberId: string; role: 'superadmin' | 'accounting' | 'admin' }) {
+  try {
+    const supabase = await createClient();
+    const { workspaceId, role: currentRole } = await resolveWorkspaceContext(supabase);
+
+    if (currentRole !== 'superadmin') {
+      return { success: false, error: 'Only Superadmins can modify team roles.' };
+    }
+
+    const { error } = await supabase
+      .from('workspace_members')
+      .update({ role: payload.role })
+      .eq('id', payload.memberId)
+      .eq('workspace_id', workspaceId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/settings/team');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to update member role.' };
+  }
+}
+
+/**
+ * Server Action: Remove a team member from the workspace
+ */
+export async function deleteTeamMember(payload: { memberId: string }) {
+  try {
+    const supabase = await createClient();
+    const { workspaceId, role: currentRole } = await resolveWorkspaceContext(supabase);
+
+    if (currentRole !== 'superadmin') {
+      return { success: false, error: 'Only Superadmins can remove team members.' };
+    }
+
+    // Attempt to delete the member from the workspace
+    const { data: member, error: fetchError } = await supabase
+      .from('workspace_members')
+      .select('user_id')
+      .eq('id', payload.memberId)
+      .eq('workspace_id', workspaceId)
+      .single();
+
+    if (fetchError || !member) {
+      return { success: false, error: 'Member not found.' };
+    }
+
+    const { error: deleteError } = await supabase
+      .from('workspace_members')
+      .delete()
+      .eq('id', payload.memberId)
+      .eq('workspace_id', workspaceId);
+
+    if (deleteError) {
+      return { success: false, error: deleteError.message };
+    }
+
+    // Note: We don't delete their auth.users account, just their workspace access.
+    revalidatePath('/settings/team');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to remove team member.' };
   }
 }

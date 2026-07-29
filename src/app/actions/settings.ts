@@ -802,7 +802,7 @@ export async function inviteTeamMember(payload: {
 /**
  * Server Action: Update a team member's role
  */
-export async function updateTeamMemberRole(payload: { memberId: string; role: 'superadmin' | 'accounting' | 'admin' }) {
+export async function updateTeamMemberRole(payload: { memberId: string; role: 'superadmin' | 'accounting' | 'admin' | 'founder' }) {
   try {
     const supabase = await createClient();
     const { workspaceId, role: currentRole } = await resolveWorkspaceContext(supabase);

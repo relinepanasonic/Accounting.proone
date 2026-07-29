@@ -37,19 +37,23 @@ export async function middleware(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
-  // Protect accounting and executive modules
-  const isProtectedPath =
-    pathname.startsWith('/invoices') ||
-    pathname.startsWith('/payroll') ||
-    pathname.startsWith('/expenses') ||
-    pathname.startsWith('/assets') ||
-    pathname.startsWith('/ledger') ||
-    pathname.startsWith('/reconcile');
+  // Public paths that don't require authentication
+  const isPublicPath =
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/register') ||
+    pathname.startsWith('/api/');
 
-  if (!user && isProtectedPath) {
+  if (!user && !isPublicPath) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = '/login';
     return NextResponse.redirect(loginUrl);
+  }
+
+  // Redirect authenticated users away from login/register
+  if (user && (pathname === '/login' || pathname === '/register')) {
+    const dashboardUrl = request.nextUrl.clone();
+    dashboardUrl.pathname = '/';
+    return NextResponse.redirect(dashboardUrl);
   }
 
   return response;

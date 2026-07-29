@@ -106,6 +106,11 @@ export async function signUpAction(formData: FormData): Promise<AuthActionResult
     return { success: false, error: authError.message };
   }
 
+  // Supabase anti-enumeration: if email exists, it returns a fake user with no identities
+  if (authData.user && (!authData.user.identities || authData.user.identities.length === 0)) {
+    return { success: false, error: 'An account with this email address already exists.' };
+  }
+
   if (authData.user) {
     // Insert into profiles
     const { error: profileError } = await adminSupabase.from('profiles').insert({

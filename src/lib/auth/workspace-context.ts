@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
+import { createClient as createAdminClient } from '@supabase/supabase-js';
 
 export interface WorkspaceTenantInfo {
   id: string;
@@ -80,7 +81,13 @@ export async function getAuthenticatedWorkspaceContext(
     
     if (isFounder) {
       // Founder gets access to ALL workspaces automatically
-      const { data: allWorkspaces } = await supabaseClient
+      // We must use the admin client to bypass RLS since the founder might not be in workspace_members
+      const adminClient = createAdminClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      );
+      
+      const { data: allWorkspaces } = await adminClient
         .from('workspaces')
         .select('id, name')
         .order('created_at', { ascending: true });

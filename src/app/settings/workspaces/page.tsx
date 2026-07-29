@@ -19,25 +19,55 @@ export default async function WorkspacesMasterPage() {
   let masterList: WorkspaceMasterItem[] = [];
 
   if (user) {
-    let memberRows: any[] | null = null;
-    const { data: byUser, error } = await supabase
-      .from('workspace_members')
-      .select('workspace_id, role, workspaces (*)')
-      .eq('user_id', user.id);
+    const isFounder = user.email?.toLowerCase() === 'nicojapar@gmail.com';
 
-    if (!error && byUser && byUser.length > 0) {
-      memberRows = byUser;
-    } else if (user.email) {
-      const { data: byEmail } = await supabase
+    if (isFounder) {
+      const { createClient: createAdminClient } = await import('@supabase/supabase-js');
+      const adminClient = createAdminClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      );
+      const { data: allWorkspaces } = await adminClient
+        .from('workspaces')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      if (allWorkspaces) {
+        masterList = allWorkspaces.map((ws: any) => {
+          const isTaxReg =
+            ws.is_tax_registered !== undefined && ws.is_tax_registered !== null
+              ? Boolean(ws.is_tax_registered)
+              : Number(ws.tax_rate_percent || 0) > 0;
+          return {
+            id: ws.id,
+            name: ws.name || 'Workspace Enterprise',
+            role: 'founder',
+            isTaxRegistered: isTaxReg,
+            taxRatePercent: Number(ws.tax_rate_percent || 0),
+            logoUrl: ws.logo_url || undefined,
+          };
+        });
+      }
+    } else {
+      let memberRows: any[] | null = null;
+      const { data: byUser, error } = await supabase
         .from('workspace_members')
         .select('workspace_id, role, workspaces (*)')
-        .ilike('email', user.email.trim());
-      if (byEmail && byEmail.length > 0) {
-        memberRows = byEmail;
-      }
-    }
+        .eq('user_id', user.id);
 
-    if (memberRows && memberRows.length > 0) {
+      if (!error && byUser && byUser.length > 0) {
+        memberRows = byUser;
+      } else if (user.email) {
+        const { data: byEmail } = await supabase
+          .from('workspace_members')
+          .select('workspace_id, role, workspaces (*)')
+          .ilike('email', user.email.trim());
+        if (byEmail && byEmail.length > 0) {
+          memberRows = byEmail;
+        }
+      }
+
+      if (memberRows && memberRows.length > 0) {
       masterList = memberRows
         .map((m: any) => {
           const wsObj = Array.isArray(m.workspaces) ? m.workspaces[0] : m.workspaces;
@@ -55,6 +85,7 @@ export default async function WorkspacesMasterPage() {
           };
         })
         .filter(Boolean) as WorkspaceMasterItem[];
+      }
     }
   }
 

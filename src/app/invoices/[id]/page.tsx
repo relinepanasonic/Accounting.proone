@@ -108,19 +108,22 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
           unitPrice: Number(l.unit_price || 0),
           quantity: Number(l.quantity || 1),
           scale: l.scale || null,
-          total: Number(l.unit_price || 0) * Number(l.quantity || 1),
+          discountAmount: Number(l.discount_amount || 0),
+          total: Number(l.unit_price || 0) * Number(l.quantity || 1) - Number(l.discount_amount || 0),
         }))
       : [];
 
   const subtotal = items.reduce((acc: number, item: any) => acc + item.total, 0);
+  const globalDiscount = Number(inv?.discount_amount || 0);
 
   const isTaxReg =
     wsObj?.is_tax_registered !== undefined && wsObj?.is_tax_registered !== null
       ? Boolean(wsObj.is_tax_registered)
       : Number(wsObj?.tax_rate_percent || 0) > 0;
   const taxRate = wsObj?.tax_rate_percent !== undefined ? Number(wsObj.tax_rate_percent) : (isTaxReg ? 11 : 0);
-  const taxAmount = isTaxReg ? Math.round(subtotal * (taxRate / 100)) : 0;
-  const grandTotal = subtotal + taxAmount;
+  const taxableAmount = Math.max(0, subtotal - globalDiscount);
+  const taxAmount = isTaxReg ? Math.round(taxableAmount * (taxRate / 100)) : 0;
+  const grandTotal = taxableAmount + taxAmount;
 
   const workspaceBrand = {
     name: wsObj?.name || 'Workspace Enterprise',
@@ -156,6 +159,7 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
       clientEmail={clientEmail}
       items={items}
       subtotal={subtotal}
+      globalDiscount={globalDiscount}
       taxAmount={taxAmount}
       grandTotal={grandTotal}
       workspaceBrand={workspaceBrand}

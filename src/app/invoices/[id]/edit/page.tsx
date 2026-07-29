@@ -56,7 +56,9 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
       quantity: item.quantity || 1,
       scale: item.scale || 'pc',
       unitPrice: item.unit_price || 0,
+      discountAmount: item.discount_amount || 0,
     })),
+    globalDiscount: invoice.discount_amount || 0,
   };
 
   return (

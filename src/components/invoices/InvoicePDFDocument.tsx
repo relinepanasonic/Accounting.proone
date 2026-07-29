@@ -16,6 +16,7 @@ export interface InvoiceItemData {
   unitPrice: number;
   quantity: number;
   scale?: string | null;
+  discountAmount?: number;
   total: number;
 }
 
@@ -46,6 +47,7 @@ export interface InvoiceDocumentProps {
   clientEmail?: string;
   items: InvoiceItemData[];
   subtotal: number;
+  globalDiscount?: number;
   taxAmount: number;
   grandTotal: number;
   amountPaid?: number;
@@ -68,6 +70,7 @@ export function InvoicePDFDocument({
   clientEmail = '',
   items = [],
   subtotal = 0,
+  globalDiscount = 0,
   taxAmount = 0,
   grandTotal = 0,
   amountPaid = 0,
@@ -347,6 +350,11 @@ export function InvoicePDFDocument({
                         isDark={false}
                         className="text-xs"
                       />
+                      {(item.discountAmount ?? 0) > 0 && (
+                        <div className="text-[10px] text-red-600 font-mono mt-1">
+                          ↳ Discount: -Rp {item.discountAmount!.toLocaleString('id-ID')}
+                        </div>
+                      )}
                     </td>
                     <td className="py-4 px-2 text-right font-mono font-semibold text-[#1e2536]">
                       Rp {item.unitPrice.toLocaleString('id-ID')}
@@ -377,6 +385,14 @@ export function InvoicePDFDocument({
                     Rp {(subtotal || 0).toLocaleString('id-ID')}
                   </span>
                 </div>
+                {globalDiscount > 0 && (
+                  <div className="flex justify-between py-1 px-2 text-red-600">
+                    <span className="font-serif">Global Discount</span>
+                    <span className="font-mono font-semibold">
+                      -Rp {globalDiscount.toLocaleString('id-ID')}
+                    </span>
+                  </div>
+                )}
                 {taxAmount > 0 && (
                   <div className="flex justify-between py-1 px-2 text-red-600">
                     <span className="font-serif">
@@ -441,17 +457,16 @@ export function InvoicePDFDocument({
                     workspaceBrand.bankAccounts.map((acc, i) => {
                       const rawName = acc.bank_name || 'Bank Account';
                       const cleanName = rawName
-                        .replace(/Primary Bank Account/gi, 'Bank Account')
-                        .replace(/Secondary Bank Account/gi, 'Bank Account')
-                        .replace(/Primary Bank/gi, 'Bank Account')
-                        .replace(/Secondary Bank\s*\(\d+\)/gi, 'Bank Account')
-                        .replace(/Primary\s+and\s+secondary/gi, 'Bank Account')
-                        .replace(/^Primary\s+/gi, '')
-                        .replace(/^Secondary\s+/gi, '')
-                        .trim() || 'Bank Account';
+                        .replace(/Primary Bank Account - /gi, '')
+                        .replace(/Secondary Bank \(\d+\) - /gi, '')
+                        .replace(/Primary Bank Account/gi, '')
+                        .replace(/Secondary Bank \(\d+\)/gi, '')
+                        .replace(/Secondary Bank Account/gi, '')
+                        .trim();
+                        
                       return (
                         <div key={i}>
-                          <strong className="text-[#1e2536]">{cleanName}:</strong>{' '}
+                          {cleanName ? <strong className="text-[#1e2536]">{cleanName}: </strong> : null}
                           {acc.account_number} <span className="text-zinc-500">({acc.account_name})</span>
                         </div>
                       );

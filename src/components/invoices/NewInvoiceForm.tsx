@@ -414,7 +414,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                           className="w-full bg-zinc-900/90 border border-[#d4af37]/40 rounded-lg px-2.5 py-1 text-[11px] font-mono text-[#f5d77f] focus:outline-none focus:border-[#d4af37]"
                         >
                           <option value="" disabled>
-                            ⚡ AUTO-FILL FROM CATALOG...
+                            Package Name
                           </option>
                           {products.map((prod) => (
                             <option key={prod.id} value={prod.id}>
@@ -550,11 +550,18 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                 const cleanName = b.bank_name
                   .replace(/Primary Bank Account - /gi, '')
                   .replace(/Secondary Bank \(\d+\) - /gi, '')
-                  .replace(/Secondary Bank Account/gi, 'Bank Account')
+                  .replace(/Primary Bank Account/gi, '')
+                  .replace(/Secondary Bank \(\d+\)/gi, '')
+                  .replace(/Secondary Bank Account/gi, '')
                   .trim();
+                
+                const label = cleanName 
+                  ? `${cleanName} | ${b.account_number} | ${b.account_name}`
+                  : `${b.account_number} | ${b.account_name}`;
+                  
                 return (
                   <option key={b.id} value={b.id}>
-                    {cleanName} | {b.account_number} | {b.account_name}
+                    {label}
                   </option>
                 );
               })}

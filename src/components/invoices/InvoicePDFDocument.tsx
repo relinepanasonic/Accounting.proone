@@ -227,7 +227,7 @@ export function InvoicePDFDocument({
       {/* A4/Letter Document Container */}
       <div className="max-w-[850px] mx-auto bg-white shadow-2xl overflow-hidden print:shadow-none print:max-w-none print:w-full font-sans text-[#2d3748]">
         {/* HEADER SECTION (Dark Navy/Charcoal #1e2536 with Left Gold Accent Strip) */}
-        <header className="relative bg-[#1e2536] text-white px-8 sm:px-12 py-9 flex items-center justify-between">
+        <header className="relative bg-[#1e2536] text-white px-8 sm:px-12 py-6 flex items-center justify-between">
           {/* Vertical Beige/Gold Accent Strip on Far Left Edge */}
           <div className="absolute top-0 left-0 bottom-0 w-3 bg-[#c5a059]" />
 
@@ -265,7 +265,7 @@ export function InvoicePDFDocument({
         <div className="w-3 h-8 bg-[#e2d5ba]" />
 
         {/* BODY CONTAINER */}
-        <div className="px-8 sm:px-12 pt-2 pb-14 space-y-10">
+        <div className="px-8 sm:px-12 pt-2 pb-8 space-y-6">
           {/* META SECTION: Bill To (Left) & Document Title + Details (Right) */}
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-8">
             {/* Left: Bill To */}
@@ -336,10 +336,10 @@ export function InvoicePDFDocument({
               <tbody className="divide-y divide-zinc-200 text-xs">
                 {items?.map((item, idx) => (
                   <tr key={item.id || idx} className="text-zinc-700">
-                    <td className="py-4 px-2 font-mono text-zinc-500">
+                    <td className="py-2.5 px-2 font-mono text-zinc-500">
                       {item.deliveryDate}
                     </td>
-                    <td className="py-4 px-2 font-medium text-[#1e2536]">
+                    <td className="py-2.5 px-2 font-medium text-[#1e2536]">
                       {item.packageName && (
                         <div className="font-bold text-[#c5a059] uppercase tracking-wider text-[11px] mb-1">
                           {item.packageName}
@@ -356,16 +356,16 @@ export function InvoicePDFDocument({
                         </div>
                       )}
                     </td>
-                    <td className="py-4 px-2 text-right font-mono font-semibold text-[#1e2536]">
+                    <td className="py-2.5 px-2 text-right font-mono font-semibold text-[#1e2536]">
                       Rp {item.unitPrice.toLocaleString('id-ID')}
                     </td>
                     {!isQuotation && (
-                      <td className="py-4 px-2 text-center font-mono font-semibold">
+                      <td className="py-2.5 px-2 text-center font-mono font-semibold">
                         {item.quantity} <span className="text-[10px] text-zinc-400 font-sans ml-0.5">{item.scale || 'pc'}</span>
                       </td>
                     )}
                     {!isQuotation && (
-                      <td className="py-4 px-2 text-right font-mono font-bold text-[#1e2536]">
+                      <td className="py-2.5 px-2 text-right font-mono font-bold text-[#1e2536]">
                         Rp {item.total.toLocaleString('id-ID')}
                       </td>
                     )}
@@ -445,7 +445,7 @@ export function InvoicePDFDocument({
           )}
 
           {/* BOTTOM AREA: Payment Method & Signature Line */}
-          <div className="pt-10 border-t border-zinc-200 grid grid-cols-1 sm:grid-cols-2 gap-8 items-end">
+          <div className="pt-6 border-t border-zinc-200 grid grid-cols-1 sm:grid-cols-2 gap-8 items-end">
             {/* Left: Payment Method & Terms */}
             <div className="space-y-4 text-xs">
               <div>
@@ -497,7 +497,7 @@ export function InvoicePDFDocument({
 
             {/* Right: Signature Line (Thomas removed -> Authorized Officer) */}
             <div className="text-right flex flex-col items-end">
-              <div className="font-serif italic text-2xl text-zinc-400 mb-6 pr-4 select-none">
+              <div className="font-serif italic text-2xl text-zinc-400 mb-3 pr-4 select-none">
                 Authorized Signature
               </div>
               <div className="w-56 border-b-2 border-[#1e2536] pb-1" />

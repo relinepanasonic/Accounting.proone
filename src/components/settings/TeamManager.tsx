@@ -29,7 +29,7 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editRole, setEditRole] = useState<'superadmin' | 'accounting' | 'admin'>('accounting');
+  const [editRole, setEditRole] = useState<'superadmin' | 'accounting' | 'admin' | 'founder'>('accounting');
   const [isPending, startTransition] = useTransition();
 
   const handleDelete = (id: string) => {

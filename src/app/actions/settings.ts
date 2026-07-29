@@ -737,6 +737,7 @@ export async function inviteTeamMember(payload: {
 
     let targetUserId = null;
     let inviteError = null;
+    let actionLink = null;
 
     // Use service_role client to invite user
     const adminSupabase = createAdminClient(
@@ -746,8 +747,12 @@ export async function inviteTeamMember(payload: {
     );
 
     try {
-      const { data: inviteData, error: adminErr } = await adminSupabase.auth.admin.inviteUserByEmail(payload.email.trim(), {
-        data: { full_name: payload.name.trim() }
+      const { data: inviteData, error: adminErr } = await adminSupabase.auth.admin.generateLink({
+        type: 'invite',
+        email: payload.email.trim(),
+        options: {
+          data: { full_name: payload.name.trim() }
+        }
       });
       
       if (adminErr) {
@@ -765,6 +770,7 @@ export async function inviteTeamMember(payload: {
         }
       } else if (inviteData?.user) {
         targetUserId = inviteData.user.id;
+        actionLink = inviteData.properties?.action_link;
       }
     } catch (e: any) {
       inviteError = e.message;
@@ -778,20 +784,20 @@ export async function inviteTeamMember(payload: {
       return { success: false, error: 'Failed to generate user ID for invite.' };
     }
 
-    const { error } = await supabase.from('workspace_members').insert({
+    const { error } = await supabase.from('workspace_members').upsert({
       workspace_id: workspaceId,
       role: payload.role,
       user_id: targetUserId,
       email: payload.email.toLowerCase().trim(),
       display_name: payload.name.trim(),
-    });
+    }, { onConflict: 'workspace_id,user_id' });
 
     if (error) {
       return { success: false, error: error.message };
     }
 
     revalidatePath('/settings/team');
-    return { success: true };
+    return { success: true, inviteLink: actionLink };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Failed to invite team member.' };
   }

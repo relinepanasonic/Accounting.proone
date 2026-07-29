@@ -23,6 +23,7 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
   const [role, setRole] = useState<'superadmin' | 'accounting' | 'admin'>('accounting');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const handleInvite = (e: React.FormEvent) => {
@@ -47,7 +48,12 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
             },
             ...prev,
           ]);
-          setSuccessMsg(`Team invitation sent to ${email} (${role.toUpperCase()})`);
+          if (res.inviteLink) {
+            setInviteLink(res.inviteLink);
+            setSuccessMsg(`Workspace clearance granted for ${email}. Copy the magic link below and send it to them to log in instantly!`);
+          } else {
+            setSuccessMsg(`Workspace clearance granted for ${email}. They can now log in using their email.`);
+          }
           setEmail('');
           setName('');
         }
@@ -90,9 +96,26 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
         )}
 
         {successMsg && (
-          <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/40 text-emerald-400 text-xs font-mono flex items-center gap-2">
-            <Check className="w-4 h-4 shrink-0" />
-            <span>{successMsg}</span>
+          <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/40 text-emerald-400 text-xs flex flex-col gap-3">
+            <div className="flex items-center gap-2 font-mono">
+              <Check className="w-4 h-4 shrink-0" />
+              <span>{successMsg}</span>
+            </div>
+            {inviteLink && (
+              <div className="bg-emerald-950/50 p-2 rounded-lg border border-emerald-500/20 flex items-center justify-between gap-2">
+                <code className="text-[10px] break-all truncate">{inviteLink}</code>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(inviteLink);
+                    alert('Link copied to clipboard!');
+                  }}
+                  className="px-2 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 rounded text-[10px] font-bold tracking-wider transition-colors shrink-0"
+                >
+                  COPY LINK
+                </button>
+              </div>
+            )}
           </div>
         )}
 

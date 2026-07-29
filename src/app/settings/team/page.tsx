@@ -32,8 +32,8 @@ export default async function TeamSettingsPage() {
     }
   }
 
-  // Strict RBAC check: only superadmin can view or modify team settings
-  if (user && currentUserRole !== 'superadmin') {
+  // Strict RBAC check: only superadmin and founder can view or modify team settings
+  if (user && currentUserRole !== 'superadmin' && currentUserRole !== 'founder') {
     return (
       <div className="gold-glass-panel rounded-3xl p-10 max-w-2xl mx-auto text-center space-y-4">
         <div className="w-16 h-16 rounded-2xl bg-[#d4af37]/15 border border-[#d4af37]/40 flex items-center justify-center mx-auto text-[#f5d77f]">

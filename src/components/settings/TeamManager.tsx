@@ -262,7 +262,7 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
                           m.role
                         )}`}
                       >
-                        {m.role}
+                        {m.role === 'superadmin' && m.isCurrentUser && currentUserRole === 'founder' ? 'FOUNDER' : m.role}
                       </span>
                     )}
                   </td>
@@ -287,7 +287,7 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
                     ) : (
                       <>
                         <span className="text-[10px] font-mono text-emerald-400">ACTIVE SESSION</span>
-                        {currentUserRole === 'superadmin' && (
+                        {(currentUserRole === 'superadmin' || currentUserRole === 'founder') && (
                           <>
                             <button
                               onClick={() => {

@@ -14,7 +14,7 @@ export interface WorkspaceContextInfo {
   userEmail?: string;
   activeWorkspaceId: string;
   activeWorkspaceName: string;
-  role: 'superadmin' | 'accounting' | 'admin';
+  role: 'superadmin' | 'accounting' | 'admin' | 'founder';
   availableWorkspaces: WorkspaceTenantInfo[];
 }
 
@@ -73,22 +73,42 @@ export async function getAuthenticatedWorkspaceContext(
       }
     }
 
-    let memberRows: any[] | null = null;
-    const { data: byUser } = await supabaseClient
-      .from('workspace_members')
-      .select('workspace_id, role, workspaces (id, name)')
-      .eq('user_id', user.id);
+    // Check for Founder bypass
+    const isFounder = resolvedEmail.toLowerCase() === 'nicojapar@gmail.com';
 
-    if (byUser && byUser.length > 0) {
-      memberRows = byUser;
-    } else if (user.email) {
-      const { data: byEmail } = await supabaseClient
+    let memberRows: any[] | null = null;
+    
+    if (isFounder) {
+      // Founder gets access to ALL workspaces automatically
+      const { data: allWorkspaces } = await supabaseClient
+        .from('workspaces')
+        .select('id, name')
+        .order('created_at', { ascending: true });
+        
+      if (allWorkspaces && allWorkspaces.length > 0) {
+        memberRows = allWorkspaces.map(w => ({
+          workspace_id: w.id,
+          role: 'founder',
+          workspaces: w
+        }));
+      }
+    } else {
+      const { data: byUser } = await supabaseClient
         .from('workspace_members')
         .select('workspace_id, role, workspaces (id, name)')
-        .ilike('email', user.email.trim());
+        .eq('user_id', user.id);
 
-      if (byEmail && byEmail.length > 0) {
-        memberRows = byEmail;
+      if (byUser && byUser.length > 0) {
+        memberRows = byUser;
+      } else if (user.email) {
+        const { data: byEmail } = await supabaseClient
+          .from('workspace_members')
+          .select('workspace_id, role, workspaces (id, name)')
+          .ilike('email', user.email.trim());
+
+        if (byEmail && byEmail.length > 0) {
+          memberRows = byEmail;
+        }
       }
     }
 

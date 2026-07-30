@@ -32,11 +32,13 @@ import { updateInvoiceAssignment } from '@/app/actions/invoices';
 function InvoiceAssignmentDropdown({ 
   invoiceId, 
   currentAssignedId, 
-  availableWorkspaces 
+  availableWorkspaces,
+  activeWorkspaceName
 }: { 
   invoiceId: string; 
   currentAssignedId: string | null; 
-  availableWorkspaces: any[] 
+  availableWorkspaces: any[];
+  activeWorkspaceName: string;
 }) {
   const [isPending, startTransition] = React.useTransition();
 
@@ -51,6 +53,14 @@ function InvoiceAssignmentDropdown({
     });
   };
 
+  const isPT = activeWorkspaceName.toLowerCase().includes('pt') || activeWorkspaceName.toLowerCase().includes('reline');
+  const isLocked = !isPT;
+
+  const validOptions = availableWorkspaces.filter(w => w.id !== '11111111-1111-1111-1111-111111111111');
+  const displayOptions = isLocked 
+    ? validOptions.filter(w => w.name === activeWorkspaceName)
+    : validOptions;
+
   return (
     <select
       value={currentAssignedId || ''}
@@ -59,14 +69,14 @@ function InvoiceAssignmentDropdown({
       className={`bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-[10px] text-zinc-400 focus:outline-none focus:border-[#d4af37] cursor-pointer hover:border-[#d4af37]/50 transition-colors max-w-[120px] ${isPending ? 'opacity-50' : ''}`}
     >
       <option value="">No Assignment</option>
-      {availableWorkspaces.filter(w => w.id !== '11111111-1111-1111-1111-111111111111').map(w => (
+      {displayOptions.map(w => (
         <option key={w.id} value={w.id}>{w.name}</option>
       ))}
     </select>
   );
 }
 
-export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [] }: { initialInvoices: InvoiceData[], availableWorkspaces?: any[] }) {
+export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], activeWorkspaceName = '' }: { initialInvoices: InvoiceData[], availableWorkspaces?: any[], activeWorkspaceName?: string }) {
   const [filterClient, setFilterClient] = useState('');
   const [filterIssueMonth, setFilterIssueMonth] = useState('');
   const [filterDueMonth, setFilterDueMonth] = useState('');
@@ -342,6 +352,7 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [] }
                       invoiceId={inv.id} 
                       currentAssignedId={inv.assignedWorkspaceId} 
                       availableWorkspaces={availableWorkspaces} 
+                      activeWorkspaceName={activeWorkspaceName}
                     />
                   </td>
                   <td className="py-3 px-3 text-center">

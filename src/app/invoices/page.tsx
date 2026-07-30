@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 
 async function InvoicesTableServer() {
   const supabase = await createClient();
-  const { activeWorkspaceId, availableWorkspaces } = await getAuthenticatedWorkspaceContext(supabase);
+  const { activeWorkspaceId, activeWorkspaceName, availableWorkspaces } = await getAuthenticatedWorkspaceContext(supabase);
 
   const { data: invoices } = await supabase
     .from('invoices')
@@ -47,7 +47,7 @@ async function InvoicesTableServer() {
         })
       : [];
 
-  return <InvoiceTableClient initialInvoices={displayInvoices} availableWorkspaces={availableWorkspaces} />;
+  return <InvoiceTableClient initialInvoices={displayInvoices} availableWorkspaces={availableWorkspaces} activeWorkspaceName={activeWorkspaceName} />;
 }
 
 export default function InvoicesPage() {

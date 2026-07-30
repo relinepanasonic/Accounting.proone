@@ -53,7 +53,7 @@ function InvoiceAssignmentDropdown({
     });
   };
 
-  const isPT = activeWorkspaceName.toLowerCase().includes('pt') || activeWorkspaceName.toLowerCase().includes('reline');
+  const isPT = activeWorkspaceName.toLowerCase().includes('pt') || activeWorkspaceName.toLowerCase().includes('pintu langit');
   const isLocked = !isPT;
 
   const validOptions = availableWorkspaces.filter(w => w.id !== '11111111-1111-1111-1111-111111111111');

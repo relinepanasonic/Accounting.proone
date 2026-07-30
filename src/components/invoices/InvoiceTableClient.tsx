@@ -20,15 +20,17 @@ interface InvoiceData {
   packageQtt: string;
   isQuotation: boolean;
   status: string;
+  assignedWorkspaceName: string;
 }
 
-type SortField = 'invoiceNumber' | 'rawIssueDate' | 'clientName' | 'rawDueDate' | 'packageName' | 'packageQtt' | 'rawAmount' | 'status';
+type SortField = 'invoiceNumber' | 'rawIssueDate' | 'clientName' | 'rawDueDate' | 'packageName' | 'packageQtt' | 'rawAmount' | 'status' | 'assignedWorkspaceName';
 type SortOrder = 'asc' | 'desc';
 
 export function InvoiceTableClient({ initialInvoices }: { initialInvoices: InvoiceData[] }) {
   const [filterClient, setFilterClient] = useState('');
   const [filterIssueMonth, setFilterIssueMonth] = useState('');
   const [filterDueMonth, setFilterDueMonth] = useState('');
+  const [filterAssignment, setFilterAssignment] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
 
   const [sortField, setSortField] = useState<SortField>('rawIssueDate');
@@ -72,6 +74,12 @@ export function InvoiceTableClient({ initialInvoices }: { initialInvoices: Invoi
     return Array.from(months).sort().reverse(); // Newest first
   }, [initialInvoices]);
 
+  const uniqueAssignments = useMemo(() => {
+    const assignments = new Set<string>();
+    initialInvoices.forEach(inv => assignments.add(inv.assignedWorkspaceName || 'No Assignment'));
+    return Array.from(assignments).sort();
+  }, [initialInvoices]);
+
   const formatMonth = (yyyyMm: string) => {
     if (!yyyyMm) return '';
     const [year, month] = yyyyMm.split('-');
@@ -101,7 +109,12 @@ export function InvoiceTableClient({ initialInvoices }: { initialInvoices: Invoi
         return false;
       }
 
-      // 5. Filter by Status
+      // 5. Filter by Assignment
+      if (filterAssignment && inv.assignedWorkspaceName !== filterAssignment) {
+        return false;
+      }
+
+      // 6. Filter by Status
       if (filterStatus !== 'All') {
         if (filterStatus === 'Quotation' && !inv.isQuotation) return false;
         if (filterStatus !== 'Quotation' && inv.isQuotation) return false;
@@ -127,7 +140,7 @@ export function InvoiceTableClient({ initialInvoices }: { initialInvoices: Invoi
     });
 
     return filtered;
-  }, [initialInvoices, filterClient, filterIssueMonth, filterDueMonth, filterStatus, sortField, sortOrder]);
+  }, [initialInvoices, filterClient, filterIssueMonth, filterDueMonth, filterAssignment, filterStatus, sortField, sortOrder]);
 
   return (
     <div className="gold-glass-panel rounded-2xl p-6">
@@ -170,6 +183,19 @@ export function InvoiceTableClient({ initialInvoices }: { initialInvoices: Invoi
             <option value="">All Months</option>
             {uniqueDueMonths.map(month => (
               <option key={month} value={month}>{formatMonth(month)}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Assignment</label>
+          <select 
+            value={filterAssignment}
+            onChange={(e) => setFilterAssignment(e.target.value)}
+            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[#d4af37]"
+          >
+            <option value="">All Workspaces</option>
+            {uniqueAssignments.map(a => (
+              <option key={a} value={a}>{a}</option>
             ))}
           </select>
         </div>
@@ -227,6 +253,9 @@ export function InvoiceTableClient({ initialInvoices }: { initialInvoices: Invoi
                 <th className="py-3 px-3 cursor-pointer select-none group" onClick={() => handleSort('rawAmount')}>
                   <div className="flex items-center justify-end gap-2">Amount Billed {getSortIcon('rawAmount')}</div>
                 </th>
+                <th className="py-3 px-3 cursor-pointer select-none group" onClick={() => handleSort('assignedWorkspaceName')}>
+                  <div className="flex items-center justify-between">Assignment {getSortIcon('assignedWorkspaceName')}</div>
+                </th>
                 <th className="py-3 px-3 cursor-pointer select-none group text-center" onClick={() => handleSort('status')}>
                   <div className="flex items-center justify-center gap-2">Status {getSortIcon('status')}</div>
                 </th>
@@ -257,7 +286,7 @@ export function InvoiceTableClient({ initialInvoices }: { initialInvoices: Invoi
                   <td className="py-3 px-3 text-zinc-400 font-sans">
                     {inv.dueDate}
                   </td>
-                  <td className="py-3 px-3 text-zinc-400 font-sans">
+                  <td className="py-3 px-3 text-zinc-400 font-sans max-w-[200px] truncate" title={inv.packageName}>
                     {inv.packageName}
                   </td>
                   <td className="py-3 px-3 text-zinc-400 font-sans font-medium">
@@ -267,6 +296,9 @@ export function InvoiceTableClient({ initialInvoices }: { initialInvoices: Invoi
                     <div className="text-sm font-extrabold text-[#f5d77f] drop-shadow-[0_0_10px_rgba(245,215,127,0.35)]">
                       {inv.amount}
                     </div>
+                  </td>
+                  <td className="py-3 px-3 text-zinc-400 font-sans">
+                    {inv.assignedWorkspaceName}
                   </td>
                   <td className="py-3 px-3 text-center">
                     {inv.isQuotation ? (

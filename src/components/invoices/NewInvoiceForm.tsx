@@ -307,7 +307,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                 <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-2">
                   <div className="flex items-center gap-1.5 text-orange-400">
                     <Building2 className="w-3.5 h-3.5" />
-                    Assign to Target Workspace
+                    Assign To
                   </div>
                 </label>
                 <select
@@ -315,10 +315,10 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                   onChange={(e) => setAssignedWorkspaceId(e.target.value)}
                   className="w-full bg-zinc-950 border border-orange-500/30 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-orange-500"
                 >
-                  <option value="">-- No Assignment (Stay in PT Pintu Langit) --</option>
+                  <option value="">No Assignment</option>
                   {availableWorkspaces.filter(w => w.id !== '11111111-1111-1111-1111-111111111111').map(w => (
                     <option key={w.id} value={w.id}>
-                      Assign to: {w.name}
+                      {w.name}
                     </option>
                   ))}
                 </select>

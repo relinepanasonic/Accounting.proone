@@ -186,7 +186,7 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [] }
     <div className="gold-glass-panel rounded-2xl p-6">
       
       {/* Filters Bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 p-4 rounded-xl bg-zinc-900/50 border border-zinc-800">
+      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6 p-3 rounded-xl bg-zinc-900/50 border border-zinc-800">
         <div>
           <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Search Client</label>
           <select 

@@ -1,10 +1,11 @@
 import React, { Suspense } from 'react';
 import Link from 'next/link';
 import { Settings, Plus, Receipt, Building2 } from 'lucide-react';
-import { LeftColumnHUD } from '@/components/dashboard/LeftColumnHUD';
-import { CenterColumnHUD } from '@/components/dashboard/CenterColumnHUD';
-import { RightColumnHUD } from '@/components/dashboard/RightColumnHUD';
-import { TopExecutiveStatsBar } from '@/components/dashboard/header/TopExecutiveStatsBar';
+import { DashboardStatsCards } from '@/components/dashboard/header/DashboardStatsCards';
+import { DashboardRow1 } from '@/components/dashboard/center-column/DashboardRow1';
+import { DashboardRow2 } from '@/components/dashboard/center-column/DashboardRow2';
+import { DashboardRow3 } from '@/components/dashboard/center-column/DashboardRow3';
+import { ClientAnalyticsTable } from '@/components/dashboard/center-column/ClientAnalyticsTable';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { getDashboardTelemetry } from '@/lib/data/dashboard';
 
@@ -91,26 +92,16 @@ export default async function CyberneticAccountingDashboardRSC() {
             </div>
           </header>
 
-          {/* TOP EXECUTIVE STATS BAR WITH MINI SPARKLINES */}
-          <TopExecutiveStatsBar summary={telemetry.invoicesSummary} />
+          {/* TOP EXECUTIVE STATS BAR WITH MINI SPARKLINES (NUMBERS) */}
+          <DashboardStatsCards telemetry={telemetry} />
 
-          {/* 3-COLUMN MODULAR LUXURY HUD GRID */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
-            {/* COLUMN 1: LEFT HUD PANEL */}
-            <Suspense fallback={<ColumnSkeleton />}>
-              <LeftColumnHUD />
-            </Suspense>
-
-            {/* COLUMN 2: CENTER DATA CORE */}
-            <Suspense fallback={<ColumnSkeleton />}>
-              <CenterColumnHUD />
-            </Suspense>
-
-            {/* COLUMN 3: RIGHT HUD PANEL */}
-            <Suspense fallback={<ColumnSkeleton />}>
-              <RightColumnHUD />
-            </Suspense>
-          </div>
+          {/* V2 DASHBOARD STACKED ROWS */}
+          <Suspense fallback={<ColumnSkeleton />}>
+            <DashboardRow1 telemetry={telemetry} />
+            <DashboardRow2 telemetry={telemetry} />
+            <DashboardRow3 telemetry={telemetry} />
+            <ClientAnalyticsTable telemetry={telemetry} />
+          </Suspense>
         </div>
 
         {/* Minimal Executive Footer (No Buttons or Numbers Strip) */}

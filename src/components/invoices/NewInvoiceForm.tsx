@@ -72,7 +72,10 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
   const [notes, setNotes] = useState(initialData?.notes || '');
   const [bankAccountId, setBankAccountId] = useState(initialData?.bankAccountId || (bankAccounts && bankAccounts.length > 0 ? bankAccounts[0].id : 'all'));
   const [customPaymentInstructions, setCustomPaymentInstructions] = useState(initialData?.paymentInstructions || '');
-  const [assignedWorkspaceId, setAssignedWorkspaceId] = useState(initialData?.assignedWorkspaceId || '');
+  const [assignedWorkspaceId, setAssignedWorkspaceId] = useState(
+    initialData?.assignedWorkspaceId || 
+    (activeWorkspaceId && activeWorkspaceId !== '11111111-1111-1111-1111-111111111111' ? activeWorkspaceId : '')
+  );
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [lineItems, setLineItems] = useState<LineItem[]>(initialData?.lineItems || []);

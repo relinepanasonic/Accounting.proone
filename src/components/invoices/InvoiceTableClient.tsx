@@ -63,12 +63,12 @@ function InvoiceAssignmentDropdown({
 
   return (
     <select
-      value={currentAssignedId || ''}
+      value={currentAssignedId || (isLocked && displayOptions.length > 0 ? displayOptions[0].id : '')}
       onChange={handleAssignmentChange}
       disabled={isPending}
       className={`bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-[10px] text-zinc-400 focus:outline-none focus:border-[#d4af37] cursor-pointer hover:border-[#d4af37]/50 transition-colors max-w-[120px] ${isPending ? 'opacity-50' : ''}`}
     >
-      <option value="">No Assignment</option>
+      {!isLocked && <option value="">No Assignment</option>}
       {displayOptions.map(w => (
         <option key={w.id} value={w.id}>{w.name}</option>
       ))}

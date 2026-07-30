@@ -2,6 +2,7 @@
 
 import React, { useState, useTransition } from 'react';
 import { Upload, FileText, CheckCircle2, AlertCircle, Eye, Trash2, X, Loader2 } from 'lucide-react';
+import { formatIndoDate } from '@/lib/utils';
 import { uploadTaxDocument, deleteTaxDocument } from '@/app/actions/invoices';
 
 interface TaxInvoice {
@@ -78,8 +79,8 @@ export function TaxDocumentManager({ invoices }: { invoices: TaxInvoice[] }) {
                   <tr key={inv.id} className="hover:bg-zinc-900/40 transition-colors group">
                     <td className="py-4 px-6">
                       <div className="text-sm font-bold text-zinc-100">{inv.invoiceNumber}</div>
-                      <div className="text-[11px] text-zinc-500 font-mono mt-1">
-                        {inv.issueDate ? new Date(inv.issueDate).toLocaleDateString('en-GB') : 'No date'}
+                      <div className="font-semibold text-white/90">
+                        {formatIndoDate(inv.issueDate)}
                       </div>
                     </td>
                     <td className="py-4 px-6">

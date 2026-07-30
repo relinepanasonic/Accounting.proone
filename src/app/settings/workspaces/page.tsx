@@ -19,7 +19,7 @@ export default async function WorkspacesMasterPage() {
   let masterList: WorkspaceMasterItem[] = [];
 
   if (user) {
-    const isFounder = user.email?.toLowerCase() === 'nicojapar@gmail.com';
+    const isFounder = user.email?.toLowerCase() === 'nicojapar@gmail.com' || user.email?.toLowerCase() === 'relinepanasonic@gmail.com';
 
     if (isFounder) {
       const { createClient: createAdminClient } = await import('@supabase/supabase-js');

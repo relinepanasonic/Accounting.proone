@@ -74,8 +74,7 @@ export async function getAuthenticatedWorkspaceContext(
       }
     }
 
-    // Check for Founder bypass
-    const isFounder = resolvedEmail.toLowerCase() === 'nicojapar@gmail.com';
+    const isFounder = resolvedEmail.toLowerCase() === 'nicojapar@gmail.com' || resolvedEmail.toLowerCase() === 'relinepanasonic@gmail.com';
 
     let memberRows: any[] | null = null;
     

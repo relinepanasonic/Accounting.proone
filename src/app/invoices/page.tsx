@@ -1,6 +1,7 @@
 import React, { Suspense } from 'react';
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
+import { formatIndoDate } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { InvoiceStatusToggle, InvoiceActionGroup } from '@/components/invoices/InvoiceRowActions';
@@ -28,13 +29,13 @@ async function InvoicesTableServer() {
           return {
             id: inv.id,
             invoiceNumber: inv.invoice_number,
-            issueDate: inv.issue_date ? new Date(inv.issue_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—',
+            issueDate: formatIndoDate(inv.issue_date),
             rawIssueDate: inv.issue_date || '',
             clientName: clientObj?.name || 'Client',
             clientContact: clientObj?.contact_name || '',
             amount: `Rp ${Number(inv.total_amount || 0).toLocaleString('id-ID')}`,
             rawAmount: Number(inv.total_amount || 0),
-            dueDate: inv.due_date ? new Date(inv.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—',
+            dueDate: formatIndoDate(inv.due_date),
             rawDueDate: inv.due_date || '',
             packageName: firstPackage,
             packageQtt: firstPackageQtt,

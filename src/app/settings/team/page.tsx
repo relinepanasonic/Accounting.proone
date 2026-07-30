@@ -73,7 +73,7 @@ export default async function TeamSettingsPage() {
     .map((m: any, idx: number) => {
       const profile = profiles?.find((p) => p.id === m.user_id);
       const email = profile?.email || `staff-${idx + 1}@professortokoonline.com`;
-      const isFounderUser = email.toLowerCase() === 'nicojapar@gmail.com';
+      const isFounderUser = email.toLowerCase() === 'nicojapar@gmail.com' || email.toLowerCase() === 'relinepanasonic@gmail.com';
       
       return {
         id: m.id,

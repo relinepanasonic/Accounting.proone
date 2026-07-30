@@ -1,6 +1,7 @@
 import 'server-only';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
+import { formatIndoDate } from '@/lib/utils';
 
 export interface DashboardTelemetry {
   invoicesSummary: {
@@ -140,7 +141,7 @@ export async function getDashboardTelemetry(): Promise<DashboardTelemetry> {
       id: inv.invoice_number || 'INV-REF',
       client: clientName,
       amount: `Rp ${Number(inv.total_amount || 0).toLocaleString('id-ID')}`,
-      dueDate: inv.due_date ? new Date(inv.due_date).toLocaleDateString('id-ID') : '15/07/2026',
+      dueDate: formatIndoDate(inv.due_date),
       status: (st === 'overdue' ? 'Overdue' : st === 'paid' ? 'Paid' : 'Pending') as 'Paid' | 'Overdue',
     };
   });
@@ -148,7 +149,7 @@ export async function getDashboardTelemetry(): Promise<DashboardTelemetry> {
   const upcomingBills = (billsRes.data || []).map((b) => ({
     vendor: b.description || 'Vendor Payee',
     amount: `Rp ${Number(b.amount || 0).toLocaleString('id-ID')}`,
-    dueDate: b.due_date ? new Date(b.due_date).toLocaleDateString('id-ID') : '15/07/2026',
+    dueDate: formatIndoDate(b.due_date),
   }));
 
   return {

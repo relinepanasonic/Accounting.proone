@@ -33,6 +33,8 @@ export interface WorkspaceBrandInfo {
   bankAccounts?: { bank_name: string; account_number: string; account_name: string }[];
 }
 
+import { formatIndoDate } from '@/lib/utils';
+
 export interface InvoiceDocumentProps {
   invoiceId?: string;
   invoiceNumber: string;
@@ -415,7 +417,7 @@ export function InvoicePDFDocument({
                     <span className="font-serif text-zinc-500 uppercase tracking-widest text-[10px]">Payment History</span>
                     {payments.map((p, i) => (
                       <div key={i} className="flex justify-between py-1 px-2 text-zinc-600">
-                        <span>Payment {i + 1} <span className="text-[10px] text-zinc-400">({new Date(p.transaction_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })})</span></span>
+                        <span>Payment {i + 1} <span className="text-[10px] text-zinc-400">({formatIndoDate(p.transaction_date)})</span></span>
                         <span className="font-mono text-[#1e2536]">Rp {Number(p.amount).toLocaleString('id-ID')}</span>
                       </div>
                     ))}

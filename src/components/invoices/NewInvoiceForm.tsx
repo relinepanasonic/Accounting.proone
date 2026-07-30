@@ -575,6 +575,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
               value={bankAccountId}
               onChange={(e) => setBankAccountId(e.target.value)}
               className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-[#f5d77f] focus:outline-none focus:border-[#d4af37] font-sans"
+            >
               {bankAccounts?.map((b) => {
                 const cleanName = b.bank_name
                   .replace(/Primary Bank Account - /gi, '')

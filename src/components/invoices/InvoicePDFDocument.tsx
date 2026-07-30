@@ -295,7 +295,7 @@ export function InvoicePDFDocument({
               <div className="w-full sm:w-80 border-t border-[#1e2536] pt-2 grid grid-cols-3 gap-3 text-center sm:text-left text-[11px]">
                 <div>
                   <span className="block text-[10px] text-zinc-400 uppercase font-mono">
-                    {isQuotation ? 'Quote Ref' : 'A/C No'}
+                    {isQuotation ? 'Quote Ref' : 'Invoice No'}
                   </span>
                   <span className="font-bold text-[#1e2536] font-mono">
                     {accountNumber}

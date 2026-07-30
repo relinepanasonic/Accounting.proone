@@ -16,7 +16,7 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
   // 1. Fetch parent invoice with relational joins
   const { data: inv } = await supabase
     .from('invoices')
-    .select('*, clients(*), invoice_line_items(*), workspaces(*), transactions(*)')
+    .select('*, clients(*), invoice_line_items(*), workspaces!invoices_workspace_id_fkey(*), transactions(*)')
     .eq('id', id)
     .single();
 
@@ -75,20 +75,20 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
   }
 
   const invoiceNumber = inv?.invoice_number || 'INV-2026-004';
+  
+  const formatIndoDate = (dateString: string) => {
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return '';
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    return `${String(d.getDate()).padStart(2, '0')} ${months[d.getMonth()]} ${d.getFullYear()}`;
+  };
+
   const issueDate = inv?.due_date
-    ? new Date(inv.due_date).toLocaleDateString('id-ID', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-      })
+    ? formatIndoDate(inv.due_date)
     : '16 Jul 2026';
 
   const invoiceDate = inv?.issue_date
-    ? new Date(inv.issue_date).toLocaleDateString('id-ID', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-      })
+    ? formatIndoDate(inv.issue_date)
     : '15 Jul 2026';
 
   const clientName = clientObj?.name || 'Client Payee';

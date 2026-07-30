@@ -70,7 +70,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
   const [dueDate, setDueDate] = useState(() => initialData?.dueDate || getNet15Date());
   const [globalDiscount, setGlobalDiscount] = useState<number>(initialData?.discountAmount || 0);
   const [notes, setNotes] = useState(initialData?.notes || '');
-  const [bankAccountId, setBankAccountId] = useState(initialData?.bankAccountId || 'all');
+  const [bankAccountId, setBankAccountId] = useState(initialData?.bankAccountId || (bankAccounts && bankAccounts.length > 0 ? bankAccounts[0].id : 'all'));
   const [customPaymentInstructions, setCustomPaymentInstructions] = useState(initialData?.paymentInstructions || '');
   const [assignedWorkspaceId, setAssignedWorkspaceId] = useState(initialData?.assignedWorkspaceId || '');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -575,8 +575,6 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
               value={bankAccountId}
               onChange={(e) => setBankAccountId(e.target.value)}
               className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-[#f5d77f] focus:outline-none focus:border-[#d4af37] font-sans"
-            >
-              <option value="all">Display All Workspace Bank Accounts (Default)</option>
               {bankAccounts?.map((b) => {
                 const cleanName = b.bank_name
                   .replace(/Primary Bank Account - /gi, '')
@@ -596,7 +594,6 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                   </option>
                 );
               })}
-              <option value="custom">Custom Bank Instructions / Override...</option>
             </select>
           </div>
 

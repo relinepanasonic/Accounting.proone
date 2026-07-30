@@ -39,7 +39,7 @@ export function ContactCrmManager({ initialClients, currentUserRole }: ContactCr
   // Delete confirmation state
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const isSuperAdmin = !currentUserRole || currentUserRole === 'superadmin';
+  const isSuperAdmin = !currentUserRole || currentUserRole === 'superadmin' || currentUserRole === 'founder';
 
   const handleAddClient = (e: React.FormEvent) => {
     e.preventDefault();
@@ -246,7 +246,7 @@ export function ContactCrmManager({ initialClients, currentUserRole }: ContactCr
           <div>
             <h3 className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
               <Users className="w-4 h-4 text-[#d4af37]" />
-              CRM DIRECTORY
+              CLIENTS CONTACTS
             </h3>
             <p className="text-[10px] text-zinc-400 mt-1">
               Manage your clients and vendors profiles.

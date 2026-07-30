@@ -256,7 +256,6 @@ export function InvoicePDFDocument({
 
           {/* Contact Info (Top Right) */}
           <div className="text-right text-[11px] leading-relaxed text-zinc-300 font-sans space-y-1 z-10">
-            {brandAddress && <div className="font-semibold text-white">{brandAddress}</div>}
             {brandPhone && <div>{brandPhone}</div>}
             {brandWebsite && <div>{brandWebsite}</div>}
             {brandEmail && <div className="text-[#c5a059]">{brandEmail}</div>}
@@ -283,7 +282,6 @@ export function InvoicePDFDocument({
                 <div className="text-zinc-500 font-medium">{clientContact}</div>
               )}
               <div className="text-zinc-600 pt-1 leading-relaxed">
-                {clientAddress && <div>{clientAddress}</div>}
                 {clientPhone && <div>{clientPhone}</div>}
                 {clientEmail && <div className="text-[#1e2536] font-medium">{clientEmail}</div>}
               </div>

@@ -15,7 +15,7 @@ async function InvoicesTableServer() {
   const { data: invoices } = await supabase
     .from('invoices')
     .select('id, invoice_number, is_quotation, status, total_amount, issue_date, due_date, client_id, clients(name, contact_name), invoice_line_items(description, quantity, scale)')
-    .eq('workspace_id', activeWorkspaceId)
+    .or(`workspace_id.eq.${activeWorkspaceId},assigned_workspace_id.eq.${activeWorkspaceId}`)
     .order('created_at', { ascending: false });
 
   const displayInvoices =

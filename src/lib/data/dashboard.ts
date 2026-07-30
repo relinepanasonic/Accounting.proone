@@ -1,5 +1,6 @@
 import 'server-only';
 import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 
 export interface DashboardTelemetry {
   invoicesSummary: {
@@ -38,26 +39,31 @@ export interface DashboardTelemetry {
  */
 export async function getDashboardTelemetry(): Promise<DashboardTelemetry> {
   const supabase = await createClient();
+  const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
   // Concurrent Execution via Promise.all (Anti-Waterfall Guardrail)
   const [invoicesRes, clientsRes, billsRes, assetsRes] = await Promise.all([
     supabase
       .from('invoices')
       .select('id, invoice_number, status, total_amount, due_date, client_id, clients(name)')
+      .or(`workspace_id.eq.${activeWorkspaceId},assigned_workspace_id.eq.${activeWorkspaceId}`)
       .order('created_at', { ascending: false }),
     supabase
       .from('clients')
       .select('id, name')
+      .eq('workspace_id', activeWorkspaceId)
       .limit(10),
     supabase
       .from('transactions')
       .select('id, description, amount, due_date')
+      .eq('workspace_id', activeWorkspaceId)
       .eq('is_upcoming_bill', true)
       .order('due_date', { ascending: true })
       .limit(8),
     supabase
       .from('fixed_assets')
       .select('initial_value, salvage_value, useful_life_years, purchase_date, status')
+      .eq('workspace_id', activeWorkspaceId)
       .eq('status', 'active'),
   ]);
 

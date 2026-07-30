@@ -24,6 +24,7 @@ export interface CreateInvoicePayload {
   isQuotation?: boolean;
   discountAmount?: number;
   lineItems: LineItem[];
+  assignedWorkspaceId?: string;
 }
 
 export interface UpdateInvoicePayload extends CreateInvoicePayload {
@@ -150,6 +151,7 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
       notes: payload.notes || null,
       bank_account_id: payload.bankAccountId || null,
       payment_instructions: payload.paymentInstructions || null,
+      assigned_workspace_id: payload.assignedWorkspaceId || null,
       updated_at: new Date().toISOString(),
     };
 
@@ -252,6 +254,7 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
         discount_amount: globalDiscount,
         notes: payload.notes || null,
       };
+      if (payload.assignedWorkspaceId) insertData.assigned_workspace_id = payload.assignedWorkspaceId;
       if (payload.bankAccountId) insertData.bank_account_id = payload.bankAccountId;
       if (payload.paymentInstructions) insertData.payment_instructions = payload.paymentInstructions;
 

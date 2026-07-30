@@ -55,7 +55,7 @@ export function BottomMobileNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0e0f14]/95 backdrop-blur-2xl border-t border-[#d4af37]/25 px-2 py-1.5 flex items-center justify-around shadow-[0_-10px_30px_rgba(0,0,0,0.85)]">
+    <nav className="print:hidden lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0e0f14]/95 backdrop-blur-2xl border-t border-[#d4af37]/25 px-2 py-1.5 flex items-center justify-around shadow-[0_-10px_30px_rgba(0,0,0,0.85)]">
       {MOBILE_NAV_ITEMS.map((item) => {
         const isActive =
           item.href === '/'

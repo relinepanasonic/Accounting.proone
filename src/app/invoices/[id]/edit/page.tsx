@@ -13,7 +13,7 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
   const { id } = resolvedParams;
 
   const supabase = await createClient();
-  const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+  const { activeWorkspaceId, availableWorkspaces } = await getAuthenticatedWorkspaceContext(supabase);
 
   // Fetch the invoice
   const { data: invoice } = await supabase
@@ -59,6 +59,7 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
       discountAmount: item.discount_amount || 0,
     })),
     globalDiscount: invoice.discount_amount || 0,
+    assignedWorkspaceId: invoice.assigned_workspace_id || '',
   };
 
   return (
@@ -97,6 +98,8 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
           products={productList} 
           bankAccounts={bankAccounts || []} 
           initialData={initialData}
+          activeWorkspaceId={activeWorkspaceId}
+          availableWorkspaces={availableWorkspaces}
         />
       </Suspense>
     </div>

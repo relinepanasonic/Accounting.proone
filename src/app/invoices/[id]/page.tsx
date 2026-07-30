@@ -75,21 +75,21 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
   }
 
   const invoiceNumber = inv?.invoice_number || 'INV-2026-004';
-  const issueDate = inv?.issue_date
-    ? new Date(inv.issue_date).toLocaleDateString('en-GB', {
+  const issueDate = inv?.due_date
+    ? new Date(inv.due_date).toLocaleDateString('id-ID', {
         day: '2-digit',
         month: 'short',
         year: 'numeric',
       })
-    : '16 Jul, 2026';
+    : '16 Jul 2026';
 
-  const invoiceDate = inv?.created_at
-    ? new Date(inv.created_at).toLocaleDateString('en-GB', {
+  const invoiceDate = inv?.issue_date
+    ? new Date(inv.issue_date).toLocaleDateString('id-ID', {
         day: '2-digit',
         month: 'short',
         year: 'numeric',
       })
-    : '15 Jul, 2026';
+    : '15 Jul 2026';
 
   const clientName = clientObj?.name || 'Client Payee';
   const clientBrand = clientObj?.company_name || clientObj?.company || '';

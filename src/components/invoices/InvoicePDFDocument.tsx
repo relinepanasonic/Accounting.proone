@@ -311,7 +311,7 @@ export function InvoicePDFDocument({
                 </div>
                 <div className="border-l border-zinc-200 pl-3">
                   <span className="block text-[10px] text-zinc-400 uppercase font-mono">
-                    {isQuotation ? 'Valid Until' : 'Issue Date'}
+                    {isQuotation ? 'Valid Until' : 'Due Date'}
                   </span>
                   <span className="font-semibold text-[#1e2536]">
                     {issueDate}
@@ -326,7 +326,6 @@ export function InvoicePDFDocument({
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-y-2 border-[#1e2536] text-[#1e2536] uppercase text-[10px] tracking-wider font-bold font-serif">
-                  <th className="py-3 px-2 w-28">{isQuotation ? 'PERIOD' : 'DATE'}</th>
                   <th className="py-3 px-2">{isQuotation ? 'DELIVERABLE / SERVICE PITCH' : 'PACKAGE & DESCRIPTION'}</th>
                   <th className="py-3 px-2 text-right">{isQuotation ? 'UNIT INVESTMENT' : 'UNIT PRICE'}</th>
                   {!isQuotation && <th className="py-3 px-2 text-center w-16">QTY</th>}
@@ -336,9 +335,6 @@ export function InvoicePDFDocument({
               <tbody className="divide-y divide-zinc-200 text-xs">
                 {items?.map((item, idx) => (
                   <tr key={item.id || idx} className="text-zinc-700">
-                    <td className="py-2.5 px-2 font-mono text-zinc-500">
-                      {item.deliveryDate}
-                    </td>
                     <td className="py-2.5 px-2 font-medium text-[#1e2536]">
                       {item.packageName && (
                         <div className="font-bold text-[#c5a059] uppercase tracking-wider text-[11px] mb-1">
@@ -445,7 +441,7 @@ export function InvoicePDFDocument({
           )}
 
           {/* BOTTOM AREA: Payment Method & Signature Line */}
-          <div className="pt-6 border-t border-zinc-200 grid grid-cols-1 sm:grid-cols-2 gap-8 items-end">
+          <div className="pt-6 grid grid-cols-1 sm:grid-cols-2 gap-8 items-end">
             {/* Left: Payment Method & Terms */}
             <div className="space-y-4 text-xs">
               <div>
@@ -478,24 +474,9 @@ export function InvoicePDFDocument({
                   )}
                 </div>
               </div>
-
-              <div>
-                <h5 className="font-serif italic text-[#c5a059] text-sm mb-1">
-                  {isQuotation ? 'Looking Forward To Our Collaboration!' : 'Thank You For Your Business!'}
-                </h5>
-                <div className="text-[11px] text-zinc-500 space-y-1">
-                  <div className="font-bold text-zinc-700">Terms & Conditions:</div>
-                  <ul className="list-disc pl-4 space-y-0.5">
-                    <li>{isQuotation ? 'Quotation validity period is 15 days from quote date.' : 'Payment is due within 15 days of invoice date.'}</li>
-                    <li>
-                      {isQuotation ? 'Deliverable timing commences immediately upon contract execution.' : 'Please include Invoice Reference Number on all bank transfer notes.'}
-                    </li>
-                  </ul>
-                </div>
-              </div>
             </div>
 
-            {/* Right: Signature Line (Thomas removed -> Authorized Officer) */}
+            {/* Right: Signature Line */}
             <div className="text-right flex flex-col items-end">
               <div className="font-serif italic text-2xl text-zinc-400 mb-3 pr-4 select-none">
                 Authorized Signature
@@ -506,6 +487,32 @@ export function InvoicePDFDocument({
                   {brandName}
                 </div>
                 <div className="text-[11px] text-zinc-500">Finance & Executive Department</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* PIC 4 STYLE FOOTER */}
+        <div className="mt-8 flex h-24 border-t border-zinc-200">
+          {/* Dark Left Block */}
+          <div className="w-1/3 bg-[#333333] text-white flex flex-col justify-center px-8">
+            <div className="text-sm tracking-wide font-sans leading-tight">THANK YOU</div>
+            <div className="text-sm tracking-wide font-sans font-bold leading-tight">FOR YOUR BUSINESS</div>
+          </div>
+          {/* Light Right Block */}
+          <div className="w-2/3 bg-white flex flex-col justify-center px-8 text-[10px] text-zinc-700 space-y-1.5 font-sans">
+            <div className="font-semibold text-zinc-900 border-b border-zinc-200 pb-1 mb-1">
+              On Touch: <span className="font-normal text-zinc-600">{brandAddress || '123 Street Name, Town/City Name, State, County 556'}</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="flex items-center gap-1.5">
+                <span className="text-zinc-900 font-bold">☎</span> {brandPhone || '+999 123 456 789'}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-zinc-900 font-bold">✉</span> {brandEmail || 'companyinfo@yourname'}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-zinc-900 font-bold">🌍</span> {brandWebsite || 'www.domainname.com'}
               </div>
             </div>
           </div>

@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function NewInvoicePage({ searchParams }: { searchParams: { historical?: string } }) {
   const supabase = await createClient();
-  const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+  const { activeWorkspaceId, availableWorkspaces } = await getAuthenticatedWorkspaceContext(supabase);
 
   const { data: clients } = await supabase.from('clients').select('id, name').order('name', { ascending: true });
   const { data: products } = await supabase.from('products').select('*').eq('workspace_id', activeWorkspaceId);
@@ -63,7 +63,7 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: {
       )}
 
       <Suspense fallback={<div className="h-40 bg-zinc-900 rounded-xl animate-pulse" />}>
-        <NewInvoiceForm clients={clientList} products={productList} bankAccounts={bankAccounts || []} isHistorical={searchParams.historical === 'true'} />
+        <NewInvoiceForm clients={clientList} products={productList} bankAccounts={bankAccounts || []} isHistorical={searchParams.historical === 'true'} activeWorkspaceId={activeWorkspaceId} availableWorkspaces={availableWorkspaces} />
       </Suspense>
     </div>
   );

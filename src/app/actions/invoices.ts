@@ -207,6 +207,28 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
   }
 }
 
+export async function updateInvoiceAssignment(invoiceId: string, assignedWorkspaceId: string | null): Promise<InvoiceActionResult> {
+  try {
+    const supabase = await createClient();
+    const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+
+    const { error } = await supabase
+      .from('invoices')
+      .update({ assigned_workspace_id: assignedWorkspaceId })
+      .eq('id', invoiceId)
+      .eq('workspace_id', workspaceId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/invoices');
+    return { success: true, invoiceId };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to update assignment.' };
+  }
+}
+
 /**
  * Server Action: Create a new action-oriented invoice and its line items.
  * Strictly enforces authentication and RLS workspace context.

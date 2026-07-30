@@ -20,13 +20,53 @@ interface InvoiceData {
   packageQtt: string;
   isQuotation: boolean;
   status: string;
+  assignedWorkspaceId: string | null;
   assignedWorkspaceName: string;
 }
 
 type SortField = 'invoiceNumber' | 'rawIssueDate' | 'clientName' | 'rawDueDate' | 'packageName' | 'packageQtt' | 'rawAmount' | 'status' | 'assignedWorkspaceName';
 type SortOrder = 'asc' | 'desc';
 
-export function InvoiceTableClient({ initialInvoices }: { initialInvoices: InvoiceData[] }) {
+import { updateInvoiceAssignment } from '@/app/actions/invoices';
+
+function InvoiceAssignmentDropdown({ 
+  invoiceId, 
+  currentAssignedId, 
+  availableWorkspaces 
+}: { 
+  invoiceId: string; 
+  currentAssignedId: string | null; 
+  availableWorkspaces: any[] 
+}) {
+  const [isPending, startTransition] = React.useTransition();
+
+  const handleAssignmentChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newAssignedId = e.target.value || null;
+    startTransition(async () => {
+      try {
+        await updateInvoiceAssignment(invoiceId, newAssignedId);
+      } catch (err) {
+        console.error(err);
+      }
+    });
+  };
+
+  return (
+    <select
+      value={currentAssignedId || ''}
+      onChange={handleAssignmentChange}
+      disabled={isPending}
+      className={`bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-[10px] text-zinc-400 focus:outline-none focus:border-[#d4af37] cursor-pointer hover:border-[#d4af37]/50 transition-colors max-w-[120px] ${isPending ? 'opacity-50' : ''}`}
+    >
+      <option value="">No Assignment</option>
+      {availableWorkspaces.filter(w => w.id !== '11111111-1111-1111-1111-111111111111').map(w => (
+        <option key={w.id} value={w.id}>{w.name}</option>
+      ))}
+    </select>
+  );
+}
+
+export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [] }: { initialInvoices: InvoiceData[], availableWorkspaces?: any[] }) {
   const [filterClient, setFilterClient] = useState('');
   const [filterIssueMonth, setFilterIssueMonth] = useState('');
   const [filterDueMonth, setFilterDueMonth] = useState('');
@@ -298,7 +338,11 @@ export function InvoiceTableClient({ initialInvoices }: { initialInvoices: Invoi
                     </div>
                   </td>
                   <td className="py-3 px-3 text-zinc-400 font-sans">
-                    {inv.assignedWorkspaceName}
+                    <InvoiceAssignmentDropdown 
+                      invoiceId={inv.id} 
+                      currentAssignedId={inv.assignedWorkspaceId} 
+                      availableWorkspaces={availableWorkspaces} 
+                    />
                   </td>
                   <td className="py-3 px-3 text-center">
                     {inv.isQuotation ? (

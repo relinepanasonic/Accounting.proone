@@ -11,11 +11,11 @@ export const dynamic = 'force-dynamic';
 
 async function InvoicesTableServer() {
   const supabase = await createClient();
-  const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+  const { activeWorkspaceId, availableWorkspaces } = await getAuthenticatedWorkspaceContext(supabase);
 
   const { data: invoices } = await supabase
     .from('invoices')
-    .select('id, invoice_number, is_quotation, status, total_amount, issue_date, due_date, client_id, clients(name, contact_name), invoice_line_items(description, quantity, scale), assignedWorkspaces:workspaces!invoices_assigned_workspace_id_fkey(name)')
+    .select('id, invoice_number, is_quotation, status, total_amount, issue_date, due_date, client_id, assigned_workspace_id, clients(name, contact_name), invoice_line_items(description, quantity, scale), assignedWorkspaces:workspaces!invoices_assigned_workspace_id_fkey(name)')
     .or(`workspace_id.eq.${activeWorkspaceId},assigned_workspace_id.eq.${activeWorkspaceId}`)
     .order('created_at', { ascending: false });
 
@@ -41,12 +41,13 @@ async function InvoicesTableServer() {
             packageQtt: firstPackageQtt,
             isQuotation: inv.is_quotation,
             status: inv.status || 'draft',
+            assignedWorkspaceId: inv.assigned_workspace_id,
             assignedWorkspaceName: inv.assignedWorkspaces ? (Array.isArray(inv.assignedWorkspaces) ? (inv.assignedWorkspaces as any[])[0]?.name : (inv.assignedWorkspaces as any).name) : 'No Assignment',
           };
         })
       : [];
 
-  return <InvoiceTableClient initialInvoices={displayInvoices} />;
+  return <InvoiceTableClient initialInvoices={displayInvoices} availableWorkspaces={availableWorkspaces} />;
 }
 
 export default function InvoicesPage() {

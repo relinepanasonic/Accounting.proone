@@ -27,6 +27,7 @@ interface NavItem {
   icon: React.ReactNode;
   badge?: string;
   allowedRoles: string[]; // which roles can see this item
+  allowedWorkspaceIds?: string[]; // if provided, ONLY these workspaces can see it
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -42,6 +43,14 @@ const NAV_ITEMS: NavItem[] = [
     icon: <ArrowDownLeft className="w-4 h-4" />,
     badge: 'Income',
     allowedRoles: ['founder', 'superadmin', 'accounting', 'admin'],
+  },
+  {
+    name: 'Tax / Pajak',
+    href: '/invoices/tax',
+    icon: <ShieldCheck className="w-4 h-4" />,
+    badge: 'Doc',
+    allowedRoles: ['founder', 'superadmin', 'accounting', 'admin'],
+    allowedWorkspaceIds: ['11111111-1111-1111-1111-111111111111'],
   },
   {
     name: 'Quotations',
@@ -185,7 +194,11 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
 
         {/* Navigation Menu Links */}
         <nav className="p-3 space-y-1">
-          {NAV_ITEMS.filter(item => item.allowedRoles.includes(activeRole)).map((item) => {
+          {NAV_ITEMS.filter(item => {
+            if (!item.allowedRoles.includes(activeRole)) return false;
+            if (item.allowedWorkspaceIds && !item.allowedWorkspaceIds.includes(activeId)) return false;
+            return true;
+          }).map((item) => {
             const isActive =
               item.href === '/'
                 ? pathname === '/'

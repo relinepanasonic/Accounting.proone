@@ -593,3 +593,45 @@ export async function recordInvoicePayment(invoiceId: string, amount: number, pa
     return { success: false, error: err?.message || 'Error recording payment.' };
   }
 }
+
+export async function uploadTaxDocument(invoiceId: string, docType: 'faktur_pajak' | 'bukti_potong', base64Data: string) {
+  try {
+    const supabase = await createClient();
+    const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+
+    const column = docType === 'faktur_pajak' ? 'faktur_pajak_url' : 'bukti_potong_url';
+    const { error } = await supabase
+      .from('invoices')
+      .update({ [column]: base64Data })
+      .eq('id', invoiceId)
+      .eq('workspace_id', workspaceId);
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath('/invoices/tax');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Error uploading document' };
+  }
+}
+
+export async function deleteTaxDocument(invoiceId: string, docType: 'faktur_pajak' | 'bukti_potong') {
+  try {
+    const supabase = await createClient();
+    const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+
+    const column = docType === 'faktur_pajak' ? 'faktur_pajak_url' : 'bukti_potong_url';
+    const { error } = await supabase
+      .from('invoices')
+      .update({ [column]: null })
+      .eq('id', invoiceId)
+      .eq('workspace_id', workspaceId);
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath('/invoices/tax');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Error deleting document' };
+  }
+}

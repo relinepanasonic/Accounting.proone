@@ -2,7 +2,21 @@
 
 import React from 'react';
 
-export function CollectionHealthCompass() {
+interface CollectionHealthCompassProps {
+  score?: number;
+}
+
+export function CollectionHealthCompass({ score = 100 }: CollectionHealthCompassProps) {
+  const radius = 40;
+  const circumference = 2 * Math.PI * radius; // approx 251.2
+  // score is 0-100, we want strokeDashoffset to be circumference * (1 - score/100)
+  const offset = circumference * (1 - score / 100);
+  
+  let label = 'HEALTHY';
+  let color = '#f5d77f';
+  if (score < 50) { label = 'CRITICAL'; color = '#ef4444'; }
+  else if (score < 80) { label = 'WARNING'; color = '#f97316'; }
+
   return (
     <div className="gold-glass-panel gold-glass-panel-hover rounded-2xl p-5 space-y-4">
       <div className="flex items-center justify-between border-b border-[#d4af37]/20 pb-3">
@@ -12,8 +26,8 @@ export function CollectionHealthCompass() {
           </h3>
           <p className="text-[10px] font-mono text-zinc-400 mt-0.5">COLLECTION VELOCITY</p>
         </div>
-        <span className="text-[10px] font-mono text-[#f5d77f] font-extrabold">
-          94.2 / 100
+        <span className="text-[10px] font-mono font-extrabold" style={{ color }}>
+          {score.toFixed(1)} / 100
         </span>
       </div>
 
@@ -32,19 +46,20 @@ export function CollectionHealthCompass() {
             cy="50"
             r="40"
             fill="none"
-            stroke="#d4af37"
+            stroke={color}
             strokeWidth="8"
-            strokeDasharray="251.2"
-            strokeDashoffset="18"
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
             strokeLinecap="round"
-            className="drop-shadow-[0_0_12px_rgba(212,175,55,0.6)]"
+            style={{ transition: 'stroke-dashoffset 1s ease-in-out' }}
+            className={score >= 80 ? "drop-shadow-[0_0_12px_rgba(212,175,55,0.6)]" : ""}
           />
         </svg>
 
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-          <span className="text-2xl font-black text-white">94%</span>
-          <span className="text-[9px] font-mono text-[#f5d77f] uppercase tracking-widest mt-0.5">
-            HEALTHY
+          <span className="text-2xl font-black text-white">{Math.round(score)}%</span>
+          <span className="text-[9px] font-mono uppercase tracking-widest mt-0.5" style={{ color }}>
+            {label}
           </span>
         </div>
       </div>

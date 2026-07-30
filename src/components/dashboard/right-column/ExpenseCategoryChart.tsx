@@ -2,14 +2,24 @@
 
 import React from 'react';
 
-const CATEGORIES = [
-  { label: 'Computing & Servers', pct: 42, color: '#f5d77f' },
-  { label: 'Creator Payouts', pct: 31, color: '#d4af37' },
-  { label: 'Studio & Power', pct: 18, color: '#aa820a' },
-  { label: 'Software Licenses', pct: 9, color: '#735706' },
-];
+interface ExpenseCategoryChartProps {
+  categories: Array<{ category: string; amount: number }>;
+}
 
-export function ExpenseCategoryChart() {
+const GOLD_PALETTE = ['#f5d77f', '#d4af37', '#aa820a', '#735706', '#4a3803'];
+
+export function ExpenseCategoryChart({ categories = [] }: ExpenseCategoryChartProps) {
+  const total = categories.reduce((sum, item) => sum + item.amount, 0) || 1;
+  const displayCategories = categories.slice(0, 5).map((item, idx) => ({
+    label: item.category,
+    pct: Math.round((item.amount / total) * 100),
+    color: GOLD_PALETTE[idx % GOLD_PALETTE.length]
+  }));
+
+  if (displayCategories.length === 0) {
+    displayCategories.push({ label: 'No Expenses Recorded', pct: 0, color: '#4a3803' });
+  }
+
   return (
     <div className="gold-glass-panel gold-glass-panel-hover rounded-2xl p-5 space-y-4">
       <div className="flex items-center justify-between border-b border-[#d4af37]/20 pb-3">
@@ -20,7 +30,7 @@ export function ExpenseCategoryChart() {
       </div>
 
       <div className="space-y-3">
-        {CATEGORIES.map((item, idx) => (
+        {displayCategories.map((item, idx) => (
           <div key={idx} className="space-y-1">
             <div className="flex items-center justify-between text-xs">
               <span className="text-zinc-300 font-sans">{item.label}</span>

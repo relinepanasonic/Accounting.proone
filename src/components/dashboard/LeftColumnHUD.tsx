@@ -11,9 +11,15 @@ export async function LeftColumnHUD() {
 
   return (
     <div className="flex flex-col gap-6">
-      <DynamicProjectedRevenueChart />
+      <DynamicProjectedRevenueChart 
+        projectedAmount={telemetry.chartData.projectedCurrentMonth}
+        targetAmount={telemetry.chartData.projectedTarget}
+        percentChange={telemetry.chartData.projectedPercentChange}
+        historicalData={telemetry.chartData.revenue}
+      />
       <DynamicUnpaidAmountGauge
-        amount={telemetry.invoicesSummary.unpaidRatio}
+        amount={telemetry.invoicesSummary.activeReceivables}
+        totalVolume={telemetry.invoicesSummary.totalVolume}
         overdueCount={telemetry.invoicesSummary.overdueCount}
       />
       <ClientReceivablesList clientReceivables={telemetry.clientReceivables} />

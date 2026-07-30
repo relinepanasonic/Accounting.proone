@@ -32,6 +32,17 @@ export interface DashboardTelemetry {
     amount: string;
     dueDate: string;
   }>;
+  chartData: {
+    months: string[];
+    revenue: number[];
+    expenses: number[];
+    depreciation: number[];
+    projectedCurrentMonth: number;
+    projectedTarget: number;
+    projectedPercentChange: number;
+    expenseCategories: Array<{ category: string; amount: number }>;
+    collectionHealthScore: number;
+  };
 }
 
 /**
@@ -56,11 +67,8 @@ export async function getDashboardTelemetry(): Promise<DashboardTelemetry> {
       .limit(10),
     supabase
       .from('transactions')
-      .select('id, description, amount, due_date')
-      .eq('workspace_id', activeWorkspaceId)
-      .eq('is_upcoming_bill', true)
-      .order('due_date', { ascending: true })
-      .limit(8),
+      .select('id, description, amount, due_date, status, category, is_upcoming_bill')
+      .eq('workspace_id', activeWorkspaceId),
     supabase
       .from('fixed_assets')
       .select('initial_value, salvage_value, useful_life_years, purchase_date, status')
@@ -146,11 +154,114 @@ export async function getDashboardTelemetry(): Promise<DashboardTelemetry> {
     };
   });
 
-  const upcomingBills = (billsRes.data || []).map((b) => ({
-    vendor: b.description || 'Vendor Payee',
-    amount: `Rp ${Number(b.amount || 0).toLocaleString('id-ID')}`,
-    dueDate: formatIndoDate(b.due_date),
-  }));
+  // Advanced Aggregation for Charts
+  const now = new Date();
+  const currentMonthIdx = now.getMonth();
+  const currentYear = now.getFullYear();
+
+  // Generate last 9 months labels
+  const monthsList = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const chartMonths: string[] = [];
+  for (let i = 8; i >= 0; i--) {
+    let m = currentMonthIdx - i;
+    if (m < 0) m += 12;
+    chartMonths.push(monthsList[m]);
+  }
+
+  // Initialize data arrays
+  const revByMonth = new Array(9).fill(0);
+  const expByMonth = new Array(9).fill(0);
+  const depByMonth = new Array(9).fill(0);
+
+  const getMonthOffset = (dateStr: string | null) => {
+    if (!dateStr) return -1;
+    const d = new Date(dateStr);
+    const mDiff = (currentYear - d.getFullYear()) * 12 + (currentMonthIdx - d.getMonth());
+    return mDiff >= 0 && mDiff < 9 ? 8 - mDiff : -1; // index in 9-element array
+  };
+
+  // 1. Revenue
+  let projectedCurrentMonth = 0;
+  for (const inv of invoices) {
+    const amt = Number(inv.total_amount || 0);
+    const st = (inv.status || 'draft').toLowerCase();
+    
+    // Group paid revenue by month
+    if (st === 'paid') {
+      const idx = getMonthOffset(inv.issue_date);
+      if (idx !== -1) revByMonth[idx] += amt;
+    }
+
+    // Add pending invoices of current month to projection
+    if (st === 'pending' || st === 'draft' || st === 'overdue') {
+      const d = new Date(inv.issue_date);
+      if (d.getMonth() === currentMonthIdx && d.getFullYear() === currentYear) {
+        projectedCurrentMonth += amt;
+      }
+    }
+  }
+  // Add already paid this month to projection
+  projectedCurrentMonth += revByMonth[8];
+
+  // 2. Expenses
+  const allTransactions = billsRes.data || [];
+  const expCategoryMap = new Map<string, number>();
+
+  for (const tx of allTransactions) {
+    const amt = Number(tx.amount || 0);
+    // Add to monthly expenses if paid
+    if ((tx.status || 'pending').toLowerCase() === 'paid') {
+      const idx = getMonthOffset(tx.due_date);
+      if (idx !== -1) expByMonth[idx] += amt;
+      
+      const cat = tx.category || 'General';
+      expCategoryMap.set(cat, (expCategoryMap.get(cat) || 0) + amt);
+    }
+  }
+
+  // Calculate Asset Depreciation across the months
+  for (const asset of assets) {
+    const initialVal = Number(asset.initial_value || 0);
+    const salvageVal = Number(asset.salvage_value || 0);
+    const lifeYears = Number(asset.useful_life_years || 3);
+    const monthlyDeprec = (initialVal - salvageVal) / ((lifeYears > 0 ? lifeYears : 1) * 12);
+
+    const purchaseDate = new Date(asset.purchase_date);
+    for (let i = 0; i < 9; i++) {
+      let m = currentMonthIdx - (8 - i);
+      let y = currentYear;
+      if (m < 0) {
+        m += 12;
+        y -= 1;
+      }
+      const checkDate = new Date(y, m);
+      if (checkDate >= purchaseDate) {
+        depByMonth[i] += monthlyDeprec;
+      }
+    }
+  }
+
+  const upcomingBills = allTransactions
+    .filter(tx => tx.is_upcoming_bill && (tx.status || 'pending').toLowerCase() !== 'paid')
+    .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
+    .slice(0, 8)
+    .map(b => ({
+      vendor: b.description || 'Vendor Payee',
+      amount: `Rp ${Number(b.amount || 0).toLocaleString('id-ID')}`,
+      dueDate: formatIndoDate(b.due_date),
+    }));
+
+  const expenseCategories = Array.from(expCategoryMap.entries())
+    .map(([category, amount]) => ({ category, amount }))
+    .sort((a, b) => b.amount - a.amount);
+
+  // Collection Health (0-100)
+  const healthScore = totalVolume > 0 ? Math.min(100, Math.round((paidCount / invoices.length) * 100)) : 100;
+  
+  // Projection Target
+  const prevMonthRevenue = revByMonth[7] || 0;
+  const projectedTarget = prevMonthRevenue > 0 ? prevMonthRevenue * 1.1 : 10000000;
+  const projectedPercentChange = prevMonthRevenue > 0 ? ((projectedCurrentMonth - prevMonthRevenue) / prevMonthRevenue) * 100 : 0;
 
   return {
     invoicesSummary: {
@@ -166,5 +277,16 @@ export async function getDashboardTelemetry(): Promise<DashboardTelemetry> {
     clientReceivables,
     invoicesList,
     upcomingBills,
+    chartData: {
+      months: chartMonths,
+      revenue: revByMonth,
+      expenses: expByMonth,
+      depreciation: depByMonth,
+      projectedCurrentMonth,
+      projectedTarget,
+      projectedPercentChange,
+      expenseCategories,
+      collectionHealthScore: healthScore
+    }
   };
 }

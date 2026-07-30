@@ -18,7 +18,12 @@ export async function CenterColumnHUD() {
         avgAmount={telemetry.invoicesSummary.avgInvoiceAmount}
       />
       <InvoicesDataTable invoicesList={telemetry.invoicesList} />
-      <DynamicCashFlowProfitCharts />
+      <DynamicCashFlowProfitCharts 
+        months={telemetry.chartData.months}
+        revenue={telemetry.chartData.revenue}
+        expenses={telemetry.chartData.expenses}
+        depreciation={telemetry.chartData.depreciation}
+      />
     </div>
   );
 }

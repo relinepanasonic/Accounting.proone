@@ -2,12 +2,58 @@
 
 import React from 'react';
 
-export function CashFlowProfitCharts() {
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'];
-  const revenueCurve = 'M 0 65 Q 40 30, 80 45 T 160 20 T 240 40 T 300 15';
-  const expensesCurve = 'M 0 75 Q 40 55, 80 60 T 160 48 T 240 58 T 300 45';
-  const depreciationBars = [920, 860, 780, 740, 680, 620, 540, 480, 410];
+interface CashFlowProfitChartsProps {
+  months: string[];
+  revenue: number[];
+  expenses: number[];
+  depreciation: number[];
+}
 
+export function CashFlowProfitCharts({
+  months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'],
+  revenue = [0, 0, 0, 0, 0, 0, 0, 0, 0],
+  expenses = [0, 0, 0, 0, 0, 0, 0, 0, 0],
+  depreciation = [0, 0, 0, 0, 0, 0, 0, 0, 0]
+}: CashFlowProfitChartsProps) {
+  
+  // Helpers to generate SVG curves
+  const width = 300;
+  const height = 80;
+  const paddingY = 10;
+  
+  const generatePath = (data: number[], minV: number, maxV: number) => {
+    if (data.length < 2) return `M 0 ${height} L ${width} ${height}`;
+    
+    const range = (maxV - minV) || 1;
+    const stepX = width / (data.length - 1);
+    const points = data.map((val, i) => ({
+      x: i * stepX,
+      y: height - paddingY - ((val - minV) / range) * (height - paddingY * 2)
+    }));
+
+    let path = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 1; i < points.length; i++) {
+      const pPrev = points[i - 1];
+      const pCur = points[i];
+      const cx = (pPrev.x + pCur.x) / 2;
+      const cy = (pPrev.y + pCur.y) / 2;
+      if (i === 1) {
+        path += ` Q ${pPrev.x} ${pPrev.y}, ${cx} ${cy} T ${pCur.x} ${pCur.y}`;
+      } else {
+        path += ` T ${pCur.x} ${pCur.y}`;
+      }
+    }
+    return path;
+  };
+
+  const combinedMax = Math.max(...revenue, ...expenses, 10000);
+  const combinedMin = Math.min(...revenue, ...expenses, 0);
+
+  const revenueCurve = generatePath(revenue, combinedMin, combinedMax);
+  const expensesCurve = generatePath(expenses, combinedMin, combinedMax);
+
+  const maxDep = Math.max(...depreciation, 100);
+  
   return (
     <div className="gold-glass-panel gold-glass-panel-hover rounded-2xl p-6 space-y-6">
       {/* REVENUE VS EXPENSES GOLD AREA CHART */}
@@ -75,11 +121,11 @@ export function CashFlowProfitCharts() {
           <span className="text-[10px] text-[#d4af37] font-mono">Straight-Line Recovery</span>
         </div>
         <div className="flex items-end justify-between h-20 gap-2 pt-2">
-          {depreciationBars.map((val, idx) => (
+          {depreciation.map((val, idx) => (
             <div key={idx} className="flex-1 flex flex-col items-center gap-1.5 group">
               <div
                 className="w-full bg-gradient-to-t from-[#997319] via-[#d4af37] to-[#f5d77f] rounded-t-sm transition-all group-hover:brightness-125 shadow-[0_0_8px_rgba(212,175,55,0.2)]"
-                style={{ height: `${(val / 1000) * 100}%` }}
+                style={{ height: `${Math.max(2, (val / maxDep) * 100)}%` }}
               />
               <span className="text-[9px] font-mono text-zinc-400 group-hover:text-[#f5d77f]">
                 {months[idx]}

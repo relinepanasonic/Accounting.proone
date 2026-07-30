@@ -12,8 +12,8 @@ export async function RightColumnHUD() {
   return (
     <div className="flex flex-col gap-6">
       <UpcomingBillsList upcomingBills={telemetry.upcomingBills} />
-      <DynamicCollectionHealthCompass />
-      <DynamicExpenseCategoryChart />
+      <DynamicCollectionHealthCompass score={telemetry.chartData.collectionHealthScore} />
+      <DynamicExpenseCategoryChart categories={telemetry.chartData.expenseCategories} />
     </div>
   );
 }

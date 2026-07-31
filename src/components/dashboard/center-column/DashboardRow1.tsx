@@ -32,12 +32,7 @@ export function DashboardRow1({ telemetry }: DashboardRow1Props) {
       const pPrev = points[i - 1];
       const pCur = points[i];
       const cx = (pPrev.x + pCur.x) / 2;
-      const cy = (pPrev.y + pCur.y) / 2;
-      if (i === 1) {
-        path += ` Q ${pPrev.x} ${pPrev.y}, ${cx} ${cy} T ${pCur.x} ${pCur.y}`;
-      } else {
-        path += ` T ${pCur.x} ${pCur.y}`;
-      }
+      path += ` C ${cx} ${pPrev.y}, ${cx} ${pCur.y}, ${pCur.x} ${pCur.y}`;
     }
     return path;
   };

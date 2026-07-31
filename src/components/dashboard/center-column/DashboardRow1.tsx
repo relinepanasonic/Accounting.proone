@@ -114,7 +114,7 @@ export function DashboardRow1({ telemetry }: DashboardRow1Props) {
         <div className="flex items-center gap-2 mb-6">
           <Package className="w-4 h-4 text-[#d4af37]" />
           <h3 className="text-sm font-extrabold uppercase tracking-widest text-white">
-            Top 5 Products by Sales
+            Top 10 Products by Sales
           </h3>
         </div>
 

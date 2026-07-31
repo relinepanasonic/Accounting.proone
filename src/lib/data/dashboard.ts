@@ -171,7 +171,7 @@ export async function getDashboardTelemetry(): Promise<DashboardTelemetry> {
   const topProducts = Array.from(productSales.entries())
     .map(([name, amount]) => ({ name, amount }))
     .sort((a, b) => b.amount - a.amount)
-    .slice(0, 5);
+    .slice(0, 10);
 
   // --- 3. Costs vs COGS & Cash Flow ---
   const cogsByMonth = new Array(12).fill(0);

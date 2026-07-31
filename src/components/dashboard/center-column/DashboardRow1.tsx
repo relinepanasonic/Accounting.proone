@@ -12,6 +12,28 @@ export function DashboardRow1({ telemetry }: DashboardRow1Props) {
   const { salesVsPaid, topProducts } = telemetry;
   const { months, issued, paid } = salesVsPaid;
 
+  const [hoverState, setHoverState] = React.useState<{ idx: number, x: number, y: number } | null>(null);
+  const containerRef = React.useRef<HTMLDivElement>(null);
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    // Find closest index
+    const stepX = rect.width / (months.length - 1);
+    let closestIdx = Math.round(x / stepX);
+    if (closestIdx < 0) closestIdx = 0;
+    if (closestIdx >= months.length) closestIdx = months.length - 1;
+    
+    setHoverState({ idx: closestIdx, x, y });
+  };
+
+  const handleMouseLeave = () => {
+    setHoverState(null);
+  };
+
   // Chart Helpers
   const width = 800;
   const height = 220;
@@ -67,7 +89,12 @@ export function DashboardRow1({ telemetry }: DashboardRow1Props) {
           </div>
         </div>
 
-        <div className="flex-1 w-full relative pt-4">
+        <div 
+          ref={containerRef}
+          className="flex-1 w-full relative pt-4 cursor-crosshair"
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+        >
           <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible preserve-3d" preserveAspectRatio="none">
             <defs>
               <linearGradient id="paidGoldGrad" x1="0" y1="0" x2="0" y2="1">
@@ -75,6 +102,21 @@ export function DashboardRow1({ telemetry }: DashboardRow1Props) {
                 <stop offset="100%" stopColor="#d4af37" stopOpacity="0" />
               </linearGradient>
             </defs>
+            
+            {/* Guide line when hovered */}
+            {hoverState && (
+              <line 
+                x1={hoverState.idx * (width / (months.length - 1))} 
+                y1={0} 
+                x2={hoverState.idx * (width / (months.length - 1))} 
+                y2={height} 
+                stroke="#d4af37" 
+                strokeWidth="1" 
+                strokeDasharray="4 4" 
+                opacity="0.5" 
+              />
+            )}
+
             {/* Paid Gold Gradient Fill */}
             <path
               d={`${paidCurve} L ${width} ${height} L 0 ${height} Z`}
@@ -99,6 +141,31 @@ export function DashboardRow1({ telemetry }: DashboardRow1Props) {
               className="drop-shadow-[0_0_10px_rgba(245,215,127,0.7)]"
             />
           </svg>
+
+          {/* Hover Tooltip */}
+          {hoverState && (
+            <div 
+              className="absolute pointer-events-none z-10 p-3 rounded-lg bg-[#0f1525]/90 backdrop-blur-sm border border-[#d4af37]/30 shadow-[0_0_20px_rgba(0,0,0,0.8)] flex flex-col gap-1 min-w-[150px] -translate-x-1/2 -translate-y-full transition-all duration-75"
+              style={{
+                left: hoverState.x,
+                top: hoverState.y - 15,
+              }}
+            >
+              <div className="text-[10px] font-bold text-white uppercase mb-1 border-b border-zinc-800 pb-1">
+                {months[hoverState.idx]}
+              </div>
+              <div className="flex justify-between items-center text-[10px] font-mono">
+                <span className="text-zinc-400">Issued</span>
+                <span className="text-zinc-300 font-bold">Rp {issued[hoverState.idx].toLocaleString('id-ID')}</span>
+              </div>
+              <div className="flex justify-between items-center text-[10px] font-mono">
+                <span className="text-[#f5d77f]">Paid</span>
+                <span className="text-[#f5d77f] font-bold drop-shadow-[0_0_5px_rgba(245,215,127,0.5)]">
+                  Rp {paid[hoverState.idx].toLocaleString('id-ID')}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* X-Axis Labels */}

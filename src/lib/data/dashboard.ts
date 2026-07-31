@@ -59,7 +59,7 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
   const [invoicesRes, clientsRes, billsRes] = await Promise.all([
     supabase
       .from('invoices')
-      .select('id, invoice_number, status, total_amount, due_date, issue_date, client_id, clients(name), invoice_line_items(package_name, description, amount)')
+      .select('id, invoice_number, status, total_amount, due_date, issue_date, created_at, client_id, clients(name), invoice_line_items(package_name, description, amount)')
       .or(`workspace_id.eq.${activeWorkspaceId},assigned_workspace_id.eq.${activeWorkspaceId}`)
       .order('created_at', { ascending: false }),
     supabase
@@ -161,6 +161,7 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
   const threeMonthsAgo = new Date();
   threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
   
+  const currentMonthIdx = new Date().getMonth();
   const targetMonthIdx = monthFilter !== null ? monthFilter : currentMonthIdx;
 
   for (const c of clients) {

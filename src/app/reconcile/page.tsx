@@ -49,7 +49,7 @@ async function ReconciliationCore() {
     );
   }
 
-  const [invoicesRes, transactionsRes, payrollRes, bankRes] = await Promise.all([
+  const [invoicesRes, transactionsRes, payrollRes, bankRes, workspaceRes] = await Promise.all([
     supabase
       .from('invoices')
       .select('id, invoice_number, total_amount, issue_date, clients(name), reconciled, workspace_id, assigned_workspace_id')
@@ -73,12 +73,31 @@ async function ReconciliationCore() {
       .select('id, bank_name, account_number, account_holder')
       .eq('workspace_id', activeWorkspaceId)
       .order('is_default', { ascending: false }),
+    supabase
+      .from('workspaces')
+      .select('name, payment_instructions')
+      .eq('id', activeWorkspaceId)
+      .single(),
   ]);
 
   const rawInvoices = invoicesRes.data || [];
   const rawTransactions = transactionsRes.data || [];
   const rawPayroll = payrollRes.data || [];
-  const bankAccounts = bankRes.data || [];
+  let bankAccounts = bankRes.data || [];
+  const ws = workspaceRes.data;
+
+  if (bankAccounts.length === 0 && ws?.payment_instructions) {
+    const lines = ws.payment_instructions.split('\n').filter((l: string) => l.trim().length > 0);
+    if (lines.length > 0) {
+      bankAccounts = lines.map((line: string, idx: number) => ({
+        id: `temp-legacy-${idx}`,
+        bank_name: idx === 0 ? 'Bank Account' : `Bank Account (${idx + 1})`,
+        account_number: line.trim(),
+        account_name: ws.name || 'Workspace',
+        is_default: idx === 0,
+      }));
+    }
+  }
 
   const systemRecords: UnreconciledSystemRecord[] = [
     ...rawInvoices.map((inv) => {

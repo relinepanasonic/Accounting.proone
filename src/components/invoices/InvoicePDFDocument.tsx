@@ -501,9 +501,11 @@ export function InvoicePDFDocument({
           </div>
           {/* Light Right Block */}
           <div className="w-2/3 bg-white flex flex-col justify-center px-8 text-[10px] text-zinc-700 space-y-1.5 font-sans">
-            <div className="font-semibold text-zinc-900 border-b border-zinc-200 pb-1 mb-1">
-              On Touch: <span className="font-normal text-zinc-600">{brandAddress || '123 Street Name, Town/City Name, State, County 556'}</span>
-            </div>
+            {brandAddress && (
+              <div className="font-semibold text-zinc-900 border-b border-zinc-200 pb-1 mb-1">
+                On Touch: <span className="font-normal text-zinc-600">{brandAddress}</span>
+              </div>
+            )}
             <div className="grid grid-cols-3 gap-2">
               <div className="flex items-center gap-1.5">
                 <span className="text-zinc-900 font-bold">☎</span> {brandPhone || '+999 123 456 789'}

@@ -31,11 +31,19 @@ const SAMPLE_BANK_STATEMENT: BankLine[] = [
   { id: 'bank-003', date: '2026-07-10', description: 'WIRE OUTWARD STUDIO RENT POWER UTILITIES', amount: -64500000 },
 ];
 
-interface ReconciliationHUDProps {
-  systemRecords: UnreconciledSystemRecord[];
+interface BankAccount {
+  id: string;
+  bank_name: string;
+  account_number: string;
+  account_holder?: string;
 }
 
-export function ReconciliationHUD({ systemRecords }: ReconciliationHUDProps) {
+interface ReconciliationHUDProps {
+  systemRecords: UnreconciledSystemRecord[];
+  bankAccounts?: BankAccount[];
+}
+
+export function ReconciliationHUD({ systemRecords, bankAccounts = [] }: ReconciliationHUDProps) {
   const [bankLines, setBankLines] = useState<BankLine[]>([]);
   const [recordsList, setRecordsList] = useState<UnreconciledSystemRecord[]>(systemRecords);
   const [selectedBankId, setSelectedBankId] = useState<string | null>(null);
@@ -45,6 +53,7 @@ export function ReconciliationHUD({ systemRecords }: ReconciliationHUDProps) {
   // Resolution Widget State
   const [resolutionTab, setResolutionTab] = useState<'expense' | 'income' | 'manual'>('expense');
   const [quickCategory, setQuickCategory] = useState<string>('Uncategorized');
+  const [activeBankId, setActiveBankId] = useState<string>(bankAccounts.length > 0 ? bankAccounts[0].id : '');
 
   const findAutoMatch = (bankLine: BankLine) => {
     return recordsList.find(
@@ -211,26 +220,55 @@ export function ReconciliationHUD({ systemRecords }: ReconciliationHUDProps) {
   return (
     <div className="space-y-6">
       {/* Upload & Demo Strip */}
-      <div className="gold-glass-panel rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-[#d4af37]/15 border border-[#d4af37]/40 flex items-center justify-center text-[#f5d77f]">
-            <FileSpreadsheet className="w-5 h-5" />
+      <div className="flex flex-col md:flex-row gap-6 items-start md:items-center justify-between mb-8 p-6 gold-glass-panel rounded-2xl border border-[#d4af37]/20">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#d4af37] to-[#8a7322] p-0.5 shadow-[0_0_20px_rgba(212,175,55,0.4)]">
+            <div className="w-full h-full bg-black/80 rounded-[10px] flex items-center justify-center">
+              <FileSpreadsheet className="w-6 h-6 text-[#d4af37]" />
+            </div>
           </div>
           <div>
-            <h3 className="text-xs font-bold uppercase tracking-wider text-white">
+            <h2 className="text-sm font-extrabold text-white uppercase tracking-wider mb-1">
               BANK STATEMENT FEED TELEMETRY
-            </h3>
-            <p className="text-[10px] text-[#d4af37] font-mono">
+            </h2>
+            <p className="text-xs text-zinc-400 font-mono">
               BRUSHED GOLD AUTOMATCH PARITY ENGINE
             </p>
           </div>
         </div>
 
-        <label className={`cursor-pointer inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-zinc-950 border border-[#d4af37]/40 hover:border-[#f5d77f] text-xs font-bold text-[#f5d77f] transition-all ${isPending ? 'opacity-50 pointer-events-none' : ''}`}>
-          <UploadCloud className="w-4 h-4" />
-          <span>{isPending ? 'PARSING PDF...' : 'UPLOAD STATEMENT (.CSV / .PDF)'}</span>
-          <input type="file" accept=".csv, .pdf" onChange={handleFileUpload} className="hidden" />
-        </label>
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          {bankAccounts.length > 0 && (
+            <select
+              value={activeBankId}
+              onChange={(e) => setActiveBankId(e.target.value)}
+              className="bg-black/60 border border-[#d4af37]/30 text-[#f5d77f] text-xs font-bold rounded-lg px-3 py-2.5 outline-none focus:border-[#d4af37] transition-all font-mono min-w-[200px]"
+            >
+              {bankAccounts.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.bank_name} - {b.account_number}
+                </option>
+              ))}
+            </select>
+          )}
+
+          <label className="group relative flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-transparent via-[#d4af37]/10 to-transparent border border-[#d4af37]/40 rounded-full text-[#f5d77f] text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-[#d4af37]/20 hover:border-[#d4af37] transition-all w-full md:w-auto justify-center">
+            <UploadCloud className="w-4 h-4" />
+            <span>Upload Statement (.CSV / .PDF)</span>
+            <input
+              type="file"
+              accept=".csv,.pdf"
+              className="hidden"
+              onChange={handleFileUpload}
+              disabled={isPending}
+            />
+            {isPending && (
+              <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center">
+                <div className="w-4 h-4 border-2 border-[#f5d77f] border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            )}
+          </label>
+        </div>
       </div>
 
       {/* Split-Panel Reconciliation HUD */}

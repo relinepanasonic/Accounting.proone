@@ -6,10 +6,13 @@ import {
   UnreconciledSystemRecord,
 } from '@/components/reconcile/ReconciliationHUD';
 
+import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
+
 export const dynamic = 'force-dynamic';
 
 async function ReconciliationCore() {
   const supabase = await createClient();
+  const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
   const {
     data: { user },
@@ -46,27 +49,36 @@ async function ReconciliationCore() {
     );
   }
 
-  const [invoicesRes, transactionsRes, payrollRes] = await Promise.all([
+  const [invoicesRes, transactionsRes, payrollRes, bankRes] = await Promise.all([
     supabase
       .from('invoices')
-      .select('id, invoice_number, total_amount, issue_date, clients(name), reconciled')
+      .select('id, invoice_number, total_amount, issue_date, clients(name), reconciled, workspace_id, assigned_workspace_id')
+      .or(`workspace_id.eq.${activeWorkspaceId},assigned_workspace_id.eq.${activeWorkspaceId}`)
       .or('reconciled.is.null,reconciled.eq.false')
       .order('issue_date', { ascending: false }),
     supabase
       .from('transactions')
-      .select('id, description, amount, due_date, category, reconciled')
+      .select('id, description, amount, due_date, category, reconciled, workspace_id')
+      .eq('workspace_id', activeWorkspaceId)
       .or('reconciled.is.null,reconciled.eq.false')
       .order('due_date', { ascending: false }),
     supabase
       .from('payroll')
-      .select('id, employee_name, total_payment, pay_period_end, status')
+      .select('id, employee_name, total_payment, pay_period_end, status, workspace_id')
+      .eq('workspace_id', activeWorkspaceId)
       .eq('status', 'draft')
       .order('pay_period_end', { ascending: false }),
+    supabase
+      .from('workspace_bank_accounts')
+      .select('id, bank_name, account_number, account_holder')
+      .eq('workspace_id', activeWorkspaceId)
+      .order('is_default', { ascending: false }),
   ]);
 
   const rawInvoices = invoicesRes.data || [];
   const rawTransactions = transactionsRes.data || [];
   const rawPayroll = payrollRes.data || [];
+  const bankAccounts = bankRes.data || [];
 
   const systemRecords: UnreconciledSystemRecord[] = [
     ...rawInvoices.map((inv) => {
@@ -98,7 +110,7 @@ async function ReconciliationCore() {
     })),
   ];
 
-  return <ReconciliationHUD systemRecords={systemRecords} />;
+  return <ReconciliationHUD systemRecords={systemRecords} bankAccounts={bankAccounts} />;
 }
 
 export default function BankReconciliationPage() {

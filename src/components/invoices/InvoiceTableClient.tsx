@@ -113,7 +113,7 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
     initialInvoices.forEach(inv => {
       if (inv.rawIssueDate) months.add(inv.rawIssueDate.substring(0, 7)); // YYYY-MM
     });
-    return Array.from(months).sort().reverse(); // Newest first
+    return Array.from(months).sort(); // Oldest first (Jan -> Dec)
   }, [initialInvoices]);
 
   const uniqueDueMonths = useMemo(() => {
@@ -121,7 +121,7 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
     initialInvoices.forEach(inv => {
       if (inv.rawDueDate) months.add(inv.rawDueDate.substring(0, 7)); // YYYY-MM
     });
-    return Array.from(months).sort().reverse(); // Newest first
+    return Array.from(months).sort(); // Oldest first (Jan -> Dec)
   }, [initialInvoices]);
 
   const uniqueAssignments = useMemo(() => {

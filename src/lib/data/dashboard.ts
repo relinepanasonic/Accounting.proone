@@ -112,7 +112,8 @@ export async function getDashboardTelemetry(): Promise<DashboardTelemetry> {
     const amt = Number(inv.total_amount || 0);
     const st = (inv.status || 'draft').toLowerCase();
     
-    if (st !== 'draft') {
+    // Include drafts in total revenue since they are treated as pending in UI
+    if (st !== 'cancelled') {
       totalRevenue += amt;
       const idx = getMonthOffset(inv.issue_date || inv.created_at);
       if (idx !== -1) issuedByMonth[idx] += amt;
@@ -123,7 +124,7 @@ export async function getDashboardTelemetry(): Promise<DashboardTelemetry> {
       paidInvoicesCount++;
       const idx = getMonthOffset(inv.issue_date || inv.created_at);
       if (idx !== -1) paidByMonth[idx] += amt;
-    } else if (st === 'pending' || st === 'overdue') {
+    } else if (st === 'pending' || st === 'overdue' || st === 'draft') {
       accountsReceivable += amt;
     }
   }

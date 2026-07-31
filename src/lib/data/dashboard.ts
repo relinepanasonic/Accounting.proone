@@ -54,7 +54,7 @@ export async function getDashboardTelemetry(): Promise<DashboardTelemetry> {
   const [invoicesRes, clientsRes, billsRes] = await Promise.all([
     supabase
       .from('invoices')
-      .select('id, invoice_number, status, total_amount, due_date, issue_date, client_id, clients(name), invoice_line_items(description, amount)')
+      .select('id, invoice_number, status, total_amount, due_date, issue_date, client_id, clients(name), invoice_line_items(package_name, description, amount)')
       .or(`workspace_id.eq.${activeWorkspaceId},assigned_workspace_id.eq.${activeWorkspaceId}`)
       .order('created_at', { ascending: false }),
     supabase
@@ -115,7 +115,7 @@ export async function getDashboardTelemetry(): Promise<DashboardTelemetry> {
         if (Array.isArray(inv.invoice_line_items)) {
           for (const item of inv.invoice_line_items) {
             const itemAmt = Number(item.amount || 0);
-            const name = item.description || 'Unknown Item';
+            const name = item.package_name || item.description || 'Unknown Item';
             productSales.set(name, (productSales.get(name) || 0) + itemAmt);
           }
         }

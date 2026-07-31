@@ -15,7 +15,7 @@ async function InvoicesTableServer() {
 
   const { data: invoices } = await supabase
     .from('invoices')
-    .select('id, invoice_number, is_quotation, status, total_amount, issue_date, due_date, client_id, assigned_workspace_id, clients(name, contact_name), invoice_line_items(description, quantity, scale), assignedWorkspaces:workspaces!invoices_assigned_workspace_id_fkey(name)')
+    .select('id, invoice_number, is_quotation, status, total_amount, issue_date, due_date, client_id, assigned_workspace_id, clients(name, contact_name), invoice_line_items(package_name, description, quantity, scale), assignedWorkspaces:workspaces!invoices_assigned_workspace_id_fkey(name)')
     .or(`workspace_id.eq.${activeWorkspaceId},assigned_workspace_id.eq.${activeWorkspaceId}`)
     .order('created_at', { ascending: false });
 
@@ -24,7 +24,7 @@ async function InvoicesTableServer() {
       ? invoices.map((inv) => {
           const clientObj = Array.isArray(inv.clients) ? inv.clients[0] : inv.clients;
           const lineItems = Array.isArray(inv.invoice_line_items) ? inv.invoice_line_items : (inv.invoice_line_items ? [inv.invoice_line_items] : []);
-          const firstPackage = lineItems.length > 0 ? lineItems[0].description : '—';
+          const firstPackage = lineItems.length > 0 ? (lineItems[0].package_name || lineItems[0].description || '—') : '—';
           const firstPackageQtt = lineItems.length > 0 ? `${Number(lineItems[0].quantity)} ${lineItems[0].scale || ''}`.trim() : '—';
           return {
             id: inv.id,

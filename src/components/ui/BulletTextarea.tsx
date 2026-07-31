@@ -119,6 +119,17 @@ export function BulletTextarea({ value, onChange, className = '', onFocus, onBlu
     if (onPaste) onPaste(e);
   };
 
+  const autoResize = () => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  };
+
+  useEffect(() => {
+    autoResize();
+  }, [value]);
+
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     let newVal = e.target.value;
     // If user starts typing from empty without focus having triggered (e.g. fast typing)
@@ -126,6 +137,7 @@ export function BulletTextarea({ value, onChange, className = '', onFocus, onBlu
       newVal = `• ${newVal}`;
     }
     onChange(newVal);
+    setTimeout(autoResize, 0);
   };
 
   return (
@@ -137,7 +149,7 @@ export function BulletTextarea({ value, onChange, className = '', onFocus, onBlu
       onBlur={handleBlur}
       onKeyDown={handleKeyDown}
       onPaste={handlePaste}
-      className={className}
+      className={`${className} resize-none overflow-hidden`}
       {...props}
     />
   );

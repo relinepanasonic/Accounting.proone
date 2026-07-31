@@ -32,11 +32,8 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: {
           <div>
             <h1 className="text-lg font-extrabold tracking-wider uppercase text-white flex items-center gap-2">
               <FileText className="w-5 h-5 text-[#d4af37]" />
-              <span>NEW INVOICE GENERATOR • LUXURY GOLD EXECUTIVE HUD</span>
+              <span>NEW INVOICE</span>
             </h1>
-            <p className="text-xs text-[#d4af37] font-mono">
-              INSTANT CATALOG AUTO-FILL & COMPUTATION ENGINE
-            </p>
           </div>
         </div>
         <Link

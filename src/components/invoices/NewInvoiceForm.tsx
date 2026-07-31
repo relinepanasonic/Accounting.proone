@@ -9,6 +9,38 @@ import { createClientRecord } from '@/app/actions/settings';
 import { RupiahInput } from '@/components/ui/RupiahInput';
 import { BulletTextarea } from '@/components/ui/BulletTextarea';
 
+// Helper for Indonesian abbreviated months
+const formatIndoDateStr = (dateStr: string) => {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return dateStr;
+  const day = date.getDate().toString().padStart(2, '0');
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  const month = months[date.getMonth()];
+  const year = date.getFullYear();
+  return `${day} ${month} ${year}`;
+};
+
+function FormattedDateInput({ value, onChange }: { value: string, onChange: (val: string) => void }) {
+  return (
+    <div className="relative w-full group">
+      <div className="absolute inset-0 flex items-center justify-between px-4 bg-zinc-950 border border-zinc-800 rounded-xl pointer-events-none group-focus-within:border-[#d4af37]">
+        <span className="text-sm font-bold text-white font-mono">
+          {formatIndoDateStr(value) || 'Select Date'}
+        </span>
+        <Calendar className="w-4 h-4 text-[#d4af37]" />
+      </div>
+      <input
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full h-[46px] opacity-0 cursor-pointer"
+        required
+      />
+    </div>
+  );
+}
+
 interface LineItem {
   id: string;
   packageName: string;
@@ -351,30 +383,20 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
             <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-2">
               Issue Date
             </label>
-            <div className="relative">
-              <input
-                type="date"
-                value={issueDate}
-                onChange={(e) => setIssueDate(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#d4af37] font-mono [color-scheme:dark]"
-              />
-              <Calendar className="w-4 h-4 text-[#d4af37] absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-            </div>
+            <FormattedDateInput 
+              value={issueDate}
+              onChange={setIssueDate}
+            />
           </div>
 
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-2">
               Due Date (Auto Net-15 Terms)
             </label>
-            <div className="relative">
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-[#f5d77f] focus:outline-none focus:border-[#d4af37] font-mono [color-scheme:dark]"
-              />
-              <Calendar className="w-4 h-4 text-[#d4af37] absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-            </div>
+            <FormattedDateInput 
+              value={dueDate}
+              onChange={setDueDate}
+            />
           </div>
         </div>
       </div>
@@ -441,30 +463,36 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
 
                   <div className="grid grid-cols-12 gap-3 items-start pr-10">
                     <div className="col-span-12 md:col-span-3 space-y-1.5">
-                      {products && products.length > 0 && (
+                      {products && products.length > 0 ? (
                         <select
-                          onChange={(e) => handleSelectProduct(item.id, e.target.value)}
-                          defaultValue=""
-                          className="w-full bg-zinc-900/90 border border-[#d4af37]/40 rounded-lg px-2.5 py-1 text-[11px] font-mono text-[#f5d77f] focus:outline-none focus:border-[#d4af37]"
+                          value={products.find(p => p.name === item.packageName) ? products.find(p => p.name === item.packageName)?.id : 'custom'}
+                          onChange={(e) => {
+                            if (e.target.value === 'custom') {
+                              handleUpdateItem(item.id, 'packageName', '');
+                            } else {
+                              handleSelectProduct(item.id, e.target.value);
+                            }
+                          }}
+                          className="w-full bg-zinc-900/90 border border-[#d4af37]/40 rounded-lg px-2.5 py-2 text-[11px] font-mono text-[#f5d77f] focus:outline-none focus:border-[#d4af37]"
                         >
-                          <option value="" disabled>
-                            Package Name
-                          </option>
+                          <option value="custom">-- Custom / Manual --</option>
                           {products.map((prod) => (
                             <option key={prod.id} value={prod.id}>
-                              {prod.name} • Rp {Number(prod.unit_price).toLocaleString('id-ID')}
+                              {prod.name}
                             </option>
                           ))}
-                          <option value="custom">-- Custom / Manual Override --</option>
                         </select>
+                      ) : null}
+                      
+                      {(!products || products.length === 0 || !products.find(p => p.name === item.packageName)) && (
+                        <input
+                          type="text"
+                          placeholder="Package Name"
+                          value={item.packageName}
+                          onChange={(e) => handleUpdateItem(item.id, 'packageName', e.target.value)}
+                          className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs font-bold text-white focus:outline-none focus:border-[#d4af37]"
+                        />
                       )}
-                      <input
-                        type="text"
-                        placeholder="Package Name"
-                        value={item.packageName}
-                        onChange={(e) => handleUpdateItem(item.id, 'packageName', e.target.value)}
-                        className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs font-bold text-white focus:outline-none focus:border-[#d4af37]"
-                      />
                     </div>
                     
                     <div className="col-span-12 md:col-span-3">

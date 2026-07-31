@@ -82,9 +82,9 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  const getNet15Date = () => {
-    const d = new Date();
-    d.setDate(d.getDate() + 15);
+  const getNet7Date = (startDate?: string) => {
+    const d = startDate ? new Date(startDate) : new Date();
+    d.setDate(d.getDate() + 7);
     return d.toISOString().split('T')[0];
   };
 
@@ -99,7 +99,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
   const [isQuickAdding, setIsQuickAdding] = useState(false);
   const [invoiceNumber, setInvoiceNumber] = useState(() => initialData?.invoiceNumber || `INV-2026-${Math.floor(100 + Math.random() * 900)}`);
   const [issueDate, setIssueDate] = useState(() => initialData?.issueDate || new Date().toISOString().split('T')[0]);
-  const [dueDate, setDueDate] = useState(() => initialData?.dueDate || getNet15Date());
+  const [dueDate, setDueDate] = useState(() => initialData?.dueDate || getNet7Date());
   const [globalDiscount, setGlobalDiscount] = useState<number>(initialData?.discountAmount || 0);
   const [notes, setNotes] = useState(initialData?.notes || '');
   const [bankAccountId, setBankAccountId] = useState(initialData?.bankAccountId || (bankAccounts && bankAccounts.length > 0 ? bankAccounts[0].id : 'all'));
@@ -385,13 +385,16 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
             </label>
             <FormattedDateInput 
               value={issueDate}
-              onChange={setIssueDate}
+              onChange={(newDate) => {
+                setIssueDate(newDate);
+                setDueDate(getNet7Date(newDate));
+              }}
             />
           </div>
 
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-2">
-              Due Date (Auto Net-15 Terms)
+              Due Date (Auto 7-Day Terms)
             </label>
             <FormattedDateInput 
               value={dueDate}

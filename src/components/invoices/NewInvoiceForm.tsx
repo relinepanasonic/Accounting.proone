@@ -482,9 +482,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                             </option>
                           ))}
                         </select>
-                      ) : null}
-                      
-                      {(!products || products.length === 0 || !products.find(p => p.name === item.packageName)) && (
+                      ) : (
                         <input
                           type="text"
                           placeholder="Package Name"

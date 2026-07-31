@@ -8,6 +8,7 @@ import { DashboardRow3 } from '@/components/dashboard/center-column/DashboardRow
 import { ClientAnalyticsTable } from '@/components/dashboard/center-column/ClientAnalyticsTable';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { getDashboardTelemetry } from '@/lib/data/dashboard';
+import { MonthFilter } from '@/components/dashboard/MonthFilter';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,9 +20,14 @@ const ColumnSkeleton = () => (
   </div>
 );
 
-export default async function CyberneticAccountingDashboardRSC() {
+interface PageProps {
+  searchParams: { month?: string };
+}
+
+export default async function CyberneticAccountingDashboardRSC({ searchParams }: PageProps) {
   const wsContext = await getAuthenticatedWorkspaceContext();
-  const telemetry = await getDashboardTelemetry();
+  const monthFilter = searchParams.month ? parseInt(searchParams.month, 10) : null;
+  const telemetry = await getDashboardTelemetry({ monthFilter });
   const userName = wsContext.userName || 'Executive';
   const activeWorkspaceName = wsContext.activeWorkspaceName || 'Professor Toko Online HQ';
 
@@ -89,6 +95,8 @@ export default async function CyberneticAccountingDashboardRSC() {
                   {userName.substring(0, 2).toUpperCase()}
                 </div>
               </Link>
+              {/* New Month Filter Component */}
+              <MonthFilter />
             </div>
           </header>
 

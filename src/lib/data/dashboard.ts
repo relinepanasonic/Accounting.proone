@@ -46,7 +46,12 @@ export interface DashboardTelemetry {
  * Concurrent, zero-waterfall server-side telemetry fetcher.
  * Uses Promise.all to fetch Invoices, Clients, Bills, and Fixed Assets simultaneously.
  */
-export async function getDashboardTelemetry(): Promise<DashboardTelemetry> {
+export interface DashboardTelemetryOptions {
+  monthFilter?: number | null;
+}
+
+export async function getDashboardTelemetry(options: DashboardTelemetryOptions = {}): Promise<DashboardTelemetry> {
+  const { monthFilter = null } = options;
   const supabase = await createClient();
   const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
@@ -100,12 +105,13 @@ export async function getDashboardTelemetry(): Promise<DashboardTelemetry> {
   for (const inv of invoices) {
     const d = new Date(inv.issue_date || inv.created_at);
     const isCurrentYear = d.getFullYear() === currentYear;
+    const isTargetMonth = monthFilter === null || d.getMonth() === monthFilter;
     
     const amt = Number(inv.total_amount || 0);
     const st = (inv.status || 'draft').toLowerCase();
     
-    // Only count current year invoices for Revenue and Sales
-    if (isCurrentYear) {
+    // Only count current year invoices for Revenue and Sales, and only if it matches month filter
+    if (isCurrentYear && isTargetMonth) {
       if (st !== 'cancelled') {
         totalRevenue += amt;
         const idx = getMonthOffset(inv.issue_date || inv.created_at);
@@ -140,25 +146,26 @@ export async function getDashboardTelemetry(): Promise<DashboardTelemetry> {
   // Process Clients for New vs Out
   let newCustomersCount = 0;
   let customerOutCount = 0;
-  
-  // Find last activity per client
   const clientLastActivity = new Map<string, Date>();
+
+  // Find last activity (invoice) per client
   for (const inv of invoices) {
-    const cid = inv.client_id;
-    if (!cid) continue;
+    if (!inv.client_id) continue;
     const d = new Date(inv.issue_date || inv.created_at);
-    const existing = clientLastActivity.get(cid);
+    const existing = clientLastActivity.get(inv.client_id);
     if (!existing || d > existing) {
-      clientLastActivity.set(cid, d);
+      clientLastActivity.set(inv.client_id, d);
     }
   }
 
   const threeMonthsAgo = new Date();
   threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+  
+  const targetMonthIdx = monthFilter !== null ? monthFilter : currentMonthIdx;
 
   for (const c of clients) {
     const createdDate = new Date(c.created_at);
-    if (createdDate.getMonth() === currentMonthIdx && createdDate.getFullYear() === currentYear) {
+    if (createdDate.getMonth() === targetMonthIdx && createdDate.getFullYear() === currentYear) {
       newCustomersCount++;
     }
     

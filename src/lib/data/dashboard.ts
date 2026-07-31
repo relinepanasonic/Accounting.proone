@@ -51,10 +51,10 @@ export async function getDashboardTelemetry(): Promise<DashboardTelemetry> {
   const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
   // Concurrent Execution via Promise.all (Anti-Waterfall Guardrail)
-  const [invoicesRes, clientsRes, billsRes, lineItemsRes] = await Promise.all([
+  const [invoicesRes, clientsRes, billsRes] = await Promise.all([
     supabase
       .from('invoices')
-      .select('id, invoice_number, status, total_amount, due_date, issue_date, client_id, clients(name)')
+      .select('id, invoice_number, status, total_amount, due_date, issue_date, client_id, clients(name), invoice_line_items(description, amount)')
       .or(`workspace_id.eq.${activeWorkspaceId},assigned_workspace_id.eq.${activeWorkspaceId}`)
       .order('created_at', { ascending: false }),
     supabase
@@ -64,67 +64,73 @@ export async function getDashboardTelemetry(): Promise<DashboardTelemetry> {
     supabase
       .from('transactions')
       .select('id, description, amount, due_date, status, category, is_upcoming_bill')
-      .eq('workspace_id', activeWorkspaceId),
-    supabase
-      .from('invoice_line_items')
-      .select('description, amount')
-      .eq('workspace_id', activeWorkspaceId),
+      .eq('workspace_id', activeWorkspaceId)
   ]);
 
   const invoices = invoicesRes.data || [];
   const clients = clientsRes.data || [];
   const transactions = billsRes.data || [];
-  const lineItems = lineItemsRes.data || [];
 
-  const now = new Date();
-  const currentMonthIdx = now.getMonth();
-  const currentYear = now.getFullYear();
+  const currentYear = 2026;
 
-  // Helper to map a date to an index (0-8) where 8 is current month
+  // Helper to map a date to an index (0-11) where 0 is Jan, 11 is Dec of currentYear
   const getMonthOffset = (dateStr: string | null) => {
     if (!dateStr) return -1;
     const d = new Date(dateStr);
-    const mDiff = (currentYear - d.getFullYear()) * 12 + (currentMonthIdx - d.getMonth());
-    return mDiff >= 0 && mDiff < 9 ? 8 - mDiff : -1;
+    if (d.getFullYear() === currentYear) {
+      return d.getMonth();
+    }
+    return -1;
   };
 
-  // Generate last 9 months labels
-  const monthsList = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const chartMonths: string[] = [];
-  for (let i = 8; i >= 0; i--) {
-    let m = currentMonthIdx - i;
-    if (m < 0) m += 12;
-    chartMonths.push(monthsList[m]);
-  }
+  const chartMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-  // --- 1. Top Stats (Numbers) ---
-  let totalRevenue = 0; // Total of all non-draft invoices
-  let totalSales = 0;   // Total of paid invoices
+  // --- 1. Top Stats (Numbers) & Top Products ---
+  let totalRevenue = 0; 
+  let totalSales = 0;   
   let paidInvoicesCount = 0;
   
-  const issuedByMonth = new Array(9).fill(0);
-  const paidByMonth = new Array(9).fill(0);
+  const issuedByMonth = new Array(12).fill(0);
+  const paidByMonth = new Array(12).fill(0);
 
   let accountsReceivable = 0;
+  const productSales = new Map<string, number>();
 
   // Process Invoices
   for (const inv of invoices) {
+    const d = new Date(inv.issue_date || inv.created_at);
+    const isCurrentYear = d.getFullYear() === currentYear;
+    
     const amt = Number(inv.total_amount || 0);
     const st = (inv.status || 'draft').toLowerCase();
     
-    // Include drafts in total revenue since they are treated as pending in UI
-    if (st !== 'cancelled') {
-      totalRevenue += amt;
-      const idx = getMonthOffset(inv.issue_date || inv.created_at);
-      if (idx !== -1) issuedByMonth[idx] += amt;
+    // Only count current year invoices for Revenue and Sales
+    if (isCurrentYear) {
+      if (st !== 'cancelled') {
+        totalRevenue += amt;
+        const idx = getMonthOffset(inv.issue_date || inv.created_at);
+        if (idx !== -1) issuedByMonth[idx] += amt;
+        
+        // Accumulate Top Products for current year non-cancelled invoices
+        if (Array.isArray(inv.invoice_line_items)) {
+          for (const item of inv.invoice_line_items) {
+            const itemAmt = Number(item.amount || 0);
+            const name = item.description || 'Unknown Item';
+            productSales.set(name, (productSales.get(name) || 0) + itemAmt);
+          }
+        }
+      }
+
+      if (st === 'paid') {
+        totalSales += amt;
+        paidInvoicesCount++;
+        const idx = getMonthOffset(inv.issue_date || inv.created_at);
+        if (idx !== -1) paidByMonth[idx] += amt;
+      }
     }
 
-    if (st === 'paid') {
-      totalSales += amt;
-      paidInvoicesCount++;
-      const idx = getMonthOffset(inv.issue_date || inv.created_at);
-      if (idx !== -1) paidByMonth[idx] += amt;
-    } else if (st === 'pending' || st === 'overdue' || st === 'draft') {
+    // AR includes ALL TIME pending/draft/overdue
+    if (st === 'pending' || st === 'overdue' || st === 'draft') {
       accountsReceivable += amt;
     }
   }
@@ -162,28 +168,21 @@ export async function getDashboardTelemetry(): Promise<DashboardTelemetry> {
     }
   }
 
-  // --- 2. Top Products ---
-  const productSales = new Map<string, number>();
-  for (const item of lineItems) {
-    const amt = Number(item.amount || 0);
-    const name = item.description || 'Unknown Item';
-    productSales.set(name, (productSales.get(name) || 0) + amt);
-  }
   const topProducts = Array.from(productSales.entries())
     .map(([name, amount]) => ({ name, amount }))
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 5);
 
   // --- 3. Costs vs COGS & Cash Flow ---
-  const cogsByMonth = new Array(9).fill(0);
-  const genByMonth = new Array(9).fill(0);
+  const cogsByMonth = new Array(12).fill(0);
+  const genByMonth = new Array(12).fill(0);
   let accountsPayable = 0;
   let netCashFlow = 0; // Total Paid Invoices - Total Paid Transactions (all time or just active balance, we'll do all time)
 
-  const bankBalanceByMonth = new Array(9).fill(0);
+  const bankBalanceByMonth = new Array(12).fill(0);
 
   // We will build running balance up to current month.
-  // First, sum everything before the 9 month window as starting balance
+  // First, sum everything before the currentYear as starting balance
   let startingBalance = 0;
 
   for (const inv of invoices) {
@@ -191,9 +190,9 @@ export async function getDashboardTelemetry(): Promise<DashboardTelemetry> {
       const idx = getMonthOffset(inv.issue_date || inv.created_at);
       const amt = Number(inv.total_amount || 0);
       if (idx === -1) {
-        // before 9 months window
+        // before current year
         const d = new Date(inv.issue_date || inv.created_at);
-        if (d < new Date(currentYear, currentMonthIdx - 8)) {
+        if (d.getFullYear() < currentYear) {
           startingBalance += amt;
         }
       } else {
@@ -218,7 +217,7 @@ export async function getDashboardTelemetry(): Promise<DashboardTelemetry> {
       
       if (idx === -1) {
         const d = new Date(tx.due_date);
-        if (d < new Date(currentYear, currentMonthIdx - 8)) {
+        if (d.getFullYear() < currentYear) {
           startingBalance -= amt;
         }
       } else {
@@ -234,7 +233,7 @@ export async function getDashboardTelemetry(): Promise<DashboardTelemetry> {
 
   // Accumulate Running Bank Balance
   let runningBal = startingBalance;
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < 12; i++) {
     runningBal += bankBalanceByMonth[i];
     bankBalanceByMonth[i] = runningBal;
   }

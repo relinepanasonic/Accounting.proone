@@ -86,20 +86,23 @@ export async function POST(request: Request) {
       // Split body by 2+ spaces to get columns
       const parts = bodyStr.split(/\s{2,}/).map(p => p.trim()).filter(p => p.length > 0);
       
-      let sourceDest = parts[0] || 'Unknown';
-      // Check the sourceBankInfo line for bank name (part after time)
+      let sourceDestination = parts[0] || 'Unknown';
+      let transactionDetails = parts[1] || '';
+      let notes = parts.length > 2 ? parts.slice(2).join(' ') : '';
+      
+      let rekFrom = '';
       const bankParts = sourceBankInfo.split(/\s{2,}/).map(p => p.trim()).filter(p => p.length > 0);
       if (bankParts.length >= 2 && !bankParts[1].startsWith('ID#')) {
-        sourceDest += ` (${bankParts[1]})`;
+        rekFrom = bankParts[1];
       }
-
-      // Notes = everything after source + transfer type (usually index 2 onwards)
-      const notes = parts.length > 2 ? parts.slice(2).join(' ') : (parts[1] || 'No notes');
 
       transactions.push({
         id: `jago-${Date.now()}-${Math.random().toString(36).substring(7)}`,
         date: dateStr,
-        description: `${sourceDest} | ${notes}`,
+        sourceDestination,
+        transactionDetails,
+        notes,
+        rekFrom,
         amount: amount,
       });
     }

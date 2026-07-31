@@ -21,14 +21,17 @@ export interface UnreconciledSystemRecord {
 interface BankLine {
   id: string;
   date: string;
-  description: string;
+  sourceDestination: string;
+  transactionDetails: string;
+  notes: string;
+  rekFrom: string;
   amount: number;
 }
 
 const SAMPLE_BANK_STATEMENT: BankLine[] = [
-  { id: 'bank-001', date: '2026-07-02', description: 'TRANSFER INVOICE INV-2026-001 PROF TOKO ONLINE', amount: 149870000 },
-  { id: 'bank-002', date: '2026-07-07', description: 'ACH DEBIT CLOUD SERVER HOSTING A/P', amount: -18000000 },
-  { id: 'bank-003', date: '2026-07-10', description: 'WIRE OUTWARD STUDIO RENT POWER UTILITIES', amount: -64500000 },
+  { id: 'bank-001', date: '2026-07-02', sourceDestination: 'TRANSFER INVOICE INV-2026-001 PROF TOKO ONLINE', transactionDetails: '', notes: '', rekFrom: '', amount: 149870000 },
+  { id: 'bank-002', date: '2026-07-07', sourceDestination: 'ACH DEBIT CLOUD SERVER HOSTING A/P', transactionDetails: '', notes: '', rekFrom: '', amount: -18000000 },
+  { id: 'bank-003', date: '2026-07-10', sourceDestination: 'WIRE OUTWARD STUDIO RENT POWER UTILITIES', transactionDetails: '', notes: '', rekFrom: '', amount: -64500000 },
 ];
 
 interface BankAccount {
@@ -105,7 +108,10 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [] }: Reconcil
               parsed.push({
                 id: `csv-${idx}`,
                 date: cols[0].trim(),
-                description: cols[1].trim(),
+                sourceDestination: cols[1].trim(),
+                transactionDetails: '',
+                notes: '',
+                rekFrom: '',
                 amount: amt,
               });
             }
@@ -135,7 +141,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [] }: Reconcil
         await reconcileRecord(
           targetRecord.id,
           targetRecord.type,
-          `BANK-REF: ${activeBankLine.description}`
+          `BANK-REF: ${activeBankLine.sourceDestination}`
         );
 
         setBankLines((prev) => prev.filter((b) => b.id !== activeBankLine.id));
@@ -313,14 +319,23 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [] }: Reconcil
                     >
                       <div className="flex items-center justify-between text-xs font-mono mb-1">
                         <span className="text-zinc-400">{bank.date}</span>
-                        <span className="font-bold text-[#f5d77f]">
+                        <span className={`font-bold ${bank.amount >= 0 ? 'text-[#f5d77f]' : 'text-red-400'}`}>
                           {bank.amount >= 0
                             ? `+Rp ${bank.amount.toLocaleString('id-ID')}`
                             : `-Rp ${Math.abs(bank.amount).toLocaleString('id-ID')}`}
                         </span>
                       </div>
-                      <div className="text-xs font-sans text-white font-medium">
-                        {bank.description}
+                      <div className="text-sm font-sans text-white font-bold tracking-wide flex flex-col gap-1 mt-2">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span>{bank.sourceDestination}</span>
+                          {bank.notes && <span className="text-zinc-500 font-normal border-l border-zinc-700 pl-2">{bank.notes}</span>}
+                          {bank.transactionDetails && <span className="text-zinc-500 font-normal border-l border-zinc-700 pl-2">{bank.transactionDetails}</span>}
+                        </div>
+                        {bank.rekFrom && (
+                          <div className="text-[10px] text-zinc-500 font-mono font-normal tracking-wider">
+                            {bank.rekFrom}
+                          </div>
+                        )}
                       </div>
 
                       {autoMatch && (

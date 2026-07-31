@@ -141,7 +141,8 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [] }: Reconcil
         await reconcileRecord(
           targetRecord.id,
           targetRecord.type,
-          `BANK-REF: ${activeBankLine.sourceDestination}`
+          `BANK-REF: ${activeBankLine.sourceDestination}`,
+          activeBankId
         );
 
         setBankLines((prev) => prev.filter((b) => b.id !== activeBankLine.id));
@@ -163,8 +164,9 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [] }: Reconcil
           quickCategory,
           Math.abs(activeBankLine.amount),
           activeBankLine.date, // Note: Must match DB format 'YYYY-MM-DD' - Bank Jago format needs transformation in DB or API, but we'll try raw for now
-          activeBankLine.description,
-          `BANK-REF: ${activeBankLine.description}`
+          activeBankLine.sourceDestination,
+          `BANK-REF: ${activeBankLine.sourceDestination}`,
+          activeBankId
         );
         setBankLines((prev) => prev.filter((b) => b.id !== activeBankLine.id));
         setSelectedBankId(null);
@@ -244,19 +246,21 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [] }: Reconcil
         </div>
 
         <div className="flex items-center gap-3 w-full md:w-auto">
-          {bankAccounts.length > 0 && (
-            <select
-              value={activeBankId}
-              onChange={(e) => setActiveBankId(e.target.value)}
-              className="bg-black/60 border border-[#d4af37]/30 text-[#f5d77f] text-xs font-bold rounded-lg px-3 py-2.5 outline-none focus:border-[#d4af37] transition-all font-mono min-w-[200px]"
-            >
-              {bankAccounts.map((b) => (
+          <select
+            value={activeBankId}
+            onChange={(e) => setActiveBankId(e.target.value)}
+            className="bg-black/60 border border-[#d4af37]/30 text-[#f5d77f] text-xs font-bold rounded-lg px-3 py-2.5 outline-none focus:border-[#d4af37] transition-all font-mono min-w-[200px]"
+          >
+            {bankAccounts.length === 0 ? (
+              <option value="">Select Bank (None Registered)</option>
+            ) : (
+              bankAccounts.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.bank_name} - {b.account_number}
                 </option>
-              ))}
-            </select>
-          )}
+              ))
+            )}
+          </select>
 
           <label className="group relative flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-transparent via-[#d4af37]/10 to-transparent border border-[#d4af37]/40 rounded-full text-[#f5d77f] text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-[#d4af37]/20 hover:border-[#d4af37] transition-all w-full md:w-auto justify-center">
             <UploadCloud className="w-4 h-4" />
@@ -425,7 +429,13 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [] }: Reconcil
                     </div>
                     <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
                        <div className="text-[10px] uppercase text-zinc-500 mb-1">Description / Source</div>
-                       <div className="text-sm text-white">{activeBankLine.description}</div>
+                       <div className="text-sm text-white">
+                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                           <span>{activeBankLine.sourceDestination}</span>
+                           {activeBankLine.notes && <span className="text-zinc-500 font-normal border-l border-zinc-700 pl-2">{activeBankLine.notes}</span>}
+                           {activeBankLine.transactionDetails && <span className="text-zinc-500 font-normal border-l border-zinc-700 pl-2">{activeBankLine.transactionDetails}</span>}
+                         </div>
+                       </div>
                     </div>
                     <div className="space-y-2">
                        <label className="text-[10px] uppercase text-zinc-500 ml-1">Category</label>

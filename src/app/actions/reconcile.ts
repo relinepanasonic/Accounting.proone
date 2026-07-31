@@ -7,7 +7,8 @@ import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 export async function reconcileRecord(
   recordId: string,
   recordType: 'invoice' | 'expense' | 'payroll',
-  bankReference: string
+  bankReference: string,
+  bankAccountId?: string
 ) {
   const supabase = await createClient();
   
@@ -32,6 +33,7 @@ export async function reconcileRecord(
       .update({
         reconciled: true,
         bank_reference: bankReference || 'BANK-MATCHED',
+        ...(bankAccountId ? { bank_account_id: bankAccountId } : {})
       })
       .eq('id', recordId);
 
@@ -55,7 +57,8 @@ export async function quickResolveAndReconcile(
   amount: number,
   transaction_date: string,
   description: string,
-  bank_reference: string
+  bank_reference: string,
+  bank_account_id?: string
 ) {
   const supabase = await createClient();
   const ctx = await getAuthenticatedWorkspaceContext(supabase);
@@ -75,6 +78,7 @@ export async function quickResolveAndReconcile(
       description,
       reconciled: true,
       bank_reference,
+      ...(bank_account_id ? { bank_account_id } : {})
     })
     .select('id')
     .single();

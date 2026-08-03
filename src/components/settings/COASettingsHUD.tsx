@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useTransition } from 'react';
-import { Plus, Search, Check, AlertCircle, Edit2, Trash2 } from 'lucide-react';
+import { Plus, Search, Check, AlertCircle, Edit2, Trash2, BookOpen } from 'lucide-react';
 import { upsertCOAAccount, deleteCOAAccount, COAAccount } from '@/app/actions/coa';
 
 interface COASettingsHUDProps {

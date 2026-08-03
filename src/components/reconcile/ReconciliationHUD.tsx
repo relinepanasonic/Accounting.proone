@@ -41,12 +41,19 @@ interface BankAccount {
   account_holder?: string;
 }
 
+interface COAAccountMinimal {
+  account_code: string;
+  account_name: string;
+  account_type: string;
+}
+
 interface ReconciliationHUDProps {
   systemRecords: UnreconciledSystemRecord[];
   bankAccounts?: BankAccount[];
+  coaAccounts?: COAAccountMinimal[];
 }
 
-export function ReconciliationHUD({ systemRecords, bankAccounts = [] }: ReconciliationHUDProps) {
+export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccounts = [] }: ReconciliationHUDProps) {
   const [bankLines, setBankLines] = useState<BankLine[]>([]);
   const [recordsList, setRecordsList] = useState<UnreconciledSystemRecord[]>(systemRecords);
   const [selectedBankId, setSelectedBankId] = useState<string | null>(null);
@@ -452,17 +459,11 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [] }: Reconcil
                          className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#d4af37]/50"
                        >
                          <option value="Uncategorized">Uncategorized</option>
-                         <option value="Contractor / Informal Wages">Contractor / Informal Wages</option>
-                         <option value="Marketing & Advertising">Marketing & Advertising</option>
-                         <option value="Office Supplies">Office Supplies</option>
-                         <option value="Bank Fees">Bank Fees</option>
-                         <option value="Software Subscriptions">Software Subscriptions</option>
-                         <option value="Travel">Travel</option>
-                         <option value="Meals & Entertainment">Meals & Entertainment</option>
-                         <option value="Utilities">Utilities</option>
-                         <option value="Contractors">Contractors</option>
-                         <option value="Taxes">Taxes</option>
-                         <option value="Other Income">Other Income</option>
+                         {coaAccounts.map(coa => (
+                           <option key={coa.account_code} value={coa.account_name}>
+                             {coa.account_code} - {coa.account_name}
+                           </option>
+                         ))}
                        </select>
                     </div>
                   </div>

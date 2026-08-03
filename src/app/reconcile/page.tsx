@@ -49,7 +49,7 @@ async function ReconciliationCore() {
     );
   }
 
-  const [invoicesRes, transactionsRes, payrollRes, bankRes, workspaceRes] = await Promise.all([
+  const [invoicesRes, transactionsRes, payrollRes, bankRes, workspaceRes, coaRes] = await Promise.all([
     supabase
       .from('invoices')
       .select('id, invoice_number, total_amount, issue_date, clients(name), reconciled, workspace_id, assigned_workspace_id')
@@ -78,6 +78,11 @@ async function ReconciliationCore() {
       .select('name, payment_instructions')
       .eq('id', activeWorkspaceId)
       .single(),
+    supabase
+      .from('global_chart_of_accounts')
+      .select('account_code, account_name, account_type')
+      .eq('is_active', true)
+      .order('account_code', { ascending: true })
   ]);
 
   const rawInvoices = invoicesRes.data || [];
@@ -85,6 +90,7 @@ async function ReconciliationCore() {
   const rawPayroll = payrollRes.data || [];
   let bankAccounts = bankRes.data || [];
   const ws = workspaceRes.data;
+  const coaAccounts = coaRes.data || [];
 
   if (bankAccounts.length === 0 && ws?.payment_instructions) {
     const lines = ws.payment_instructions.split('\n').filter((l: string) => l.trim().length > 0);
@@ -129,7 +135,7 @@ async function ReconciliationCore() {
     })),
   ];
 
-  return <ReconciliationHUD systemRecords={systemRecords} bankAccounts={bankAccounts} />;
+  return <ReconciliationHUD systemRecords={systemRecords} bankAccounts={bankAccounts} coaAccounts={coaAccounts} />;
 }
 
 export default function BankReconciliationPage() {

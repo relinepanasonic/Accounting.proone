@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState, useTransition } from 'react';
-import { Plus, Search, Check, AlertCircle, Edit2, Trash2, BookOpen, Copy, ChevronDown, ChevronRight, X } from 'lucide-react';
+import { Plus, Search, Check, AlertCircle, Edit2, Trash2, BookOpen, Copy, ChevronDown, ChevronRight, X, Loader2 } from 'lucide-react';
 import { upsertCOAAccount, deleteCOAAccount, COAAccount } from '@/app/actions/coa';
+import { getJournalEntriesForAccount, JournalEntry } from '@/app/actions/journal';
+import { formatCurrency } from '@/lib/utils/currency';
 
 interface COASettingsHUDProps {
   accounts: COAAccount[];
@@ -48,6 +50,20 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [] }: COAS
   // New Features State
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const [selectedAccountForJournal, setSelectedAccountForJournal] = useState<COAAccount | null>(null);
+  const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
+  const [isJournalLoading, setIsJournalLoading] = useState(false);
+
+  React.useEffect(() => {
+    if (selectedAccountForJournal) {
+      setIsJournalLoading(true);
+      getJournalEntriesForAccount(selectedAccountForJournal.account_code).then((data) => {
+        setJournalEntries(data);
+        setIsJournalLoading(false);
+      });
+    } else {
+      setJournalEntries([]);
+    }
+  }, [selectedAccountForJournal]);
 
   const toggleCategory = (e: React.MouseEvent, code: string) => {
     e.stopPropagation();
@@ -525,17 +541,56 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [] }: COAS
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800/50">
-                  <tr>
-                    <td colSpan={6} className="px-6 py-32 text-center">
-                      <div className="flex flex-col items-center justify-center gap-4">
-                        <div className="w-16 h-16 rounded-2xl bg-zinc-900/50 border border-zinc-800 flex items-center justify-center">
-                          <BookOpen className="w-8 h-8 text-zinc-700" />
+                  {isJournalLoading ? (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-32 text-center">
+                        <div className="flex flex-col items-center justify-center gap-4">
+                          <Loader2 className="w-10 h-10 text-[#d4af37] animate-spin" />
+                          <p className="text-xs font-mono text-zinc-500 uppercase tracking-widest">Loading Ledger...</p>
                         </div>
-                        <p className="text-sm font-mono font-bold text-zinc-500 uppercase tracking-widest">No Transactions Found</p>
-                        <p className="text-xs text-zinc-600 max-w-xs mx-auto">The ledger for this account is currently empty. Transactions will appear here once recorded.</p>
-                      </div>
-                    </td>
-                  </tr>
+                      </td>
+                    </tr>
+                  ) : journalEntries.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-32 text-center">
+                        <div className="flex flex-col items-center justify-center gap-4">
+                          <div className="w-16 h-16 rounded-2xl bg-zinc-900/50 border border-zinc-800 flex items-center justify-center">
+                            <BookOpen className="w-8 h-8 text-zinc-700" />
+                          </div>
+                          <p className="text-sm font-mono font-bold text-zinc-500 uppercase tracking-widest">No Transactions Found</p>
+                          <p className="text-xs text-zinc-600 max-w-xs mx-auto">The ledger for this account is currently empty. Transactions will appear here once recorded.</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    journalEntries.map((entry) => {
+                      // Note: True running balance would be calculated differently depending on Asset vs Liability,
+                      // For now we just show the line amounts
+                      return (
+                        <tr key={entry.id} className="hover:bg-white/[0.02] transition-colors">
+                          <td className="px-6 py-3 text-xs font-mono text-zinc-400">
+                            {new Date(entry.transaction_date).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-3 text-sm text-white">
+                            {entry.description || '-'}
+                          </td>
+                          <td className="px-6 py-3 text-xs font-mono text-zinc-500 uppercase">
+                            {entry.reference_type}
+                          </td>
+                          <td className="px-6 py-3 text-sm font-mono text-emerald-400 text-right">
+                            {entry.debit_amount > 0 ? formatCurrency(entry.debit_amount) : '-'}
+                          </td>
+                          <td className="px-6 py-3 text-sm font-mono text-rose-400 text-right">
+                            {entry.credit_amount > 0 ? formatCurrency(entry.credit_amount) : '-'}
+                          </td>
+                          <td className="px-6 py-3 text-sm font-mono text-zinc-300 text-right">
+                            {/* Running Balance placeholder */}
+                            -
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>

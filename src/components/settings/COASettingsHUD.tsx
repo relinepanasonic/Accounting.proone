@@ -7,11 +7,12 @@ import { upsertCOAAccount, deleteCOAAccount, COAAccount } from '@/app/actions/co
 interface COASettingsHUDProps {
   accounts: COAAccount[];
   hasClearance: boolean;
+  workspaces?: { id: string; name: string }[];
 }
 
 const ACCOUNT_TYPES = ['Asset', 'Liability', 'Equity', 'Revenue', 'Expense'];
 
-export function COASettingsHUD({ accounts, hasClearance }: COASettingsHUDProps) {
+export function COASettingsHUD({ accounts, hasClearance, workspaces = [] }: COASettingsHUDProps) {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('All');
   
@@ -26,6 +27,7 @@ export function COASettingsHUD({ accounts, hasClearance }: COASettingsHUDProps) 
   const [formType, setFormType] = useState('Asset');
   const [formDesc, setFormDesc] = useState('');
   const [formParentCode, setFormParentCode] = useState('');
+  const [formWorkspaceId, setFormWorkspaceId] = useState('');
   const [formActive, setFormActive] = useState(true);
 
   // Delete State
@@ -49,6 +51,7 @@ export function COASettingsHUD({ accounts, hasClearance }: COASettingsHUDProps) 
       setFormType(acc.account_type);
       setFormDesc(acc.description || '');
       setFormParentCode(acc.parent_code || '');
+      setFormWorkspaceId(acc.workspace_id || '');
       setFormActive(acc.is_active);
     } else {
       setFormId(undefined);
@@ -57,6 +60,7 @@ export function COASettingsHUD({ accounts, hasClearance }: COASettingsHUDProps) 
       setFormType('Asset');
       setFormDesc('');
       setFormParentCode('');
+      setFormWorkspaceId('');
       setFormActive(true);
     }
     setIsFormOpen(true);
@@ -76,6 +80,7 @@ export function COASettingsHUD({ accounts, hasClearance }: COASettingsHUDProps) 
           account_type: formType,
           description: formDesc || null,
           parent_code: formParentCode || null,
+          workspace_id: formWorkspaceId || null,
           is_active: formActive,
         });
         setIsFormOpen(false);
@@ -199,9 +204,16 @@ export function COASettingsHUD({ accounts, hasClearance }: COASettingsHUDProps) 
                       )}
                     </td>
                     <td className="px-6 py-4">
-                      <span className="inline-flex items-center px-2 py-1 rounded bg-black/60 border border-zinc-800 text-[10px] font-mono text-zinc-300 uppercase">
-                        {acc.account_type}
-                      </span>
+                      <div className="flex flex-col gap-1">
+                        <span className="inline-flex items-center px-2 py-1 rounded bg-black/60 border border-zinc-800 text-[10px] font-mono text-zinc-300 uppercase w-max">
+                          {acc.account_type}
+                        </span>
+                        {acc.workspace_id && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded bg-[#d4af37]/10 text-[9px] font-mono text-[#d4af37] uppercase w-max">
+                            {workspaces.find(w => w.id === acc.workspace_id)?.name || 'Unknown Workspace'}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
@@ -314,6 +326,22 @@ export function COASettingsHUD({ accounts, hasClearance }: COASettingsHUDProps) 
                 </select>
               </div>
               
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-2">Workspace Assignment</label>
+                <select
+                  value={formWorkspaceId}
+                  onChange={(e) => setFormWorkspaceId(e.target.value)}
+                  className="w-full bg-black/60 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-[#f5d77f] focus:outline-none focus:border-[#d4af37]/60"
+                >
+                  <option value="">Global (All Workspaces)</option>
+                  {workspaces.map(w => (
+                    <option key={w.id} value={w.id}>
+                      {w.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div>
                 <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-2">Account Name</label>
                 <input

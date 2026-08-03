@@ -37,11 +37,18 @@ export default async function COASettingsPage() {
     console.error('Failed to load COA:', error);
   }
 
+  // Fetch workspaces for dropdown
+  const { data: workspaces } = await supabase
+    .from('workspaces')
+    .select('id, name')
+    .order('name', { ascending: true });
+
   return (
     <div className="space-y-6">
       <COASettingsHUD 
         accounts={accounts || []} 
         hasClearance={hasClearance} 
+        workspaces={workspaces || []}
       />
     </div>
   );

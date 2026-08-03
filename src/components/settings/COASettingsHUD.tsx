@@ -186,6 +186,8 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [] }: COAS
                 <th className="px-6 py-4 text-[10px] font-black tracking-widest text-[#d4af37] uppercase">Code</th>
                 <th className="px-6 py-4 text-[10px] font-black tracking-widest text-[#d4af37] uppercase">Account Name</th>
                 <th className="px-6 py-4 text-[10px] font-black tracking-widest text-[#d4af37] uppercase">Type</th>
+                <th className="px-6 py-4 text-[10px] font-black tracking-widest text-[#d4af37] uppercase">Workspace</th>
+                <th className="px-6 py-4 text-[10px] font-black tracking-widest text-[#d4af37] uppercase text-right">Balance</th>
                 <th className="px-6 py-4 text-[10px] font-black tracking-widest text-[#d4af37] uppercase">Status</th>
                 {hasClearance && <th className="px-6 py-4 text-[10px] font-black tracking-widest text-[#d4af37] uppercase text-right">Actions</th>}
               </tr>
@@ -193,7 +195,7 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [] }: COAS
             <tbody className="divide-y divide-[#d4af37]/10">
               {filteredAccounts.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-sm font-mono text-zinc-500">
+                  <td colSpan={7} className="px-6 py-12 text-center text-sm font-mono text-zinc-500">
                     NO ACCOUNTS FOUND MATCHING CRITERIA.
                   </td>
                 </tr>
@@ -218,16 +220,23 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [] }: COAS
                       )}
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex flex-col gap-1">
-                        <span className="inline-flex items-center px-2 py-1 rounded bg-black/60 border border-zinc-800 text-[10px] font-mono text-zinc-300 uppercase w-max">
-                          {acc.account_type}
+                      <span className="inline-flex items-center px-2 py-1 rounded bg-black/60 border border-zinc-800 text-[10px] font-mono text-zinc-300 uppercase w-max">
+                        {acc.account_type}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      {acc.workspace_id ? (
+                        <span className="inline-flex items-center px-2 py-1 rounded bg-[#d4af37]/10 border border-[#d4af37]/20 text-[10px] font-mono text-[#d4af37] uppercase w-max">
+                          {workspaces.find(w => w.id === acc.workspace_id)?.name || 'Unknown Workspace'}
                         </span>
-                        {acc.workspace_id && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded bg-[#d4af37]/10 text-[9px] font-mono text-[#d4af37] uppercase w-max">
-                            {workspaces.find(w => w.id === acc.workspace_id)?.name || 'Unknown Workspace'}
-                          </span>
-                        )}
-                      </div>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-1 rounded bg-zinc-800 border border-zinc-700 text-[10px] font-mono text-zinc-400 uppercase w-max">
+                          Global
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="text-sm font-mono font-medium text-white">$0.00</div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">

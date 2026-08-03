@@ -48,7 +48,9 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [] }: COAS
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // New Features State
-  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(() => 
+    new Set(accounts.filter(a => !a.parent_code).map(a => a.account_code))
+  );
   const [selectedAccountForJournal, setSelectedAccountForJournal] = useState<COAAccount | null>(null);
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [isJournalLoading, setIsJournalLoading] = useState(false);

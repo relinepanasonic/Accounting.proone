@@ -25,6 +25,7 @@ export function COASettingsHUD({ accounts, hasClearance }: COASettingsHUDProps) 
   const [formName, setFormName] = useState('');
   const [formType, setFormType] = useState('Asset');
   const [formDesc, setFormDesc] = useState('');
+  const [formParentCode, setFormParentCode] = useState('');
   const [formActive, setFormActive] = useState(true);
 
   // Delete State
@@ -47,6 +48,7 @@ export function COASettingsHUD({ accounts, hasClearance }: COASettingsHUDProps) 
       setFormName(acc.account_name);
       setFormType(acc.account_type);
       setFormDesc(acc.description || '');
+      setFormParentCode(acc.parent_code || '');
       setFormActive(acc.is_active);
     } else {
       setFormId(undefined);
@@ -54,6 +56,7 @@ export function COASettingsHUD({ accounts, hasClearance }: COASettingsHUDProps) 
       setFormName('');
       setFormType('Asset');
       setFormDesc('');
+      setFormParentCode('');
       setFormActive(true);
     }
     setIsFormOpen(true);
@@ -72,6 +75,7 @@ export function COASettingsHUD({ accounts, hasClearance }: COASettingsHUDProps) 
           account_name: formName,
           account_type: formType,
           description: formDesc || null,
+          parent_code: formParentCode || null,
           is_active: formActive,
         });
         setIsFormOpen(false);
@@ -180,10 +184,16 @@ export function COASettingsHUD({ accounts, hasClearance }: COASettingsHUDProps) 
                 filteredAccounts.map((acc) => (
                   <tr key={acc.id} className="hover:bg-white/[0.02] transition-colors group">
                     <td className="px-6 py-4 text-sm font-mono font-bold text-[#f5d77f]">
-                      {acc.account_code}
+                      <div className="flex items-center gap-2">
+                        {acc.parent_code && <span className="text-zinc-600 pl-4">↳</span>}
+                        <span>{acc.account_code}</span>
+                      </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-white">{acc.account_name}</div>
+                      <div className="text-sm font-medium text-white">
+                        {acc.parent_code ? <span className="text-zinc-500 mr-2">Sub-Account</span> : null}
+                        {acc.account_name}
+                      </div>
                       {acc.description && (
                         <div className="text-xs text-zinc-500 mt-1 line-clamp-1">{acc.description}</div>
                       )}
@@ -269,15 +279,39 @@ export function COASettingsHUD({ accounts, hasClearance }: COASettingsHUDProps) 
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-2">Account Type</label>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-2">Parent Account</label>
                   <select
-                    value={formType}
-                    onChange={(e) => setFormType(e.target.value)}
+                    value={formParentCode}
+                    onChange={(e) => {
+                      const newParent = e.target.value;
+                      setFormParentCode(newParent);
+                      if (newParent) {
+                        const parentAcc = accounts.find(a => a.account_code === newParent);
+                        if (parentAcc) setFormType(parentAcc.account_type);
+                      }
+                    }}
                     className="w-full bg-black/60 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#d4af37]/60"
                   >
-                    {ACCOUNT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                    <option value="">None (Master Account)</option>
+                    {accounts.filter(a => !a.parent_code && a.id !== formId).map(a => (
+                      <option key={a.account_code} value={a.account_code}>
+                        {a.account_code} - {a.account_name}
+                      </option>
+                    ))}
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-2">Account Type</label>
+                <select
+                  value={formType}
+                  onChange={(e) => setFormType(e.target.value)}
+                  disabled={!!formParentCode}
+                  className="w-full bg-black/60 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#d4af37]/60 disabled:opacity-50"
+                >
+                  {ACCOUNT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
               </div>
               
               <div>

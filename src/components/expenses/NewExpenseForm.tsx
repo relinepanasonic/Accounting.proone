@@ -17,12 +17,19 @@ const CATEGORY_OPTIONS = [
   'Creator Partnerships & Ads',
 ];
 
-export interface NewExpenseFormProps {
-  isHistorical?: boolean;
-  contacts?: Array<{ id: string; name: string; company_name?: string; contact_type?: string }>;
+interface COAAccountMinimal {
+  account_code: string;
+  account_name: string;
+  account_type: string;
 }
 
-export function NewExpenseForm({ isHistorical = false, contacts = [] }: NewExpenseFormProps) {
+interface NewExpenseFormProps {
+  contacts: any[];
+  isHistorical?: boolean;
+  coaAccounts?: COAAccountMinimal[];
+}
+
+export function NewExpenseForm({ contacts, isHistorical, coaAccounts = [] }: NewExpenseFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -179,11 +186,19 @@ export function NewExpenseForm({ isHistorical = false, contacts = [] }: NewExpen
               onChange={(e) => setCategory(e.target.value)}
               className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#d4af37] font-sans"
             >
-              {CATEGORY_OPTIONS.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
+              {coaAccounts.length > 0 ? (
+                coaAccounts.map((coa) => (
+                  <option key={coa.account_code} value={coa.account_name}>
+                    {coa.account_code} - {coa.account_name}
+                  </option>
+                ))
+              ) : (
+                CATEGORY_OPTIONS.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))
+              )}
             </select>
           </div>
         </div>

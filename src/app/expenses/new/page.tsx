@@ -16,6 +16,12 @@ export default async function NewExpensePage({ searchParams }: { searchParams: {
     .select('id, name, company_name, contact_type')
     .order('name', { ascending: true });
 
+  const { data: coaData } = await supabase
+    .from('global_chart_of_accounts')
+    .select('account_code, account_name, account_type')
+    .eq('is_active', true)
+    .order('account_code', { ascending: true });
+
   const isHistorical = searchParams?.historical === 'true';
 
   return (
@@ -55,7 +61,11 @@ export default async function NewExpensePage({ searchParams }: { searchParams: {
         </div>
       )}
 
-        <NewExpenseForm isHistorical={isHistorical} contacts={clientsData || []} />
+        <NewExpenseForm 
+        contacts={clientsData || []}
+        coaAccounts={coaData || []}
+        isHistorical={isHistorical} 
+      />
     </div>
   );
 }

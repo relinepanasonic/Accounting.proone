@@ -10,6 +10,7 @@ export interface COAAccount {
   account_type: string;
   description: string | null;
   is_active: boolean;
+  parent_code?: string | null;
 }
 
 export async function upsertCOAAccount(account: COAAccount) {
@@ -32,6 +33,7 @@ export async function upsertCOAAccount(account: COAAccount) {
         account_type: account.account_type,
         description: account.description,
         is_active: account.is_active,
+        parent_code: account.parent_code || null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', account.id);
@@ -46,6 +48,7 @@ export async function upsertCOAAccount(account: COAAccount) {
         account_name: account.account_name,
         account_type: account.account_type,
         description: account.description,
+        parent_code: account.parent_code || null,
         is_active: account.is_active !== undefined ? account.is_active : true,
       });
 

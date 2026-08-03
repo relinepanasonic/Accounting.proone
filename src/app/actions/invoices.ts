@@ -193,6 +193,18 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
       return { success: false, error: 'Invoice updated, but line items failed to save.' };
     }
 
+    // New Double-Entry logic (replace old entries)
+    if (!payload.isQuotation && totalAmount > 0) {
+      await supabase.from('journal_entries').delete().eq('reference_id', payload.id).eq('reference_type', 'invoice');
+      
+      await supabase.from('journal_entries').insert([
+        { workspace_id: workspaceId, account_code: '1002', transaction_date: payload.issueDate, debit_amount: totalAmount, credit_amount: 0, description: `Invoice ${payload.invoiceNumber}`, reference_id: payload.id, reference_type: 'invoice' },
+        { workspace_id: workspaceId, account_code: '4001', transaction_date: payload.issueDate, debit_amount: 0, credit_amount: totalAmount, description: `Invoice ${payload.invoiceNumber}`, reference_id: payload.id, reference_type: 'invoice' }
+      ]);
+    } else {
+      await supabase.from('journal_entries').delete().eq('reference_id', payload.id).eq('reference_type', 'invoice');
+    }
+
     const syncRes = await syncInvoiceToNewWave(payload.id, supabase);
 
     revalidatePath('/invoices');
@@ -342,6 +354,14 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
       };
     }
 
+    // New Double-Entry logic
+    if (!payload.isQuotation && totalAmount > 0) {
+      await supabase.from('journal_entries').insert([
+        { workspace_id: workspaceId, account_code: '1002', transaction_date: payload.issueDate, debit_amount: totalAmount, credit_amount: 0, description: `Invoice ${invoiceNumberToUse}`, reference_id: invoice.id, reference_type: 'invoice' },
+        { workspace_id: workspaceId, account_code: '4001', transaction_date: payload.issueDate, debit_amount: 0, credit_amount: totalAmount, description: `Invoice ${invoiceNumberToUse}`, reference_id: invoice.id, reference_type: 'invoice' }
+      ]);
+    }
+
     const syncRes = await syncInvoiceToNewWave(invoice.id, supabase);
 
     revalidatePath('/invoices');
@@ -466,54 +486,19 @@ export async function toggleInvoiceStatus(invoiceId: string, currentStatus: stri
           const { data: firstBank } = await supabase.from('workspace_bank_accounts').select('*').eq('workspace_id', workspaceId).order('is_default', { ascending: false }).limit(1);
           if (firstBank && firstBank.length > 0) chosenBank = firstBank[0];
         }
-        const debitAccountName = chosenBank ? `${chosenBank.bank_name} (${chosenBank.account_number})` : 'Operating Cash Account';
         const debitAccountCode = chosenBank?.coa_account_code || '1010';
-        const jeNumber = `JE-INV-PAY-${inv.invoice_number}`;
         const todayStr = new Date().toISOString().split('T')[0];
 
         // Clean up any prior payment JE for this invoice just in case
-        await supabase.from('journal_entries').delete().eq('workspace_id', workspaceId).eq('entry_number', jeNumber);
+        await supabase.from('journal_entries').delete().eq('reference_id', invoiceId).eq('reference_type', 'payment');
 
-        const { data: jeData } = await supabase
-          .from('journal_entries')
-          .insert({
-            workspace_id: workspaceId,
-            entry_number: jeNumber,
-            entry_date: todayStr,
-            description: `Customer payment received into bank account [${debitAccountName}] for Invoice #${inv.invoice_number}`,
-            status: 'posted',
-            source_module: 'invoices',
-            total_amount: inv.total_amount || 0,
-          })
-          .select('id')
-          .single();
-
-        if (jeData?.id) {
-          await supabase.from('journal_entry_lines').insert([
-            {
-              workspace_id: workspaceId,
-              journal_entry_id: jeData.id,
-              account_name: debitAccountName,
-              account_code: debitAccountCode,
-              debit_amount: Number(inv.total_amount || 0),
-              credit_amount: 0,
-            },
-            {
-              workspace_id: workspaceId,
-              journal_entry_id: jeData.id,
-              account_name: 'Accounts Receivable',
-              account_code: '1200',
-              debit_amount: 0,
-              credit_amount: Number(inv.total_amount || 0),
-            },
-          ]);
-        }
+        await supabase.from('journal_entries').insert([
+          { workspace_id: workspaceId, account_code: debitAccountCode, transaction_date: todayStr, debit_amount: Number(inv.total_amount || 0), credit_amount: 0, description: `Payment for Invoice ${inv.invoice_number}`, reference_id: invoiceId, reference_type: 'payment' },
+          { workspace_id: workspaceId, account_code: '1002', transaction_date: todayStr, debit_amount: 0, credit_amount: Number(inv.total_amount || 0), description: `Payment for Invoice ${inv.invoice_number}`, reference_id: invoiceId, reference_type: 'payment' }
+        ]);
       }
     } else {
-      const { data: inv } = await supabase.from('invoices').select('invoice_number').eq('id', invoiceId).single();
-      if (inv?.invoice_number) {
-        await supabase.from('journal_entries').delete().eq('workspace_id', workspaceId).eq('entry_number', `JE-INV-PAY-${inv.invoice_number}`);
-      }
+      await supabase.from('journal_entries').delete().eq('reference_id', invoiceId).eq('reference_type', 'payment');
     }
 
     await syncInvoiceToNewWave(invoiceId, supabase);
@@ -540,6 +525,9 @@ export async function deleteInvoice(invoiceId: string) {
       .delete()
       .eq('invoice_id', invoiceId)
       .eq('workspace_id', workspaceId);
+
+    // Delete associated ledger entries
+    await supabase.from('journal_entries').delete().eq('reference_id', invoiceId);
 
     const { error } = await supabase
       .from('invoices')
@@ -598,7 +586,14 @@ export async function recordInvoicePayment(invoiceId: string, amount: number, pa
 
     if (txErr) throw new Error('Failed to create payment transaction.');
 
-    // 3. Update Invoice
+    // 3. Ledger Double-Entry
+    const todayStr = paymentDate || new Date().toISOString().split('T')[0];
+    await supabase.from('journal_entries').insert([
+      { workspace_id: workspaceId, account_code: '1010', transaction_date: todayStr, debit_amount: amount, credit_amount: 0, description: `Payment for Invoice ${inv.invoice_number}${reference ? ' - ' + reference : ''}`, reference_id: invoiceId, reference_type: 'payment' },
+      { workspace_id: workspaceId, account_code: '1002', transaction_date: todayStr, debit_amount: 0, credit_amount: amount, description: `Payment for Invoice ${inv.invoice_number}${reference ? ' - ' + reference : ''}`, reference_id: invoiceId, reference_type: 'payment' }
+    ]);
+
+    // 4. Update Invoice
     const { error: invErr } = await supabase.from('invoices').update({
       amount_paid: newAmountPaid,
       status: newStatus,

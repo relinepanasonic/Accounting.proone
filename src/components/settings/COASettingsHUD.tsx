@@ -12,6 +12,18 @@ interface COASettingsHUDProps {
 
 const ACCOUNT_TYPES = ['Asset', 'Liability', 'Equity', 'Revenue', 'Expense'];
 
+const getDepth = (acc: COAAccount, allAccounts: COAAccount[]): number => {
+  let depth = 0;
+  let current = acc;
+  while (current.parent_code) {
+    depth++;
+    const parent = allAccounts.find(a => a.account_code === current.parent_code);
+    if (!parent || parent.account_code === current.account_code) break;
+    current = parent;
+  }
+  return depth;
+};
+
 export function COASettingsHUD({ accounts, hasClearance, workspaces = [] }: COASettingsHUDProps) {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('All');
@@ -186,17 +198,19 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [] }: COAS
                   </td>
                 </tr>
               ) : (
-                filteredAccounts.map((acc) => (
+                filteredAccounts.map((acc) => {
+                  const depth = getDepth(acc, accounts);
+                  return (
                   <tr key={acc.id} className="hover:bg-white/[0.02] transition-colors group">
                     <td className="px-6 py-4 text-sm font-mono font-bold text-[#f5d77f]">
-                      <div className="flex items-center gap-2">
-                        {acc.parent_code && <span className="text-zinc-600 pl-4">↳</span>}
+                      <div className="flex items-center gap-2" style={{ paddingLeft: `${depth * 1.5}rem` }}>
+                        {depth > 0 && <span className="text-zinc-600">↳</span>}
                         <span>{acc.account_code}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm font-medium text-white">
-                        {acc.parent_code ? <span className="text-zinc-500 mr-2">Sub-Account</span> : null}
+                        {depth === 1 ? <span className="text-zinc-500 mr-2">Account</span> : depth > 1 ? <span className="text-zinc-500 mr-2">Sub-Account</span> : <span className="text-[#d4af37] mr-2">Category</span>}
                         {acc.account_name}
                       </div>
                       {acc.description && (
@@ -261,8 +275,9 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [] }: COAS
                       </td>
                     )}
                   </tr>
-                ))
-              )}
+                );
+              })
+            )}
             </tbody>
           </table>
         </div>

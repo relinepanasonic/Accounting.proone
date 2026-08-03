@@ -287,6 +287,34 @@ export async function saveWorkspaceSettings(payload: {
             return { success: false, error: `Error updating bank account (${item.bank_name}): ${updErr.message}` };
           }
         } else {
+          // 1. Generate new COA code (101X)
+          const { data: coaAccounts } = await supabase
+            .from('global_chart_of_accounts')
+            .select('account_code')
+            .eq('workspace_id', workspaceId)
+            .like('account_code', '101%');
+          
+          let nextCode = 1011;
+          if (coaAccounts && coaAccounts.length > 0) {
+            const codes = coaAccounts.map(c => parseInt(c.account_code, 10)).filter(c => !isNaN(c));
+            if (codes.length > 0) {
+              nextCode = Math.max(...codes) + 1;
+            }
+          }
+          const accountCodeStr = nextCode.toString();
+
+          // 2. Insert into COA
+          await supabase.from('global_chart_of_accounts').insert({
+            workspace_id: workspaceId,
+            account_code: accountCodeStr,
+            account_name: `${item.bank_name} - ${item.account_number.slice(-4)}`,
+            account_type: 'Asset',
+            description: `Auto-generated for ${item.account_name}`,
+            parent_code: '1010', // Assuming 1010 is the parent Cash on Hand/Bank
+            is_active: true
+          });
+
+          // 3. Insert into workspace_bank_accounts
           const { error: insErr } = await supabase
             .from('workspace_bank_accounts')
             .insert({
@@ -295,6 +323,7 @@ export async function saveWorkspaceSettings(payload: {
               account_number: item.account_number.trim(),
               account_name: item.account_name.trim(),
               is_default: item.is_default,
+              coa_account_code: accountCodeStr
             });
           if (insErr) {
             if (isTableMissingErr(insErr)) {

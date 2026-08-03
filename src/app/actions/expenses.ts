@@ -2,6 +2,8 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { getWorkspaceMappings } from './mappings';
+import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 
 export interface CreateExpensePayload {
   vendor: string;
@@ -16,15 +18,7 @@ export async function createExpense(payload: CreateExpensePayload) {
   const supabase = await createClient();
 
   // Retrieve active workspace
-  const { data: workspaces } = await supabase
-    .from('workspaces')
-    .select('id')
-    .limit(1);
-
-  const workspaceId =
-    workspaces && workspaces.length > 0
-      ? workspaces[0].id
-      : '11111111-1111-1111-1111-111111111111';
+  const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
   const finalDescription = payload.notes ? `${payload.vendor} - ${payload.notes}` : payload.vendor;
 
@@ -44,10 +38,14 @@ export async function createExpense(payload: CreateExpensePayload) {
   }
 
   // Double-Entry Ledger: Expense Created (Debit Expense, Credit A/P)
+  const mappings = await getWorkspaceMappings(workspaceId);
+  const expenseAccount = mappings.find(m => m.mapping_type === 'EXPENSE')?.account_code || '5100';
+  const apAccount = mappings.find(m => m.mapping_type === 'AP')?.account_code || '2000';
+
   const todayStr = new Date().toISOString().split('T')[0];
   await supabase.from('journal_entries').insert([
-    { workspace_id: workspaceId, account_code: '5100', transaction_date: todayStr, debit_amount: payload.amount, credit_amount: 0, description: finalDescription, reference_id: txData.id, reference_type: 'expense' },
-    { workspace_id: workspaceId, account_code: '2000', transaction_date: todayStr, debit_amount: 0, credit_amount: payload.amount, description: finalDescription, reference_id: txData.id, reference_type: 'expense' }
+    { workspace_id: workspaceId, account_code: expenseAccount, transaction_date: todayStr, debit_amount: payload.amount, credit_amount: 0, description: finalDescription, reference_id: txData.id, reference_type: 'expense' },
+    { workspace_id: workspaceId, account_code: apAccount, transaction_date: todayStr, debit_amount: 0, credit_amount: payload.amount, description: finalDescription, reference_id: txData.id, reference_type: 'expense' }
   ]);
 
   revalidatePath('/expenses');
@@ -73,11 +71,14 @@ export async function toggleExpenseStatus(id: string, currentStatus: string) {
   const { data: tx } = await supabase.from('transactions').select('amount, workspace_id, description').eq('id', id).single();
   if (tx) {
     if (nextStatus === 'paid') {
+      const mappings = await getWorkspaceMappings(tx.workspace_id);
+      const apAccount = mappings.find(m => m.mapping_type === 'AP')?.account_code || '2000';
+      
       const todayStr = new Date().toISOString().split('T')[0];
       await supabase.from('journal_entries').delete().eq('reference_id', id).eq('reference_type', 'expense_payment');
       
       await supabase.from('journal_entries').insert([
-        { workspace_id: tx.workspace_id, account_code: '2000', transaction_date: todayStr, debit_amount: tx.amount, credit_amount: 0, description: `Payment for ${tx.description}`, reference_id: id, reference_type: 'expense_payment' },
+        { workspace_id: tx.workspace_id, account_code: apAccount, transaction_date: todayStr, debit_amount: tx.amount, credit_amount: 0, description: `Payment for ${tx.description}`, reference_id: id, reference_type: 'expense_payment' },
         { workspace_id: tx.workspace_id, account_code: '1010', transaction_date: todayStr, debit_amount: 0, credit_amount: tx.amount, description: `Payment for ${tx.description}`, reference_id: id, reference_type: 'expense_payment' }
       ]);
     } else {

@@ -74,6 +74,7 @@ export default async function COASettingsPage() {
           accounts={accounts || []} 
           hasClearance={hasClearance} 
           workspaces={workspaces || []}
+          activeWorkspaceId={activeWorkspaceId}
         />
       </div>
     );

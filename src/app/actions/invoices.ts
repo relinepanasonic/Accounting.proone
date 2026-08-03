@@ -38,6 +38,7 @@ export interface InvoiceActionResult {
 }
 
 import { getAuthenticatedWorkspaceContext as getCanonicalWorkspaceContext } from '@/lib/auth/workspace-context';
+import { getWorkspaceMappings } from './mappings';
 
 /**
  * Helper: Retrieve Authenticated User ID and their active workspace_id (respecting multi-tenant cookie)
@@ -195,11 +196,15 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
 
     // New Double-Entry logic (replace old entries)
     if (!payload.isQuotation && totalAmount > 0) {
+      const mappings = await getWorkspaceMappings(workspaceId);
+      const salesAccount = mappings.find(m => m.mapping_type === 'SALES')?.account_code || '4001';
+      const arAccount = mappings.find(m => m.mapping_type === 'AR')?.account_code || '1002';
+
       await supabase.from('journal_entries').delete().eq('reference_id', payload.id).eq('reference_type', 'invoice');
       
       await supabase.from('journal_entries').insert([
-        { workspace_id: workspaceId, account_code: '1002', transaction_date: payload.issueDate, debit_amount: totalAmount, credit_amount: 0, description: `Invoice ${payload.invoiceNumber}`, reference_id: payload.id, reference_type: 'invoice' },
-        { workspace_id: workspaceId, account_code: '4001', transaction_date: payload.issueDate, debit_amount: 0, credit_amount: totalAmount, description: `Invoice ${payload.invoiceNumber}`, reference_id: payload.id, reference_type: 'invoice' }
+        { workspace_id: workspaceId, account_code: arAccount, transaction_date: payload.issueDate, debit_amount: totalAmount, credit_amount: 0, description: `Invoice ${payload.invoiceNumber}`, reference_id: payload.id, reference_type: 'invoice' },
+        { workspace_id: workspaceId, account_code: salesAccount, transaction_date: payload.issueDate, debit_amount: 0, credit_amount: totalAmount, description: `Invoice ${payload.invoiceNumber}`, reference_id: payload.id, reference_type: 'invoice' }
       ]);
     } else {
       await supabase.from('journal_entries').delete().eq('reference_id', payload.id).eq('reference_type', 'invoice');
@@ -356,9 +361,13 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
 
     // New Double-Entry logic
     if (!payload.isQuotation && totalAmount > 0) {
+      const mappings = await getWorkspaceMappings(workspaceId);
+      const salesAccount = mappings.find(m => m.mapping_type === 'SALES')?.account_code || '4001';
+      const arAccount = mappings.find(m => m.mapping_type === 'AR')?.account_code || '1002';
+
       await supabase.from('journal_entries').insert([
-        { workspace_id: workspaceId, account_code: '1002', transaction_date: payload.issueDate, debit_amount: totalAmount, credit_amount: 0, description: `Invoice ${invoiceNumberToUse}`, reference_id: invoice.id, reference_type: 'invoice' },
-        { workspace_id: workspaceId, account_code: '4001', transaction_date: payload.issueDate, debit_amount: 0, credit_amount: totalAmount, description: `Invoice ${invoiceNumberToUse}`, reference_id: invoice.id, reference_type: 'invoice' }
+        { workspace_id: workspaceId, account_code: arAccount, transaction_date: payload.issueDate, debit_amount: totalAmount, credit_amount: 0, description: `Invoice ${invoiceNumberToUse}`, reference_id: invoice.id, reference_type: 'invoice' },
+        { workspace_id: workspaceId, account_code: salesAccount, transaction_date: payload.issueDate, debit_amount: 0, credit_amount: totalAmount, description: `Invoice ${invoiceNumberToUse}`, reference_id: invoice.id, reference_type: 'invoice' }
       ]);
     }
 
@@ -489,12 +498,15 @@ export async function toggleInvoiceStatus(invoiceId: string, currentStatus: stri
         const debitAccountCode = chosenBank?.coa_account_code || '1010';
         const todayStr = new Date().toISOString().split('T')[0];
 
+        const mappings = await getWorkspaceMappings(workspaceId);
+        const arAccount = mappings.find(m => m.mapping_type === 'AR')?.account_code || '1002';
+
         // Clean up any prior payment JE for this invoice just in case
         await supabase.from('journal_entries').delete().eq('reference_id', invoiceId).eq('reference_type', 'payment');
 
         await supabase.from('journal_entries').insert([
           { workspace_id: workspaceId, account_code: debitAccountCode, transaction_date: todayStr, debit_amount: Number(inv.total_amount || 0), credit_amount: 0, description: `Payment for Invoice ${inv.invoice_number}`, reference_id: invoiceId, reference_type: 'payment' },
-          { workspace_id: workspaceId, account_code: '1002', transaction_date: todayStr, debit_amount: 0, credit_amount: Number(inv.total_amount || 0), description: `Payment for Invoice ${inv.invoice_number}`, reference_id: invoiceId, reference_type: 'payment' }
+          { workspace_id: workspaceId, account_code: arAccount, transaction_date: todayStr, debit_amount: 0, credit_amount: Number(inv.total_amount || 0), description: `Payment for Invoice ${inv.invoice_number}`, reference_id: invoiceId, reference_type: 'payment' }
         ]);
       }
     } else {
@@ -587,10 +599,13 @@ export async function recordInvoicePayment(invoiceId: string, amount: number, pa
     if (txErr) throw new Error('Failed to create payment transaction.');
 
     // 3. Ledger Double-Entry
+    const mappings = await getWorkspaceMappings(workspaceId);
+    const arAccount = mappings.find(m => m.mapping_type === 'AR')?.account_code || '1002';
     const todayStr = paymentDate || new Date().toISOString().split('T')[0];
+    
     await supabase.from('journal_entries').insert([
       { workspace_id: workspaceId, account_code: '1010', transaction_date: todayStr, debit_amount: amount, credit_amount: 0, description: `Payment for Invoice ${inv.invoice_number}${reference ? ' - ' + reference : ''}`, reference_id: invoiceId, reference_type: 'payment' },
-      { workspace_id: workspaceId, account_code: '1002', transaction_date: todayStr, debit_amount: 0, credit_amount: amount, description: `Payment for Invoice ${inv.invoice_number}${reference ? ' - ' + reference : ''}`, reference_id: invoiceId, reference_type: 'payment' }
+      { workspace_id: workspaceId, account_code: arAccount, transaction_date: todayStr, debit_amount: 0, credit_amount: amount, description: `Payment for Invoice ${inv.invoice_number}${reference ? ' - ' + reference : ''}`, reference_id: invoiceId, reference_type: 'payment' }
     ]);
 
     // 4. Update Invoice

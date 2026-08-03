@@ -5,11 +5,13 @@ import { Plus, Search, Check, AlertCircle, Edit2, Trash2, BookOpen, Copy, Chevro
 import { upsertCOAAccount, deleteCOAAccount, COAAccount } from '@/app/actions/coa';
 import { getJournalEntriesForAccount, JournalEntry } from '@/app/actions/journal';
 import { formatCurrency } from '@/lib/utils/currency';
+import { LedgerMappingModal } from './LedgerMappingModal';
 
 interface COASettingsHUDProps {
   accounts: COAAccount[];
   hasClearance: boolean;
   workspaces?: { id: string; name: string }[];
+  activeWorkspaceId?: string | null;
 }
 
 const ACCOUNT_TYPES = ['Asset', 'Liability', 'Equity', 'Revenue', 'Expense'];
@@ -26,7 +28,7 @@ const getDepth = (acc: COAAccount, allAccounts: COAAccount[]): number => {
   return depth;
 };
 
-export function COASettingsHUD({ accounts, hasClearance, workspaces = [] }: COASettingsHUDProps) {
+export function COASettingsHUD({ accounts, hasClearance, workspaces = [], activeWorkspaceId }: COASettingsHUDProps) {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('All');
   
@@ -54,6 +56,7 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [] }: COAS
   const [selectedAccountForJournal, setSelectedAccountForJournal] = useState<COAAccount | null>(null);
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [isJournalLoading, setIsJournalLoading] = useState(false);
+  const [isMappingModalOpen, setIsMappingModalOpen] = useState(false);
 
   const getAccountBalance = (code: string): number => {
     const acc = accounts.find(a => a.account_code === code);
@@ -182,15 +185,26 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [] }: COAS
           </h2>
         </div>
         
-        {hasClearance && (
-          <button
-            onClick={() => handleOpenForm()}
-            className="gold-btn flex items-center gap-2 px-6 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider whitespace-nowrap"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add Account</span>
-          </button>
-        )}
+        <div className="flex gap-3">
+          {hasClearance && workspaces.length > 0 && (
+            <button
+              onClick={() => setIsMappingModalOpen(true)}
+              className="px-6 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider border border-[#d4af37]/30 text-[#d4af37] hover:bg-[#d4af37]/10 transition-colors"
+            >
+              Workspace Mappings
+            </button>
+          )}
+
+          {hasClearance && (
+            <button
+              onClick={() => handleOpenForm()}
+              className="gold-btn flex items-center gap-2 px-6 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider whitespace-nowrap"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Account</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Error Alert */}
@@ -611,6 +625,16 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [] }: COAS
             </div>
           </div>
         </div>
+      )}
+
+      {isMappingModalOpen && activeWorkspaceId && (
+        <LedgerMappingModal
+          isOpen={isMappingModalOpen}
+          onClose={() => setIsMappingModalOpen(false)}
+          accounts={accounts}
+          workspaceId={activeWorkspaceId}
+          workspaceName={workspaces.find(w => w.id === activeWorkspaceId)?.name || 'Active Workspace'}
+        />
       )}
     </div>
   );

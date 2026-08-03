@@ -38,6 +38,30 @@ export default async function COASettingsPage() {
     console.error('Failed to load COA:', error);
   }
 
+  // Fetch balances
+  const { data: balancesData } = await supabase
+    .from('journal_entries')
+    .select('account_code, debit_amount, credit_amount');
+
+  if (accounts && balancesData) {
+    accounts.forEach((acc) => {
+      let debit = 0;
+      let credit = 0;
+      balancesData.forEach((b) => {
+        if (b.account_code === acc.account_code) {
+          debit += Number(b.debit_amount || 0);
+          credit += Number(b.credit_amount || 0);
+        }
+      });
+      // Asset and Expense normal balance is Debit
+      if (['Asset', 'Expense'].includes(acc.account_type)) {
+        (acc as any).balance = debit - credit;
+      } else {
+        (acc as any).balance = credit - debit;
+      }
+    });
+  }
+
   // Fetch workspaces for dropdown
   const { data: workspaces } = await supabase
     .from('workspaces')

@@ -12,6 +12,7 @@ export interface COAAccount {
   is_active: boolean;
   parent_code?: string | null;
   workspace_id?: string | null;
+  balance?: number;
 }
 
 export async function upsertCOAAccount(account: COAAccount) {

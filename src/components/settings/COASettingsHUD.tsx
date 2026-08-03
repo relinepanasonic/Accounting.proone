@@ -55,6 +55,19 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [] }: COAS
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [isJournalLoading, setIsJournalLoading] = useState(false);
 
+  const getAccountBalance = (code: string): number => {
+    const acc = accounts.find(a => a.account_code === code);
+    if (!acc) return 0;
+    
+    // Sum children
+    const children = accounts.filter(a => a.parent_code === code);
+    if (children.length > 0) {
+      return children.reduce((sum, child) => sum + getAccountBalance(child.account_code), acc.balance || 0);
+    }
+    
+    return acc.balance || 0;
+  };
+
   React.useEffect(() => {
     if (selectedAccountForJournal) {
       setIsJournalLoading(true);
@@ -307,7 +320,7 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [] }: COAS
                       )}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="text-sm font-mono font-medium text-white">Rp 0.00</div>
+                      <div className="text-sm font-mono font-medium text-white">{formatCurrency(getAccountBalance(acc.account_code))}</div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">

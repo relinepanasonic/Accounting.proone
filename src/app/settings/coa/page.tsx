@@ -6,8 +6,9 @@ import { COASettingsHUD } from '@/components/settings/COASettingsHUD';
 export const dynamic = 'force-dynamic';
 
 export default async function COASettingsPage() {
-  const supabase = await createClient();
-  const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+  try {
+    const supabase = await createClient();
+    const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
   // Check role
   const { data: { user } } = await supabase.auth.getUser();
@@ -43,13 +44,17 @@ export default async function COASettingsPage() {
     .select('id, name')
     .order('name', { ascending: true });
 
-  return (
-    <div className="space-y-6">
-      <COASettingsHUD 
-        accounts={accounts || []} 
-        hasClearance={hasClearance} 
-        workspaces={workspaces || []}
-      />
-    </div>
-  );
+    return (
+      <div className="space-y-6">
+        <COASettingsHUD 
+          accounts={accounts || []} 
+          hasClearance={hasClearance} 
+          workspaces={workspaces || []}
+        />
+      </div>
+    );
+  } catch (error) {
+    console.error('Server Component Crash in COASettingsPage:', error);
+    throw error;
+  }
 }

@@ -254,11 +254,18 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [] }: Reconcil
             {bankAccounts.length === 0 ? (
               <option value="">Select Bank (None Registered)</option>
             ) : (
-              bankAccounts.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.bank_name} - {b.account_number}
-                </option>
-              ))
+              bankAccounts.map((b) => {
+                const isLegacy = b.id.startsWith('temp-legacy');
+                const label = isLegacy 
+                  ? `${b.bank_name} - ${b.account_number}`
+                  : `Bank Account - ${b.bank_name} - ${b.account_number}${b.account_holder ? ` (${b.account_holder})` : ''}`;
+                
+                return (
+                  <option key={b.id} value={b.id}>
+                    {label}
+                  </option>
+                );
+              })
             )}
           </select>
 

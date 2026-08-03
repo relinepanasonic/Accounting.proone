@@ -211,12 +211,14 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [] }: COAS
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-white">
-                        {depth === 1 ? <span className="text-zinc-500 mr-2">Account</span> : depth > 1 ? <span className="text-zinc-500 mr-2">Sub-Account</span> : <span className="text-[#d4af37] mr-2">Category</span>}
+                      <div 
+                        className={`${depth === 0 ? 'text-base font-bold text-[#d4af37]' : 'text-sm font-medium text-white'}`}
+                        style={{ paddingLeft: `${depth * 1.5}rem` }}
+                      >
                         {acc.account_name}
                       </div>
                       {acc.description && (
-                        <div className="text-xs text-zinc-500 mt-1 line-clamp-1">{acc.description}</div>
+                        <div className="text-xs text-zinc-500 mt-1 line-clamp-1" style={{ paddingLeft: `${depth * 1.5}rem` }}>{acc.description}</div>
                       )}
                     </td>
                     <td className="px-6 py-4">

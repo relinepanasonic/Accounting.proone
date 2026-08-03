@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useTransition } from 'react';
-import { Plus, Search, Check, AlertCircle, Edit2, Trash2, BookOpen } from 'lucide-react';
+import { Plus, Search, Check, AlertCircle, Edit2, Trash2, BookOpen, Copy, ChevronDown, ChevronRight, X } from 'lucide-react';
 import { upsertCOAAccount, deleteCOAAccount, COAAccount } from '@/app/actions/coa';
 
 interface COASettingsHUDProps {
@@ -44,6 +44,32 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [] }: COAS
 
   // Delete State
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  // New Features State
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+  const [selectedAccountForJournal, setSelectedAccountForJournal] = useState<COAAccount | null>(null);
+
+  const toggleCategory = (e: React.MouseEvent, code: string) => {
+    e.stopPropagation();
+    const newSet = new Set(collapsedCategories);
+    if (newSet.has(code)) newSet.delete(code);
+    else newSet.add(code);
+    setCollapsedCategories(newSet);
+  };
+
+  const handleDuplicate = (acc: COAAccount) => {
+    if (!hasClearance) return;
+    setError(null);
+    setFormId(undefined);
+    setFormCode('');
+    setFormName(`Copy of ${acc.account_name}`);
+    setFormType(acc.account_type);
+    setFormDesc(acc.description || '');
+    setFormParentCode(acc.parent_code || '');
+    setFormWorkspaceId(acc.workspace_id || '');
+    setFormActive(acc.is_active);
+    setIsFormOpen(true);
+  };
 
   const filteredAccounts = accounts.filter((acc) => {
     const matchesSearch = 
@@ -123,9 +149,6 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [] }: COAS
           <h2 className="text-lg font-black tracking-widest text-white uppercase flex items-center gap-2">
             GLOBAL CHART OF ACCOUNTS
           </h2>
-          <p className="text-xs font-mono text-zinc-400 mt-1">
-            MASTER LEDGER CODES • APPLIES ACROSS ALL ENTERPRISE WORKSPACES
-          </p>
         </div>
         
         {hasClearance && (
@@ -202,24 +225,52 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [] }: COAS
               ) : (
                 filteredAccounts.map((acc) => {
                   const depth = getDepth(acc, accounts);
+                  
+                  let isHidden = false;
+                  let current = acc;
+                  while (current.parent_code) {
+                    if (collapsedCategories.has(current.parent_code)) {
+                      isHidden = true;
+                      break;
+                    }
+                    const parent = accounts.find(a => a.account_code === current.parent_code);
+                    if (!parent) break;
+                    current = parent;
+                  }
+                  
+                  if (isHidden) return null;
+
+                  const isCategory = depth === 0;
+                  const isCollapsed = collapsedCategories.has(acc.account_code);
+
                   return (
-                  <tr key={acc.id} className="hover:bg-white/[0.02] transition-colors group">
+                  <tr 
+                    key={acc.id} 
+                    onClick={() => setSelectedAccountForJournal(acc)}
+                    className="hover:bg-white/[0.02] transition-colors group cursor-pointer"
+                  >
                     <td className="px-6 py-4 text-sm font-mono font-bold text-[#f5d77f]">
                       <div className="flex items-center gap-2" style={{ paddingLeft: `${depth * 1.5}rem` }}>
-                        {depth > 0 && <span className="text-zinc-600">↳</span>}
+                        {isCategory ? (
+                          <button 
+                            onClick={(e) => toggleCategory(e, acc.account_code)}
+                            className="p-1 hover:bg-white/10 rounded transition-colors"
+                          >
+                            {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          </button>
+                        ) : (
+                          <span className="text-zinc-600">↳</span>
+                        )}
                         <span>{acc.account_code}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <div 
-                        className={`${depth === 0 ? 'text-base font-bold text-[#d4af37]' : 'text-sm font-medium text-white'}`}
+                        className={`${isCategory ? 'text-base font-bold text-[#d4af37]' : 'text-sm font-medium text-white'}`}
                         style={{ paddingLeft: `${depth * 1.5}rem` }}
                       >
                         {acc.account_name}
                       </div>
-                      {acc.description && (
-                        <div className="text-xs text-zinc-500 mt-1 line-clamp-1" style={{ paddingLeft: `${depth * 1.5}rem` }}>{acc.description}</div>
-                      )}
                     </td>
                     <td className="px-6 py-4">
                       <span className="inline-flex items-center px-2 py-1 rounded bg-black/60 border border-zinc-800 text-[10px] font-mono text-zinc-300 uppercase w-max">
@@ -268,16 +319,23 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [] }: COAS
                             </button>
                           </div>
                         ) : (
-                          <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex gap-2 justify-end">
                             <button
-                              onClick={() => handleOpenForm(acc)}
-                              className="p-2 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white transition-colors"
+                              onClick={(e) => { e.stopPropagation(); handleDuplicate(acc); }}
+                              className="p-2 text-zinc-400 hover:text-white transition-colors"
+                              title="Duplicate Account"
+                            >
+                              <Copy className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleOpenForm(acc); }}
+                              className="p-2 text-zinc-400 hover:text-white transition-colors"
                             >
                               <Edit2 className="w-4 h-4" />
                             </button>
                             <button
-                              onClick={() => setDeleteConfirmId(acc.id!)}
-                              className="p-2 rounded-lg hover:bg-red-500/20 text-zinc-400 hover:text-red-400 transition-colors"
+                              onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(acc.id!); }}
+                              className="p-2 text-red-400 hover:text-red-300 transition-colors"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -429,6 +487,58 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [] }: COAS
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Journal Details Modal */}
+      {selectedAccountForJournal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setSelectedAccountForJournal(null)}>
+          <div 
+            className="w-full max-w-5xl h-[80vh] flex flex-col gold-glass-panel rounded-2xl border border-[#d4af37]/30 shadow-2xl overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="p-6 border-b border-[#d4af37]/20 bg-black/40 flex items-center justify-between shrink-0">
+              <div>
+                <h3 className="text-xl font-black uppercase text-[#f5d77f] flex items-center gap-3">
+                  <BookOpen className="w-6 h-6 text-[#d4af37]" />
+                  JOURNAL: {selectedAccountForJournal.account_name}
+                </h3>
+                <p className="text-xs text-zinc-400 font-mono mt-2">ACCOUNT {selectedAccountForJournal.account_code} • {selectedAccountForJournal.account_type.toUpperCase()}</p>
+              </div>
+              <button onClick={() => setSelectedAccountForJournal(null)} className="p-2 hover:bg-white/10 rounded-full transition-colors text-zinc-400 hover:text-white">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            
+            {/* Table */}
+            <div className="flex-1 overflow-auto bg-black/20">
+              <table className="w-full text-left border-collapse">
+                <thead className="sticky top-0 bg-[#0f1115] border-b border-[#d4af37]/20 z-10 shadow-md">
+                  <tr>
+                    <th className="px-6 py-4 text-[10px] font-black tracking-widest text-[#d4af37] uppercase">Date</th>
+                    <th className="px-6 py-4 text-[10px] font-black tracking-widest text-[#d4af37] uppercase">Description</th>
+                    <th className="px-6 py-4 text-[10px] font-black tracking-widest text-[#d4af37] uppercase">Ref / Status</th>
+                    <th className="px-6 py-4 text-[10px] font-black tracking-widest text-emerald-400 uppercase text-right">Cash In</th>
+                    <th className="px-6 py-4 text-[10px] font-black tracking-widest text-rose-400 uppercase text-right">Cash Out</th>
+                    <th className="px-6 py-4 text-[10px] font-black tracking-widest text-white uppercase text-right">Balance</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800/50">
+                  <tr>
+                    <td colSpan={6} className="px-6 py-32 text-center">
+                      <div className="flex flex-col items-center justify-center gap-4">
+                        <div className="w-16 h-16 rounded-2xl bg-zinc-900/50 border border-zinc-800 flex items-center justify-center">
+                          <BookOpen className="w-8 h-8 text-zinc-700" />
+                        </div>
+                        <p className="text-sm font-mono font-bold text-zinc-500 uppercase tracking-widest">No Transactions Found</p>
+                        <p className="text-xs text-zinc-600 max-w-xs mx-auto">The ledger for this account is currently empty. Transactions will appear here once recorded.</p>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

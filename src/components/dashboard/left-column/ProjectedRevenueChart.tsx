@@ -103,8 +103,8 @@ export function ProjectedRevenueChart({
       </div>
 
       <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 pt-2 border-t border-zinc-800">
-        <span>FORECAST: Rp {(projectedAmount / 1000000).toLocaleString('id-ID', {maximumFractionDigits:1})} M</span>
-        <span className="text-[#f5d77f] font-bold">TARGET: Rp {(targetAmount / 1000000).toLocaleString('id-ID', {maximumFractionDigits:1})} M</span>
+        <span>FORECAST: Rp {(projectedAmount / 1000000).toLocaleString('en-US', {maximumFractionDigits:1})} M</span>
+        <span className="text-[#f5d77f] font-bold">TARGET: Rp {(targetAmount / 1000000).toLocaleString('en-US', {maximumFractionDigits:1})} M</span>
       </div>
     </div>
   );

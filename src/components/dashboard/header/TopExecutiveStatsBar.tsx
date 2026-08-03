@@ -22,7 +22,7 @@ export function TopExecutiveStatsBar({ summary }: TopExecutiveStatsBarProps) {
   const stats = [
     {
       label: 'TOTAL SALES & REVENUE',
-      value: `Rp ${rev.toLocaleString('id-ID')}`,
+      value: `Rp ${rev.toLocaleString('en-US')}`,
       change: rev > 0 ? 'Verified live collection' : 'No revenue recorded yet',
       badge: rev > 0 ? 'Live' : '0.0%',
       isPositive: true,
@@ -31,7 +31,7 @@ export function TopExecutiveStatsBar({ summary }: TopExecutiveStatsBarProps) {
     },
     {
       label: 'ACTIVE RECEIVABLES (A/R)',
-      value: `Rp ${receivables.toLocaleString('id-ID')}`,
+      value: `Rp ${receivables.toLocaleString('en-US')}`,
       change: receivables > 0 ? 'Pending client settlement' : 'All receivables cleared',
       badge: receivables > 0 ? 'A/R' : '0.0%',
       isPositive: true,
@@ -49,7 +49,7 @@ export function TopExecutiveStatsBar({ summary }: TopExecutiveStatsBarProps) {
     },
     {
       label: 'AVG. INVOICE VALUE',
-      value: `Rp ${Math.round(avgVal).toLocaleString('id-ID')}`,
+      value: `Rp ${Math.round(avgVal).toLocaleString('en-US')}`,
       change: avgVal > 0 ? 'Mean deliverable size' : 'No transactions computed',
       badge: avgVal > 0 ? 'Avg' : '0.0%',
       isPositive: true,

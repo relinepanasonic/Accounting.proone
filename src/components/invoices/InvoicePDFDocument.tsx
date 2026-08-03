@@ -348,12 +348,12 @@ export function InvoicePDFDocument({
                       />
                       {(item.discountAmount ?? 0) > 0 && (
                         <div className="text-[10px] text-red-600 font-mono mt-1">
-                          ↳ Discount: -Rp {item.discountAmount!.toLocaleString('id-ID')}
+                          ↳ Discount: -Rp {item.discountAmount!.toLocaleString('en-US')}
                         </div>
                       )}
                     </td>
                     <td className="py-2.5 px-2 text-right font-mono font-semibold text-[#1e2536]">
-                      Rp {item.unitPrice.toLocaleString('id-ID')}
+                      Rp {item.unitPrice.toLocaleString('en-US')}
                     </td>
                     {!isQuotation && (
                       <td className="py-2.5 px-2 text-center font-mono font-semibold">
@@ -362,7 +362,7 @@ export function InvoicePDFDocument({
                     )}
                     {!isQuotation && (
                       <td className="py-2.5 px-2 text-right font-mono font-bold text-[#1e2536]">
-                        Rp {item.total.toLocaleString('id-ID')}
+                        Rp {item.total.toLocaleString('en-US')}
                       </td>
                     )}
                   </tr>
@@ -378,14 +378,14 @@ export function InvoicePDFDocument({
                 <div className="flex justify-between py-1 px-2 text-zinc-600">
                   <span className="font-serif">Sub-Total</span>
                   <span className="font-mono font-semibold text-[#1e2536]">
-                    Rp {(subtotal || 0).toLocaleString('id-ID')}
+                    Rp {(subtotal || 0).toLocaleString('en-US')}
                   </span>
                 </div>
                 {globalDiscount > 0 && (
                   <div className="flex justify-between py-1 px-2 text-red-600">
                     <span className="font-serif">Global Discount</span>
                     <span className="font-mono font-semibold">
-                      -Rp {globalDiscount.toLocaleString('id-ID')}
+                      -Rp {globalDiscount.toLocaleString('en-US')}
                     </span>
                   </div>
                 )}
@@ -395,7 +395,7 @@ export function InvoicePDFDocument({
                       Tax: PPN ({workspaceBrand?.taxRatePercent || 11}%)
                     </span>
                     <span className="font-mono font-semibold">
-                      Rp {taxAmount.toLocaleString('id-ID')}
+                      Rp {taxAmount.toLocaleString('en-US')}
                     </span>
                   </div>
                 )}
@@ -405,7 +405,7 @@ export function InvoicePDFDocument({
                     GRAND TOTAL
                   </span>
                   <span className="font-mono text-base">
-                    Rp {(grandTotal || 0).toLocaleString('id-ID')}
+                    Rp {(grandTotal || 0).toLocaleString('en-US')}
                   </span>
                 </div>
                 
@@ -416,7 +416,7 @@ export function InvoicePDFDocument({
                     {payments.map((p, i) => (
                       <div key={i} className="flex justify-between py-1 px-2 text-zinc-600">
                         <span>Payment {i + 1} <span className="text-[10px] text-zinc-400">({formatIndoDate(p.transaction_date)})</span></span>
-                        <span className="font-mono text-[#1e2536]">Rp {Number(p.amount).toLocaleString('id-ID')}</span>
+                        <span className="font-mono text-[#1e2536]">Rp {Number(p.amount).toLocaleString('en-US')}</span>
                       </div>
                     ))}
                   </div>
@@ -427,7 +427,7 @@ export function InvoicePDFDocument({
                       BALANCE DUE
                     </span>
                     <span className="font-mono text-base">
-                      Rp {balanceDue.toLocaleString('id-ID')}
+                      Rp {balanceDue.toLocaleString('en-US')}
                     </span>
                   </div>
                 )}

@@ -21,7 +21,7 @@ export function UnpaidAmountGauge({ amount = 0, totalVolume = 1, overdueCount = 
   const filledLength = Math.max(0, Math.min(percentage * arcLength, arcLength));
   const emptyLength = 310 - filledLength; // 310 is slightly more than circumference to ensure it wraps correctly
 
-  const formatCurrency = (val: number) => `Rp ${val.toLocaleString('id-ID')}`;
+  const formatCurrency = (val: number) => `Rp ${val.toLocaleString('en-US')}`;
   
   // Format the main large number text compactly
   const formatCompact = (val: number) => {

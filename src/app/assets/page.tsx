@@ -88,12 +88,12 @@ async function FixedAssetsRegistry() {
                     </span>
                   </td>
                   <td className="py-3 px-3 text-right text-zinc-300">
-                    Rp {item.purchase_price.toLocaleString('id-ID')}
+                    Rp {item.purchase_price.toLocaleString('en-US')}
                   </td>
                   {/* Critical Current Value highlighted in Glowing Rich Gold */}
                   <td className="py-3 px-3 text-right">
                     <span className="text-sm font-black text-[#f5d77f] drop-shadow-[0_0_10px_rgba(245,215,127,0.45)]">
-                      Rp {item.current_book_value.toLocaleString('id-ID')}
+                      Rp {item.current_book_value.toLocaleString('en-US')}
                     </span>
                   </td>
                   <td className="py-3 px-3 text-center">

@@ -134,31 +134,31 @@ async function PayrollPersonnelGrid({ month, year, isNewWave, activeWorkspaceId 
                     {item.employee_name}
                   </td>
                   <td className="px-6 py-4 text-right text-xs font-mono text-zinc-400">
-                    Rp {Number(hourlyData.tarif_per_jam || 0).toLocaleString('id-ID')}
+                    Rp {Number(hourlyData.tarif_per_jam || 0).toLocaleString('en-US')}
                   </td>
                   <td className="px-6 py-4 text-right text-xs font-mono text-zinc-400">
                     {Number(hourlyData.jam_terjadwal || 0).toFixed(2)}
                   </td>
                   <td className="px-6 py-4 text-right text-xs font-mono text-zinc-500">
-                    Rp {Number(hourlyData.forecast_gaji || 0).toLocaleString('id-ID')}
+                    Rp {Number(hourlyData.forecast_gaji || 0).toLocaleString('en-US')}
                   </td>
                   <td className="px-6 py-4 text-right text-xs font-mono text-[#d4af37] font-bold">
                     {Number(hourlyData.jam_dilaporkan || 0).toFixed(2)}
                   </td>
                   <td className="px-6 py-4 text-right text-sm font-black font-mono text-[#f5d77f] drop-shadow-[0_0_8px_rgba(245,215,127,0.3)]">
-                    Rp {item.base_salary.toLocaleString('id-ID')}
+                    Rp {item.base_salary.toLocaleString('en-US')}
                   </td>
                   <td className="px-6 py-4 text-right text-xs font-mono text-zinc-400">
-                    Rp {Number(hourlyData.tunjangan || 0).toLocaleString('id-ID')}
+                    Rp {Number(hourlyData.tunjangan || 0).toLocaleString('en-US')}
                   </td>
                   <td className="px-6 py-4 text-right text-xs font-mono text-zinc-400">
-                    Rp {Number(hourlyData.bonus || 0).toLocaleString('id-ID')}
+                    Rp {Number(hourlyData.bonus || 0).toLocaleString('en-US')}
                   </td>
                   <td className="px-6 py-4 text-right text-xs font-mono text-red-400/80">
-                    Rp {Number(hourlyData.bayar_kasbon || 0).toLocaleString('id-ID')}
+                    Rp {Number(hourlyData.bayar_kasbon || 0).toLocaleString('en-US')}
                   </td>
                   <td className="px-6 py-4 text-right text-xs font-mono text-red-400/80">
-                    Rp {Number(hourlyData.pinalti || 0).toLocaleString('id-ID')}
+                    Rp {Number(hourlyData.pinalti || 0).toLocaleString('en-US')}
                   </td>
                   <td className="px-6 py-4 text-center">
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-mono uppercase bg-black/70 border border-[#d4af37]/30">
@@ -214,13 +214,13 @@ async function PayrollPersonnelGrid({ month, year, isNewWave, activeWorkspaceId 
                   </span>
                 </td>
                 <td className="px-6 py-4 text-right text-xs font-mono text-zinc-300">
-                  Rp {item.base_salary.toLocaleString('id-ID')}
+                  Rp {item.base_salary.toLocaleString('en-US')}
                 </td>
                 <td className="px-6 py-4 text-right text-xs font-mono text-[#f5d77f]">
-                  {item.bonus_amount > 0 ? `+Rp ${item.bonus_amount.toLocaleString('id-ID')}` : '-'}
+                  {item.bonus_amount > 0 ? `+Rp ${item.bonus_amount.toLocaleString('en-US')}` : '-'}
                 </td>
                 <td className="px-6 py-4 text-right text-sm font-black font-mono text-[#f5d77f] drop-shadow-[0_0_8px_rgba(245,215,127,0.3)]">
-                  Rp {totalPayout.toLocaleString('id-ID')}
+                  Rp {totalPayout.toLocaleString('en-US')}
                 </td>
                 <td className="px-6 py-4 text-center text-[10px] font-mono text-zinc-400">
                   {item.pay_period_end}

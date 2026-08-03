@@ -33,7 +33,7 @@ async function InvoicesTableServer() {
             rawIssueDate: inv.issue_date || '',
             clientName: clientObj?.name || 'Client',
             clientContact: clientObj?.contact_name || '',
-            amount: `Rp ${Number(inv.total_amount || 0).toLocaleString('id-ID')}`,
+            amount: `Rp ${Number(inv.total_amount || 0).toLocaleString('en-US')}`,
             rawAmount: Number(inv.total_amount || 0),
             dueDate: formatIndoDate(inv.due_date),
             rawDueDate: inv.due_date || '',

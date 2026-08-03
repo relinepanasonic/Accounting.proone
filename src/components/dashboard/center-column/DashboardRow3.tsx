@@ -30,7 +30,7 @@ export function DashboardRow3({ telemetry }: DashboardRow3Props) {
         
         <div className="mt-4 z-10 relative">
           <span className="text-2xl font-black font-mono text-white tracking-tight drop-shadow-md">
-            Rp {accountsPayable.toLocaleString('id-ID')}
+            Rp {accountsPayable.toLocaleString('en-US')}
           </span>
           <p className="text-[10px] font-mono text-zinc-500 mt-1">Pending unpaid bills & expenses</p>
         </div>
@@ -55,7 +55,7 @@ export function DashboardRow3({ telemetry }: DashboardRow3Props) {
         
         <div className="mt-4 z-10 relative">
           <span className="text-2xl font-black font-mono text-white tracking-tight drop-shadow-[0_0_10px_rgba(245,215,127,0.35)]">
-            Rp {accountsReceivable.toLocaleString('id-ID')}
+            Rp {accountsReceivable.toLocaleString('en-US')}
           </span>
           <p className="text-[10px] font-mono text-zinc-400 mt-1">Pending unpaid client invoices</p>
         </div>
@@ -80,7 +80,7 @@ export function DashboardRow3({ telemetry }: DashboardRow3Props) {
         
         <div className="mt-4 z-10 relative">
           <span className={`text-2xl font-black font-mono tracking-tight drop-shadow-md ${netCashFlow >= 0 ? 'text-[#f5d77f]' : 'text-rose-400'}`}>
-            {netCashFlow >= 0 ? '+' : '-'}Rp {Math.abs(netCashFlow).toLocaleString('id-ID')}
+            {netCashFlow >= 0 ? '+' : '-'}Rp {Math.abs(netCashFlow).toLocaleString('en-US')}
           </span>
           <p className="text-[10px] font-mono text-zinc-400 mt-1">Total Paid Invoices - Paid Expenses</p>
         </div>

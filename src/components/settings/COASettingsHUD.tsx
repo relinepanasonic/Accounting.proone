@@ -236,7 +236,7 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [] }: COAS
                       )}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="text-sm font-mono font-medium text-white">$0.00</div>
+                      <div className="text-sm font-mono font-medium text-white">Rp 0.00</div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">

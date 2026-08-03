@@ -211,7 +211,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
           <div className="flex items-center justify-between text-xs font-mono mb-1">
             <span className="text-zinc-400">{rec.date}</span>
             <span className="font-bold text-[#f5d77f]">
-              Rp {rec.amount.toLocaleString('id-ID')}
+              Rp {rec.amount.toLocaleString('en-US')}
             </span>
           </div>
           <div className="text-xs font-sans text-white font-medium flex items-center justify-between">
@@ -339,8 +339,8 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                         <span className="text-zinc-400">{bank.date}</span>
                         <span className={`font-bold ${bank.amount >= 0 ? 'text-[#f5d77f]' : 'text-red-400'}`}>
                           {bank.amount >= 0
-                            ? `+Rp ${bank.amount.toLocaleString('id-ID')}`
-                            : `-Rp ${Math.abs(bank.amount).toLocaleString('id-ID')}`}
+                            ? `+Rp ${bank.amount.toLocaleString('en-US')}`
+                            : `-Rp ${Math.abs(bank.amount).toLocaleString('en-US')}`}
                         </span>
                       </div>
                       <div className="text-sm font-sans text-white font-bold tracking-wide flex flex-col gap-1 mt-2">
@@ -438,7 +438,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                     <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
                        <div className="text-[10px] uppercase text-zinc-500 mb-1">Amount</div>
                        <div className="text-sm font-bold text-[#f5d77f] font-mono">
-                          Rp {Math.abs(activeBankLine.amount).toLocaleString('id-ID')}
+                          Rp {Math.abs(activeBankLine.amount).toLocaleString('en-US')}
                        </div>
                     </div>
                     <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/80">

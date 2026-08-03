@@ -218,11 +218,11 @@ export function AdvancedJournalForm() {
           <div className="flex items-center gap-6 font-mono text-xs">
             <div className="flex flex-col items-end">
               <span className="text-[9px] text-zinc-500 uppercase tracking-widest">Total Debit</span>
-              <span className="text-white">Rp {totalDebit.toLocaleString('id-ID')}</span>
+              <span className="text-white">Rp {totalDebit.toLocaleString('en-US')}</span>
             </div>
             <div className="flex flex-col items-end">
               <span className="text-[9px] text-zinc-500 uppercase tracking-widest">Total Credit</span>
-              <span className="text-white">Rp {totalCredit.toLocaleString('id-ID')}</span>
+              <span className="text-white">Rp {totalCredit.toLocaleString('en-US')}</span>
             </div>
           </div>
         </div>
@@ -242,7 +242,7 @@ export function AdvancedJournalForm() {
             </h4>
             {!isBalanced && (
               <p className="text-[10px] font-mono text-zinc-400 mt-0.5">
-                Difference: Rp {difference.toLocaleString('id-ID')}
+                Difference: Rp {difference.toLocaleString('en-US')}
               </p>
             )}
           </div>

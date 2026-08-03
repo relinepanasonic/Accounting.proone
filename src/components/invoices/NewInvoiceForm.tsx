@@ -546,7 +546,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                     <div className="col-span-12 md:col-span-2 flex flex-col items-end justify-start">
                       <div className="md:hidden text-[10px] font-bold text-[#d4af37]/60 w-full text-left mb-1">BASE TOTAL</div>
                       <div className="text-xs font-mono text-zinc-400 mt-1 md:mt-2">
-                          Rp {(item.quantity * item.unitPrice).toLocaleString('id-ID')}
+                          Rp {(item.quantity * item.unitPrice).toLocaleString('en-US')}
                       </div>
                     </div>
                   </div>
@@ -563,7 +563,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                       />
                     </div>
                     <div className="w-28 text-right text-sm font-bold text-[#f5d77f]">
-                        Rp {(item.quantity * item.unitPrice - (item.discountAmount || 0)).toLocaleString('id-ID')}
+                        Rp {(item.quantity * item.unitPrice - (item.discountAmount || 0)).toLocaleString('en-US')}
                     </div>
                   </div>
                 </div>
@@ -573,7 +573,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
             <div className="flex flex-col items-end pt-4 border-t border-[#d4af37]/20 gap-3">
                 <div className="flex justify-between w-full md:w-1/3 items-center">
                 <span className="text-sm text-[#d4af37]/60">Subtotal:</span>
-                <span className="font-mono text-[#f5d77f]">Rp {subTotal.toLocaleString('id-ID')}</span>
+                <span className="font-mono text-[#f5d77f]">Rp {subTotal.toLocaleString('en-US')}</span>
                 </div>
                 <div className="flex justify-between w-full md:w-1/3 items-center">
                 <span className="text-sm text-red-400/80">Invoice Discount:</span>
@@ -585,7 +585,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                 </div>
                 <div className="flex justify-between w-full md:w-1/3 items-center pt-3 border-t border-[#d4af37]/20">
                 <span className="text-lg font-bold text-[#d4af37]">Grand Total:</span>
-                <span className="text-xl font-mono font-bold text-white">Rp {grandTotal.toLocaleString('id-ID')}</span>
+                <span className="text-xl font-mono font-bold text-white">Rp {grandTotal.toLocaleString('en-US')}</span>
                 </div>
             </div>
           </div>

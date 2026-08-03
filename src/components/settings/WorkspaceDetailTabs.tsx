@@ -1247,10 +1247,10 @@ export function WorkspaceDetailTabs({
                             {item.quantity || 1} {item.scale || 'pc'}
                           </td>
                           <td className="py-4 px-6 text-right font-mono font-bold text-[#f5d77f] whitespace-nowrap">
-                            Rp {Number(item.unit_price || 0).toLocaleString('id-ID')}
+                            Rp {Number(item.unit_price || 0).toLocaleString('en-US')}
                           </td>
                           <td className="py-4 px-6 text-right font-mono font-extrabold text-[#d4af37] whitespace-nowrap">
-                            Rp {(Number(item.quantity || 1) * Number(item.unit_price || 0)).toLocaleString('id-ID')}
+                            Rp {(Number(item.quantity || 1) * Number(item.unit_price || 0)).toLocaleString('en-US')}
                           </td>
                           <td className="py-4 px-6 text-right whitespace-nowrap">
                             <div className="flex items-center justify-end gap-2">

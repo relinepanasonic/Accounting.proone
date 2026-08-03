@@ -156,12 +156,12 @@ export function DashboardRow1({ telemetry }: DashboardRow1Props) {
               </div>
               <div className="flex justify-between items-center text-[10px] font-mono">
                 <span className="text-zinc-400">Issued</span>
-                <span className="text-zinc-300 font-bold">Rp {issued[hoverState.idx].toLocaleString('id-ID')}</span>
+                <span className="text-zinc-300 font-bold">Rp {issued[hoverState.idx].toLocaleString('en-US')}</span>
               </div>
               <div className="flex justify-between items-center text-[10px] font-mono">
                 <span className="text-[#f5d77f]">Paid</span>
                 <span className="text-[#f5d77f] font-bold drop-shadow-[0_0_5px_rgba(245,215,127,0.5)]">
-                  Rp {paid[hoverState.idx].toLocaleString('id-ID')}
+                  Rp {paid[hoverState.idx].toLocaleString('en-US')}
                 </span>
               </div>
             </div>
@@ -205,7 +205,7 @@ export function DashboardRow1({ telemetry }: DashboardRow1Props) {
                         {p.name}
                       </span>
                       <span className="text-[10px] font-mono text-[#f5d77f]">
-                        Rp {p.amount.toLocaleString('id-ID')}
+                        Rp {p.amount.toLocaleString('en-US')}
                       </span>
                     </div>
                     {/* Progress Bar */}

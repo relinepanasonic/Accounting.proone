@@ -89,12 +89,12 @@ export function ClientAnalyticsTable({ telemetry }: ClientAnalyticsTableProps) {
                   </td>
                   <td className="py-3 px-4">
                     <span className="text-xs font-mono text-emerald-400 drop-shadow-md">
-                      Rp {client.totalPaid.toLocaleString('id-ID')}
+                      Rp {client.totalPaid.toLocaleString('en-US')}
                     </span>
                   </td>
                   <td className="py-3 px-4">
                     <span className={`text-xs font-mono ${client.ar > 0 ? 'text-rose-400' : 'text-zinc-500'}`}>
-                      Rp {client.ar.toLocaleString('id-ID')}
+                      Rp {client.ar.toLocaleString('en-US')}
                     </span>
                   </td>
                   <td className="py-3 px-4">

@@ -78,7 +78,7 @@ export function NewExpenseForm({ contacts, isHistorical, coaAccounts = [] }: New
       return;
     }
     if (!amount || Number(amount) <= 0) {
-      setErrorMsg('Please enter an expense amount greater than $0.');
+      setErrorMsg('Please enter an expense amount greater than Rp 0.');
       return;
     }
 

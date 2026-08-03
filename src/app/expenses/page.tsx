@@ -100,7 +100,7 @@ async function ExpensesTable() {
                   </td>
                   <td className="py-3 px-3 text-right">
                     <span className="text-sm font-extrabold text-[#f5d77f] drop-shadow-[0_0_10px_rgba(245,215,127,0.35)]">
-                      Rp {item.amount.toLocaleString('id-ID')}
+                      Rp {item.amount.toLocaleString('en-US')}
                     </span>
                   </td>
                   <td className="py-3 px-3 text-center">

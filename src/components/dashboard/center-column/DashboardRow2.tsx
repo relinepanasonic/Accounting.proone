@@ -87,13 +87,13 @@ export function DashboardRow2({ telemetry }: DashboardRow2Props) {
                   <div 
                     className="w-full bg-zinc-600 transition-all"
                     style={{ height: `${genPct}%` }}
-                    title={`General: Rp ${gen.toLocaleString('id-ID')}`}
+                    title={`General: Rp ${gen.toLocaleString('en-US')}`}
                   ></div>
                   {/* COGS (Bottom) */}
                   <div 
                     className="w-full bg-gradient-to-t from-[#d4af37] to-[#f5d77f] transition-all"
                     style={{ height: `${cogsPct}%` }}
-                    title={`COGS: Rp ${cogs.toLocaleString('id-ID')}`}
+                    title={`COGS: Rp ${cogs.toLocaleString('en-US')}`}
                   ></div>
                 </div>
                 <span className="text-[9px] font-mono text-zinc-500 uppercase mt-3">{m}</span>
@@ -114,7 +114,7 @@ export function DashboardRow2({ telemetry }: DashboardRow2Props) {
           </div>
           <div className="flex flex-col items-end">
             <span className="text-xl font-black font-mono text-[#f5d77f] drop-shadow-[0_0_8px_rgba(245,215,127,0.3)]">
-              Rp {bankBalance.balance[bankBalance.balance.length - 1]?.toLocaleString('id-ID')}
+              Rp {bankBalance.balance[bankBalance.balance.length - 1]?.toLocaleString('en-US')}
             </span>
             <span className="text-[10px] font-mono text-zinc-400">Current Balance</span>
           </div>

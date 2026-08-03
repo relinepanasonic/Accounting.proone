@@ -170,7 +170,7 @@ async function ActivityLedgerTimeline() {
                         : 'text-zinc-100'
                     }`}
                   >
-                    Rp {(line.debit_amount || line.credit_amount).toLocaleString('id-ID')}
+                    Rp {(line.debit_amount || line.credit_amount).toLocaleString('en-US')}
                   </span>
                 </div>
               ))}

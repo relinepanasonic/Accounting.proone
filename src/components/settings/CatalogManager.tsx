@@ -353,10 +353,10 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
                       {item.quantity || 1} {item.scale || 'pc'}
                     </td>
                     <td className="py-3.5 px-3 text-right font-mono font-bold text-[#f5d77f]">
-                      Rp {Number(item.unit_price).toLocaleString('id-ID')}
+                      Rp {Number(item.unit_price).toLocaleString('en-US')}
                     </td>
                     <td className="py-3.5 px-3 text-right font-mono font-extrabold text-[#d4af37]">
-                      Rp {(Number(item.quantity || 1) * Number(item.unit_price || 0)).toLocaleString('id-ID')}
+                      Rp {(Number(item.quantity || 1) * Number(item.unit_price || 0)).toLocaleString('en-US')}
                     </td>
                     <td className="py-3.5 px-3 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1.5">

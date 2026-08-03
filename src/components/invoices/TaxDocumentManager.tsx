@@ -86,7 +86,7 @@ export function TaxDocumentManager({ invoices }: { invoices: TaxInvoice[] }) {
                     <td className="py-4 px-6">
                       <div className="text-sm text-zinc-300 font-medium">{inv.clientName}</div>
                       <div className="text-xs text-[#d4af37] font-mono mt-1">
-                        Rp {inv.amount.toLocaleString('id-ID')}
+                        Rp {inv.amount.toLocaleString('en-US')}
                       </div>
                     </td>
                     

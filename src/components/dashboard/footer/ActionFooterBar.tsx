@@ -6,9 +6,9 @@ import { Plus, Receipt } from 'lucide-react';
 
 export function ActionFooterBar() {
   const metrics = [
-    { label: 'AVG DAILY', value: '$4,570.00' },
-    { label: 'REV PER INV', value: '$10,000.00' },
-    { label: 'HOURLY RATE', value: '$150.00' },
+    { label: 'AVG DAILY', value: 'Rp 4,570.00' },
+    { label: 'REV PER INV', value: 'Rp 10,000.00' },
+    { label: 'HOURLY RATE', value: 'Rp 150.00' },
     { label: 'COLLECTED', value: '94.80%' },
     { label: 'DSO RATIO', value: '14 DAYS' },
   ];

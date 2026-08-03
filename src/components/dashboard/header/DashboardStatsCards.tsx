@@ -14,7 +14,7 @@ export function DashboardStatsCards({ telemetry }: DashboardStatsCardsProps) {
   const stats = [
     {
       label: 'TOTAL REVENUE',
-      value: `Rp ${totalRevenue.toLocaleString('id-ID')}`,
+      value: `Rp ${totalRevenue.toLocaleString('en-US')}`,
       change: 'Issued invoices total',
       badge: 'Rev',
       icon: <Receipt className="w-4 h-4 text-[#d4af37]" />,
@@ -23,7 +23,7 @@ export function DashboardStatsCards({ telemetry }: DashboardStatsCardsProps) {
     },
     {
       label: 'TOTAL SALES',
-      value: `Rp ${totalSales.toLocaleString('id-ID')}`,
+      value: `Rp ${totalSales.toLocaleString('en-US')}`,
       change: 'Paid invoices total',
       badge: 'Sales',
       icon: <Banknote className="w-4 h-4 text-[#d4af37]" />,
@@ -32,7 +32,7 @@ export function DashboardStatsCards({ telemetry }: DashboardStatsCardsProps) {
     },
     {
       label: 'AVG. ORDER VALUE',
-      value: `Rp ${Math.round(avgOrderValue).toLocaleString('id-ID')}`,
+      value: `Rp ${Math.round(avgOrderValue).toLocaleString('en-US')}`,
       change: 'Mean paid invoice size',
       badge: 'Avg',
       icon: <LineChart className="w-4 h-4 text-[#d4af37]" />,

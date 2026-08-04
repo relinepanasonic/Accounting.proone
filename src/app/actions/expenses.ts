@@ -90,3 +90,26 @@ export async function toggleExpenseStatus(id: string, currentStatus: string) {
   revalidatePath('/');
   return { success: true, status: nextStatus };
 }
+
+export async function deleteExpense(id: string) {
+  const supabase = await createClient();
+  const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+
+  // Delete journal entries first (foreign key constraints or manual cascades)
+  await supabase.from('journal_entries').delete().eq('reference_id', id);
+
+  const { error } = await supabase
+    .from('transactions')
+    .delete()
+    .eq('id', id)
+    .eq('workspace_id', workspaceId);
+
+  if (error) {
+    console.error('Error deleting expense:', error);
+    throw new Error('Failed to delete expense');
+  }
+
+  revalidatePath('/expenses');
+  revalidatePath('/');
+  return { success: true };
+}

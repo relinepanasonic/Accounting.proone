@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useTransition } from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Copy, CheckCircle, Clock, FileText, Trash2, Edit2 } from 'lucide-react';
 import { duplicateInvoice, toggleInvoiceStatus, deleteInvoice, convertQuotationToInvoice } from '@/app/actions/invoices';
 
@@ -12,6 +12,7 @@ interface InvoiceActionProps {
 }
 
 export function InvoiceStatusToggle({ id, status }: InvoiceActionProps) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const isPaid = status?.toLowerCase() === 'paid';
 
@@ -19,6 +20,7 @@ export function InvoiceStatusToggle({ id, status }: InvoiceActionProps) {
     startTransition(async () => {
       try {
         await toggleInvoiceStatus(id, status || 'draft');
+        router.refresh();
       } catch (err) {
         console.error(err);
       }
@@ -52,12 +54,14 @@ export function InvoiceStatusToggle({ id, status }: InvoiceActionProps) {
 }
 
 export function InvoiceActionGroup({ id, isQuotation, status }: InvoiceActionProps) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   const handleDuplicate = () => {
     startTransition(async () => {
       try {
         await duplicateInvoice(id);
+        router.refresh();
       } catch (err) {
         console.error(err);
       }
@@ -69,6 +73,7 @@ export function InvoiceActionGroup({ id, isQuotation, status }: InvoiceActionPro
       startTransition(async () => {
         try {
           await deleteInvoice(id);
+          router.refresh();
         } catch (err) {
           console.error(err);
         }
@@ -81,6 +86,7 @@ export function InvoiceActionGroup({ id, isQuotation, status }: InvoiceActionPro
       startTransition(async () => {
         try {
           await convertQuotationToInvoice(id);
+          router.refresh();
         } catch (err) {
           console.error(err);
         }

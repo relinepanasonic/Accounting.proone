@@ -81,6 +81,8 @@ export default async function WorkspaceDetailPage({ params }: WorkspaceDetailPag
           name: p.name,
           description: p.description || undefined,
           unit_price: Number(p.unit_price) || 0,
+          quantity: Number(p.quantity) || 1,
+          scale: p.scale || 'pc',
         }))
       : [];
 

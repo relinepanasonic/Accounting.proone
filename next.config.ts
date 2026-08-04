@@ -6,7 +6,8 @@ const nextConfig: NextConfig = {
   },
   typescript: {
     ignoreBuildErrors: true,
-  }
+  },
+  serverExternalPackages: ['pdf2json', 'pdf-parse'],
 };
 
 export default nextConfig;

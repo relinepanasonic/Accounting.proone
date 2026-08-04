@@ -83,14 +83,14 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
     }
   }, [activeBankLine]);
 
-  const findAutoMatch = (bankLine: BankLine) => {
+  function findAutoMatch(bankLine: BankLine) {
     return recordsList.find(
       (r) =>
         Math.abs(r.amount - Math.abs(bankLine.amount)) < 0.01 &&
         ((bankLine.amount > 0 && r.type === 'invoice') ||
-          (bankLine.amount < 0 && r.type === 'expense'))
+          (bankLine.amount < 0 && (r.type === 'expense' || r.type === 'payroll')))
     );
-  };
+  }
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

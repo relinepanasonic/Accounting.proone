@@ -285,7 +285,7 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
         client_id: payload.clientId,
         invoice_number: invoiceNumberToUse,
         is_quotation: payload.isQuotation || false,
-        status: 'Draft',
+        status: 'draft',
         issue_date: payload.issueDate,
         due_date: payload.dueDate,
         subtotal: subtotal,

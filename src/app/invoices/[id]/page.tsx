@@ -153,6 +153,7 @@ export default async function InvoiceDetailPage({ params, searchParams }: Invoic
       invoiceNumber={invoiceNumber}
       accountNumber={`#${invoiceNumber}`}
       invoiceDate={invoiceDate}
+      rawIssueDate={inv?.issue_date}
       issueDate={issueDate}
       clientName={clientName}
       clientBrand={clientBrand}

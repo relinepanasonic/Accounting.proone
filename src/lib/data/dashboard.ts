@@ -8,7 +8,7 @@ export interface DashboardTelemetry {
   totalSales: number;
   avgOrderValue: number;
   newCustomersCount: number;
-  customerOutCount: number;
+  customerActiveCount: number;
 
   salesVsPaid: {
     months: string[];
@@ -143,36 +143,47 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
 
   const avgOrderValue = paidInvoicesCount > 0 ? totalSales / paidInvoicesCount : 0;
 
-  // Process Clients for New vs Out
-  let newCustomersCount = 0;
-  let customerOutCount = 0;
+  // --- 2. Client Metrics & Activity Tracking ---
   const clientLastActivity = new Map<string, Date>();
-
-  // Find last activity (invoice) per client
-  for (const inv of invoices) {
-    if (!inv.client_id) continue;
-    const d = new Date(inv.issue_date || inv.created_at);
-    const existing = clientLastActivity.get(inv.client_id);
-    if (!existing || d > existing) {
-      clientLastActivity.set(inv.client_id, d);
-    }
-  }
-
-  const threeMonthsAgo = new Date();
-  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+  const clientFirstInvoice = new Map<string, Date>();
+  const activeClientsInMonth = new Set<string>();
   
   const currentMonthIdx = new Date().getMonth();
   const targetMonthIdx = monthFilter !== null ? monthFilter : currentMonthIdx;
 
-  for (const c of clients) {
-    const createdDate = new Date(c.created_at);
-    if (createdDate.getMonth() === targetMonthIdx && createdDate.getFullYear() === currentYear) {
-      newCustomersCount++;
+  // Find last activity (invoice) per client and active status
+  for (const inv of invoices) {
+    if (!inv.client_id) continue;
+    const d = new Date(inv.issue_date || inv.created_at);
+    const existingLast = clientLastActivity.get(inv.client_id);
+    if (!existingLast || d > existingLast) {
+      clientLastActivity.set(inv.client_id, d);
     }
-    
-    const lastActive = clientLastActivity.get(c.id);
-    if (!lastActive || lastActive < threeMonthsAgo) {
-      customerOutCount++;
+
+    const existingFirst = clientFirstInvoice.get(inv.client_id);
+    if (!existingFirst || d < existingFirst) {
+      clientFirstInvoice.set(inv.client_id, d);
+    }
+
+    if (d.getMonth() === targetMonthIdx && d.getFullYear() === currentYear) {
+      activeClientsInMonth.add(inv.client_id);
+    }
+  }
+
+  let newCustomersCount = 0;
+  const customerActiveCount = activeClientsInMonth.size;
+
+  for (const c of clients) {
+    // Count as new customer if their first invoice was in the target month
+    const firstInvDate = clientFirstInvoice.get(c.id);
+    if (firstInvDate && firstInvDate.getMonth() === targetMonthIdx && firstInvDate.getFullYear() === currentYear) {
+      newCustomersCount++;
+    } else if (!firstInvDate) {
+      // Fallback: If no invoice yet, count by creation date
+      const createdDate = new Date(c.created_at);
+      if (createdDate.getMonth() === targetMonthIdx && createdDate.getFullYear() === currentYear) {
+        newCustomersCount++;
+      }
     }
   }
 
@@ -274,6 +285,9 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     if (st === 'pending' || st === 'overdue') m.ar += amt;
   }
 
+  const threeMonthsAgo = new Date();
+  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
   const clientMetrics = Array.from(clientMetricsMap.values()).map(m => {
     const lastActive = clientLastActivity.get(m.id);
     if (!lastActive || lastActive < threeMonthsAgo) {
@@ -291,7 +305,7 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     totalSales,
     avgOrderValue,
     newCustomersCount,
-    customerOutCount,
+    customerActiveCount,
     
     salesVsPaid: {
       months: chartMonths,

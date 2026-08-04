@@ -9,7 +9,7 @@ interface DashboardStatsCardsProps {
 }
 
 export function DashboardStatsCards({ telemetry }: DashboardStatsCardsProps) {
-  const { totalRevenue, totalSales, avgOrderValue, newCustomersCount, customerOutCount } = telemetry;
+  const { totalRevenue, totalSales, avgOrderValue, newCustomersCount, customerActiveCount } = telemetry;
 
   const stats = [
     {
@@ -49,11 +49,11 @@ export function DashboardStatsCards({ telemetry }: DashboardStatsCardsProps) {
       line: 'M 0 30 Q 30 15, 60 25 T 100 10',
     },
     {
-      label: 'CUSTOMER OUT',
-      value: `${customerOutCount}`,
-      change: 'No activity in 3+ mo',
-      badge: 'Churn',
-      icon: <UserMinus className="w-4 h-4 text-[#d4af37]" />,
+      label: 'CUSTOMER ACTIVE',
+      value: `${customerActiveCount || 0}`,
+      change: 'Billed this month',
+      badge: 'Active',
+      icon: <Users className="w-4 h-4 text-[#d4af37]" />,
       curve: 'M 0 40 Q 25 45, 50 35 T 100 40 L 100 45 L 0 45 Z',
       line: 'M 0 40 Q 25 45, 50 35 T 100 40',
     },

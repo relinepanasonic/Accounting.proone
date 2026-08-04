@@ -8,6 +8,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { reconcileRecord, quickResolveAndReconcile } from '@/app/actions/reconcile';
+import { RupiahInput } from '@/components/ui/RupiahInput';
 
 export interface UnreconciledSystemRecord {
   id: string;
@@ -63,7 +64,25 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   // Resolution Widget State
   const [resolutionTab, setResolutionTab] = useState<'expense' | 'income' | 'manual'>('expense');
   const [quickCategory, setQuickCategory] = useState<string>('Uncategorized');
+  const [quickVendor, setQuickVendor] = useState('');
+  const [quickDate, setQuickDate] = useState('');
+  const [quickAmount, setQuickAmount] = useState<number | ''>('');
+  const [quickNotes, setQuickNotes] = useState('');
+  
   const [activeBankId, setActiveBankId] = useState<string>(bankAccounts.length > 0 ? bankAccounts[0].id : '');
+
+  const activeBankLine = bankLines.find((b) => b.id === selectedBankId);
+  const autoMatchRecord = activeBankLine ? findAutoMatch(activeBankLine) : null;
+  const currentTargetRecordId = selectedRecordId || autoMatchRecord?.id;
+
+  React.useEffect(() => {
+    if (activeBankLine) {
+      setQuickVendor(activeBankLine.sourceDestination || '');
+      setQuickDate(activeBankLine.date || '');
+      setQuickAmount(Math.abs(activeBankLine.amount || 0));
+      setQuickNotes([activeBankLine.notes, activeBankLine.transactionDetails].filter(Boolean).join(' | '));
+    }
+  }, [activeBankLine]);
 
   const findAutoMatch = (bankLine: BankLine) => {
     return recordsList.find(
@@ -136,9 +155,6 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
     }
   };
 
-  const activeBankLine = bankLines.find((b) => b.id === selectedBankId);
-  const autoMatchRecord = activeBankLine ? findAutoMatch(activeBankLine) : null;
-  const currentTargetRecordId = selectedRecordId || autoMatchRecord?.id;
 
   const handleMatchAndClear = () => {
     if (!activeBankLine || !currentTargetRecordId) return;
@@ -171,10 +187,10 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
         await quickResolveAndReconcile(
           resolutionTab === 'expense' ? 'expense' : 'income',
           quickCategory,
-          Math.abs(activeBankLine.amount),
-          activeBankLine.date, // Note: Must match DB format 'YYYY-MM-DD' - Bank Jago format needs transformation in DB or API, but we'll try raw for now
-          activeBankLine.sourceDestination,
-          `BANK-REF: ${activeBankLine.sourceDestination}`,
+          Number(quickAmount) || Math.abs(activeBankLine.amount),
+          quickDate || activeBankLine.date,
+          quickVendor || activeBankLine.sourceDestination,
+          quickNotes || `BANK-REF: ${activeBankLine.sourceDestination}`,
           activeBankId
         );
         setBankLines((prev) => prev.filter((b) => b.id !== activeBankLine.id));
@@ -264,10 +280,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
               <option value="">Select Bank (None Registered)</option>
             ) : (
               bankAccounts.map((b) => {
-                const isLegacy = b.id.startsWith('temp-legacy');
-                const label = isLegacy 
-                  ? `${b.bank_name} | ${b.account_number}`
-                  : `${b.bank_name} | ${b.account_number}${b.account_holder ? ` | ${b.account_holder}` : ''}`;
+                const label = `${b.bank_name} | ${b.account_number}${b.account_holder ? ` | ${b.account_holder}` : ''}`;
                 
                 return (
                   <option key={b.id} value={b.id}>
@@ -433,42 +446,76 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                 // QUICK EXPENSE / INCOME TAB
                 <div className="flex-1 flex flex-col justify-between">
                   <div className="space-y-4">
-                    <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
-                       <div className="text-[10px] uppercase text-zinc-500 mb-1">Date</div>
-                       <div className="text-sm text-white font-mono">{activeBankLine.date}</div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1">
+                          Vendor / Payee Name <span className="text-red-500">*</span>
+                        </label>
+                        <input 
+                          type="text"
+                          required
+                          value={quickVendor}
+                          onChange={(e) => setQuickVendor(e.target.value)}
+                          className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#d4af37]"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500">Category</label>
+                        <select 
+                          value={quickCategory}
+                          onChange={(e) => setQuickCategory(e.target.value)}
+                          className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#d4af37]"
+                        >
+                          <option value="Uncategorized">Uncategorized</option>
+                          {coaAccounts.map(coa => (
+                            <option key={coa.account_code} value={coa.account_name}>
+                              {coa.account_code} - {coa.account_name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
-                    <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
-                       <div className="text-[10px] uppercase text-zinc-500 mb-1">Amount</div>
-                       <div className="text-sm font-bold text-[#f5d77f] font-mono">
-                          Rp {Math.abs(activeBankLine.amount).toLocaleString('en-US')}
-                       </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1">
+                          Payment Date *
+                        </label>
+                        <input
+                          type="date"
+                          required
+                          value={quickDate}
+                          onChange={(e) => setQuickDate(e.target.value)}
+                          className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#d4af37] font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1">
+                          Amount (IDR / Rp) *
+                        </label>
+                        <RupiahInput
+                          required
+                          placeholder="Rp 0"
+                          value={quickAmount}
+                          onChange={(e) => setQuickAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                          className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm font-mono font-bold text-[#f5d77f] focus:outline-none focus:border-[#d4af37]"
+                        />
+                      </div>
                     </div>
-                    <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
-                       <div className="text-[10px] uppercase text-zinc-500 mb-1">Description / Source</div>
-                       <div className="text-sm text-white">
-                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                           <span>{activeBankLine.sourceDestination}</span>
-                           {activeBankLine.notes && <span className="text-zinc-500 font-normal border-l border-zinc-700 pl-2">{activeBankLine.notes}</span>}
-                           {activeBankLine.transactionDetails && <span className="text-zinc-500 font-normal border-l border-zinc-700 pl-2">{activeBankLine.transactionDetails}</span>}
-                         </div>
-                       </div>
-                    </div>
-                    <div className="space-y-2">
-                       <label className="text-[10px] uppercase text-zinc-500 ml-1">Category</label>
-                       <select 
-                         value={quickCategory}
-                         onChange={(e) => setQuickCategory(e.target.value)}
-                         className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#d4af37]/50"
-                       >
-                         <option value="Uncategorized">Uncategorized</option>
-                         {coaAccounts.map(coa => (
-                           <option key={coa.account_code} value={coa.account_name}>
-                             {coa.account_code} - {coa.account_name}
-                           </option>
-                         ))}
-                       </select>
+
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1">
+                        Memo / Reference Notes
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={quickNotes}
+                        onChange={(e) => setQuickNotes(e.target.value)}
+                        className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#d4af37] font-sans"
+                      />
                     </div>
                   </div>
+
 
                   <div className="mt-6 pt-4 border-t border-zinc-800 flex items-center justify-between">
                     <div className="text-xs font-mono text-zinc-400">

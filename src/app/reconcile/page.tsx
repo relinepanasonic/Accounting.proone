@@ -95,13 +95,31 @@ async function ReconciliationCore() {
   if (bankAccounts.length === 0 && ws?.payment_instructions) {
     const lines = ws.payment_instructions.split('\n').filter((l: string) => l.trim().length > 0);
     if (lines.length > 0) {
-      bankAccounts = lines.map((line: string, idx: number) => ({
-        id: `temp-legacy-${idx}`,
-        bank_name: idx === 0 ? 'Bank Account' : `Bank Account (${idx + 1})`,
-        account_number: line.trim(),
-        account_name: ws.name || 'Workspace',
-        is_default: idx === 0,
-      }));
+      bankAccounts = lines.map((line: string, idx: number) => {
+        let bankName = idx === 0 ? 'Bank Account' : `Bank Account (${idx + 1})`;
+        let accountNo = line.trim();
+        let name = ws.name || 'Workspace';
+
+        const cleanText = line.replace(/\(.*?\)/g, '').trim();
+        const parts = cleanText.split('-').map(s => s.trim()).filter(Boolean);
+        if (parts.length >= 2) {
+          accountNo = parts[parts.length - 1];
+          bankName = parts[parts.length - 2];
+        }
+
+        const parensMatch = line.match(/\((.*?)\)/);
+        if (parensMatch) {
+          name = parensMatch[1];
+        }
+
+        return {
+          id: `temp-legacy-${idx}`,
+          bank_name: bankName,
+          account_number: accountNo,
+          account_holder: name,
+          is_default: idx === 0,
+        };
+      });
     }
   }
 

@@ -40,6 +40,7 @@ export interface InvoiceDocumentProps {
   invoiceNumber: string;
   accountNumber: string;
   invoiceDate: string;
+  rawIssueDate?: string;
   issueDate: string;
   clientName: string;
   clientBrand?: string;
@@ -104,20 +105,30 @@ export function InvoicePDFDocument({
     });
   };
 
-  // Format default filename: NoInvDateClientName.pdf
+  // Format default filename: DocumentType.ClientName.DDMMYY
+  const getFormattedFilename = () => {
+    const docTypeName = isQuotation ? 'Quotation' : (isReceipt ? 'PaymentReceipt' : 'Invoice');
+    const cleanClient = (clientName || 'Client').replace(/[^a-zA-Z0-9 ]/g, '');
+    
+    let ddmmyy = '';
+    if (rawIssueDate) {
+      const d = new Date(rawIssueDate);
+      if (!isNaN(d.getTime())) {
+        ddmmyy = `${String(d.getDate()).padStart(2, '0')}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getFullYear()).slice(-2)}`;
+      }
+    }
+    
+    if (!ddmmyy) ddmmyy = 'Date';
+    
+    return `${docTypeName}.${cleanClient}.${ddmmyy}`;
+  };
+
   useEffect(() => {
-    const cleanNum = (invoiceNumber || (isQuotation ? 'QUO' : 'INV')).replace(/[^a-zA-Z0-9-]/g, '');
-    const cleanDate = (invoiceDate || issueDate || 'Date').replace(/[^a-zA-Z0-9]/g, '');
-    const cleanClient = (clientName || 'Client').replace(/[^a-zA-Z0-9]/g, '');
-    const defaultTitle = `${cleanNum}_${cleanDate}_${cleanClient}`;
-    document.title = defaultTitle;
-  }, [invoiceNumber, invoiceDate, issueDate, clientName, isQuotation]);
+    document.title = getFormattedFilename();
+  }, [invoiceNumber, invoiceDate, issueDate, clientName, isQuotation, rawIssueDate]);
 
   const handlePrintPDF = () => {
-    const cleanNum = (invoiceNumber || (isQuotation ? 'QUO' : 'INV')).replace(/[^a-zA-Z0-9-]/g, '');
-    const cleanDate = (invoiceDate || issueDate || 'Date').replace(/[^a-zA-Z0-9]/g, '');
-    const cleanClient = (clientName || 'Client').replace(/[^a-zA-Z0-9]/g, '');
-    document.title = `${cleanNum}_${cleanDate}_${cleanClient}`;
+    document.title = getFormattedFilename();
     window.print();
   };
 
@@ -348,7 +359,7 @@ export function InvoicePDFDocument({
                         className="text-xs"
                       />
                       {(item.discountAmount ?? 0) > 0 && (
-                        <div className="text-[10px] text-red-600 font-mono mt-1">
+                        <div className="text-[10px] text-[#1e2536] font-mono mt-1">
                           ↳ Discount: -Rp {item.discountAmount!.toLocaleString('en-US')}
                         </div>
                       )}

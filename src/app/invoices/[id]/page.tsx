@@ -26,7 +26,7 @@ export default async function InvoiceDetailPage({ params, searchParams }: Invoic
   // 2. Extract line items directly or fallback to query
   const lineItems =
     Array.isArray(inv?.invoice_line_items) && inv.invoice_line_items.length > 0
-      ? inv.invoice_line_items.sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0))
+      ? [...inv.invoice_line_items].sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0))
       : (await supabase.from('invoice_line_items').select('*').eq('invoice_id', id).order('sort_order', { ascending: true })).data;
 
   const clientObj = Array.isArray(inv?.clients) ? inv?.clients[0] : inv?.clients;

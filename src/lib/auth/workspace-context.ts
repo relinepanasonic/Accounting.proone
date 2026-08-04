@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
@@ -40,10 +41,11 @@ const SEED_WORKSPACES: WorkspaceTenantInfo[] = [
 /**
  * Multi-Tenant Active Workspace Engine
  * Resolves user's allowed workspace tenants and active_workspace_id cookie.
+ * Wrapped in React `cache` so it only runs once per request.
  */
-export async function getAuthenticatedWorkspaceContext(
+export const getAuthenticatedWorkspaceContext = cache(async (
   supabase?: any
-): Promise<WorkspaceContextInfo> {
+): Promise<WorkspaceContextInfo> => {
   const supabaseClient = supabase || (await createClient());
 
   const {
@@ -207,4 +209,4 @@ export async function getAuthenticatedWorkspaceContext(
     role: matchedSeed.role,
     availableWorkspaces: SEED_WORKSPACES,
   };
-}
+});

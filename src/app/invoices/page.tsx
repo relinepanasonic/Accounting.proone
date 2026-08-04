@@ -13,18 +13,22 @@ async function InvoicesTableServer() {
   const supabase = await createClient();
   const { activeWorkspaceId, activeWorkspaceName, availableWorkspaces } = await getAuthenticatedWorkspaceContext(supabase);
 
-  const { data: invoices } = await supabase
-    .from('invoices')
-    .select('id, invoice_number, is_quotation, status, total_amount, issue_date, due_date, client_id, assigned_workspace_id, clients(name, contact_name), invoice_line_items(package_name, description, quantity, scale), assignedWorkspaces:workspaces!invoices_assigned_workspace_id_fkey(name)')
-    .or(`workspace_id.eq.${activeWorkspaceId},assigned_workspace_id.eq.${activeWorkspaceId}`)
-    .order('created_at', { ascending: false });
-
-  const { data: incomeTx } = await supabase
-    .from('transactions')
-    .select('id, description, amount, transaction_date, category')
-    .eq('workspace_id', activeWorkspaceId)
-    .eq('type', 'income')
-    .order('transaction_date', { ascending: false });
+  const [
+    { data: invoices },
+    { data: incomeTx }
+  ] = await Promise.all([
+    supabase
+      .from('invoices')
+      .select('id, invoice_number, is_quotation, status, total_amount, issue_date, due_date, client_id, assigned_workspace_id, clients(name, contact_name), invoice_line_items(package_name, description, quantity, scale), assignedWorkspaces:workspaces!invoices_assigned_workspace_id_fkey(name)')
+      .or(`workspace_id.eq.${activeWorkspaceId},assigned_workspace_id.eq.${activeWorkspaceId}`)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('transactions')
+      .select('id, description, amount, transaction_date, category')
+      .eq('workspace_id', activeWorkspaceId)
+      .eq('type', 'income')
+      .order('transaction_date', { ascending: false })
+  ]);
 
   const displayInvoices =
     invoices && invoices.length > 0

@@ -89,8 +89,9 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
           });
           const result = await res.json();
           if (result.success && result.data && result.data.length > 0) {
-            setBankLines(result.data);
-            setSelectedBankId(result.data[0].id);
+            const sortedData = result.data.sort((a: BankLine, b: BankLine) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            setBankLines(sortedData);
+            setSelectedBankId(sortedData[0].id);
           } else {
             alert(result.error || 'No transactions found in this PDF. Please ensure it is a valid Bank Jago statement.');
             console.error('PDF Parse Error Details:', result);
@@ -126,8 +127,9 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
         });
 
         if (parsed.length > 0) {
-          setBankLines(parsed);
-          setSelectedBankId(parsed[0].id);
+          const sortedParsed = parsed.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+          setBankLines(sortedParsed);
+          setSelectedBankId(sortedParsed[0].id);
         }
       };
       reader.readAsText(file);
@@ -264,8 +266,8 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
               bankAccounts.map((b) => {
                 const isLegacy = b.id.startsWith('temp-legacy');
                 const label = isLegacy 
-                  ? `${b.bank_name} - ${b.account_number}`
-                  : `Bank Account - ${b.bank_name} - ${b.account_number}${b.account_holder ? ` (${b.account_holder})` : ''}`;
+                  ? `${b.bank_name} | ${b.account_number}`
+                  : `${b.bank_name} | ${b.account_number}${b.account_holder ? ` | ${b.account_holder}` : ''}`;
                 
                 return (
                   <option key={b.id} value={b.id}>

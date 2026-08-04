@@ -109,11 +109,29 @@ export async function quickResolveAndReconcile(
       { workspace_id: ctx.activeWorkspaceId, account_code: salesAccount, transaction_date: todayStr, debit_amount: 0, credit_amount: amount, description: `Quick Income - ${description}`, reference_id: data.id, reference_type: 'quick_income' }
     ]);
   } else {
-    const expenseAccount = mappings.find(m => m.mapping_type === 'EXPENSE')?.account_code || '5100';
+    // If category starts with '12' (e.g. 1201 Office Equipment), it's a fixed asset.
+    const isFixedAsset = category.startsWith('12');
+    const expenseAccount = isFixedAsset ? category.split(' ')[0] : (mappings.find(m => m.mapping_type === 'EXPENSE')?.account_code || '5100');
+
     await supabase.from('journal_entries').insert([
       { workspace_id: ctx.activeWorkspaceId, account_code: expenseAccount, transaction_date: todayStr, debit_amount: amount, credit_amount: 0, description: `Quick Expense - ${description}`, reference_id: data.id, reference_type: 'quick_expense' },
       { workspace_id: ctx.activeWorkspaceId, account_code: bankAccountCode, transaction_date: todayStr, debit_amount: 0, credit_amount: amount, description: `Quick Expense - ${description}`, reference_id: data.id, reference_type: 'quick_expense' }
     ]);
+
+    // If it's a fixed asset, also register it in the Fixed Assets module automatically.
+    if (isFixedAsset) {
+      const assetName = description || 'Unnamed Fixed Asset';
+      await supabase.from('fixed_assets').insert({
+        workspace_id: ctx.activeWorkspaceId,
+        asset_name: assetName,
+        category: category,
+        purchase_date: todayStr,
+        initial_value: amount,
+        salvage_value: 0,
+        useful_life_years: 3, // Default 3 years useful life
+        status: 'active'
+      });
+    }
   }
 
   revalidatePath('/reconcile');

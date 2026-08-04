@@ -19,20 +19,40 @@ async function FixedAssetsRegistry() {
 
   const { data: records } = await supabase
     .from('fixed_assets')
-    .select('*')
+    .select('id, asset_name, category, initial_value, salvage_value, purchase_date, annual_depreciation, status')
     .order('asset_name', { ascending: true });
 
   const displayRecords: FixedAssetRecord[] =
     records && records.length > 0
-      ? records.map((r) => ({
-          id: r.id,
-          asset_name: r.asset_name,
-          category: r.category || 'Equipment',
-          purchase_price: Number(r.purchase_price || 0),
-          current_book_value: Number(r.current_book_value || 0),
-          salvage_value: Number(r.salvage_value || 0),
-          status: r.status || 'Active',
-        }))
+      ? records.map((r) => {
+          const initialValue = Number(r.initial_value || 0);
+          const annualDepr = Number(r.annual_depreciation || 0);
+          
+          let currentBookValue = initialValue;
+          if (r.purchase_date && annualDepr > 0) {
+            const purchaseDate = new Date(r.purchase_date);
+            const now = new Date();
+            // Calculate months elapsed
+            let monthsElapsed = (now.getFullYear() - purchaseDate.getFullYear()) * 12;
+            monthsElapsed -= purchaseDate.getMonth();
+            monthsElapsed += now.getMonth();
+            monthsElapsed = Math.max(0, monthsElapsed);
+            
+            const monthlyDepr = annualDepr / 12;
+            const accumulatedDepreciation = monthlyDepr * monthsElapsed;
+            currentBookValue = Math.max(Number(r.salvage_value || 0), initialValue - accumulatedDepreciation);
+          }
+
+          return {
+            id: r.id,
+            asset_name: r.asset_name,
+            category: r.category || 'Equipment',
+            purchase_price: initialValue,
+            current_book_value: currentBookValue,
+            salvage_value: Number(r.salvage_value || 0),
+            status: r.status || 'Active',
+          };
+        })
       : [];
 
   return (

@@ -3,11 +3,11 @@
 import React, { useTransition } from 'react';
 import Link from 'next/link';
 import { Copy, CheckCircle, Clock, FileText, Trash2, Edit2 } from 'lucide-react';
-import { duplicateInvoice, toggleInvoiceStatus, deleteInvoice } from '@/app/actions/invoices';
+import { duplicateInvoice, toggleInvoiceStatus, deleteInvoice, convertQuotationToInvoice } from '@/app/actions/invoices';
 
-interface InvoiceActionProps {
   id: string;
   status?: string;
+  isQuotation?: boolean;
 }
 
 export function InvoiceStatusToggle({ id, status }: InvoiceActionProps) {
@@ -50,7 +50,7 @@ export function InvoiceStatusToggle({ id, status }: InvoiceActionProps) {
   );
 }
 
-export function InvoiceActionGroup({ id }: InvoiceActionProps) {
+export function InvoiceActionGroup({ id, isQuotation, status }: InvoiceActionProps) {
   const [isPending, startTransition] = useTransition();
 
   const handleDuplicate = () => {
@@ -75,12 +75,45 @@ export function InvoiceActionGroup({ id }: InvoiceActionProps) {
     }
   };
 
+  const handleConvert = () => {
+    if (confirm('Convert this Quotation into an Invoice?')) {
+      startTransition(async () => {
+        try {
+          await convertQuotationToInvoice(id);
+        } catch (err) {
+          console.error(err);
+        }
+      });
+    }
+  };
+
   return (
     <div className="inline-flex items-center gap-2">
+      {isQuotation && (
+        <button
+          onClick={handleConvert}
+          disabled={isPending}
+          title="Convert to Invoice"
+          className="p-1.5 rounded-lg bg-blue-900/20 border border-blue-500/30 hover:border-blue-400 text-blue-400 hover:text-blue-300 hover:scale-105 transition-all duration-200"
+        >
+          <CheckCircle className="w-3.5 h-3.5" />
+        </button>
+      )}
+
+      {status?.toLowerCase() === 'paid' && !isQuotation && (
+        <Link
+          href={`/invoices/${id}?receipt=true`}
+          title="Download Payment Receipt"
+          className="p-1.5 rounded-lg bg-green-900/20 border border-green-500/30 hover:border-green-400 text-green-400 hover:text-green-300 hover:scale-105 transition-all duration-200"
+        >
+          <FileText className="w-3.5 h-3.5" />
+        </Link>
+      )}
+
       {/* View PDF / Print Invoice Action */}
       <Link
         href={`/invoices/${id}`}
-        title="View / Download PDF Invoice"
+        title={`View / Download PDF ${isQuotation ? 'Quotation' : 'Invoice'}`}
         className="p-1.5 rounded-lg bg-zinc-900 border border-[#d4af37]/30 hover:border-[#d4af37] text-[#f5d77f] hover:scale-105 transition-all duration-200"
       >
         <FileText className="w-3.5 h-3.5" />

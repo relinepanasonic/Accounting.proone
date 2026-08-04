@@ -324,7 +324,7 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
                       {inv.invoiceNumber}
                     </div>
                   </td>
-                  <td className="py-3 px-3 text-zinc-400 font-sans">
+                  <td className={`py-3 px-3 font-sans ${inv.isQuotation ? 'text-white' : 'text-zinc-400'}`}>
                     {inv.issueDate}
                   </td>
                   <td className="py-3 px-3">
@@ -333,13 +333,13 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
                     </div>
                     {inv.clientContact && <div className="text-[10px] text-zinc-500 font-sans mt-0.5">{inv.clientContact}</div>}
                   </td>
-                  <td className="py-3 px-3 text-zinc-400 font-sans">
+                  <td className={`py-3 px-3 font-sans ${inv.isQuotation ? 'text-white' : 'text-zinc-400'}`}>
                     {inv.dueDate}
                   </td>
-                  <td className="py-3 px-3 text-zinc-400 font-sans max-w-[200px] truncate" title={inv.packageName}>
+                  <td className={`py-3 px-3 font-sans max-w-[200px] truncate ${inv.isQuotation ? 'text-white' : 'text-zinc-400'}`} title={inv.packageName}>
                     {inv.packageName}
                   </td>
-                  <td className="py-3 px-3 text-zinc-400 font-sans font-medium">
+                  <td className={`py-3 px-3 font-sans font-medium ${inv.isQuotation ? 'text-white' : 'text-zinc-400'}`}>
                     {inv.packageQtt}
                   </td>
                   <td className="py-3 px-3 text-right">
@@ -365,7 +365,7 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
                     )}
                   </td>
                   <td className="py-3 px-3 text-center">
-                    <InvoiceActionGroup id={inv.id} />
+                    <InvoiceActionGroup id={inv.id} isQuotation={inv.isQuotation} status={inv.status} />
                   </td>
                 </tr>
               ))}

@@ -57,7 +57,7 @@ export default function InvoicesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#d4af37]/20">
         <div>
           <h1 className="text-lg font-extrabold tracking-wider uppercase text-white flex items-center gap-2">
-            <span>INVOICES & QUOTATIONS</span>
+            <span>INCOME & QUOTATIONS</span>
           </h1>
         </div>
 

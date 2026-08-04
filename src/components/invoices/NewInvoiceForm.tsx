@@ -97,7 +97,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [quickAddName, setQuickAddName] = useState('');
   const [isQuickAdding, setIsQuickAdding] = useState(false);
-  const [invoiceNumber, setInvoiceNumber] = useState(() => initialData?.invoiceNumber || `INV-2026-${Math.floor(100 + Math.random() * 900)}`);
+  const [invoiceNumber, setInvoiceNumber] = useState(() => initialData?.invoiceNumber || (initialData?.isQuotation || (typeof searchParams !== 'undefined' && searchParams.get('type') === 'quotation') ? `QUOTE-2026-${Math.floor(100 + Math.random() * 900)}` : `INV-2026-${Math.floor(100 + Math.random() * 900)}`));
   const [issueDate, setIssueDate] = useState(() => initialData?.issueDate || new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState(() => initialData?.dueDate || getNet7Date());
   const [globalDiscount, setGlobalDiscount] = useState<number>(initialData?.discountAmount || 0);
@@ -366,7 +366,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
 
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-2">
-              Invoice Reference Number *
+              {isQuotation ? 'Quotation Number *' : 'Invoice Reference Number *'}
             </label>
             <input
               type="text"
@@ -381,7 +381,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-zinc-800/80">
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-2">
-              Issue Date
+              {isQuotation ? 'Date Make' : 'Issue Date'}
             </label>
             <FormattedDateInput 
               value={issueDate}
@@ -394,7 +394,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
 
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-2">
-              Due Date (Auto 7-Day Terms)
+              {isQuotation ? 'Date Expired' : 'Due Date (Auto 7-Day Terms)'}
             </label>
             <FormattedDateInput 
               value={dueDate}
@@ -570,7 +570,8 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
               );
             })}
             {/* SUMMARY */}
-            <div className="flex flex-col items-end pt-4 border-t border-[#d4af37]/20 gap-3">
+            {!isQuotation && (
+              <div className="flex flex-col items-end pt-4 border-t border-[#d4af37]/20 gap-3">
                 <div className="flex justify-between w-full md:w-1/3 items-center">
                 <span className="text-sm text-[#d4af37]/60">Subtotal:</span>
                 <span className="font-mono text-[#f5d77f]">Rp {subTotal.toLocaleString('en-US')}</span>
@@ -587,16 +588,18 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                 <span className="text-lg font-bold text-[#d4af37]">Grand Total:</span>
                 <span className="text-xl font-mono font-bold text-white">Rp {grandTotal.toLocaleString('en-US')}</span>
                 </div>
-            </div>
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      <div className="gold-glass-panel rounded-2xl p-6 space-y-4">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-200 border-b border-zinc-800 pb-3 flex items-center gap-2">
-          <Building2 className="w-4 h-4 text-[#d4af37]" />
-          <span>PAYMENT & BANK DISBURSEMENT INSTRUCTIONS</span>
-        </h3>
+      {!isQuotation && (
+        <div className="gold-glass-panel rounded-2xl p-6 space-y-4">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-200 border-b border-zinc-800 pb-3 flex items-center gap-2">
+            <Building2 className="w-4 h-4 text-[#d4af37]" />
+            <span>PAYMENT & BANK DISBURSEMENT INSTRUCTIONS</span>
+          </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -658,7 +661,9 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
             />
           </div>
         </div>
+        </div>
       </div>
+      )}
 
       <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-3">
         <Link
@@ -669,16 +674,8 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
         </Link>
         <button
           type="button"
-          disabled={isPending}
-          onClick={(e) => handleSubmit(e, true)}
-          className="border border-[#d4af37] text-[#d4af37] hover:bg-[#d4af37]/10 inline-flex items-center justify-center gap-2.5 px-6 py-3 min-h-[44px] rounded-full text-xs uppercase tracking-wider disabled:opacity-75 transition-all"
-        >
-          {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-          <span className="font-extrabold">{initialData ? 'UPDATE QUOTATION' : 'SAVE QUOTATION'}</span>
-        </button>
-        <button
-          type="submit"
           disabled={isPending || !clientId}
+          onClick={(e) => handleSubmit(e, isQuotation)}
           className="gold-btn inline-flex items-center justify-center gap-2.5 px-8 py-3 min-h-[44px] rounded-full text-xs uppercase tracking-wider disabled:opacity-75 transition-all shadow-[0_0_20px_rgba(212,175,55,0.4)]"
         >
           {isPending ? (
@@ -687,7 +684,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
             <Check className="w-4 h-4 text-black" />
           )}
           <span className="font-extrabold">
-            {isPending ? 'GENERATING...' : (initialData ? 'UPDATE INVOICE' : 'SAVE INVOICE')}
+            {isPending ? 'GENERATING...' : isQuotation ? (initialData ? 'UPDATE QUOTATION' : 'SAVE QUOTATION') : (initialData ? 'UPDATE INVOICE' : 'SAVE INVOICE')}
           </span>
         </button>
       </div>

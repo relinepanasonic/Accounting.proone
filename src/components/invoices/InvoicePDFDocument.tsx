@@ -55,7 +55,7 @@ export interface InvoiceDocumentProps {
   amountPaid?: number;
   payments?: any[];
   workspaceBrand?: WorkspaceBrandInfo;
-  documentType?: 'INVOICE' | 'QUOTATION';
+  documentType?: 'INVOICE' | 'QUOTATION' | 'RECEIPT';
 }
 
 export function InvoicePDFDocument({
@@ -81,6 +81,7 @@ export function InvoicePDFDocument({
   documentType = 'INVOICE',
 }: Partial<InvoiceDocumentProps>) {
   const isQuotation = documentType === 'QUOTATION';
+  const isReceipt = documentType === 'RECEIPT';
   const balanceDue = Math.max(0, grandTotal - amountPaid);
 
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -136,7 +137,7 @@ export function InvoicePDFDocument({
           className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-900 border border-[#d4af37]/30 text-[#f5d77f] hover:bg-[#d4af37]/15 text-xs font-bold transition-all"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>BACK TO {isQuotation ? 'QUOTATIONS' : 'INVOICES'}</span>
+          <span>BACK TO {isQuotation ? 'QUOTATIONS' : isReceipt ? 'INCOME' : 'INVOICES'}</span>
         </Link>
 
         <div className="flex items-center gap-3">
@@ -157,7 +158,7 @@ export function InvoicePDFDocument({
             className="gold-btn inline-flex items-center gap-2 px-6 py-2.5 rounded-full text-xs font-extrabold uppercase tracking-wider shadow-[0_0_20px_rgba(212,175,55,0.4)] transition-all hover:scale-105"
           >
             <Printer className="w-4 h-4" />
-            <span>DOWNLOAD / PRINT {isQuotation ? 'QUOTATION' : 'INVOICE'} PDF</span>
+            <span>DOWNLOAD / PRINT {isQuotation ? 'QUOTATION' : isReceipt ? 'RECEIPT' : 'INVOICE'} PDF</span>
           </button>
         </div>
       </div>
@@ -290,12 +291,12 @@ export function InvoicePDFDocument({
             {/* Right: Title & 3-Column Meta Table */}
             <div className="sm:text-right flex flex-col sm:items-end">
               <h2 className="text-4xl font-serif tracking-[0.25em] text-[#1e2536] font-normal mb-3">
-                {isQuotation ? 'QUOTATION' : 'INVOICE'}
+                {isQuotation ? 'QUOTATION' : isReceipt ? 'PAYMENT RECEIPT' : 'INVOICE'}
               </h2>
               <div className="w-full sm:w-80 border-t border-[#1e2536] pt-2 grid grid-cols-3 gap-3 text-center sm:text-left text-[11px]">
                 <div>
                   <span className="block text-[10px] text-zinc-400 uppercase font-mono">
-                    {isQuotation ? 'Quote Ref' : 'Invoice No'}
+                    {isQuotation ? 'Quote Ref' : isReceipt ? 'Receipt No' : 'Invoice No'}
                   </span>
                   <span className="font-bold text-[#1e2536] font-mono">
                     {accountNumber}
@@ -436,7 +437,7 @@ export function InvoicePDFDocument({
           ) : (
             <div className="p-4 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-600 font-sans leading-relaxed">
               <strong className="text-[#1e2536] block mb-1">PROPOSAL & PITCH TERMS:</strong>
-              Investment rates listed above reflect individual unit prices per deliverable or service package. Final scope and total contract value will be computed upon package selection and official invoice issuance. No tax (PPN) is assessed at the pitch stage.
+              This quotation is formally issued on {invoiceDate} and remains valid until {issueDate}.
             </div>
           )}
 
@@ -444,36 +445,38 @@ export function InvoicePDFDocument({
           <div className="pt-6 grid grid-cols-1 sm:grid-cols-2 gap-8 items-end">
             {/* Left: Payment Method & Terms */}
             <div className="space-y-4 text-xs">
-              <div>
-                <h4 className="text-xs font-serif uppercase tracking-wider font-bold text-[#1e2536] pb-1 border-b border-zinc-300 inline-block">
-                  PAYMENT & DISBURSEMENT INSTRUCTIONS
-                </h4>
-                <div className="mt-2 text-zinc-600 space-y-1">
-                  {workspaceBrand?.bankAccounts && workspaceBrand.bankAccounts.length > 0 ? (
-                    workspaceBrand.bankAccounts.map((acc, i) => {
-                      const rawName = acc.bank_name || 'Bank Account';
-                      const cleanName = rawName
-                        .replace(/Primary Bank Account - /gi, '')
-                        .replace(/Secondary Bank \(\d+\) - /gi, '')
-                        .replace(/Primary Bank Account/gi, '')
-                        .replace(/Secondary Bank \(\d+\)/gi, '')
-                        .replace(/Secondary Bank Account/gi, '')
-                        .trim();
-                        
-                      return (
-                        <div key={i}>
-                          {cleanName ? <strong className="text-[#1e2536]">{cleanName}: </strong> : null}
-                          {acc.account_number} <span className="text-zinc-500">({acc.account_name})</span>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div>
-                      <strong className="text-[#1e2536]">Bank Transfer:</strong> Please refer to official company instructions upon invoice confirmation.
-                    </div>
-                  )}
+              {!isQuotation && (
+                <div>
+                  <h4 className="text-xs font-serif uppercase tracking-wider font-bold text-[#1e2536] pb-1 border-b border-zinc-300 inline-block">
+                    PAYMENT & DISBURSEMENT INSTRUCTIONS
+                  </h4>
+                  <div className="mt-2 text-zinc-600 space-y-1">
+                    {workspaceBrand?.bankAccounts && workspaceBrand.bankAccounts.length > 0 ? (
+                      workspaceBrand.bankAccounts.map((acc, i) => {
+                        const rawName = acc.bank_name || 'Bank Account';
+                        const cleanName = rawName
+                          .replace(/Primary Bank Account - /gi, '')
+                          .replace(/Secondary Bank \(\d+\) - /gi, '')
+                          .replace(/Primary Bank Account/gi, '')
+                          .replace(/Secondary Bank \(\d+\)/gi, '')
+                          .replace(/Secondary Bank Account/gi, '')
+                          .trim();
+                          
+                        return (
+                          <div key={i}>
+                            {cleanName ? <strong className="text-[#1e2536]">{cleanName}: </strong> : null}
+                            {acc.account_number} <span className="text-zinc-500">({acc.account_name})</span>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div>
+                        <strong className="text-[#1e2536]">Bank Transfer:</strong> Please refer to official company instructions upon invoice confirmation.
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Right: Signature Line */}

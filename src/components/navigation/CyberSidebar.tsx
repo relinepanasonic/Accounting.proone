@@ -38,10 +38,10 @@ const NAV_ITEMS: NavItem[] = [
     allowedRoles: ['founder', 'superadmin', 'accounting'],
   },
   {
-    name: 'Invoices',
+    name: 'Income',
     href: '/invoices',
     icon: <ArrowDownLeft className="w-4 h-4" />,
-    badge: 'Income',
+    badge: 'Sales',
     allowedRoles: ['founder', 'superadmin', 'accounting', 'admin'],
   },
   {
@@ -52,13 +52,7 @@ const NAV_ITEMS: NavItem[] = [
     allowedRoles: ['founder', 'superadmin', 'accounting', 'admin'],
     allowedWorkspaceIds: ['11111111-1111-1111-1111-111111111111'],
   },
-  {
-    name: 'Quotations',
-    href: '/quotations',
-    icon: <FileText className="w-4 h-4" />,
-    badge: 'Pitch',
-    allowedRoles: ['founder', 'superadmin', 'accounting'],
-  },
+
   {
     name: 'Expenses',
     href: '/expenses',

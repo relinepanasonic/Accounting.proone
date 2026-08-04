@@ -682,3 +682,36 @@ export async function deleteTaxDocument(invoiceId: string, docType: 'faktur_paja
     return { success: false, error: err?.message || 'Error deleting document' };
   }
 }
+
+export async function convertQuotationToInvoice(quotationId: string) {
+  try {
+    const supabase = await createClient();
+    const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+
+    const invoiceNumber = `INV-2026-${Math.floor(100 + Math.random() * 900)}`;
+    const issueDate = new Date().toISOString().split('T')[0];
+    const dueDateObj = new Date();
+    dueDateObj.setDate(dueDateObj.getDate() + 7);
+    const dueDate = dueDateObj.toISOString().split('T')[0];
+
+    const { error } = await supabase
+      .from('invoices')
+      .update({
+        is_quotation: false,
+        invoice_number: invoiceNumber,
+        issue_date: issueDate,
+        due_date: dueDate,
+        status: 'draft',
+      })
+      .eq('id', quotationId)
+      .eq('workspace_id', workspaceId);
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath('/invoices');
+    revalidatePath(`/invoices/${quotationId}`);
+    return { success: true, newInvoiceId: quotationId };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Error converting quotation to invoice' };
+  }
+}

@@ -6,11 +6,14 @@ export const dynamic = 'force-dynamic';
 
 interface InvoiceDetailPageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
-export default async function InvoiceDetailPage({ params }: InvoiceDetailPageProps) {
+export default async function InvoiceDetailPage({ params, searchParams }: InvoiceDetailPageProps) {
   const resolvedParams = await params;
+  const resolvedSearchParams = await searchParams;
   const { id } = resolvedParams;
+  const isReceipt = resolvedSearchParams?.receipt === 'true';
   const supabase = await createClient();
 
   // 1. Fetch parent invoice with relational joins
@@ -163,7 +166,7 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
       taxAmount={taxAmount}
       grandTotal={grandTotal}
       workspaceBrand={workspaceBrand}
-      documentType={inv?.is_quotation ? 'QUOTATION' : 'INVOICE'}
+      documentType={isReceipt ? 'RECEIPT' : inv?.is_quotation ? 'QUOTATION' : 'INVOICE'}
     />
   );
 }

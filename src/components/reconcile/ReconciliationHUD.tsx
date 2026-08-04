@@ -7,7 +7,6 @@ import {
   FileSpreadsheet,
   Sparkles,
 } from 'lucide-react';
-import { reconcileRecord, quickResolveAndReconcile } from '@/app/actions/reconcile';
 import { RupiahInput } from '@/components/ui/RupiahInput';
 
 export interface UnreconciledSystemRecord {
@@ -52,9 +51,11 @@ interface ReconciliationHUDProps {
   systemRecords: UnreconciledSystemRecord[];
   bankAccounts?: BankAccount[];
   coaAccounts?: COAAccountMinimal[];
+  onReconcile: (recordId: string, recordType: 'invoice' | 'expense' | 'payroll', bankReference: string, bankAccountId?: string) => Promise<any>;
+  onQuickResolve: (type: 'expense' | 'income', category: string, amount: number, transaction_date: string, description: string, bank_reference: string, bank_account_id?: string) => Promise<any>;
 }
 
-export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccounts = [] }: ReconciliationHUDProps) {
+export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccounts = [], onReconcile, onQuickResolve }: ReconciliationHUDProps) {
   const [bankLines, setBankLines] = useState<BankLine[]>([]);
   const [recordsList, setRecordsList] = useState<UnreconciledSystemRecord[]>(systemRecords);
   const [selectedBankId, setSelectedBankId] = useState<string | null>(null);
@@ -163,7 +164,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
 
     startTransition(async () => {
       try {
-        await reconcileRecord(
+        await onReconcile(
           targetRecord.id,
           targetRecord.type,
           `BANK-REF: ${activeBankLine.sourceDestination}`,
@@ -184,7 +185,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
     if (!activeBankLine) return;
     startTransition(async () => {
       try {
-        await quickResolveAndReconcile(
+        await onQuickResolve(
           resolutionTab === 'expense' ? 'expense' : 'income',
           quickCategory,
           Number(quickAmount) || Math.abs(activeBankLine.amount),
@@ -262,11 +263,8 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
           </div>
           <div>
             <h2 className="text-sm font-extrabold text-white uppercase tracking-wider mb-1">
-              BANK STATEMENT FEED TELEMETRY
+              BANK RECONCILIATION
             </h2>
-            <p className="text-xs text-zinc-400 font-mono">
-              BRUSHED GOLD AUTOMATCH PARITY ENGINE
-            </p>
           </div>
         </div>
 
@@ -281,7 +279,6 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
             ) : (
               bankAccounts.map((b) => {
                 const label = `${b.bank_name} | ${b.account_number}${b.account_holder ? ` | ${b.account_holder}` : ''}`;
-                
                 return (
                   <option key={b.id} value={b.id}>
                     {label}

@@ -5,8 +5,8 @@ import {
   ReconciliationHUD,
   UnreconciledSystemRecord,
 } from '@/components/reconcile/ReconciliationHUD';
-
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
+import { reconcileRecord, quickResolveAndReconcile } from '@/app/actions/reconcile';
 
 export const dynamic = 'force-dynamic';
 
@@ -154,7 +154,13 @@ async function ReconciliationCore() {
     })),
   ];
 
-  return <ReconciliationHUD systemRecords={systemRecords} bankAccounts={bankAccounts} coaAccounts={coaAccounts} />;
+  return <ReconciliationHUD
+    systemRecords={systemRecords}
+    bankAccounts={bankAccounts}
+    coaAccounts={coaAccounts}
+    onReconcile={reconcileRecord}
+    onQuickResolve={quickResolveAndReconcile}
+  />;
   } catch (err: any) {
     console.error('[ReconciliationCore] Fatal error:', err);
     return (

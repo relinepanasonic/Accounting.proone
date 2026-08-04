@@ -95,11 +95,15 @@ export async function toggleExpenseStatus(id: string, currentStatus: string) {
 export async function deleteExpense(id: string) {
   const supabase = await createClient();
   const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+  
+  // Use admin client to bypass RLS for deletion (especially for journal_entries which may lack delete policies)
+  const { createAdminClient } = await import('@/lib/api/supabase-admin');
+  const adminClient = createAdminClient();
 
   // Delete journal entries first (foreign key constraints or manual cascades)
-  await supabase.from('journal_entries').delete().eq('reference_id', id);
+  await adminClient.from('journal_entries').delete().eq('reference_id', id);
 
-  const { error } = await supabase
+  const { error } = await adminClient
     .from('transactions')
     .delete()
     .eq('id', id)

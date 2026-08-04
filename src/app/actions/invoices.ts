@@ -532,23 +532,26 @@ export async function deleteInvoice(invoiceId: string) {
     const supabase = await createClient();
     const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
-    await supabase
+    const { createAdminClient } = await import('@/lib/api/supabase-admin');
+    const adminClient = createAdminClient();
+
+    await adminClient
       .from('invoice_line_items')
       .delete()
       .eq('invoice_id', invoiceId)
       .eq('workspace_id', workspaceId);
 
     // Delete associated ledger entries
-    await supabase.from('journal_entries').delete().eq('reference_id', invoiceId);
+    await adminClient.from('journal_entries').delete().eq('reference_id', invoiceId);
 
-    const { error } = await supabase
+    const { error } = await adminClient
       .from('invoices')
       .delete()
       .eq('id', invoiceId)
       .eq('workspace_id', workspaceId);
 
     // Also attempt to delete from transactions (for Quick Incomes labeled as 'DIRECT INCOME')
-    const { error: txError } = await supabase
+    const { error: txError } = await adminClient
       .from('transactions')
       .delete()
       .eq('id', invoiceId)

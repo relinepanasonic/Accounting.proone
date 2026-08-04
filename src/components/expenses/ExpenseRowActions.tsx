@@ -32,8 +32,9 @@ export function ExpenseRowActions({ id, status }: ExpenseRowActionsProps) {
         try {
           await deleteExpense(id);
           router.refresh(); // Ensure Client Component state forces a refresh to remove the item instantly
-        } catch (err) {
+        } catch (err: any) {
           console.error(err);
+          alert(err.message || 'Failed to delete expense');
         }
       });
     }

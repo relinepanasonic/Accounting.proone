@@ -72,10 +72,15 @@ export function InvoiceActionGroup({ id, isQuotation, status }: InvoiceActionPro
     if (confirm('Are you sure you want to permanently delete this invoice and its line items?')) {
       startTransition(async () => {
         try {
-          await deleteInvoice(id);
-          router.refresh();
-        } catch (err) {
+          const res = await deleteInvoice(id);
+          if (res?.error) {
+            alert(res.error);
+          } else {
+            router.refresh();
+          }
+        } catch (err: any) {
           console.error(err);
+          alert('Failed to delete invoice');
         }
       });
     }

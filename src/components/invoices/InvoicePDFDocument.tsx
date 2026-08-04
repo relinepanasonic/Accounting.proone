@@ -64,6 +64,7 @@ export function InvoicePDFDocument({
   invoiceNumber = 'INV-2026-001',
   accountNumber = '#INV-2026-001',
   invoiceDate = '16 Jul, 2026',
+  rawIssueDate,
   issueDate = '16 Jul, 2026',
   clientName = 'Client Payee',
   clientBrand = '',

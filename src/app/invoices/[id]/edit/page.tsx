@@ -32,7 +32,7 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
 
   // Fetch required form options
   const { data: clients } = await supabase.from('clients').select('id, name, company_name').order('name', { ascending: true });
-  const { data: products } = await supabase.from('products').select('*').eq('workspace_id', activeWorkspaceId);
+  const { data: products } = await supabase.from('products').select('*').eq('workspace_id', activeWorkspaceId).order('name', { ascending: true });
   const { data: bankAccounts } = await supabase.from('workspace_bank_accounts').select('*').eq('workspace_id', activeWorkspaceId).order('is_default', { ascending: false });
 
   const clientList = clients || [];

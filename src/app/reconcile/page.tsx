@@ -58,7 +58,7 @@ async function ReconciliationCore() {
       .order('issue_date', { ascending: false }),
     supabase
       .from('transactions')
-      .select('id, description, amount, due_date, category, reconciled, workspace_id')
+      .select('id, description, amount, due_date, category, reconciled, workspace_id, type')
       .eq('workspace_id', activeWorkspaceId)
       .or('reconciled.is.null,reconciled.eq.false')
       .order('due_date', { ascending: false }),
@@ -140,7 +140,7 @@ async function ReconciliationCore() {
     }
   }
 
-  const systemRecords: UnreconciledSystemRecord[] = [
+  const systemRecords: any[] = [
     ...rawInvoices.map((inv) => {
       const clientObj = Array.isArray(inv.clients) ? inv.clients[0] : inv.clients;
       return {
@@ -154,9 +154,9 @@ async function ReconciliationCore() {
     }),
     ...rawTransactions.map((tx) => ({
       id: tx.id,
-      type: 'expense' as const,
-      reference: tx.category || 'EXPENSE-REF',
-      payeeOrClient: tx.description || 'Vendor Payee',
+      type: (tx.type === 'income' ? 'income' : 'expense') as const,
+      reference: tx.category || 'CATEGORY-REF',
+      payeeOrClient: tx.description || 'System Record',
       date: tx.due_date || '2026-07-07',
       amount: Number(tx.amount || 0),
     })),

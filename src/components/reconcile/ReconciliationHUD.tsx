@@ -12,7 +12,7 @@ import { RupiahInput } from '@/components/ui/RupiahInput';
 
 export interface UnreconciledSystemRecord {
   id: string;
-  type: 'invoice' | 'expense' | 'payroll';
+  type: 'invoice' | 'expense' | 'payroll' | 'income';
   reference: string;
   payeeOrClient: string;
   date: string;
@@ -68,6 +68,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   const [quickDate, setQuickDate] = useState('');
   const [quickAmount, setQuickAmount] = useState<number | ''>('');
   const [quickNotes, setQuickNotes] = useState('');
+  const [coaDropdownOpen, setCoaDropdownOpen] = useState(false);
   
   const [activeBankId, setActiveBankId] = useState<string>(bankAccounts.length > 0 ? bankAccounts[0].id : '');
 
@@ -88,7 +89,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
     return recordsList.find(
       (r) =>
         Math.abs(r.amount - Math.abs(bankLine.amount)) < 0.01 &&
-        ((bankLine.amount > 0 && r.type === 'invoice') ||
+        ((bankLine.amount > 0 && (r.type === 'invoice' || r.type === 'income')) ||
           (bankLine.amount < 0 && (r.type === 'expense' || r.type === 'payroll')))
     );
   }
@@ -203,16 +204,37 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   };
 
   const renderSystemRecordsList = () => {
-    if (recordsList.length === 0) {
+    let filteredRecords = [...recordsList];
+    
+    if (activeBankLine) {
+      filteredRecords = filteredRecords.filter((rec) => {
+        if (activeBankLine.amount > 0) {
+          return rec.type === 'invoice' || rec.type === 'income';
+        } else {
+          return rec.type === 'expense' || rec.type === 'payroll';
+        }
+      });
+
+      filteredRecords.sort((a, b) => {
+        const aDiff = Math.abs(a.amount - Math.abs(activeBankLine.amount));
+        const bDiff = Math.abs(b.amount - Math.abs(activeBankLine.amount));
+        if (aDiff !== bDiff) return aDiff - bDiff;
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
+      });
+    }
+
+    if (filteredRecords.length === 0) {
       return (
         <div className="p-8 text-center text-zinc-500 font-mono text-xs border border-dashed border-zinc-800 rounded-xl space-y-2">
           <div className="text-white font-bold">NO UNRECONCILED SYSTEM RECORDS</div>
-          <div className="text-[10px] text-zinc-400 font-sans">All invoices and expenses are cleared or none have been issued yet.</div>
+          <div className="text-[10px] text-zinc-400 font-sans">
+            {activeBankLine ? `No ${activeBankLine.amount > 0 ? 'income/invoices' : 'expense/payroll'} available to match.` : 'All invoices and expenses are cleared or none have been issued yet.'}
+          </div>
         </div>
       );
     }
 
-    return recordsList.map((rec) => {
+    return filteredRecords.map((rec) => {
       const isHighlighted = rec.id === currentTargetRecordId;
       const isAuto = autoMatchRecord?.id === rec.id;
 
@@ -460,20 +482,55 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                           className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#d4af37]"
                         />
                       </div>
-                      <div className="space-y-1">
+                      <div className="space-y-1 relative">
                         <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500">Category</label>
-                        <select 
+                        <input
+                          type="text"
+                          placeholder="Type to search or enter custom..."
                           value={quickCategory}
-                          onChange={(e) => setQuickCategory(e.target.value)}
+                          onChange={(e) => {
+                            setQuickCategory(e.target.value);
+                            setCoaDropdownOpen(true);
+                          }}
+                          onFocus={() => setCoaDropdownOpen(true)}
+                          onBlur={() => setTimeout(() => setCoaDropdownOpen(false), 200)}
                           className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#d4af37]"
-                        >
-                          <option value="Uncategorized">Uncategorized</option>
-                          {coaAccounts.map(coa => (
-                            <option key={coa.account_code} value={coa.account_name}>
-                              {coa.account_code} - {coa.account_name}
-                            </option>
-                          ))}
-                        </select>
+                        />
+                        {coaDropdownOpen && (
+                          <div className="absolute z-50 w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-xl shadow-xl max-h-56 overflow-y-auto top-[100%]">
+                            {Object.entries(
+                              coaAccounts.reduce((acc, curr) => {
+                                if (!acc[curr.account_type]) acc[curr.account_type] = [];
+                                acc[curr.account_type].push(curr);
+                                return acc;
+                              }, {} as Record<string, COAAccountMinimal[]>)
+                            ).map(([type, accounts]) => {
+                              const searchLower = quickCategory.toLowerCase();
+                              const filtered = searchLower === 'uncategorized' ? accounts : accounts.filter(a => 
+                                (a.account_code + ' ' + a.account_name).toLowerCase().includes(searchLower)
+                              );
+                              if (filtered.length === 0) return null;
+                              return (
+                                <div key={type}>
+                                  <div className="px-3 py-1.5 bg-zinc-900 text-[10px] font-bold text-zinc-500 uppercase tracking-wider sticky top-0">{type}</div>
+                                  {filtered.map(coa => (
+                                    <div 
+                                      key={coa.account_code}
+                                      onClick={() => {
+                                        setQuickCategory(coa.account_name);
+                                        setCoaDropdownOpen(false);
+                                      }}
+                                      className="px-4 py-2 text-xs text-zinc-300 hover:bg-[#d4af37]/20 hover:text-white cursor-pointer transition-colors flex items-center gap-2"
+                                    >
+                                      <span className="font-mono text-[#f5d77f]">{coa.account_code}</span>
+                                      <span>{coa.account_name}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     </div>
 

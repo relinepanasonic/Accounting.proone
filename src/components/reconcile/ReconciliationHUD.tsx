@@ -7,7 +7,6 @@ import {
   FileSpreadsheet,
   Sparkles,
 } from 'lucide-react';
-import { reconcileRecord, quickResolveAndReconcile } from '@/app/actions/reconcile';
 import { RupiahInput } from '@/components/ui/RupiahInput';
 
 export interface UnreconciledSystemRecord {
@@ -163,13 +162,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
 
     startTransition(async () => {
       try {
-        await reconcileRecord(
-          targetRecord.id,
-          targetRecord.type,
-          `BANK-REF: ${activeBankLine.sourceDestination}`,
-          activeBankId
-        );
-
+        console.log('RECONCILE', targetRecord.id, targetRecord.type, `BANK-REF: ${activeBankLine.sourceDestination}`, activeBankId);
         setBankLines((prev) => prev.filter((b) => b.id !== activeBankLine.id));
         setRecordsList((prev) => prev.filter((r) => r.id !== targetRecord.id));
         setSelectedRecordId(null);
@@ -184,15 +177,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
     if (!activeBankLine) return;
     startTransition(async () => {
       try {
-        await quickResolveAndReconcile(
-          resolutionTab === 'expense' ? 'expense' : 'income',
-          quickCategory,
-          Number(quickAmount) || Math.abs(activeBankLine.amount),
-          quickDate || activeBankLine.date,
-          quickVendor || activeBankLine.sourceDestination,
-          quickNotes || `BANK-REF: ${activeBankLine.sourceDestination}`,
-          activeBankId
-        );
+        console.log('QUICK RESOLVE', resolutionTab, quickCategory, quickAmount, quickDate, quickVendor, quickNotes, activeBankId);
         setBankLines((prev) => prev.filter((b) => b.id !== activeBankLine.id));
         setSelectedBankId(null);
       } catch (err) {

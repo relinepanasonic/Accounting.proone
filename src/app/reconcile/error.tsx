@@ -11,6 +11,7 @@ export default function ReconcileError({
 }) {
   useEffect(() => {
     console.error('Reconcile page error:', error);
+    console.log('Full stack trace:', error.stack);
   }, [error]);
 
   return (
@@ -20,7 +21,10 @@ export default function ReconcileError({
           Page Error Detected
         </h2>
         <div className="bg-zinc-950 rounded-xl p-4 mb-6 text-left">
-          <p className="text-xs font-mono text-red-300 break-all">{error.message}</p>
+          <p className="text-xs font-mono text-red-300 break-all mb-2">{error.message}</p>
+          <pre className="text-[10px] font-mono text-zinc-400 whitespace-pre-wrap overflow-auto max-h-64 border border-zinc-800 p-2 rounded">
+            {error.stack}
+          </pre>
           {error.digest && (
             <p className="text-[10px] font-mono text-zinc-500 mt-2">Digest: {error.digest}</p>
           )}

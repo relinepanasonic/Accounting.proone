@@ -59,7 +59,8 @@ export async function quickResolveAndReconcile(
   transaction_date: string,
   description: string,
   bank_reference: string,
-  bank_account_id?: string
+  bank_account_id?: string,
+  client_id?: string
 ) {
   const supabase = await createClient();
   const ctx = await getAuthenticatedWorkspaceContext(supabase);
@@ -78,7 +79,8 @@ export async function quickResolveAndReconcile(
       transaction_date,
       description,
       reconciled: true,
-      bank_reference
+      bank_reference,
+      client_id: client_id || null
     })
     .select('id')
     .single();

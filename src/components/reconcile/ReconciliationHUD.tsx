@@ -8,6 +8,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { reconcileRecord, quickResolveAndReconcile } from '@/app/actions/reconcile';
+import { createClientRecord } from '@/app/actions/settings';
 import { RupiahInput } from '@/components/ui/RupiahInput';
 
 export interface UnreconciledSystemRecord {
@@ -52,9 +53,11 @@ interface ReconciliationHUDProps {
   systemRecords: UnreconciledSystemRecord[];
   bankAccounts?: BankAccount[];
   coaAccounts?: COAAccountMinimal[];
+  reconciledBankRefs?: string[];
+  vendors?: { id: string; name: string }[];
 }
 
-export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccounts = [] }: ReconciliationHUDProps) {
+export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccounts = [], reconciledBankRefs = [], vendors = [] }: ReconciliationHUDProps) {
   const [bankLines, setBankLines] = useState<BankLine[]>([]);
   const [recordsList, setRecordsList] = useState<UnreconciledSystemRecord[]>(systemRecords);
   const [selectedBankId, setSelectedBankId] = useState<string | null>(null);
@@ -64,7 +67,12 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   // Resolution Widget State
   const [resolutionTab, setResolutionTab] = useState<'expense' | 'income' | 'manual'>('expense');
   const [quickCategory, setQuickCategory] = useState<string>('Uncategorized');
-  const [quickVendor, setQuickVendor] = useState('');
+  const [quickVendorName, setQuickVendorName] = useState('');
+  const [quickVendorId, setQuickVendorId] = useState<string | undefined>(undefined);
+  const [vendorDropdownOpen, setVendorDropdownOpen] = useState(false);
+  const [isQuickAddingVendor, setIsQuickAddingVendor] = useState(false);
+  const [localVendors, setLocalVendors] = useState(vendors);
+  
   const [quickDate, setQuickDate] = useState('');
   const [quickAmount, setQuickAmount] = useState<number | ''>('');
   const [quickNotes, setQuickNotes] = useState('');
@@ -78,7 +86,8 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
 
   React.useEffect(() => {
     if (activeBankLine) {
-      setQuickVendor(activeBankLine.sourceDestination || '');
+      setQuickVendorName(activeBankLine.sourceDestination || '');
+      setQuickVendorId(undefined); // Reset ID so it acts as free text unless explicitly matched/selected
       setQuickDate(activeBankLine.date || '');
       setQuickAmount(Math.abs(activeBankLine.amount || 0));
       setQuickNotes([activeBankLine.notes, activeBankLine.transactionDetails].filter(Boolean).join(' | '));
@@ -109,7 +118,19 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
           });
           const result = await res.json();
           if (result.success && result.data && result.data.length > 0) {
-            const sortedData = result.data.sort((a: BankLine, b: BankLine) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            // Filter out items already reconciled
+            let filteredData = result.data.filter((line: BankLine) => {
+              const uniqueRef = `BANK-REF:${line.date}:${line.amount}:${line.sourceDestination}`;
+              const fallbackRef = `BANK-REF: ${line.sourceDestination}`;
+              return !reconciledBankRefs.includes(uniqueRef) && !reconciledBankRefs.includes(fallbackRef);
+            });
+
+            if (filteredData.length === 0) {
+              alert('All items in this statement have already been reconciled and filtered out!');
+              return;
+            }
+
+            const sortedData = filteredData.sort((a: BankLine, b: BankLine) => new Date(a.date).getTime() - new Date(b.date).getTime());
             setBankLines(sortedData);
             setSelectedBankId(sortedData[0].id);
           } else {
@@ -147,7 +168,18 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
         });
 
         if (parsed.length > 0) {
-          const sortedParsed = parsed.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+          let filteredParsed = parsed.filter((line) => {
+            const uniqueRef = `BANK-REF:${line.date}:${line.amount}:${line.sourceDestination}`;
+            const fallbackRef = `BANK-REF: ${line.sourceDestination}`;
+            return !reconciledBankRefs.includes(uniqueRef) && !reconciledBankRefs.includes(fallbackRef);
+          });
+
+          if (filteredParsed.length === 0) {
+            alert('All items in this statement have already been reconciled and filtered out!');
+            return;
+          }
+
+          const sortedParsed = filteredParsed.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
           setBankLines(sortedParsed);
           setSelectedBankId(sortedParsed[0].id);
         }
@@ -167,7 +199,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
         await reconcileRecord(
           targetRecord.id,
           targetRecord.type,
-          `BANK-REF: ${activeBankLine.sourceDestination}`,
+          `BANK-REF:${activeBankLine.date}:${activeBankLine.amount}:${activeBankLine.sourceDestination}`,
           activeBankId
         );
 
@@ -185,14 +217,19 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
     if (!activeBankLine) return;
     startTransition(async () => {
       try {
+        const uniqueBankRef = `BANK-REF:${activeBankLine.date}:${activeBankLine.amount}:${activeBankLine.sourceDestination}`;
+        // Combine vendor + notes for description since DB doesn't have notes column
+        const finalDescription = (quickVendorName ? quickVendorName + ' | ' : '') + quickNotes;
+
         await quickResolveAndReconcile(
           resolutionTab === 'expense' ? 'expense' : 'income',
           quickCategory,
           Number(quickAmount) || Math.abs(activeBankLine.amount),
           quickDate || activeBankLine.date,
-          quickVendor || activeBankLine.sourceDestination,
-          quickNotes || `BANK-REF: ${activeBankLine.sourceDestination}`,
-          activeBankId
+          finalDescription || 'Quick Resolve',
+          uniqueBankRef,
+          activeBankId,
+          quickVendorId
         );
         setBankLines((prev) => prev.filter((b) => b.id !== activeBankLine.id));
         setSelectedBankId(null);
@@ -201,6 +238,28 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
         alert('Failed to save quick record. Please try again.');
       }
     });
+  };
+
+  const handleQuickAddVendor = async () => {
+    if (!quickVendorName.trim()) return;
+    setIsQuickAddingVendor(true);
+    try {
+      const res = await createClientRecord({
+        name: quickVendorName,
+        contactType: 'vendor'
+      });
+      if (res.success && res.client) {
+        setLocalVendors(prev => [...prev, res.client!]);
+        setQuickVendorId(res.client.id);
+        setVendorDropdownOpen(false);
+      } else {
+        alert(res.error || 'Failed to create vendor');
+      }
+    } catch (err: any) {
+      alert(err?.message || 'Error creating vendor');
+    } finally {
+      setIsQuickAddingVendor(false);
+    }
   };
 
   const renderSystemRecordsList = () => {
@@ -470,17 +529,61 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                 <div className="flex-1 flex flex-col justify-between">
                   <div className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
+                      <div className="relative">
                         <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1">
                           Vendor / Payee Name <span className="text-red-500">*</span>
                         </label>
                         <input 
                           type="text"
                           required
-                          value={quickVendor}
-                          onChange={(e) => setQuickVendor(e.target.value)}
+                          placeholder="Search vendor or enter custom text..."
+                          value={quickVendorName}
+                          onChange={(e) => {
+                            setQuickVendorName(e.target.value);
+                            setQuickVendorId(undefined); // Unset ID if they type manually
+                            setVendorDropdownOpen(true);
+                          }}
+                          onFocus={() => setVendorDropdownOpen(true)}
+                          onBlur={() => setTimeout(() => setVendorDropdownOpen(false), 200)}
                           className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#d4af37]"
                         />
+                        {vendorDropdownOpen && (
+                          <div className="absolute z-50 w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-xl shadow-xl max-h-56 overflow-y-auto top-[100%]">
+                            {localVendors
+                              .filter(v => v.name.toLowerCase().includes(quickVendorName.toLowerCase()))
+                              .map(v => (
+                                <div 
+                                  key={v.id}
+                                  onClick={() => {
+                                    setQuickVendorName(v.name);
+                                    setQuickVendorId(v.id);
+                                    setVendorDropdownOpen(false);
+                                  }}
+                                  className="px-4 py-2.5 text-xs text-white hover:bg-[#d4af37]/20 cursor-pointer transition-colors"
+                                >
+                                  {v.name}
+                                </div>
+                              ))}
+                            
+                            {/* Quick Add Button */}
+                            {quickVendorName.trim() && !localVendors.some(v => v.name.toLowerCase() === quickVendorName.toLowerCase()) && (
+                              <div 
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleQuickAddVendor();
+                                }}
+                                className="px-4 py-3 text-xs text-[#f5d77f] font-bold border-t border-zinc-800 hover:bg-[#d4af37]/20 cursor-pointer flex items-center gap-2 transition-colors"
+                              >
+                                {isQuickAddingVendor ? (
+                                  <span className="animate-pulse">ADDING...</span>
+                                ) : (
+                                  <><span>+ QUICK ADD VENDOR:</span> <span className="text-white">"{quickVendorName}"</span></>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <div className="space-y-1 relative">
                         <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500">Category</label>

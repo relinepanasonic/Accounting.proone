@@ -49,7 +49,17 @@ async function ReconciliationCore() {
     );
   }
 
-  const [invoicesRes, transactionsRes, payrollRes, bankRes, workspaceRes, coaRes] = await Promise.all([
+  const [
+    invoicesRes, 
+    transactionsRes, 
+    payrollRes, 
+    bankRes, 
+    workspaceRes, 
+    coaRes, 
+    txRefsRes, 
+    invRefsRes, 
+    vendorsRes
+  ] = await Promise.all([
     supabase
       .from('invoices')
       .select('id, invoice_number, total_amount, issue_date, clients(name), reconciled, workspace_id, assigned_workspace_id')
@@ -82,12 +92,37 @@ async function ReconciliationCore() {
       .from('global_chart_of_accounts')
       .select('account_code, account_name, account_type')
       .eq('is_active', true)
-      .order('account_code', { ascending: true })
+      .order('account_code', { ascending: true }),
+    supabase
+      .from('transactions')
+      .select('bank_reference')
+      .eq('workspace_id', activeWorkspaceId)
+      .eq('reconciled', true)
+      .not('bank_reference', 'is', null),
+    supabase
+      .from('invoices')
+      .select('bank_reference')
+      .or(`workspace_id.eq.${activeWorkspaceId},assigned_workspace_id.eq.${activeWorkspaceId}`)
+      .eq('reconciled', true)
+      .not('bank_reference', 'is', null),
+    supabase
+      .from('clients')
+      .select('id, name')
+      .eq('contact_type', 'vendor')
+      .order('name', { ascending: true })
   ]);
 
   const rawInvoices = invoicesRes.data || [];
   const rawTransactions = transactionsRes.data || [];
   const rawPayroll = payrollRes.data || [];
+  const vendors = vendorsRes.data || [];
+  
+  // Combine all reconciled bank references into a single set for fast lookup
+  const reconciledBankRefs = new Set([
+    ...(txRefsRes.data || []).map(r => r.bank_reference),
+    ...(invRefsRes.data || []).map(r => r.bank_reference)
+  ].filter(Boolean));
+
   let bankAccounts = bankRes.data ? bankRes.data.map(b => ({
     ...b,
     account_holder: (b as any).account_name || b.account_holder
@@ -170,7 +205,15 @@ async function ReconciliationCore() {
     })),
   ];
 
-  return <ReconciliationHUD systemRecords={systemRecords} bankAccounts={bankAccounts} coaAccounts={coaAccounts} />;
+  return (
+    <ReconciliationHUD 
+      systemRecords={systemRecords} 
+      bankAccounts={bankAccounts} 
+      coaAccounts={coaAccounts}
+      reconciledBankRefs={Array.from(reconciledBankRefs)}
+      vendors={vendors}
+    />
+  );
   } catch (err: any) {
     console.error('[ReconciliationCore] Fatal error:', err);
     return (

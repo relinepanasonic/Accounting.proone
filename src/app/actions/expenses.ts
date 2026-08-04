@@ -28,7 +28,7 @@ export async function createExpense(payload: CreateExpensePayload) {
     category: payload.category,
     amount: payload.amount,
     due_date: payload.dueDate,
-    status: 'pending',
+    reconciled: false,
     is_upcoming_bill: true,
   }).select('id').single();
 
@@ -56,10 +56,11 @@ export async function createExpense(payload: CreateExpensePayload) {
 export async function toggleExpenseStatus(id: string, currentStatus: string) {
   const supabase = await createClient();
   const nextStatus = currentStatus.toLowerCase() === 'paid' ? 'pending' : 'paid';
+  const nextReconciled = nextStatus === 'paid';
 
   const { error } = await supabase
     .from('transactions')
-    .update({ status: nextStatus })
+    .update({ reconciled: nextReconciled })
     .eq('id', id);
 
   if (error) {

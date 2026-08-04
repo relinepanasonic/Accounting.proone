@@ -68,7 +68,7 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
       .eq('workspace_id', activeWorkspaceId),
     supabase
       .from('transactions')
-      .select('id, description, amount, due_date, status, category, is_upcoming_bill')
+      .select('id, description, amount, due_date, reconciled, category, is_upcoming_bill')
       .eq('workspace_id', activeWorkspaceId)
   ]);
 
@@ -223,7 +223,7 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
 
   for (const tx of transactions) {
     const amt = Number(tx.amount || 0);
-    const st = (tx.status || 'pending').toLowerCase();
+    const st = tx.reconciled ? 'paid' : 'pending';
     const cat = (tx.category || '').toLowerCase();
     
     if (st === 'pending' && tx.is_upcoming_bill) {

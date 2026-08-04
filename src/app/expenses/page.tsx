@@ -20,12 +20,16 @@ async function ExpensesTable() {
   const supabase = await createClient();
   const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
-  const { data: records } = await supabase
+  const { data: records, error } = await supabase
     .from('transactions')
-    .select('id, due_date, description, category, amount, status')
+    .select('id, due_date, description, category, amount, reconciled')
     .eq('workspace_id', activeWorkspaceId)
     .eq('type', 'expense')
-    .order('due_date', { ascending: true });
+    .order('transaction_date', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching expenses:', error);
+  }
 
   const displayRecords: ExpenseRecord[] =
     records && records.length > 0
@@ -35,7 +39,7 @@ async function ExpensesTable() {
           vendor: r.description || 'Vendor Payee',
           category: r.category || 'Software & Operations',
           amount: Number(r.amount || 0),
-          status: r.status || 'pending',
+          status: r.reconciled ? 'paid' : 'pending',
         }))
       : [];
 

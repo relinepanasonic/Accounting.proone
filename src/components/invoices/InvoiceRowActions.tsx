@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Copy, CheckCircle, Clock, FileText, Trash2, Edit2 } from 'lucide-react';
 import { duplicateInvoice, toggleInvoiceStatus, deleteInvoice, convertQuotationToInvoice } from '@/app/actions/invoices';
 
+interface InvoiceActionProps {
   id: string;
   status?: string;
   isQuotation?: boolean;

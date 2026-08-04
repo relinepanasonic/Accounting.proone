@@ -661,7 +661,6 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
             />
           </div>
         </div>
-        </div>
       </div>
       )}
 

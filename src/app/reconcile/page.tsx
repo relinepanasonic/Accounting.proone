@@ -11,6 +11,7 @@ import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 export const dynamic = 'force-dynamic';
 
 async function ReconciliationCore() {
+  try {
   const supabase = await createClient();
   const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
@@ -100,23 +101,16 @@ async function ReconciliationCore() {
         let accountNo = line.trim();
         let name = ws.name || 'Workspace';
 
-        const numMatch = line.match(/([\d]{3,}(?:-[\d]{2,})+|[\d]{6,})/);
-        if (numMatch && numMatch.index !== undefined) {
-            accountNo = numMatch[1];
-            
-            const beforeNum = line.substring(0, numMatch.index).trim();
-            const afterNum = line.substring(numMatch.index + numMatch[0].length).trim();
-            
-            let bName = beforeNum.replace(/-$/, '').trim();
-            const bParts = bName.split('-');
-            if (bParts.length > 1) {
-                bName = bParts[bParts.length - 1].trim();
-            }
-            bankName = bName || bankName;
-            
-            let nName = afterNum.replace(/^\(/, '').replace(/\)$/, '').trim();
-            nName = nName.replace(/\)\s*\(/g, ' - ');
-            name = nName || name;
+        const cleanText = line.replace(/\(.*?\)/g, '').trim();
+        const parts = cleanText.split('-').map(s => s.trim()).filter(Boolean);
+        if (parts.length >= 2) {
+          accountNo = parts[parts.length - 1];
+          bankName = parts[parts.length - 2];
+        }
+
+        const parensMatch = line.match(/\((.*?)\)/);
+        if (parensMatch) {
+          name = parensMatch[1];
         }
 
         return {
@@ -161,6 +155,16 @@ async function ReconciliationCore() {
   ];
 
   return <ReconciliationHUD systemRecords={systemRecords} bankAccounts={bankAccounts} coaAccounts={coaAccounts} />;
+  } catch (err: any) {
+    console.error('[ReconciliationCore] Fatal error:', err);
+    return (
+      <div className="gold-glass-panel rounded-2xl p-8 text-center">
+        <p className="text-red-400 font-mono text-xs font-bold uppercase mb-2">Page Load Error</p>
+        <p className="text-zinc-300 font-mono text-xs break-all">{err?.message || String(err)}</p>
+        <p className="text-zinc-500 font-mono text-[10px] mt-2">{err?.stack?.split('\n')[1] || ''}</p>
+      </div>
+    );
+  }
 }
 
 export default function BankReconciliationPage() {
@@ -169,8 +173,11 @@ export default function BankReconciliationPage() {
       <div className="pb-4 border-b border-[#d4af37]/20">
         <h1 className="text-lg font-extrabold tracking-wider uppercase text-white flex items-center gap-2">
           <CheckSquare className="w-5 h-5 text-[#d4af37]" />
-          <span>BANK RECONCILIATION</span>
+          <span>BANK RECONCILIATION ENGINE • AUTOMATED STATEMENT MATCHING</span>
         </h1>
+        <p className="text-xs text-[#d4af37] font-mono">
+          BRUSHED GOLD AUTOMATCH FEED • PARITY CLEARANCE HUD
+        </p>
       </div>
 
       <Suspense

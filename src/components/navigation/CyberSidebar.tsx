@@ -231,17 +231,6 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
                   )}
                 </div>
 
-                {!isCollapsed && item.badge && (
-                  <span
-                    className={`px-2 py-0.5 rounded-full text-[9px] font-mono uppercase ${
-                      isActive
-                        ? 'bg-[#d4af37]/25 text-[#f5d77f] border border-[#d4af37]/50'
-                        : 'bg-zinc-900 text-zinc-400 border border-zinc-800'
-                    }`}
-                  >
-                    {item.badge}
-                  </span>
-                )}
               </Link>
             );
           })}

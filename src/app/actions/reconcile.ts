@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
+import { getWorkspaceMappings } from './mappings';
 
 export async function reconcileRecord(
   recordId: string,
@@ -33,7 +34,7 @@ export async function reconcileRecord(
       .update({
         reconciled: true,
         bank_reference: bankReference || 'BANK-MATCHED',
-        ...(bankAccountId ? { bank_account_id: bankAccountId } : {})
+        ...(bankAccountId && table === 'invoices' ? { bank_account_id: bankAccountId } : {})
       })
       .eq('id', recordId);
 
@@ -77,8 +78,7 @@ export async function quickResolveAndReconcile(
       transaction_date,
       description,
       reconciled: true,
-      bank_reference,
-      ...(bank_account_id ? { bank_account_id } : {})
+      bank_reference
     })
     .select('id')
     .single();
@@ -86,6 +86,32 @@ export async function quickResolveAndReconcile(
   if (error) {
     console.error('Error creating quick transaction:', error);
     throw new Error('Failed to create and reconcile transaction');
+  }
+
+  // 2. Ledger Double-Entry
+  const mappings = await getWorkspaceMappings(ctx.activeWorkspaceId);
+  let bankAccountCode = '1010';
+  if (bank_account_id && bank_account_id !== 'all' && bank_account_id !== 'custom') {
+    const { data: bankRes } = await supabase.from('workspace_bank_accounts').select('coa_account_code').eq('id', bank_account_id).single();
+    if (bankRes?.coa_account_code) {
+      bankAccountCode = bankRes.coa_account_code;
+    }
+  }
+
+  const todayStr = transaction_date || new Date().toISOString().split('T')[0];
+
+  if (type === 'income') {
+    const salesAccount = mappings.find(m => m.mapping_type === 'SALES')?.account_code || '4001';
+    await supabase.from('journal_entries').insert([
+      { workspace_id: ctx.activeWorkspaceId, account_code: bankAccountCode, transaction_date: todayStr, debit_amount: amount, credit_amount: 0, description: `Quick Income - ${description}`, reference_id: data.id, reference_type: 'quick_income' },
+      { workspace_id: ctx.activeWorkspaceId, account_code: salesAccount, transaction_date: todayStr, debit_amount: 0, credit_amount: amount, description: `Quick Income - ${description}`, reference_id: data.id, reference_type: 'quick_income' }
+    ]);
+  } else {
+    const expenseAccount = mappings.find(m => m.mapping_type === 'EXPENSE')?.account_code || '5100';
+    await supabase.from('journal_entries').insert([
+      { workspace_id: ctx.activeWorkspaceId, account_code: expenseAccount, transaction_date: todayStr, debit_amount: amount, credit_amount: 0, description: `Quick Expense - ${description}`, reference_id: data.id, reference_type: 'quick_expense' },
+      { workspace_id: ctx.activeWorkspaceId, account_code: bankAccountCode, transaction_date: todayStr, debit_amount: 0, credit_amount: amount, description: `Quick Expense - ${description}`, reference_id: data.id, reference_type: 'quick_expense' }
+    ]);
   }
 
   revalidatePath('/reconcile');

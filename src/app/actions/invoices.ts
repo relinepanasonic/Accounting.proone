@@ -547,6 +547,13 @@ export async function deleteInvoice(invoiceId: string) {
       .eq('id', invoiceId)
       .eq('workspace_id', workspaceId);
 
+    // Also attempt to delete from transactions (for Quick Incomes labeled as 'DIRECT INCOME')
+    const { error: txError } = await supabase
+      .from('transactions')
+      .delete()
+      .eq('id', invoiceId)
+      .eq('workspace_id', workspaceId);
+
     if (error) {
       return { success: false, error: error.message };
     }

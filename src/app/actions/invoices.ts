@@ -570,7 +570,7 @@ export async function recordInvoicePayment(invoiceId: string, amount: number, pa
     // 1. Fetch current invoice state
     const { data: inv, error: fetchErr } = await supabase
       .from('invoices')
-      .select('id, invoice_number, amount_paid, total_amount, client_id, status')
+      .select('id, invoice_number, amount_paid, total_amount, client_id, status, bank_account_id')
       .eq('id', invoiceId)
       .eq('workspace_id', workspaceId)
       .single();
@@ -601,10 +601,22 @@ export async function recordInvoicePayment(invoiceId: string, amount: number, pa
     // 3. Ledger Double-Entry
     const mappings = await getWorkspaceMappings(workspaceId);
     const arAccount = mappings.find(m => m.mapping_type === 'AR')?.account_code || '1002';
+    
+    let chosenBank: any = null;
+    if (inv.bank_account_id && inv.bank_account_id !== 'all' && inv.bank_account_id !== 'custom') {
+      const { data: bankRes } = await supabase.from('workspace_bank_accounts').select('*').eq('id', inv.bank_account_id).single();
+      if (bankRes) chosenBank = bankRes;
+    }
+    if (!chosenBank) {
+      const { data: firstBank } = await supabase.from('workspace_bank_accounts').select('*').eq('workspace_id', workspaceId).order('is_default', { ascending: false }).limit(1);
+      if (firstBank && firstBank.length > 0) chosenBank = firstBank[0];
+    }
+    const debitAccountCode = chosenBank?.coa_account_code || '1010';
+
     const todayStr = paymentDate || new Date().toISOString().split('T')[0];
     
     await supabase.from('journal_entries').insert([
-      { workspace_id: workspaceId, account_code: '1010', transaction_date: todayStr, debit_amount: amount, credit_amount: 0, description: `Payment for Invoice ${inv.invoice_number}${reference ? ' - ' + reference : ''}`, reference_id: invoiceId, reference_type: 'payment' },
+      { workspace_id: workspaceId, account_code: debitAccountCode, transaction_date: todayStr, debit_amount: amount, credit_amount: 0, description: `Payment for Invoice ${inv.invoice_number}${reference ? ' - ' + reference : ''}`, reference_id: invoiceId, reference_type: 'payment' },
       { workspace_id: workspaceId, account_code: arAccount, transaction_date: todayStr, debit_amount: 0, credit_amount: amount, description: `Payment for Invoice ${inv.invoice_number}${reference ? ' - ' + reference : ''}`, reference_id: invoiceId, reference_type: 'payment' }
     ]);
 

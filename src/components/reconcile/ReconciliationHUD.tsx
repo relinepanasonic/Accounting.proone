@@ -308,12 +308,11 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
 
       {/* Split-Panel Reconciliation HUD */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* LEFT PANEL: BANK FEED */}
         <div className="gold-glass-panel rounded-2xl p-6 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between pb-3 mb-4 border-b border-zinc-800">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-[#f5d77f]">
-                LEFT PANEL • BANK STATEMENT FEED
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[#d4af37]">
+                BANK STATEMENT FEED
               </h3>
               <span className="text-[10px] font-mono text-zinc-400">
                 {bankLines.length} UNCLEARED ITEMS
@@ -525,9 +524,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
             <div className="h-full flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between pb-3 mb-4 border-b border-zinc-800">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#d4af37]">
-                    RIGHT PANEL • SYSTEM RECORDS
-                  </h3>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#d4af37]">SYSTEM RECORDS</h3>
                   <span className="text-[10px] font-mono text-zinc-400">
                     {recordsList.length} QUEUED ENTRIES
                   </span>

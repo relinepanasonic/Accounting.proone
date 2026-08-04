@@ -113,8 +113,12 @@ async function ReconciliationCore() {
           const cleanText = line.replace(/\(.*?\)/g, '').trim();
           const dashParts = cleanText.split('-').map(s => s.trim()).filter(Boolean);
           if (dashParts.length >= 2) {
-            accountNo = dashParts.slice(1).join('-'); 
+            // If the user prefixed with "Primary Bank Account - " or "Secondary Bank - ", ignore that part
+            if (dashParts.length > 2 && dashParts[0].match(/Primary|Secondary|Bank Account/i)) {
+              dashParts.shift();
+            }
             bankName = dashParts[0];
+            accountNo = dashParts.slice(1).join('-'); 
           }
           const parensMatch = line.match(/\((.*?)\)/);
           if (parensMatch) {
@@ -182,11 +186,8 @@ export default function BankReconciliationPage() {
       <div className="pb-4 border-b border-[#d4af37]/20">
         <h1 className="text-lg font-extrabold tracking-wider uppercase text-white flex items-center gap-2">
           <CheckSquare className="w-5 h-5 text-[#d4af37]" />
-          <span>BANK RECONCILIATION ENGINE • AUTOMATED STATEMENT MATCHING</span>
+          <span>BANK RECONCILIATION ENGINE</span>
         </h1>
-        <p className="text-xs text-[#d4af37] font-mono">
-          BRUSHED GOLD AUTOMATCH FEED • PARITY CLEARANCE HUD
-        </p>
       </div>
 
       <Suspense

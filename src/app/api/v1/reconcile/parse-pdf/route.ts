@@ -30,8 +30,8 @@ function parseBankDate(dateStr: string): string {
 
 export async function POST(request: Request) {
   try {
-    // Dynamic require to avoid Turbopack bundling issues
-    const pdfParse = (await import('pdf-parse')).default;
+    // Use unpdf for serverless-safe PDF parsing
+    const { extractText, getDocumentProxy } = await import('unpdf');
 
     const formData = await request.formData();
     const file = formData.get('file') as File;
@@ -41,10 +41,11 @@ export async function POST(request: Request) {
     }
 
     const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const buffer = new Uint8Array(arrayBuffer);
 
-    const data = await pdfParse(buffer);
-    const rawText = data.text || '';
+    const pdf = await getDocumentProxy(buffer);
+    const data = await extractText(pdf, { mergePages: true });
+    const rawText = (typeof data === 'string' ? data : data.text) || '';
 
     // Split into lines, clean whitespace
     const rawLines = rawText

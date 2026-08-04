@@ -3,15 +3,7 @@ import { NextResponse } from 'next/server';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Parse an Indonesian-format number string like "1.311.000" or "-1.311.000" or "16.338.930,32"
-function parseIndonesianNumber(s: string): number {
-  if (!s) return NaN;
-  // Remove dots used as thousand separators, replace comma decimal separator with dot
-  const cleaned = s.replace(/\./g, '').replace(',', '.');
-  return parseFloat(cleaned);
-}
-
-// Convert "06 Jan 2026" to "2026-01-06"
+// Convert "06 Jan 2026" → "2026-01-06"
 function parseBankDate(dateStr: string): string {
   const monthMap: Record<string, string> = {
     jan: '01', feb: '02', mar: '03', apr: '04',
@@ -28,10 +20,17 @@ function parseBankDate(dateStr: string): string {
   return `${year}-${month}-${day}`;
 }
 
+// Parse Indonesian number format "1.311.000" or "-1.311.000" or "16.338.930,32"
+function parseIndonesianNumber(s: string): number {
+  if (!s) return NaN;
+  const cleaned = s.replace(/\./g, '').replace(',', '.');
+  return parseFloat(cleaned);
+}
+
 export async function POST(request: Request) {
   try {
-    // Use unpdf for serverless-safe PDF parsing
-    const { extractText, getDocumentProxy } = await import('unpdf');
+    // Use require() inside function body so it stays as a server-only dynamic require
+    const PDFParser = require('pdf2json');
 
     const formData = await request.formData();
     const file = formData.get('file') as File;
@@ -41,19 +40,28 @@ export async function POST(request: Request) {
     }
 
     const arrayBuffer = await file.arrayBuffer();
-    const buffer = new Uint8Array(arrayBuffer);
+    const buffer = Buffer.from(arrayBuffer);
 
-    const pdf = await getDocumentProxy(buffer);
-    const data = await extractText(pdf, { mergePages: true });
-    const rawText = (typeof data === 'string' ? data : data.text) || '';
+    // Use pdf2json's raw text mode (2nd arg = 1 enables raw text extraction)
+    const rawText: string = await new Promise((resolve, reject) => {
+      const pdfParser = new PDFParser(null, 1);
+      pdfParser.on("pdfParser_dataError", (errData: any) => reject(new Error(errData.parserError)));
+      pdfParser.on("pdfParser_dataReady", () => {
+        resolve(pdfParser.getRawTextContent());
+      });
+      pdfParser.parseBuffer(buffer);
+    });
 
-    // Split into lines, clean whitespace
-    const rawLines = rawText
-      .split('\n')
+    // Clean page break markers
+    const cleanedText = rawText.replace(/[-]+Page\s*\(\d+\)\s*Break[-]+/g, '');
+
+    // Split by newline, clean whitespace
+    const rawLines = cleanedText.split('\n')
       .map((l: string) => l.replace(/\t/g, ' ').trim())
       .filter((l: string) => l.length > 0);
 
     // Bank Jago transaction lines start with "DD Mon YYYY"
+    // e.g. "06 Jan 2026  NICO WINARTA JAPAR  Outgoing Transfer  Beli kulkas gading  -1.311.000  16.338.930,32"
     const dateRegex = /^(\d{2}\s[A-Za-z]{3}\s\d{4})\s+(.*)/;
     const timeIdRegex = /^\d{2}:\d{2}\s/;
     const transactions: any[] = [];
@@ -64,29 +72,28 @@ export async function POST(request: Request) {
 
       if (!dateMatch) continue;
 
-      const dateStr = dateMatch[1];
-      const rest = dateMatch[2];
+      const dateStr = dateMatch[1];   // e.g. "06 Jan 2026"
+      const rest = dateMatch[2];      // everything after the date
 
-      // Look for next line to get time/ref info
+      // Next line is usually: time + bank reference code
       let sourceBankInfo = '';
       if (i + 1 < rawLines.length && timeIdRegex.test(rawLines[i + 1])) {
         sourceBankInfo = rawLines[i + 1];
       }
 
-      // Find all Indonesian-format numbers at end of line
-      // Format: -1.311.000 or 16.338.930,32
-      const numRegex = /(-?\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?)/g;
-      const allMatches = rest.match(numRegex) || [];
+      // Extract all Indonesian-format numbers from end of line
+      const numRegex = /([-+]?\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?)/g;
+      const matches = rest.match(numRegex);
 
-      if (allMatches.length < 2) continue;
+      if (!matches || matches.length < 2) continue;
 
       // Last number = Balance, second-to-last = Amount
-      const amountStr = allMatches[allMatches.length - 2];
+      const amountStr = matches[matches.length - 2];
       const amount = parseIndonesianNumber(amountStr);
 
       if (isNaN(amount)) continue;
 
-      // Extract body before amounts
+      // Body is everything before the amount+balance at end
       const amtIndex = rest.lastIndexOf(amountStr);
       const bodyStr = rest.substring(0, amtIndex).trim();
 
@@ -105,7 +112,7 @@ export async function POST(request: Request) {
 
       transactions.push({
         id: `jago-${Date.now()}-${i}-${Math.random().toString(36).substring(7)}`,
-        date: parseBankDate(dateStr),
+        date: parseBankDate(dateStr),  // Convert to YYYY-MM-DD
         sourceDestination,
         transactionDetails,
         notes,
@@ -117,7 +124,7 @@ export async function POST(request: Request) {
     if (transactions.length === 0) {
       return NextResponse.json({
         success: false,
-        error: `No transactions found. First 20 lines detected:\n${rawLines.slice(0, 20).join('\n')}`,
+        error: 'No transactions found. First 30 lines:\n' + rawLines.slice(0, 30).join('\n'),
       });
     }
 
@@ -125,6 +132,6 @@ export async function POST(request: Request) {
 
   } catch (error: any) {
     console.error('PDF Parse Error:', error);
-    return NextResponse.json({ success: false, error: error.message || 'Unknown error parsing PDF' }, { status: 500 });
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

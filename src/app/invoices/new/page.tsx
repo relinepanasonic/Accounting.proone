@@ -7,7 +7,11 @@ import { NewInvoiceForm } from '@/components/invoices/NewInvoiceForm';
 
 export const dynamic = 'force-dynamic';
 
-export default async function NewInvoicePage({ searchParams }: { searchParams: { historical?: string } }) {
+export default async function NewInvoicePage({ searchParams }: { searchParams: Promise<{ type?: string, historical?: string }> }) {
+  const resolvedParams = await searchParams;
+  const isQuotation = resolvedParams.type === 'quotation';
+  const isHistorical = resolvedParams.historical === 'true';
+
   const supabase = await createClient();
   const { activeWorkspaceId, availableWorkspaces } = await getAuthenticatedWorkspaceContext(supabase);
 
@@ -32,7 +36,7 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: {
           <div>
             <h1 className="text-lg font-extrabold tracking-wider uppercase text-white flex items-center gap-2">
               <FileText className="w-5 h-5 text-[#d4af37]" />
-              <span>NEW INVOICE</span>
+              <span>{isQuotation ? 'NEW QUOTATION' : 'NEW INVOICE'}</span>
             </h1>
           </div>
         </div>
@@ -45,7 +49,7 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: {
         </Link>
       </div>
 
-      {searchParams.historical === 'true' && (
+      {isHistorical && (
         <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-4 flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center shrink-0">
             <AlertTriangle className="w-4 h-4 text-orange-400" />
@@ -60,7 +64,7 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: {
       )}
 
       <Suspense fallback={<div className="h-40 bg-zinc-900 rounded-xl animate-pulse" />}>
-        <NewInvoiceForm clients={clientList} products={productList} bankAccounts={bankAccounts || []} isHistorical={searchParams.historical === 'true'} activeWorkspaceId={activeWorkspaceId} availableWorkspaces={availableWorkspaces} />
+        <NewInvoiceForm clients={clientList} products={productList} bankAccounts={bankAccounts || []} isHistorical={isHistorical} activeWorkspaceId={activeWorkspaceId} availableWorkspaces={availableWorkspaces} />
       </Suspense>
     </div>
   );

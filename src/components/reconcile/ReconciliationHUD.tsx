@@ -78,7 +78,22 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   React.useEffect(() => {
     if (activeBankLine) {
       setQuickVendor(activeBankLine.sourceDestination || '');
-      setQuickDate(activeBankLine.date || '');
+      
+      let formattedDate = '';
+      if (activeBankLine.date) {
+        try {
+          const d = new Date(activeBankLine.date);
+          if (!isNaN(d.getTime())) {
+            formattedDate = d.toISOString().split('T')[0];
+          } else {
+            formattedDate = activeBankLine.date;
+          }
+        } catch (e) {
+          formattedDate = activeBankLine.date;
+        }
+      }
+      
+      setQuickDate(formattedDate);
       setQuickAmount(Math.abs(activeBankLine.amount || 0));
       setQuickNotes([activeBankLine.notes, activeBankLine.transactionDetails].filter(Boolean).join(' | '));
     }
@@ -264,9 +279,6 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
             <h2 className="text-sm font-extrabold text-white uppercase tracking-wider mb-1">
               BANK STATEMENT FEED TELEMETRY
             </h2>
-            <p className="text-xs text-zinc-400 font-mono">
-              BRUSHED GOLD AUTOMATCH PARITY ENGINE
-            </p>
           </div>
         </div>
 
@@ -317,7 +329,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
           <div>
             <div className="flex items-center justify-between pb-3 mb-4 border-b border-zinc-800">
               <h3 className="text-xs font-bold uppercase tracking-wider text-[#f5d77f]">
-                LEFT PANEL • BANK STATEMENT FEED
+                BANK STATEMENT RECORD
               </h3>
               <span className="text-[10px] font-mono text-zinc-400">
                 {bankLines.length} UNCLEARED ITEMS
@@ -540,7 +552,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
               <div>
                 <div className="flex items-center justify-between pb-3 mb-4 border-b border-zinc-800">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-[#d4af37]">
-                    RIGHT PANEL • SYSTEM RECORDS
+                    SYSTEM RECORD
                   </h3>
                   <span className="text-[10px] font-mono text-zinc-400">
                     {recordsList.length} QUEUED ENTRIES

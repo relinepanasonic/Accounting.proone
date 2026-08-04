@@ -59,7 +59,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   const [recordsList, setRecordsList] = useState<UnreconciledSystemRecord[]>(systemRecords);
   const [selectedBankId, setSelectedBankId] = useState<string | null>(null);
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [isPending, setIsPending] = useState(false);
 
   // Resolution Widget State
   const [resolutionTab, setResolutionTab] = useState<'expense' | 'income' | 'manual'>('expense');
@@ -85,26 +85,23 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
           const d = new Date(activeBankLine.date);
           if (!isNaN(d.getTime())) {
             formattedDate = d.toISOString().split('T')[0];
-          } else {
-            formattedDate = activeBankLine.date;
           }
-        } catch (e) {
-          formattedDate = activeBankLine.date;
-        }
+        } catch (e) {}
       }
       
       setQuickDate(formattedDate);
-      setQuickAmount(Math.abs(activeBankLine.amount || 0));
+      setQuickAmount(Math.abs(Number(activeBankLine.amount) || 0));
       setQuickNotes([activeBankLine.notes, activeBankLine.transactionDetails].filter(Boolean).join(' | '));
     }
   }, [activeBankLine]);
 
   const findAutoMatch = (bankLine: BankLine) => {
+    const bAmt = Number(bankLine.amount) || 0;
     return recordsList.find(
       (r) =>
-        Math.abs(r.amount - Math.abs(bankLine.amount)) < 0.01 &&
-        ((bankLine.amount > 0 && r.type === 'invoice') ||
-          (bankLine.amount < 0 && r.type === 'expense'))
+        Math.abs((Number(r.amount) || 0) - Math.abs(bAmt)) < 0.01 &&
+        ((bAmt > 0 && r.type === 'invoice') ||
+          (bAmt < 0 && r.type === 'expense'))
     );
   };
 
@@ -113,7 +110,8 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
     if (!file) return;
 
     if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
-      startTransition(async () => {
+      setIsPending(true);
+      (async () => {
         const formData = new FormData();
         formData.append('file', file);
         try {
@@ -123,9 +121,14 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
           });
           const result = await res.json();
           if (result.success && result.data && result.data.length > 0) {
-            const sortedData = result.data.sort((a: BankLine, b: BankLine) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            const sortedData = result.data.sort((a: BankLine, b: BankLine) => {
+              const tA = new Date(a.date).getTime();
+              const tB = new Date(b.date).getTime();
+              if (isNaN(tA) || isNaN(tB)) return 0;
+              return tA - tB;
+            });
             setBankLines(sortedData);
-            setSelectedBankId(sortedData[0].id);
+            setSelectedBankId(sortedData[0]?.id || null);
           } else {
             alert(result.error || 'No transactions found in this PDF. Please ensure it is a valid Bank Jago statement.');
             console.error('PDF Parse Error Details:', result);
@@ -133,8 +136,10 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
         } catch (err: any) {
           alert('Network or Server Error: ' + err.message);
           console.error('PDF Parse Error:', err);
+        } finally {
+          setIsPending(false);
         }
-      });
+      })();
     } else {
       const reader = new FileReader();
       reader.onload = (event) => {
@@ -161,9 +166,14 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
         });
 
         if (parsed.length > 0) {
-          const sortedParsed = parsed.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+          const sortedParsed = parsed.sort((a, b) => {
+            const tA = new Date(a.date).getTime();
+            const tB = new Date(b.date).getTime();
+            if (isNaN(tA) || isNaN(tB)) return 0;
+            return tA - tB;
+          });
           setBankLines(sortedParsed);
-          setSelectedBankId(sortedParsed[0].id);
+          setSelectedBankId(sortedParsed[0]?.id || null);
         }
       };
       reader.readAsText(file);
@@ -176,7 +186,8 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
     const targetRecord = recordsList.find((r) => r.id === currentTargetRecordId);
     if (!targetRecord) return;
 
-    startTransition(async () => {
+    setIsPending(true);
+    (async () => {
       try {
         await reconcileRecord(
           targetRecord.id,
@@ -191,18 +202,21 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
         setSelectedBankId(null);
       } catch (err) {
         console.error(err);
+      } finally {
+        setIsPending(false);
       }
-    });
+    })();
   };
 
   const handleQuickResolve = () => {
     if (!activeBankLine) return;
-    startTransition(async () => {
+    setIsPending(true);
+    (async () => {
       try {
         await quickResolveAndReconcile(
           resolutionTab === 'expense' ? 'expense' : 'income',
           quickCategory,
-          Number(quickAmount) || Math.abs(activeBankLine.amount),
+          Number(quickAmount) || Math.abs(Number(activeBankLine.amount) || 0),
           quickDate || activeBankLine.date,
           quickVendor || activeBankLine.sourceDestination,
           quickNotes || `BANK-REF: ${activeBankLine.sourceDestination}`,
@@ -213,8 +227,10 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
       } catch (err) {
         console.error(err);
         alert('Failed to save quick record. Please try again.');
+      } finally {
+        setIsPending(false);
       }
-    });
+    })();
   };
 
   const renderSystemRecordsList = () => {

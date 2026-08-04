@@ -70,7 +70,7 @@ async function ReconciliationCore() {
       .order('pay_period_end', { ascending: false }),
     supabase
       .from('workspace_bank_accounts')
-      .select('id, bank_name, account_number, account_holder')
+      .select('id, bank_name, account_number, account_name')
       .eq('workspace_id', activeWorkspaceId)
       .order('is_default', { ascending: false }),
     supabase
@@ -88,7 +88,10 @@ async function ReconciliationCore() {
   const rawInvoices = invoicesRes.data || [];
   const rawTransactions = transactionsRes.data || [];
   const rawPayroll = payrollRes.data || [];
-  let bankAccounts = bankRes.data || [];
+  let bankAccounts = bankRes.data ? bankRes.data.map(b => ({
+    ...b,
+    account_holder: (b as any).account_name || b.account_holder
+  })) : [];
   const ws = workspaceRes.data;
   const coaAccounts = coaRes.data || [];
 

@@ -19,6 +19,13 @@ async function InvoicesTableServer() {
     .or(`workspace_id.eq.${activeWorkspaceId},assigned_workspace_id.eq.${activeWorkspaceId}`)
     .order('created_at', { ascending: false });
 
+  const { data: incomeTx } = await supabase
+    .from('transactions')
+    .select('id, description, amount, transaction_date, category')
+    .eq('workspace_id', activeWorkspaceId)
+    .eq('type', 'income')
+    .order('transaction_date', { ascending: false });
+
   const displayInvoices =
     invoices && invoices.length > 0
       ? invoices.map((inv) => {
@@ -47,7 +54,33 @@ async function InvoicesTableServer() {
         })
       : [];
 
-  return <InvoiceTableClient initialInvoices={displayInvoices} availableWorkspaces={availableWorkspaces} activeWorkspaceName={activeWorkspaceName} />;
+  const displayIncomeTx =
+    incomeTx && incomeTx.length > 0
+      ? incomeTx.map((tx) => ({
+          id: tx.id,
+          invoiceNumber: 'DIRECT INCOME',
+          issueDate: formatIndoDate(tx.transaction_date),
+          rawIssueDate: tx.transaction_date || '',
+          clientName: tx.description || 'Quick Income',
+          clientContact: '',
+          amount: `Rp ${Number(tx.amount || 0).toLocaleString('en-US')}`,
+          rawAmount: Number(tx.amount || 0),
+          dueDate: formatIndoDate(tx.transaction_date),
+          rawDueDate: tx.transaction_date || '',
+          packageName: tx.category || 'Categorized Income',
+          packageQtt: '—',
+          isQuotation: false,
+          status: 'paid',
+          assignedWorkspaceId: activeWorkspaceId,
+          assignedWorkspaceName: activeWorkspaceName,
+        }))
+      : [];
+
+  const finalInvoices = [...displayInvoices, ...displayIncomeTx].sort(
+    (a, b) => new Date(b.rawIssueDate || 0).getTime() - new Date(a.rawIssueDate || 0).getTime()
+  );
+
+  return <InvoiceTableClient initialInvoices={finalInvoices} availableWorkspaces={availableWorkspaces} activeWorkspaceName={activeWorkspaceName} />;
 }
 
 export default function InvoicesPage() {

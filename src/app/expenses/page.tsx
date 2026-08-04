@@ -24,7 +24,7 @@ async function ExpensesTable() {
     .from('transactions')
     .select('id, due_date, description, category, amount, status')
     .eq('workspace_id', activeWorkspaceId)
-    .eq('is_upcoming_bill', true)
+    .eq('type', 'expense')
     .order('due_date', { ascending: true });
 
   const displayRecords: ExpenseRecord[] =

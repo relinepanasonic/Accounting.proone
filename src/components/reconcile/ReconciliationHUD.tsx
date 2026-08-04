@@ -91,6 +91,13 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
       setQuickDate(activeBankLine.date || '');
       setQuickAmount(Math.abs(activeBankLine.amount || 0));
       setQuickNotes([activeBankLine.notes, activeBankLine.transactionDetails].filter(Boolean).join(' | '));
+      
+      // Auto-switch tab based on amount polarity
+      if (activeBankLine.amount > 0) {
+        setResolutionTab('income');
+      } else {
+        setResolutionTab('expense');
+      }
     }
   }, [activeBankLine]);
 

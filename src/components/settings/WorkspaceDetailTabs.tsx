@@ -85,6 +85,7 @@ export function WorkspaceDetailTabs({
   // Tab 2: Banking State
   const [accounts, setAccounts] = useState<BankAccountItem[]>(initialBankAccounts);
   const [showAddBankModal, setShowAddBankModal] = useState(false);
+  const [editingBankId, setEditingBankId] = useState<string | null>(null);
   const [newBankName, setNewBankName] = useState('');
   const [newAccountNumber, setNewAccountNumber] = useState('');
   const [newAccountName, setNewAccountName] = useState('');
@@ -211,21 +212,48 @@ export function WorkspaceDetailTabs({
     e.preventDefault();
     if (!newBankName.trim() || !newAccountNumber.trim() || !newAccountName.trim()) return;
 
-    const isFirst = accounts.length === 0;
-    const newItem: BankAccountItem = {
-      id: `temp-${Date.now()}`,
-      bank_name: newBankName.trim(),
-      account_number: newAccountNumber.trim(),
-      account_name: newAccountName.trim(),
-      is_default: isFirst,
-    };
+    let updated = [...accounts];
 
-    const updated = [newItem, ...accounts];
+    if (editingBankId) {
+      updated = updated.map((acc) => {
+        if (acc.id === editingBankId) {
+          return {
+            ...acc,
+            bank_name: newBankName.trim(),
+            account_number: newAccountNumber.trim(),
+            account_name: newAccountName.trim(),
+          };
+        }
+        return acc;
+      });
+      syncBankAccountsToServer(updated, `Updated "${newBankName.trim()}" successfully.`);
+    } else {
+      const isFirst = accounts.length === 0;
+      const newItem: BankAccountItem = {
+        id: `temp-${Date.now()}`,
+        bank_name: newBankName.trim(),
+        account_number: newAccountNumber.trim(),
+        account_name: newAccountName.trim(),
+        is_default: isFirst,
+      };
+      updated = [newItem, ...updated];
+      syncBankAccountsToServer(updated, `Registered "${newItem.bank_name}" successfully.`);
+    }
+
     setShowAddBankModal(false);
+    setEditingBankId(null);
     setNewBankName('');
     setNewAccountNumber('');
     setNewAccountName('');
-    syncBankAccountsToServer(updated, `Registered "${newItem.bank_name}" successfully.`);
+  };
+
+  const handleEditBank = (acc: BankAccountItem) => {
+    setEditingBankId(acc.id || null);
+    setNewBankName(acc.bank_name);
+    setNewAccountNumber(acc.account_number);
+    setNewAccountName(acc.account_name);
+    setShowAddBankModal(true);
+    setBankingMsg(null);
   };
 
   const handleDeleteBank = (id?: string, index?: number) => {
@@ -733,7 +761,15 @@ export function WorkspaceDetailTabs({
               <button
                 type="button"
                 onClick={() => {
-                  setShowAddBankModal(!showAddBankModal);
+                  if (showAddBankModal) {
+                    setShowAddBankModal(false);
+                    setEditingBankId(null);
+                    setNewBankName('');
+                    setNewAccountNumber('');
+                    setNewAccountName('');
+                  } else {
+                    setShowAddBankModal(true);
+                  }
                   setBankingMsg(null);
                 }}
                 className="gold-btn inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full text-xs font-extrabold uppercase tracking-wider shadow-[0_0_25px_rgba(212,175,55,0.35)] shrink-0 transition-transform hover:scale-105"
@@ -768,8 +804,8 @@ export function WorkspaceDetailTabs({
               >
                 <div className="flex items-center justify-between border-b border-yellow-600/20 pb-3">
                   <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#f5d77f] font-mono">
-                    <Plus className="w-4 h-4" />
-                    <span>NEW SETTLEMENT BANK DETAILS</span>
+                    {editingBankId ? <Edit2 className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                    <span>{editingBankId ? 'EDIT SETTLEMENT BANK DETAILS' : 'NEW SETTLEMENT BANK DETAILS'}</span>
                   </div>
                   <span className="text-[10px] font-mono text-zinc-400 uppercase">
                     INSTANT TENANT SYNC
@@ -823,6 +859,7 @@ export function WorkspaceDetailTabs({
                     type="button"
                     onClick={() => {
                       setShowAddBankModal(false);
+                      setEditingBankId(null);
                       setNewBankName('');
                       setNewAccountNumber('');
                       setNewAccountName('');
@@ -843,10 +880,12 @@ export function WorkspaceDetailTabs({
                   >
                     {bankingPending ? (
                       <Loader2 className="w-4 h-4 animate-spin text-black" />
+                    ) : editingBankId ? (
+                      <Save className="w-4 h-4 text-black" />
                     ) : (
                       <Plus className="w-4 h-4 text-black" />
                     )}
-                    <span>SAVE BANK ACCOUNT</span>
+                    <span>{editingBankId ? 'SAVE CHANGES' : 'SAVE BANK ACCOUNT'}</span>
                   </button>
                 </div>
               </form>
@@ -929,6 +968,15 @@ export function WorkspaceDetailTabs({
                             SET DEFAULT
                           </button>
                         )}
+                        <button
+                          type="button"
+                          onClick={() => handleEditBank(acc)}
+                          disabled={bankingPending}
+                          title="Edit Bank Account"
+                          className="p-2 rounded-xl border border-yellow-600/20 bg-black/40 text-zinc-400 hover:text-white hover:border-yellow-600/50 transition-all"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
                         <button
                           type="button"
                           onClick={() => handleDeleteBank(acc.id, index)}

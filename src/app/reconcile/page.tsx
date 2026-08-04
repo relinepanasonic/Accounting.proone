@@ -100,16 +100,26 @@ async function ReconciliationCore() {
         let accountNo = line.trim();
         let name = ws.name || 'Workspace';
 
-        const cleanText = line.replace(/\(.*?\)/g, '').trim();
-        const parts = cleanText.split('-').map(s => s.trim()).filter(Boolean);
-        if (parts.length >= 2) {
-          accountNo = parts[parts.length - 1];
-          bankName = parts[parts.length - 2];
-        }
-
-        const parensMatch = line.match(/\((.*?)\)/);
-        if (parensMatch) {
-          name = parensMatch[1];
+        const pipeParts = line.split('|').map(s => s.trim()).filter(Boolean);
+        
+        if (pipeParts.length >= 3) {
+          bankName = pipeParts[0];
+          accountNo = pipeParts[1];
+          name = pipeParts[2];
+        } else if (pipeParts.length === 2) {
+          bankName = pipeParts[0];
+          accountNo = pipeParts[1];
+        } else {
+          const cleanText = line.replace(/\(.*?\)/g, '').trim();
+          const dashParts = cleanText.split('-').map(s => s.trim()).filter(Boolean);
+          if (dashParts.length >= 2) {
+            accountNo = dashParts.slice(1).join('-'); 
+            bankName = dashParts[0];
+          }
+          const parensMatch = line.match(/\((.*?)\)/);
+          if (parensMatch) {
+            name = parensMatch[1];
+          }
         }
 
         return {

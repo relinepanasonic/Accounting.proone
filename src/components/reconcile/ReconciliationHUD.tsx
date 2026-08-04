@@ -377,6 +377,27 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                 <h3 className="text-xs font-bold uppercase tracking-wider text-[#d4af37]">
                   UNMATCHED ITEM • RESOLUTION WIDGET
                 </h3>
+                {resolutionTab === 'manual' ? (
+                  <button
+                    type="button"
+                    disabled={!currentTargetRecordId || isPending}
+                    onClick={handleMatchAndClear}
+                    className="gold-btn inline-flex items-center gap-2 px-6 py-2 rounded-full text-[10px] uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>{isPending ? 'RECONCILING...' : 'FORCE MATCH & CLEAR'}</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={handleQuickResolve}
+                    className="gold-btn inline-flex items-center gap-2 px-6 py-2 rounded-full text-[10px] uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>{isPending ? 'PROCESSING...' : 'SAVE & RECONCILE'}</span>
+                  </button>
+                )}
               </div>
               
               {/* Tab Selector */}
@@ -406,21 +427,6 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                 <div className="flex-1 flex flex-col justify-between">
                   <div className="space-y-3 flex-1 overflow-y-auto max-h-[400px] pr-2">
                     {renderSystemRecordsList()}
-                  </div>
-                   
-                  <div className="mt-6 pt-4 border-t border-zinc-800 flex items-center justify-between">
-                    <div className="text-xs font-mono text-zinc-400">
-                      {currentTargetRecordId ? <span className="text-[#f5d77f] font-bold">READY TO CLEAR</span> : <span>SELECT SYSTEM RECORD</span>}
-                    </div>
-                    <button
-                      type="button"
-                      disabled={!currentTargetRecordId || isPending}
-                      onClick={handleMatchAndClear}
-                      className="gold-btn inline-flex items-center gap-2 px-7 py-3 rounded-full text-xs uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>{isPending ? 'RECONCILING...' : 'FORCE MATCH & CLEAR'}</span>
-                    </button>
                   </div>
                 </div>
               ) : (
@@ -495,22 +501,6 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                         className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#d4af37] font-sans"
                       />
                     </div>
-                  </div>
-
-
-                  <div className="mt-6 pt-4 border-t border-zinc-800 flex items-center justify-between">
-                    <div className="text-xs font-mono text-zinc-400">
-                      <span className="text-[#f5d77f] font-bold">READY TO CREATE & CLEAR</span>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={isPending}
-                      onClick={handleQuickResolve}
-                      className="gold-btn inline-flex items-center gap-2 px-7 py-3 rounded-full text-xs uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      <Sparkles className="w-4 h-4" />
-                      <span>{isPending ? 'PROCESSING...' : 'SAVE & RECONCILE'}</span>
-                    </button>
                   </div>
                 </div>
               )}

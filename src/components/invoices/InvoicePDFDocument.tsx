@@ -341,8 +341,8 @@ export function InvoicePDFDocument({
                 <tr className="border-y-2 border-[#1e2536] text-[#1e2536] uppercase text-[10px] tracking-wider font-bold font-serif">
                   <th className="py-3 px-2">{isQuotation ? 'DELIVERABLE / SERVICE PITCH' : 'PACKAGE & DESCRIPTION'}</th>
                   <th className="py-3 px-2 text-right">{isQuotation ? 'UNIT INVESTMENT' : 'UNIT PRICE'}</th>
-                  {!isQuotation && <th className="py-3 px-2 text-center w-16">QTY</th>}
-                  {!isQuotation && <th className="py-3 px-2 text-right">TOTAL</th>}
+                  <th className="py-3 px-2 text-center w-16">QTY</th>
+                  <th className="py-3 px-2 text-right">TOTAL</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-200 text-xs">
@@ -368,16 +368,12 @@ export function InvoicePDFDocument({
                     <td className="py-2.5 px-2 text-right font-mono font-semibold text-[#1e2536]">
                       Rp {item.unitPrice.toLocaleString('en-US')}
                     </td>
-                    {!isQuotation && (
-                      <td className="py-2.5 px-2 text-center font-mono font-semibold">
-                        {item.quantity} <span className="text-[10px] text-zinc-400 font-sans ml-0.5">{item.scale || 'pc'}</span>
-                      </td>
-                    )}
-                    {!isQuotation && (
-                      <td className="py-2.5 px-2 text-right font-mono font-bold text-[#1e2536]">
-                        Rp {item.total.toLocaleString('en-US')}
-                      </td>
-                    )}
+                    <td className="py-2.5 px-2 text-center font-mono font-semibold">
+                      {item.quantity} <span className="text-[10px] text-zinc-400 font-sans ml-0.5">{item.scale || 'pc'}</span>
+                    </td>
+                    <td className="py-2.5 px-2 text-right font-mono font-bold text-[#1e2536]">
+                      Rp {item.total.toLocaleString('en-US')}
+                    </td>
                   </tr>
                 ))}
               </tbody>

@@ -2,7 +2,8 @@
 
 import React, { useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle, Clock, Trash2 } from 'lucide-react';
+import Link from 'next/link';
+import { CheckCircle, Clock, Trash2, Edit2 } from 'lucide-react';
 import { toggleExpenseStatus, deleteExpense } from '@/app/actions/expenses';
 
 interface ExpenseRowActionsProps {
@@ -63,6 +64,13 @@ export function ExpenseRowActions({ id, status }: ExpenseRowActionsProps) {
           </>
         )}
       </button>
+      <Link
+        href={`/expenses/${id}/edit`}
+        title="Edit Expense"
+        className="p-1.5 rounded-lg bg-zinc-800/40 border border-zinc-700 hover:border-[#d4af37] text-zinc-400 hover:text-[#d4af37] hover:scale-105 transition-all duration-200"
+      >
+        <Edit2 className="w-3.5 h-3.5" />
+      </Link>
       <button
         onClick={handleDelete}
         disabled={isPending}

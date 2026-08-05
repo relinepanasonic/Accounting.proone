@@ -4,7 +4,7 @@ import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
-import { createExpense } from '@/app/actions/expenses';
+import { createExpense, updateExpense } from '@/app/actions/expenses';
 import { createClientRecord } from '@/app/actions/settings';
 import { RupiahInput } from '@/components/ui/RupiahInput';
 
@@ -27,25 +27,34 @@ interface NewExpenseFormProps {
   contacts: any[];
   isHistorical?: boolean;
   coaAccounts?: COAAccountMinimal[];
+  initialData?: any;
 }
 
-export function NewExpenseForm({ contacts, isHistorical, coaAccounts = [] }: NewExpenseFormProps) {
+export function NewExpenseForm({ contacts, isHistorical, coaAccounts = [], initialData }: NewExpenseFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   const [localContacts, setLocalContacts] = useState(contacts);
   const vendors = localContacts.filter(c => c.contact_type === 'vendor');
-  const [vendorId, setVendorId] = useState('');
+  
+  // Extract vendor and notes from description (format: "Vendor Name - Notes" or "Vendor Name")
+  const initialDesc = initialData?.description || '';
+  const parts = initialDesc.split(' - ');
+  const initVendorName = parts[0] || '';
+  const initNotes = parts.slice(1).join(' - ') || '';
+  
+  const existingVendor = initVendorName ? vendors.find(v => (v.company_name || v.name) === initVendorName) : null;
+  const [vendorId, setVendorId] = useState(existingVendor?.id || '');
   
   // Quick Add Vendor State
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [quickAddName, setQuickAddName] = useState('');
   const [isQuickAdding, setIsQuickAdding] = useState(false);
 
-  const [category, setCategory] = useState(CATEGORY_OPTIONS[0]);
-  const [dueDate, setDueDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [amount, setAmount] = useState<number | ''>(1200);
-  const [notes, setNotes] = useState('');
+  const [category, setCategory] = useState(initialData?.category || CATEGORY_OPTIONS[0]);
+  const [dueDate, setDueDate] = useState(() => initialData?.due_date ? initialData.due_date : new Date().toISOString().split('T')[0]);
+  const [amount, setAmount] = useState<number | ''>(initialData?.amount || 1200);
+  const [notes, setNotes] = useState(initNotes);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleQuickAddVendor = async () => {
@@ -89,14 +98,20 @@ export function NewExpenseForm({ contacts, isHistorical, coaAccounts = [] }: New
         const finalVendorName = selectedVendor ? (selectedVendor.company_name || selectedVendor.name) : 'Unknown Vendor';
         
         const finalNotes = isHistorical ? `[HISTORICAL_OPENING_BALANCE] ${notes}` : notes;
-        await createExpense({
+        const payload = {
           vendor: finalVendorName,
           category,
           dueDate,
           amount: Number(amount),
           notes: finalNotes,
           isHistorical,
-        });
+        };
+        
+        if (initialData?.id) {
+          await updateExpense(initialData.id, payload);
+        } else {
+          await createExpense(payload);
+        }
         
         if (isHistorical) {
           router.push('/settings/opening-balances');
@@ -255,10 +270,10 @@ export function NewExpenseForm({ contacts, isHistorical, coaAccounts = [] }: New
         <button
           type="submit"
           disabled={isPending}
-          className="gold-btn inline-flex items-center gap-2 px-8 py-3 rounded-full text-xs uppercase tracking-wider disabled:opacity-50"
+          className="w-full sm:w-auto px-8 py-3 rounded-xl bg-[#d4af37] text-zinc-950 font-bold uppercase tracking-wider text-sm hover:bg-[#f5d77f] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(212,175,55,0.3)]"
         >
           <Check className="w-4 h-4" />
-          <span>{isPending ? 'RECORDING OUTFLOW...' : 'RECORD EXPENSE'}</span>
+          <span>{isPending ? 'Processing...' : initialData?.id ? 'UPDATE EXPENSE' : 'RECORD EXPENSE'}</span>
         </button>
       </div>
     </form>

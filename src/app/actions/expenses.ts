@@ -18,12 +18,12 @@ export async function createExpense(payload: CreateExpensePayload) {
   const supabase = await createClient();
 
   // Retrieve active workspace
-  const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+  const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
   const finalDescription = payload.notes ? `${payload.vendor} - ${payload.notes}` : payload.vendor;
 
   const { data: txData, error } = await supabase.from('transactions').insert({
-    workspace_id: workspaceId,
+    workspace_id: activeWorkspaceId,
     description: finalDescription,
     category: payload.category,
     amount: payload.amount,
@@ -38,14 +38,54 @@ export async function createExpense(payload: CreateExpensePayload) {
   }
 
   // Double-Entry Ledger: Expense Created (Debit Expense, Credit A/P)
-  const mappings = await getWorkspaceMappings(workspaceId);
+  const mappings = await getWorkspaceMappings(activeWorkspaceId);
   const expenseAccount = mappings.find(m => m.mapping_type === 'EXPENSE')?.account_code || '5100';
   const apAccount = mappings.find(m => m.mapping_type === 'AP')?.account_code || '2000';
 
   const todayStr = new Date().toISOString().split('T')[0];
   await supabase.from('journal_entries').insert([
-    { workspace_id: workspaceId, account_code: expenseAccount, transaction_date: todayStr, debit_amount: payload.amount, credit_amount: 0, description: finalDescription, reference_id: txData.id, reference_type: 'expense' },
-    { workspace_id: workspaceId, account_code: apAccount, transaction_date: todayStr, debit_amount: 0, credit_amount: payload.amount, description: finalDescription, reference_id: txData.id, reference_type: 'expense' }
+    { workspace_id: activeWorkspaceId, account_code: expenseAccount, transaction_date: todayStr, debit_amount: payload.amount, credit_amount: 0, description: finalDescription, reference_id: txData.id, reference_type: 'expense' },
+    { workspace_id: activeWorkspaceId, account_code: apAccount, transaction_date: todayStr, debit_amount: 0, credit_amount: payload.amount, description: finalDescription, reference_id: txData.id, reference_type: 'expense' }
+  ]);
+
+  revalidatePath('/expenses');
+  revalidatePath('/');
+  return { success: true };
+}
+
+export async function updateExpense(id: string, payload: CreateExpensePayload) {
+  const supabase = await createClient();
+  const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+
+  const finalDescription = payload.notes ? `${payload.vendor} - ${payload.notes}` : payload.vendor;
+
+  const { error } = await supabase.from('transactions')
+    .update({
+      description: finalDescription,
+      category: payload.category,
+      amount: payload.amount,
+      due_date: payload.dueDate,
+    })
+    .eq('id', id)
+    .eq('workspace_id', activeWorkspaceId);
+
+  if (error) {
+    console.error('Error updating expense:', error);
+    throw new Error('Failed to update expense');
+  }
+
+  const mappings = await getWorkspaceMappings(activeWorkspaceId);
+  const expenseAccount = mappings.find(m => m.mapping_type === 'EXPENSE')?.account_code || '5100';
+  const apAccount = mappings.find(m => m.mapping_type === 'AP')?.account_code || '2000';
+  const todayStr = payload.dueDate || new Date().toISOString().split('T')[0];
+
+  const { createAdminClient } = await import('@/lib/api/supabase-admin');
+  const adminClient = createAdminClient();
+  await adminClient.from('journal_entries').delete().eq('reference_id', id).eq('reference_type', 'expense');
+
+  await supabase.from('journal_entries').insert([
+    { workspace_id: activeWorkspaceId, account_code: expenseAccount, transaction_date: todayStr, debit_amount: payload.amount, credit_amount: 0, description: finalDescription, reference_id: id, reference_type: 'expense' },
+    { workspace_id: activeWorkspaceId, account_code: apAccount, transaction_date: todayStr, debit_amount: 0, credit_amount: payload.amount, description: finalDescription, reference_id: id, reference_type: 'expense' }
   ]);
 
   revalidatePath('/expenses');

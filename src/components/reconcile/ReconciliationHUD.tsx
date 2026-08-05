@@ -620,7 +620,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                             ).map(([type, accounts]) => {
                               const searchLower = quickCategory.toLowerCase();
                               const filtered = searchLower === 'uncategorized' ? accounts : accounts.filter(a => 
-                                (a.account_code + ' ' + a.account_name).toLowerCase().includes(searchLower)
+                                (a.account_code + ' - ' + a.account_name).toLowerCase().includes(searchLower)
                               );
                               if (filtered.length === 0) return null;
                               const isExpanded = expandedCoaGroups[type] !== false; // Default to true
@@ -642,7 +642,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                                     <div 
                                       key={coa.account_code}
                                       onClick={() => {
-                                        setQuickCategory(coa.account_name);
+                                        setQuickCategory(coa.account_code + ' - ' + coa.account_name);
                                         setCoaDropdownOpen(false);
                                       }}
                                       className="px-4 py-2 text-xs text-zinc-300 hover:bg-[#d4af37]/20 hover:text-white cursor-pointer transition-colors flex items-center gap-2"

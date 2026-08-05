@@ -1,6 +1,7 @@
 import React, { Suspense } from 'react';
 import Link from 'next/link';
-import { Settings, Plus, Receipt, Building2 } from 'lucide-react';
+import { Settings, Plus, Receipt, Building2, AlertTriangle } from 'lucide-react';
+import { createClient } from '@/lib/supabase/server';
 import { DashboardStatsCards } from '@/components/dashboard/header/DashboardStatsCards';
 import { DashboardRow1 } from '@/components/dashboard/center-column/DashboardRow1';
 import { DashboardRow2 } from '@/components/dashboard/center-column/DashboardRow2';
@@ -30,6 +31,33 @@ export default async function CyberneticAccountingDashboardRSC({ searchParams }:
   const telemetry = await getDashboardTelemetry({ monthFilter });
   const userName = wsContext.userName || 'Executive';
   const activeWorkspaceName = wsContext.activeWorkspaceName || 'Professor Toko Online HQ';
+  const supabase = await createClient();
+
+  // Check if depreciation needs running
+  const today = new Date();
+  const currentMonthStr = today.toISOString().slice(0, 7); // '2026-08'
+  const { data: assets } = await supabase
+    .from('fixed_assets')
+    .select('id, annual_depreciation')
+    .eq('workspace_id', wsContext.activeWorkspaceId)
+    .eq('status', 'active');
+  
+  let needsDepreciation = false;
+  if (assets && assets.length > 0) {
+    const { data: existingDepr } = await supabase
+      .from('journal_entries')
+      .select('id')
+      .eq('workspace_id', wsContext.activeWorkspaceId)
+      .like('reference_id', `depr-%-${currentMonthStr}`)
+      .limit(1);
+    
+    if (!existingDepr || existingDepr.length === 0) {
+      // Check if any of these assets actually have annual_depreciation > 0
+      if (assets.some((a: any) => Number(a.annual_depreciation) > 0)) {
+        needsDepreciation = true;
+      }
+    }
+  }
 
   return (
     <div className="min-h-screen bg-[#0b0c10] text-zinc-100 font-sans selection:bg-[#d4af37] selection:text-black relative overflow-hidden">
@@ -99,6 +127,27 @@ export default async function CyberneticAccountingDashboardRSC({ searchParams }:
               <MonthFilter />
             </div>
           </header>
+
+          {needsDepreciation && (
+            <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-red-950/40 via-red-900/20 to-transparent border border-red-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-[0_0_30px_rgba(239,68,68,0.15)] relative overflow-hidden">
+              <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-500 shadow-[0_0_10px_rgba(239,68,68,1)]"></div>
+              <div className="flex items-center gap-4 pl-2">
+                <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center shrink-0 border border-red-500/40">
+                  <AlertTriangle className="w-5 h-5 text-red-400 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-red-400 uppercase tracking-widest flex items-center gap-2">
+                    Monthly Depreciation Required
+                    <span className="px-2 py-0.5 rounded bg-red-500/20 text-[9px] font-mono border border-red-500/30">ACTION NEEDED</span>
+                  </h3>
+                  <p className="text-xs text-red-300/70 mt-1 font-sans">You have active fixed assets that haven't been depreciated for this month.</p>
+                </div>
+              </div>
+              <Link href="/assets" className="px-6 py-2.5 bg-red-500/20 hover:bg-red-500 text-red-100 hover:text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all border border-red-500/50 hover:border-red-400 shadow-[0_0_15px_rgba(239,68,68,0.3)] flex items-center justify-center whitespace-nowrap">
+                Run Now
+              </Link>
+            </div>
+          )}
 
           {/* TOP EXECUTIVE STATS BAR WITH MINI SPARKLINES (NUMBERS) */}
           <DashboardStatsCards telemetry={telemetry} />

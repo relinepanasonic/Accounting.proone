@@ -128,7 +128,8 @@ export async function quickResolveAndReconcile(
         purchase_date: todayStr,
         initial_value: amount,
         salvage_value: 0,
-        useful_life_years: 3, // Default 3 years useful life
+        useful_life_years: 1, // Default 1 year (12 months) useful life
+        annual_depreciation: amount, // Since it's 1 year, the whole amount is depreciated in 1 year
         status: 'active'
       });
     }

@@ -1,6 +1,8 @@
 import React, { Suspense } from 'react';
-import { Box } from 'lucide-react';
+import { Box, Edit2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
+import Link from 'next/link';
+import { RunDepreciationButton } from '@/components/assets/RunDepreciationButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -91,6 +93,7 @@ async function FixedAssetsRegistry() {
                 <th className="py-3 px-3 text-right">Purchase Cost</th>
                 <th className="py-3 px-3 text-right">Current Book Value</th>
                 <th className="py-3 px-3 text-center">Status</th>
+                <th className="py-3 px-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/60">
@@ -122,6 +125,15 @@ async function FixedAssetsRegistry() {
                       <span>{item.status}</span>
                     </span>
                   </td>
+                  <td className="py-3 px-3 text-right">
+                    <Link
+                      href={`/assets/${item.id}/edit`}
+                      className="inline-flex p-1.5 rounded-lg bg-zinc-800/40 border border-zinc-700 hover:border-[#d4af37] text-zinc-400 hover:text-[#d4af37] hover:scale-105 transition-all duration-200"
+                      title="Edit Asset Schedule"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </Link>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -146,6 +158,7 @@ export default function AssetsPage() {
             LUXURY EXECUTIVE PANELS • INSTANT REALTIME VALUE COMPUTATION
           </p>
         </div>
+        <RunDepreciationButton />
       </div>
 
       <Suspense

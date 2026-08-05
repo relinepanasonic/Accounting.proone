@@ -6,6 +6,8 @@ import {
   CheckCircle2,
   FileSpreadsheet,
   Sparkles,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import { reconcileRecord, quickResolveAndReconcile } from '@/app/actions/reconcile';
 import { createClientRecord } from '@/app/actions/settings';
@@ -77,6 +79,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   const [quickAmount, setQuickAmount] = useState<number | ''>('');
   const [quickNotes, setQuickNotes] = useState('');
   const [coaDropdownOpen, setCoaDropdownOpen] = useState(false);
+  const [expandedCoaGroups, setExpandedCoaGroups] = useState<Record<string, boolean>>({});
   
   const [activeBankId, setActiveBankId] = useState<string>(bankAccounts.length > 0 ? bankAccounts[0].id : '');
 
@@ -620,10 +623,21 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                                 (a.account_code + ' ' + a.account_name).toLowerCase().includes(searchLower)
                               );
                               if (filtered.length === 0) return null;
+                              const isExpanded = expandedCoaGroups[type] !== false; // Default to true
+
                               return (
                                 <div key={type}>
-                                  <div className="px-3 py-1.5 bg-zinc-900 text-[10px] font-bold text-zinc-500 uppercase tracking-wider sticky top-0">{type}</div>
-                                  {filtered.map(coa => (
+                                  <div 
+                                    className="px-3 py-1.5 bg-zinc-900 text-[10px] font-bold text-zinc-500 uppercase tracking-wider sticky top-0 cursor-pointer flex items-center gap-1 hover:text-white transition-colors"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setExpandedCoaGroups(prev => ({ ...prev, [type]: prev[type] === undefined ? false : !prev[type] }));
+                                    }}
+                                  >
+                                    {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                                    {type}
+                                  </div>
+                                  {isExpanded && filtered.map(coa => (
                                     <div 
                                       key={coa.account_code}
                                       onClick={() => {

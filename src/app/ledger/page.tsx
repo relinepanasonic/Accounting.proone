@@ -40,7 +40,7 @@ async function ActivityLedgerTimeline() {
       .limit(1)
       .single();
 
-    if (member && member.role === 'admin') {
+    if (member && !['admin', 'superadmin', 'accounting', 'founder'].includes(member.role)) {
       hasClearance = false;
     }
   }

@@ -57,6 +57,7 @@ export interface InvoiceDocumentProps {
   payments?: any[];
   workspaceBrand?: WorkspaceBrandInfo;
   documentType?: 'INVOICE' | 'QUOTATION' | 'RECEIPT';
+  notes?: string;
 }
 
 export function InvoicePDFDocument({
@@ -73,6 +74,7 @@ export function InvoicePDFDocument({
   clientPhone = '',
   clientEmail = '',
   items = [],
+  notes = '',
   subtotal = 0,
   globalDiscount = 0,
   taxAmount = 0,
@@ -464,7 +466,15 @@ export function InvoicePDFDocument({
           ) : (
             <div className="p-4 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-600 font-sans leading-relaxed">
               <strong className="text-[#1e2536] block mb-1">PROPOSAL & PITCH TERMS:</strong>
-              This quotation is formally issued on {invoiceDate} and remains valid until {issueDate}.
+              <div className="whitespace-pre-wrap">{notes || `This quotation is formally issued on ${invoiceDate} and remains valid until ${issueDate}.`}</div>
+            </div>
+          )}
+
+          {/* NOTES FOR INVOICES */}
+          {!isQuotation && notes && (
+            <div className="mt-4 p-4 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-600 font-sans leading-relaxed whitespace-pre-wrap">
+              <strong className="text-[#1e2536] block mb-1">ADDITIONAL NOTES & TERMS:</strong>
+              {notes}
             </div>
           )}
 

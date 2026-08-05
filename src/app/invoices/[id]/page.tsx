@@ -162,6 +162,7 @@ export default async function InvoiceDetailPage({ params, searchParams }: Invoic
       clientPhone={clientPhone}
       clientEmail={clientEmail}
       items={items}
+      notes={inv?.notes || ''}
       subtotal={subtotal}
       globalDiscount={globalDiscount}
       taxAmount={taxAmount}

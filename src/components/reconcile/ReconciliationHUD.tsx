@@ -629,6 +629,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                                 <div key={type}>
                                   <div 
                                     className="px-3 py-1.5 bg-zinc-900 text-[10px] font-bold text-zinc-500 uppercase tracking-wider sticky top-0 cursor-pointer flex items-center gap-1 hover:text-white transition-colors"
+                                    onMouseDown={(e) => e.preventDefault()}
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       setExpandedCoaGroups(prev => ({ ...prev, [type]: prev[type] === undefined ? false : !prev[type] }));

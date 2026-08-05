@@ -346,36 +346,55 @@ export function InvoicePDFDocument({
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-200 text-xs">
-                {items?.map((item, idx) => (
-                  <tr key={item.id || idx} className="text-zinc-700">
-                    <td className="py-2.5 px-2 font-medium text-[#1e2536]">
-                      {item.packageName && (
-                        <div className="font-bold text-[#c5a059] uppercase tracking-wider text-[11px] mb-1">
-                          {item.packageName}
-                        </div>
+                {items?.map((item, idx) => {
+                  const hasDiscount = (item.discountAmount ?? 0) > 0;
+                  const grossTotal = item.unitPrice * item.quantity;
+                  return (
+                    <React.Fragment key={item.id || idx}>
+                      <tr className="text-zinc-700">
+                        <td className="py-2.5 px-2 font-medium text-[#1e2536]">
+                          {item.packageName && (
+                            <div className="font-bold text-[#c5a059] uppercase tracking-wider text-[11px] mb-1">
+                              {item.packageName}
+                            </div>
+                          )}
+                          <DescriptionBullets
+                            description={item.description}
+                            isDark={false}
+                            className="text-xs"
+                          />
+                        </td>
+                        <td className="py-2.5 px-2 text-right font-mono font-semibold text-[#1e2536] align-top">
+                          Rp {item.unitPrice.toLocaleString('en-US')}
+                        </td>
+                        <td className="py-2.5 px-2 text-center font-mono font-semibold align-top">
+                          {item.quantity} <span className="text-[10px] text-zinc-400 font-sans ml-0.5">{item.scale || 'pc'}</span>
+                        </td>
+                        <td className="py-2.5 px-2 text-right font-mono font-bold text-[#1e2536] align-top">
+                          Rp {(hasDiscount ? grossTotal : item.total).toLocaleString('en-US')}
+                        </td>
+                      </tr>
+                      {hasDiscount && (
+                        <>
+                          <tr className="text-zinc-700">
+                            <td colSpan={2}></td>
+                            <td className="py-1 px-2 text-right font-serif text-[11px] text-zinc-500">Discount</td>
+                            <td className="py-1 px-2 text-right font-mono font-semibold text-red-600 text-[11px]">
+                              -Rp {item.discountAmount!.toLocaleString('en-US')}
+                            </td>
+                          </tr>
+                          <tr className="text-zinc-700">
+                            <td colSpan={2}></td>
+                            <td className="py-1 px-2 text-right font-serif font-bold text-[#1e2536] text-[11px]">Sub Total</td>
+                            <td className="py-1 px-2 text-right font-mono font-bold text-[#1e2536] text-[11px]">
+                              Rp {item.total.toLocaleString('en-US')}
+                            </td>
+                          </tr>
+                        </>
                       )}
-                      <DescriptionBullets
-                        description={item.description}
-                        isDark={false}
-                        className="text-xs"
-                      />
-                      {(item.discountAmount ?? 0) > 0 && (
-                        <div className="text-[10px] text-[#1e2536] font-mono mt-1">
-                          ↳ Discount: -Rp {item.discountAmount!.toLocaleString('en-US')}
-                        </div>
-                      )}
-                    </td>
-                    <td className="py-2.5 px-2 text-right font-mono font-semibold text-[#1e2536]">
-                      Rp {item.unitPrice.toLocaleString('en-US')}
-                    </td>
-                    <td className="py-2.5 px-2 text-center font-mono font-semibold">
-                      {item.quantity} <span className="text-[10px] text-zinc-400 font-sans ml-0.5">{item.scale || 'pc'}</span>
-                    </td>
-                    <td className="py-2.5 px-2 text-right font-mono font-bold text-[#1e2536]">
-                      Rp {item.total.toLocaleString('en-US')}
-                    </td>
-                  </tr>
-                ))}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -8,7 +8,8 @@ import { NewExpenseForm } from '@/components/expenses/NewExpenseForm';
 
 export const dynamic = 'force-dynamic';
 
-export default async function EditExpensePage({ params }: { params: { id: string } }) {
+export default async function EditExpensePage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const supabase = await createClient();
   const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 

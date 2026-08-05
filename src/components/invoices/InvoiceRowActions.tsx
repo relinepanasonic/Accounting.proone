@@ -3,6 +3,7 @@
 import React, { useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Copy, CheckCircle, Clock, FileText, Trash2, Edit2 } from 'lucide-react';
+import Link from 'next/link';
 import { duplicateInvoice, toggleInvoiceStatus, deleteInvoice, convertQuotationToInvoice } from '@/app/actions/invoices';
 
 interface InvoiceActionProps {

@@ -3,6 +3,7 @@
 import React, { useState, useTransition } from 'react';
 import { UserPlus, ShieldAlert, ShieldCheck, Loader2, AlertCircle, Check, Trash2, Edit2, X, Save, Copy, Link2 } from 'lucide-react';
 import { generateInviteLink } from '@/app/actions/invite';
+import Link from 'next/link';
 import { deleteTeamMember, updateTeamMemberRole } from '@/app/actions/settings';
 
 export interface TeamMemberRecord {

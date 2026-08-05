@@ -69,6 +69,11 @@ async function syncInvoiceToNewWave(invoiceId: string, supabase: any): Promise<{
       .single();
 
     if (!inv) return { success: false, error: 'Invoice not found in database for sync.' };
+
+    const { data: wsData } = await supabase.from('workspaces').select('name').eq('id', inv.workspace_id).single();
+    if (wsData && !wsData.name.toLowerCase().includes('new wave')) {
+      return { success: true }; // Silently succeed without pushing
+    }
     
     const clientName = Array.isArray(inv.clients) ? inv.clients[0]?.name : inv.clients?.name;
 

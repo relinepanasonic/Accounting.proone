@@ -16,7 +16,8 @@ export function EditAssetForm({ initialData }: EditAssetFormProps) {
   const [isPending, startTransition] = useTransition();
 
   const [assetName, setAssetName] = useState(initialData?.asset_name || '');
-  const [usefulLifeYears, setUsefulLifeYears] = useState<number>(initialData?.useful_life_years || 1);
+  // Display as months, but store in DB as years (can be fractional like 1.5 if DB type changed to NUMERIC)
+  const [usefulLifeMonths, setUsefulLifeMonths] = useState<number>((initialData?.useful_life_years || 1) * 12);
   const [salvageValue, setSalvageValue] = useState<number | ''>(initialData?.salvage_value || 0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -28,10 +29,12 @@ export function EditAssetForm({ initialData }: EditAssetFormProps) {
       setErrorMsg('Asset name is required');
       return;
     }
-    if (usefulLifeYears <= 0) {
-      setErrorMsg('Useful life must be at least 1 year');
+    if (usefulLifeMonths < 1) {
+      setErrorMsg('Useful life must be at least 1 month');
       return;
     }
+
+    const usefulLifeYears = usefulLifeMonths / 12;
 
     // Recalculate annual depreciation
     const depBase = initialValue - Number(salvageValue || 0);
@@ -44,7 +47,7 @@ export function EditAssetForm({ initialData }: EditAssetFormProps) {
         category: initialData.category,
         useful_life_years: usefulLifeYears,
         salvage_value: Number(salvageValue || 0),
-        annual_depreciation: annualDepreciation
+        // annual_depreciation is generated, so we omit it
       });
 
       if (res.success) {
@@ -80,14 +83,14 @@ export function EditAssetForm({ initialData }: EditAssetFormProps) {
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-bold tracking-widest text-[#d4af37] uppercase">Useful Life (Years)</label>
+            <label className="text-[10px] font-bold tracking-widest text-[#d4af37] uppercase">Useful Life (Months)</label>
             <input
               type="number"
               required
               min="1"
               step="1"
-              value={usefulLifeYears}
-              onChange={(e) => setUsefulLifeYears(Number(e.target.value))}
+              value={usefulLifeMonths}
+              onChange={(e) => setUsefulLifeMonths(Number(e.target.value))}
               className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#d4af37]/50 focus:ring-1 focus:ring-[#d4af37]/50 transition-all font-sans text-sm"
             />
           </div>
@@ -100,6 +103,9 @@ export function EditAssetForm({ initialData }: EditAssetFormProps) {
               className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#d4af37]/50 focus:ring-1 focus:ring-[#d4af37]/50 transition-all font-sans text-sm"
               placeholder="0"
             />
+            <p className="text-[10px] text-zinc-500 mt-1">
+              Estimated resale value at the end of its useful life (often 0).
+            </p>
           </div>
         </div>
 
@@ -108,7 +114,7 @@ export function EditAssetForm({ initialData }: EditAssetFormProps) {
           <div>
             <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold mb-1">New Annual Depreciation</p>
             <p className="text-sm font-mono text-[#d4af37]">
-              {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format((initialValue - Number(salvageValue || 0)) / usefulLifeYears)} / year
+              {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format((initialValue - Number(salvageValue || 0)) / (usefulLifeMonths / 12))} / year
             </p>
           </div>
           <div className="text-right">

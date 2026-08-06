@@ -11,6 +11,7 @@ interface FixedAssetRecord {
   asset_name: string;
   category: string;
   purchase_price: number;
+  useful_life_months: number;
   current_book_value: number;
   salvage_value: number;
   status: string;
@@ -21,7 +22,7 @@ async function FixedAssetsRegistry() {
 
   const { data: records } = await supabase
     .from('fixed_assets')
-    .select('id, asset_name, category, initial_value, salvage_value, purchase_date, annual_depreciation, status')
+    .select('id, asset_name, category, initial_value, salvage_value, purchase_date, annual_depreciation, status, useful_life_years')
     .order('asset_name', { ascending: true });
 
   const displayRecords: FixedAssetRecord[] =
@@ -50,6 +51,7 @@ async function FixedAssetsRegistry() {
             asset_name: r.asset_name,
             category: r.category || 'Equipment',
             purchase_price: initialValue,
+            useful_life_months: (r.useful_life_years || 1) * 12,
             current_book_value: currentBookValue,
             salvage_value: Number(r.salvage_value || 0),
             status: r.status || 'Active',
@@ -91,6 +93,7 @@ async function FixedAssetsRegistry() {
                 <th className="py-3 px-3">Fixed Asset Name</th>
                 <th className="py-3 px-3">Category</th>
                 <th className="py-3 px-3 text-right">Purchase Cost</th>
+                <th className="py-3 px-3 text-center">Useful Life</th>
                 <th className="py-3 px-3 text-right">Current Book Value</th>
                 <th className="py-3 px-3 text-center">Status</th>
                 <th className="py-3 px-3 text-right">Actions</th>
@@ -112,6 +115,9 @@ async function FixedAssetsRegistry() {
                   </td>
                   <td className="py-3 px-3 text-right text-zinc-300">
                     Rp {item.purchase_price.toLocaleString('en-US')}
+                  </td>
+                  <td className="py-3 px-3 text-center text-zinc-400">
+                    {item.useful_life_months} months
                   </td>
                   {/* Critical Current Value highlighted in Glowing Rich Gold */}
                   <td className="py-3 px-3 text-right">

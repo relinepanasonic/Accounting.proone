@@ -55,7 +55,7 @@ export async function createExpense(payload: CreateExpensePayload) {
   // If category is a Fixed Asset account (starts with '12'), also register it in the Fixed Assets module
   const isFixedAsset = debitAccountCode.startsWith('12');
   if (isFixedAsset) {
-    await supabase.from('fixed_assets').insert({
+    const { error: assetErr } = await supabase.from('fixed_assets').insert({
       workspace_id: activeWorkspaceId,
       asset_name: payload.vendor,
       category: payload.category,
@@ -63,9 +63,12 @@ export async function createExpense(payload: CreateExpensePayload) {
       initial_value: payload.amount,
       salvage_value: 0,
       useful_life_years: 1,
-      annual_depreciation: payload.amount,
+      // annual_depreciation is a GENERATED column in Postgres, do NOT pass it
       status: 'active'
     });
+    if (assetErr) {
+      console.error('Failed to insert fixed asset:', assetErr);
+    }
   }
 
   revalidatePath('/expenses');

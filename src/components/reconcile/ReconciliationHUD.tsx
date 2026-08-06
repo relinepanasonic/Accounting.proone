@@ -68,7 +68,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
 
   // Resolution Widget State
   const [resolutionTab, setResolutionTab] = useState<'expense' | 'income' | 'manual'>('expense');
-  const [quickCategory, setQuickCategory] = useState<string>('Uncategorized');
+  const [quickCategory, setQuickCategory] = useState<string>('');
   const [quickVendorName, setQuickVendorName] = useState('');
   const [quickVendorId, setQuickVendorId] = useState<string | undefined>(undefined);
   const [vendorDropdownOpen, setVendorDropdownOpen] = useState(false);
@@ -243,6 +243,12 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
         );
         setBankLines((prev) => prev.filter((b) => b.id !== activeBankLine.id));
         setSelectedBankId(null);
+        
+        // Reset quick form fields so they don't stick for the next item
+        setQuickCategory('');
+        setQuickVendorName('');
+        setQuickVendorId(undefined);
+        setQuickNotes('');
       } catch (err) {
         console.error(err);
         alert('Failed to save quick record. Please try again.');
@@ -623,7 +629,11 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                                 (a.account_code + ' - ' + a.account_name).toLowerCase().includes(searchLower)
                               );
                               if (filtered.length === 0) return null;
-                              const isExpanded = expandedCoaGroups[type] !== false; // Default to true
+                              // Expanded if they are searching for something, otherwise default to collapsed
+                              const hasSearchTerm = searchLower.length > 0;
+                              const isExpanded = expandedCoaGroups[type] !== undefined 
+                                ? expandedCoaGroups[type] 
+                                : hasSearchTerm;
 
                               return (
                                 <div key={type}>
@@ -632,7 +642,10 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                                     onMouseDown={(e) => e.preventDefault()}
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setExpandedCoaGroups(prev => ({ ...prev, [type]: prev[type] === undefined ? false : !prev[type] }));
+                                      setExpandedCoaGroups(prev => {
+                                        const current = prev[type] !== undefined ? prev[type] : (searchLower.length > 0);
+                                        return { ...prev, [type]: !current };
+                                      });
                                     }}
                                   >
                                     {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}

@@ -540,6 +540,35 @@ export async function deleteInvoice(invoiceId: string) {
     const { createAdminClient } = await import('@/lib/api/supabase-admin');
     const adminClient = createAdminClient();
 
+    // ── Step 0: Push DELETE to New Wave BEFORE removing locally ──────────────
+    // Fetch the invoice workspace to check if it belongs to New Wave
+    const { data: invForSync } = await supabase
+      .from('invoices')
+      .select('id, workspace_id, workspaces:workspace_id(name)')
+      .eq('id', invoiceId)
+      .single();
+
+    if (invForSync) {
+      const wsName: string = (Array.isArray(invForSync.workspaces)
+        ? (invForSync.workspaces as any[])[0]?.name
+        : (invForSync.workspaces as any)?.name) || '';
+
+      if (wsName.toLowerCase().includes('new wave')) {
+        const apiKey = process.env.ACCOUNTING_API_KEY || process.env.NEWWAVE_INTEGRATION_TOKEN;
+        if (apiKey) {
+          try {
+            await fetch(
+              `https://app.newwave.id/api/accounting/invoices?source=proone&external_id=${invoiceId}`,
+              { method: 'DELETE', headers: { 'Authorization': `Bearer ${apiKey}` } }
+            );
+          } catch (syncErr) {
+            console.warn('New Wave DELETE sync failed (non-fatal):', syncErr);
+          }
+        }
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     await adminClient
       .from('invoice_line_items')
       .delete()

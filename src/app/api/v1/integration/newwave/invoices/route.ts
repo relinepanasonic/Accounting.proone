@@ -4,6 +4,7 @@ import { createAdminClient, getNewwaveWorkspaceId } from '@/lib/api/supabase-adm
 
 export const OPTIONS = handleOptions;
 
+// ─── GET: list invoices in the New Wave workspace ───────────────────────────
 export async function GET(request: Request) {
   try {
     if (!authenticateApiRequest(request)) {
@@ -15,7 +16,7 @@ export async function GET(request: Request) {
 
     const { data: invoices, error } = await supabase
       .from('invoices')
-      .select('id, invoice_number, status, total_amount, issue_date, due_date, clients(name, contact_name, email)')
+      .select('id, invoice_number, status, total_amount, issue_date, due_date, external_id, source, clients(name, contact_name, email)')
       .eq('workspace_id', workspaceId)
       .order('created_at', { ascending: false });
 
@@ -24,11 +25,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: true, data: invoices }, { headers: corsHeaders });
 
   } catch (error: any) {
-    console.error('API Error:', error);
+    console.error('GET /invoices error:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500, headers: corsHeaders });
   }
 }
 
+// ─── POST: create or update invoice from New Wave (upserts on source+external_id) ───
 export async function POST(request: Request) {
   try {
     if (!authenticateApiRequest(request)) {
@@ -36,7 +38,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { clientName, clientEmail, items, issueDate, dueDate } = body;
+    const { source, external_id, clientName, clientEmail, items, issueDate, dueDate, invoiceNumber, status } = body;
 
     if (!clientName) {
       return NextResponse.json({ error: 'Missing clientName in payload' }, { status: 400, headers: corsHeaders });
@@ -49,7 +51,7 @@ export async function POST(request: Request) {
     const workspaceId = await getNewwaveWorkspaceId(supabase);
 
     // 1. Find or Create Client
-    let clientId = null;
+    let clientId: string | null = null;
     const { data: existingClients } = await supabase
       .from('clients')
       .select('id')
@@ -62,75 +64,151 @@ export async function POST(request: Request) {
     } else {
       const { data: newClient, error: clientError } = await supabase
         .from('clients')
-        .insert({
-          workspace_id: workspaceId,
-          name: clientName,
-          email: clientEmail || null,
-        })
+        .insert({ workspace_id: workspaceId, name: clientName, email: clientEmail || null })
         .select('id')
         .single();
-      
       if (clientError) throw clientError;
       clientId = newClient.id;
     }
 
     // 2. Calculate Totals
     const totalAmount = items.reduce(
-      (acc: number, item: any) => acc + (Number(item.quantity) || 1) * (Number(item.unitPrice) || 0),
+      (acc: number, item: any) => acc + (Number(item.quantity) || 1) * (Number(item.unitPrice || item.price) || 0),
       0
     );
 
-    // 3. Generate Invoice Number (e.g. NW2607XXX)
-    const dateStr = new Date().toISOString().slice(2, 10).replace(/-/g, ''); // YYMMDD
+    // 3. Determine invoice number
+    const dateStr = new Date().toISOString().slice(2, 10).replace(/-/g, '');
     const randomSuffix = Math.floor(100 + Math.random() * 900);
-    const invoiceNumber = `NW${dateStr}${randomSuffix}`;
+    const finalInvoiceNumber = invoiceNumber || `NW${dateStr}${randomSuffix}`;
+    const finalIssueDate = issueDate || new Date().toISOString().split('T')[0];
+    const finalDueDate = dueDate || new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-    // 4. Create Invoice
-    const { data: invoice, error: invoiceError } = await supabase
-      .from('invoices')
-      .insert({
-        workspace_id: workspaceId,
-        client_id: clientId,
-        invoice_number: invoiceNumber,
-        status: 'draft',
-        issue_date: issueDate || new Date().toISOString().split('T')[0],
-        due_date: dueDate || new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        subtotal: totalAmount,
-        total_amount: totalAmount,
-      })
-      .select('id, invoice_number')
-      .single();
+    const invoiceData = {
+      workspace_id: workspaceId,
+      client_id: clientId,
+      invoice_number: finalInvoiceNumber,
+      status: status || 'draft',
+      issue_date: finalIssueDate,
+      due_date: finalDueDate,
+      subtotal: totalAmount,
+      total_amount: totalAmount,
+      source: source || 'new-wave',
+      external_id: external_id || null,
+    };
 
-    if (invoiceError) throw invoiceError;
+    let invoiceId: string;
+    let isUpdate = false;
+
+    // 4. Upsert: if (source, external_id) already exists → update; else → insert
+    if (source && external_id) {
+      const { data: existing } = await supabase
+        .from('invoices')
+        .select('id')
+        .eq('workspace_id', workspaceId)
+        .eq('source', source)
+        .eq('external_id', external_id)
+        .single();
+
+      if (existing) {
+        // UPDATE existing invoice
+        const { error: updateErr } = await supabase
+          .from('invoices')
+          .update({ ...invoiceData, updated_at: new Date().toISOString() })
+          .eq('id', existing.id);
+        if (updateErr) throw updateErr;
+
+        // Replace line items
+        await supabase.from('invoice_line_items').delete().eq('invoice_id', existing.id);
+
+        invoiceId = existing.id;
+        isUpdate = true;
+      } else {
+        // INSERT new
+        const { data: newInv, error: insertErr } = await supabase
+          .from('invoices')
+          .insert(invoiceData)
+          .select('id')
+          .single();
+        if (insertErr) throw insertErr;
+        invoiceId = newInv.id;
+      }
+    } else {
+      // No external_id provided — plain insert
+      const { data: newInv, error: insertErr } = await supabase
+        .from('invoices')
+        .insert(invoiceData)
+        .select('id')
+        .single();
+      if (insertErr) throw insertErr;
+      invoiceId = newInv.id;
+    }
 
     // 5. Insert Line Items
     const lineItemsData = items.map((item: any) => ({
       workspace_id: workspaceId,
-      invoice_id: invoice.id,
-      description: item.description,
+      invoice_id: invoiceId,
+      package_name: item.name || item.package_name || null,
+      description: item.description || null,
       quantity: Number(item.quantity) || 1,
-      unit_price: Number(item.unitPrice) || 0,
-      total: (Number(item.quantity) || 1) * (Number(item.unitPrice) || 0),
+      scale: item.scale || 'pc',
+      unit_price: Number(item.unitPrice || item.price) || 0,
+      total: (Number(item.quantity) || 1) * (Number(item.unitPrice || item.price) || 0),
     }));
 
-    const { error: lineItemsError } = await supabase
-      .from('invoice_line_items')
-      .insert(lineItemsData);
+    await supabase.from('invoice_line_items').insert(lineItemsData);
 
-    if (lineItemsError) throw lineItemsError;
-
-    return NextResponse.json({ 
-      success: true, 
-      message: 'Invoice created successfully',
-      data: {
-        invoiceId: invoice.id,
-        invoiceNumber: invoice.invoice_number,
-        clientId
-      }
+    return NextResponse.json({
+      success: true,
+      message: isUpdate ? 'Invoice updated successfully' : 'Invoice created successfully',
+      data: { invoiceId, invoiceNumber: finalInvoiceNumber, clientId }
     }, { headers: corsHeaders });
 
   } catch (error: any) {
-    console.error('API Error:', error);
+    console.error('POST /invoices error:', error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500, headers: corsHeaders });
+  }
+}
+
+// ─── DELETE: remove invoice by source+external_id (or ?id=) ─────────────────
+export async function DELETE(request: Request) {
+  try {
+    if (!authenticateApiRequest(request)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const source = searchParams.get('source');
+    const external_id = searchParams.get('external_id');
+    const directId = searchParams.get('id');
+
+    const supabase = createAdminClient();
+    const workspaceId = await getNewwaveWorkspaceId(supabase);
+
+    let query = supabase.from('invoices').select('id').eq('workspace_id', workspaceId);
+
+    if (directId) {
+      query = query.eq('id', directId) as any;
+    } else if (source && external_id) {
+      query = query.eq('source', source).eq('external_id', external_id) as any;
+    } else {
+      return NextResponse.json({ error: 'Provide either ?id= or ?source=&external_id=' }, { status: 400, headers: corsHeaders });
+    }
+
+    const { data: found } = await query.single();
+    if (!found) {
+      return NextResponse.json({ error: 'Invoice not found' }, { status: 404, headers: corsHeaders });
+    }
+
+    // Delete line items first, then invoice
+    await supabase.from('invoice_line_items').delete().eq('invoice_id', found.id);
+    await supabase.from('journal_entries').delete().eq('reference_id', found.id);
+    await supabase.from('invoices').delete().eq('id', found.id);
+
+    return NextResponse.json({ success: true, message: 'Invoice deleted', deletedId: found.id }, { headers: corsHeaders });
+
+  } catch (error: any) {
+    console.error('DELETE /invoices error:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500, headers: corsHeaders });
   }
 }

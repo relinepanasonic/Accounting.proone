@@ -103,7 +103,7 @@ export async function quickResolveAndReconcile(
   const todayStr = transaction_date || new Date().toISOString().split('T')[0];
 
   if (type === 'income') {
-    const salesAccount = mappings.find(m => m.mapping_type === 'SALES')?.account_code || '4001';
+    const salesAccount = mappings.find(m => m.mapping_type === 'SALES')?.account_code || '4000';
     await supabase.from('journal_entries').insert([
       { workspace_id: ctx.activeWorkspaceId, account_code: bankAccountCode, transaction_date: todayStr, debit_amount: amount, credit_amount: 0, description: `Quick Income - ${description}`, reference_id: data.id, reference_type: 'quick_income' },
       { workspace_id: ctx.activeWorkspaceId, account_code: salesAccount, transaction_date: todayStr, debit_amount: 0, credit_amount: amount, description: `Quick Income - ${description}`, reference_id: data.id, reference_type: 'quick_income' }
@@ -117,7 +117,7 @@ export async function quickResolveAndReconcile(
     // Use the parsed code if it exists and looks like an account code (digits), otherwise fallback
     const expenseAccount = (/^\d+$/.test(parsedAccountCode)) 
       ? parsedAccountCode 
-      : (mappings.find(m => m.mapping_type === 'EXPENSE')?.account_code || '5100');
+      : (mappings.find(m => m.mapping_type === 'EXPENSE')?.account_code || '5000');
 
     await supabase.from('journal_entries').insert([
       { workspace_id: ctx.activeWorkspaceId, account_code: expenseAccount, transaction_date: todayStr, debit_amount: amount, credit_amount: 0, description: `Quick Expense - ${description}`, reference_id: data.id, reference_type: 'quick_expense' },

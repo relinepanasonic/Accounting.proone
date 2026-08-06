@@ -441,14 +441,28 @@ export function InvoicePDFDocument({
                 
                 {/* PAYMENT HISTORY & BALANCE DUE */}
                 {payments && payments.length > 0 && (
-                  <div className="pt-2 pb-1 border-b border-zinc-200 border-dashed">
-                    <span className="font-serif text-zinc-500 uppercase tracking-widest text-[10px]">Payment History</span>
-                    {payments.map((p, i) => (
-                      <div key={i} className="flex justify-between py-1 px-2 text-zinc-600">
-                        <span>Payment {i + 1} <span className="text-[10px] text-zinc-400">({formatIndoDate(p.transaction_date)})</span></span>
-                        <span className="font-mono text-[#1e2536]">Rp {Number(p.amount).toLocaleString('en-US')}</span>
-                      </div>
-                    ))}
+                  <div className="pt-3 pb-2 border-b border-zinc-200 border-dashed">
+                    <span className="font-serif text-[#c5a059] uppercase tracking-widest text-[10px] block mb-2 font-bold">Payment History</span>
+                    
+                    <div className="flex justify-between py-1 px-2 text-[9px] text-zinc-400 font-bold uppercase tracking-wider border-b border-zinc-100 mb-1">
+                      <span className="w-1/3">Date</span>
+                      <span className="w-1/3 text-right">Amount Payment</span>
+                      <span className="w-1/3 text-right">Remaining Balance</span>
+                    </div>
+
+                    {(() => {
+                      let runningBalance = grandTotal || 0;
+                      return payments.map((p, i) => {
+                        runningBalance -= Number(p.amount);
+                        return (
+                          <div key={i} className="flex justify-between py-1 px-2 text-zinc-600 text-[11px] items-center">
+                            <span className="w-1/3 text-zinc-500">{formatIndoDate(p.transaction_date)}</span>
+                            <span className="w-1/3 text-right font-mono text-[#1e2536] font-bold">Rp {Number(p.amount).toLocaleString('en-US')}</span>
+                            <span className="w-1/3 text-right font-mono text-zinc-500">Rp {runningBalance.toLocaleString('en-US')}</span>
+                          </div>
+                        );
+                      });
+                    })()}
                   </div>
                 )}
                 {amountPaid > 0 && (

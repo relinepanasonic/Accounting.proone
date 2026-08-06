@@ -202,8 +202,8 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
     // New Double-Entry logic (replace old entries)
     if (!payload.isQuotation && totalAmount > 0) {
       const mappings = await getWorkspaceMappings(workspaceId);
-      const salesAccount = mappings.find(m => m.mapping_type === 'SALES')?.account_code || '4001';
-      const arAccount = mappings.find(m => m.mapping_type === 'AR')?.account_code || '1002';
+      const salesAccount = mappings.find(m => m.mapping_type === 'SALES')?.account_code || '4000';
+      const arAccount = mappings.find(m => m.mapping_type === 'AR')?.account_code || '1200';
 
       await supabase.from('journal_entries').delete().eq('reference_id', payload.id).eq('reference_type', 'invoice');
       
@@ -367,8 +367,8 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
     // New Double-Entry logic
     if (!payload.isQuotation && totalAmount > 0) {
       const mappings = await getWorkspaceMappings(workspaceId);
-      const salesAccount = mappings.find(m => m.mapping_type === 'SALES')?.account_code || '4001';
-      const arAccount = mappings.find(m => m.mapping_type === 'AR')?.account_code || '1002';
+      const salesAccount = mappings.find(m => m.mapping_type === 'SALES')?.account_code || '4000';
+      const arAccount = mappings.find(m => m.mapping_type === 'AR')?.account_code || '1200';
 
       await supabase.from('journal_entries').insert([
         { workspace_id: workspaceId, account_code: arAccount, transaction_date: payload.issueDate, debit_amount: totalAmount, credit_amount: 0, description: `Invoice ${invoiceNumberToUse}`, reference_id: invoice.id, reference_type: 'invoice' },
@@ -505,11 +505,11 @@ export async function toggleInvoiceStatus(invoiceId: string, currentStatus: stri
           const { data: firstBank } = await supabase.from('workspace_bank_accounts').select('*').eq('workspace_id', workspaceId).order('is_default', { ascending: false }).limit(1);
           if (firstBank && firstBank.length > 0) chosenBank = firstBank[0];
         }
-        const debitAccountCode = chosenBank?.coa_account_code || '1010';
+        const debitAccountCode = chosenBank?.coa_account_code || '1000';
         const todayStr = new Date().toISOString().split('T')[0];
 
         const mappings = await getWorkspaceMappings(workspaceId);
-        const arAccount = mappings.find(m => m.mapping_type === 'AR')?.account_code || '1002';
+        const arAccount = mappings.find(m => m.mapping_type === 'AR')?.account_code || '1200';
 
         // Clean up any prior payment JE for this invoice just in case
         await supabase.from('journal_entries').delete().eq('reference_id', invoiceId).eq('reference_type', 'payment');
@@ -657,7 +657,7 @@ export async function recordInvoicePayment(invoiceId: string, amount: number, pa
 
     // 3. Ledger Double-Entry
     const mappings = await getWorkspaceMappings(workspaceId);
-    const arAccount = mappings.find(m => m.mapping_type === 'AR')?.account_code || '1002';
+    const arAccount = mappings.find(m => m.mapping_type === 'AR')?.account_code || '1200';
     
     let chosenBank: any = null;
     if (inv.bank_account_id && inv.bank_account_id !== 'all' && inv.bank_account_id !== 'custom') {
@@ -668,7 +668,7 @@ export async function recordInvoicePayment(invoiceId: string, amount: number, pa
       const { data: firstBank } = await supabase.from('workspace_bank_accounts').select('*').eq('workspace_id', workspaceId).order('is_default', { ascending: false }).limit(1);
       if (firstBank && firstBank.length > 0) chosenBank = firstBank[0];
     }
-    const debitAccountCode = chosenBank?.coa_account_code || '1010';
+    const debitAccountCode = chosenBank?.coa_account_code || '1000';
 
       const todayStr = paymentDate || new Date().toISOString().split('T')[0];
       

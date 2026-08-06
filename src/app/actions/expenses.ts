@@ -37,18 +37,39 @@ export async function createExpense(payload: CreateExpensePayload) {
     throw new Error('Failed to record expense');
   }
 
-  // Double-Entry Ledger: Expense Created (Debit Expense, Credit A/P)
+  // Double-Entry Ledger: Expense Created
+  // The debit account is the ACTUAL COA account the user selected (e.g. 1201 for fixed assets, 5xxx for expenses)
   const mappings = await getWorkspaceMappings(activeWorkspaceId);
-  const expenseAccount = mappings.find(m => m.mapping_type === 'EXPENSE')?.account_code || '5100';
   const apAccount = mappings.find(m => m.mapping_type === 'AP')?.account_code || '2000';
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  // Use the selected category COA code directly — not a hardcoded EXPENSE account
+  // This ensures Fixed Asset accounts (12xx) are debited correctly instead of always going to 5100
+  const debitAccountCode = payload.category.split(' ')[0]; // e.g. "1201" from "1201 - Office Equipment"
+
+  const todayStr = payload.dueDate || new Date().toISOString().split('T')[0];
   await supabase.from('journal_entries').insert([
-    { workspace_id: activeWorkspaceId, account_code: expenseAccount, transaction_date: todayStr, debit_amount: payload.amount, credit_amount: 0, description: finalDescription, reference_id: txData.id, reference_type: 'expense' },
+    { workspace_id: activeWorkspaceId, account_code: debitAccountCode, transaction_date: todayStr, debit_amount: payload.amount, credit_amount: 0, description: finalDescription, reference_id: txData.id, reference_type: 'expense' },
     { workspace_id: activeWorkspaceId, account_code: apAccount, transaction_date: todayStr, debit_amount: 0, credit_amount: payload.amount, description: finalDescription, reference_id: txData.id, reference_type: 'expense' }
   ]);
 
+  // If category is a Fixed Asset account (starts with '12'), also register it in the Fixed Assets module
+  const isFixedAsset = debitAccountCode.startsWith('12');
+  if (isFixedAsset) {
+    await supabase.from('fixed_assets').insert({
+      workspace_id: activeWorkspaceId,
+      asset_name: payload.vendor,
+      category: payload.category,
+      purchase_date: todayStr,
+      initial_value: payload.amount,
+      salvage_value: 0,
+      useful_life_years: 1,
+      annual_depreciation: payload.amount,
+      status: 'active'
+    });
+  }
+
   revalidatePath('/expenses');
+  revalidatePath('/assets');
   revalidatePath('/');
   return { success: true };
 }
@@ -74,9 +95,10 @@ export async function updateExpense(id: string, payload: CreateExpensePayload) {
     throw new Error('Failed to update expense');
   }
 
+  // Fix: Use the actual selected COA code (payload.category) as debit account, not the hardcoded EXPENSE mapping
   const mappings = await getWorkspaceMappings(activeWorkspaceId);
-  const expenseAccount = mappings.find(m => m.mapping_type === 'EXPENSE')?.account_code || '5100';
   const apAccount = mappings.find(m => m.mapping_type === 'AP')?.account_code || '2000';
+  const debitAccountCode = payload.category.split(' ')[0];
   const todayStr = payload.dueDate || new Date().toISOString().split('T')[0];
 
   const { createAdminClient } = await import('@/lib/api/supabase-admin');
@@ -84,7 +106,7 @@ export async function updateExpense(id: string, payload: CreateExpensePayload) {
   await adminClient.from('journal_entries').delete().eq('reference_id', id).eq('reference_type', 'expense');
 
   await supabase.from('journal_entries').insert([
-    { workspace_id: activeWorkspaceId, account_code: expenseAccount, transaction_date: todayStr, debit_amount: payload.amount, credit_amount: 0, description: finalDescription, reference_id: id, reference_type: 'expense' },
+    { workspace_id: activeWorkspaceId, account_code: debitAccountCode, transaction_date: todayStr, debit_amount: payload.amount, credit_amount: 0, description: finalDescription, reference_id: id, reference_type: 'expense' },
     { workspace_id: activeWorkspaceId, account_code: apAccount, transaction_date: todayStr, debit_amount: 0, credit_amount: payload.amount, description: finalDescription, reference_id: id, reference_type: 'expense' }
   ]);
 

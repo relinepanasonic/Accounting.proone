@@ -48,9 +48,11 @@ export async function POST(request: Request) {
     }
 
     const supabase = createAdminClient();
+    // All inbound invoices from New Wave ALWAYS land in the New Wave workspace.
+    // This is explicit and intentional — never left implicit.
     const workspaceId = await getNewwaveWorkspaceId(supabase);
 
-    // 1. Find or Create Client
+    // 1. Find or Create Client (scoped to New Wave workspace only)
     let clientId: string | null = null;
     const { data: existingClients } = await supabase
       .from('clients')
@@ -77,12 +79,13 @@ export async function POST(request: Request) {
       0
     );
 
-    // 3. Determine invoice number
+    // 3. Determine stable values
     const dateStr = new Date().toISOString().slice(2, 10).replace(/-/g, '');
     const randomSuffix = Math.floor(100 + Math.random() * 900);
     const finalInvoiceNumber = invoiceNumber || `NW${dateStr}${randomSuffix}`;
     const finalIssueDate = issueDate || new Date().toISOString().split('T')[0];
     const finalDueDate = dueDate || new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const finalSource = source || 'new-wave';
 
     const invoiceData = {
       workspace_id: workspaceId,
@@ -93,48 +96,83 @@ export async function POST(request: Request) {
       due_date: finalDueDate,
       subtotal: totalAmount,
       total_amount: totalAmount,
-      source: source || 'new-wave',
+      source: finalSource,
       external_id: external_id || null,
     };
 
     let invoiceId: string;
     let isUpdate = false;
 
-    // 4. Upsert: if (source, external_id) already exists → update; else → insert
+    // 4. Upsert strategy:
+    //    When source + external_id are present, we ONLY match on that pair — never on invoice_number.
+    //    This is intentional: invoice_number is not guaranteed stable or unique from New Wave's side.
+    //
+    //    We use an explicit SELECT then UPDATE/INSERT rather than .upsert() because:
+    //    - .upsert() with onConflict requires the DB unique index to exist
+    //    - We also need to replace line items only on update
+    //
+    //    Concurrency protection: the DB unique index on (source, external_id) acts as the
+    //    final guard — if two concurrent POSTs race and both try to INSERT, the second will
+    //    get a unique violation (error code 23505) which we catch and handle as an UPDATE.
     if (source && external_id) {
+      // Explicit match ONLY on (source, external_id) — never fall back to invoice_number
       const { data: existing } = await supabase
         .from('invoices')
         .select('id')
         .eq('workspace_id', workspaceId)
         .eq('source', source)
         .eq('external_id', external_id)
-        .single();
+        .maybeSingle();
 
       if (existing) {
-        // UPDATE existing invoice
+        // ── UPDATE path ──────────────────────────────────────────────────────
         const { error: updateErr } = await supabase
           .from('invoices')
           .update({ ...invoiceData, updated_at: new Date().toISOString() })
           .eq('id', existing.id);
         if (updateErr) throw updateErr;
 
-        // Replace line items
+        // Replace ALL line items (delete-then-reinsert prevents accumulation on repeated pushes)
         await supabase.from('invoice_line_items').delete().eq('invoice_id', existing.id);
 
         invoiceId = existing.id;
         isUpdate = true;
       } else {
-        // INSERT new
+        // ── INSERT path ───────────────────────────────────────────────────────
         const { data: newInv, error: insertErr } = await supabase
           .from('invoices')
           .insert(invoiceData)
           .select('id')
           .single();
-        if (insertErr) throw insertErr;
-        invoiceId = newInv.id;
+
+        if (insertErr) {
+          // Unique constraint violation (23505): concurrent request already inserted this invoice.
+          // Retry as an update to stay idempotent.
+          if (insertErr.code === '23505') {
+            const { data: raceWinner } = await supabase
+              .from('invoices')
+              .select('id')
+              .eq('workspace_id', workspaceId)
+              .eq('source', source)
+              .eq('external_id', external_id)
+              .single();
+            if (raceWinner) {
+              await supabase.from('invoices').update({ ...invoiceData, updated_at: new Date().toISOString() }).eq('id', raceWinner.id);
+              await supabase.from('invoice_line_items').delete().eq('invoice_id', raceWinner.id);
+              invoiceId = raceWinner.id;
+              isUpdate = true;
+            } else {
+              throw insertErr;
+            }
+          } else {
+            throw insertErr;
+          }
+        } else {
+          invoiceId = newInv.id;
+        }
       }
     } else {
-      // No external_id provided — plain insert
+      // No external_id — plain insert (e.g. manually created via old API format)
       const { data: newInv, error: insertErr } = await supabase
         .from('invoices')
         .insert(invoiceData)
@@ -144,7 +182,7 @@ export async function POST(request: Request) {
       invoiceId = newInv.id;
     }
 
-    // 5. Insert Line Items
+    // 5. Insert fresh line items
     const lineItemsData = items.map((item: any) => ({
       workspace_id: workspaceId,
       invoice_id: invoiceId,

@@ -462,6 +462,11 @@ export async function duplicateInvoice(invoiceId: string) {
 
     revalidatePath('/invoices');
     revalidatePath('/');
+
+    // Sync the new duplicate to New Wave (it has a fresh UUID = stable external_id for New Wave)
+    // This is non-fatal: a failure here won't block the duplication from succeeding.
+    await syncInvoiceToNewWave(newInv.id, supabase);
+
     return { success: true, newInvoiceId: newInv.id };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Error duplicating invoice.' };

@@ -29,7 +29,13 @@ export function InvoicePaymentModal({
   const [paymentAmount, setPaymentAmount] = useState<number | ''>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  if (!isOpen) return null;
+  // Only render on client to avoid hydration mismatch with document.body
+  const [mounted, setMounted] = useState(false);
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!isOpen || !mounted) return null;
 
   const totalAR = totalAmount - paidAmount;
 
@@ -69,13 +75,7 @@ export function InvoicePaymentModal({
     });
   };
 
-  // Only render on client to avoid hydration mismatch with document.body
-  const [mounted, setMounted] = useState(false);
-  React.useEffect(() => {
-    setMounted(true);
-  }, []);
 
-  if (!isOpen || !mounted) return null;
 
   const modalContent = (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">

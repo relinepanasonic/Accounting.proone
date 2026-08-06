@@ -19,6 +19,19 @@ WHERE c.workspace_id IS NULL;
 -- 4. Delete the original global records
 DELETE FROM public.global_chart_of_accounts WHERE workspace_id IS NULL;
 
+-- 4.5. Fix orphaned journal entries caused by hardcoded fallbacks
+UPDATE public.journal_entries 
+SET account_code = '1200' 
+WHERE account_code = '1002' AND workspace_id != 'f7262187-2a08-4454-b046-b4fd91f2f642';
+
+UPDATE public.journal_entries 
+SET account_code = '4000' 
+WHERE account_code = '4001' AND workspace_id != '11111111-1111-1111-1111-111111111111';
+
+UPDATE public.journal_entries 
+SET account_code = '1000' 
+WHERE account_code IN ('1001', '1010') AND workspace_id != '11111111-1111-1111-1111-111111111111';
+
 -- 5. Add unique constraint on (workspace_id, account_code)
 ALTER TABLE public.global_chart_of_accounts ADD CONSTRAINT global_chart_of_accounts_workspace_id_account_code_key UNIQUE (workspace_id, account_code);
 

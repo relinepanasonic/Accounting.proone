@@ -19,7 +19,7 @@ async function InvoicesTableServer() {
   ] = await Promise.all([
     supabase
       .from('invoices')
-      .select('id, invoice_number, is_quotation, status, total_amount, issue_date, due_date, client_id, assigned_workspace_id, clients(name, contact_name), invoice_line_items(package_name, description, quantity, scale), assignedWorkspaces:workspaces!invoices_assigned_workspace_id_fkey(name)')
+      .select('id, invoice_number, is_quotation, status, total_amount, amount_paid, issue_date, due_date, client_id, assigned_workspace_id, clients(name, contact_name), invoice_line_items(package_name, description, quantity, scale), assignedWorkspaces:workspaces!invoices_assigned_workspace_id_fkey(name)')
       .or(`workspace_id.eq.${activeWorkspaceId},assigned_workspace_id.eq.${activeWorkspaceId}`)
       .order('created_at', { ascending: false }),
     supabase
@@ -46,6 +46,7 @@ async function InvoicesTableServer() {
             clientContact: clientObj?.contact_name || '',
             amount: `Rp ${Number(inv.total_amount || 0).toLocaleString('en-US')}`,
             rawAmount: Number(inv.total_amount || 0),
+            paidAmount: Number(inv.amount_paid || 0),
             dueDate: formatIndoDate(inv.due_date),
             rawDueDate: inv.due_date || '',
             packageName: firstPackage,
@@ -69,6 +70,7 @@ async function InvoicesTableServer() {
           clientContact: '',
           amount: `Rp ${Number(tx.amount || 0).toLocaleString('en-US')}`,
           rawAmount: Number(tx.amount || 0),
+          paidAmount: Number(tx.amount || 0),
           dueDate: formatIndoDate(tx.transaction_date),
           rawDueDate: tx.transaction_date || '',
           packageName: tx.category || 'Categorized Income',

@@ -595,11 +595,19 @@ export async function recordInvoicePayment(invoiceId: string, amount: number, pa
     const newAmountPaid = Number(inv.amount_paid) + amount;
     const isFullyPaid = newAmountPaid >= Number(inv.total_amount);
     
-    // Determine new status (we keep it simple, if not fully paid it might remain 'sent' or 'draft', if fully paid it becomes 'paid')
-    const newStatus = isFullyPaid ? 'paid' : (inv.status === 'draft' ? 'sent' : inv.status);
+    // Determine new status
+    let newStatus = inv.status;
+    if (isFullyPaid) {
+      newStatus = 'paid';
+    } else if (newAmountPaid > 0) {
+      newStatus = 'partial_paid';
+    } else {
+      newStatus = 'invoiced'; // If payment is 0, just mark as sent/invoiced
+    }
 
-    // 2. Insert Transaction
-    const { error: txErr } = await supabase.from('transactions').insert({
+    // 2. Insert Transaction (Only if amount > 0)
+    if (amount > 0) {
+      const { error: txErr } = await supabase.from('transactions').insert({
       workspace_id: workspaceId,
       type: 'income',
       category: 'Client Payment',
@@ -628,12 +636,13 @@ export async function recordInvoicePayment(invoiceId: string, amount: number, pa
     }
     const debitAccountCode = chosenBank?.coa_account_code || '1010';
 
-    const todayStr = paymentDate || new Date().toISOString().split('T')[0];
-    
-    await supabase.from('journal_entries').insert([
-      { workspace_id: workspaceId, account_code: debitAccountCode, transaction_date: todayStr, debit_amount: amount, credit_amount: 0, description: `Payment for Invoice ${inv.invoice_number}${reference ? ' - ' + reference : ''}`, reference_id: invoiceId, reference_type: 'payment' },
-      { workspace_id: workspaceId, account_code: arAccount, transaction_date: todayStr, debit_amount: 0, credit_amount: amount, description: `Payment for Invoice ${inv.invoice_number}${reference ? ' - ' + reference : ''}`, reference_id: invoiceId, reference_type: 'payment' }
-    ]);
+      const todayStr = paymentDate || new Date().toISOString().split('T')[0];
+      
+      await supabase.from('journal_entries').insert([
+        { workspace_id: workspaceId, account_code: debitAccountCode, transaction_date: todayStr, debit_amount: amount, credit_amount: 0, description: `Payment for Invoice ${inv.invoice_number}${reference ? ' - ' + reference : ''}`, reference_id: invoiceId, reference_type: 'payment' },
+        { workspace_id: workspaceId, account_code: arAccount, transaction_date: todayStr, debit_amount: 0, credit_amount: amount, description: `Payment for Invoice ${inv.invoice_number}${reference ? ' - ' + reference : ''}`, reference_id: invoiceId, reference_type: 'payment' }
+      ]);
+    }
 
     // 4. Update Invoice
     const { error: invErr } = await supabase.from('invoices').update({

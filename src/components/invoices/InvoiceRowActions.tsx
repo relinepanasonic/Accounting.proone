@@ -1,56 +1,75 @@
 'use client';
 
-import React, { useTransition } from 'react';
+import React, { useTransition, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Copy, CheckCircle, Clock, FileText, Trash2, Edit2 } from 'lucide-react';
 import Link from 'next/link';
-import { duplicateInvoice, toggleInvoiceStatus, deleteInvoice, convertQuotationToInvoice } from '@/app/actions/invoices';
+import { duplicateInvoice, deleteInvoice, convertQuotationToInvoice } from '@/app/actions/invoices';
+import { InvoicePaymentModal } from './InvoicePaymentModal';
 
 interface InvoiceActionProps {
   id: string;
   status?: string;
   isQuotation?: boolean;
+  invoiceNumber?: string;
+  totalAmount?: number;
+  paidAmount?: number;
 }
 
-export function InvoiceStatusToggle({ id, status }: InvoiceActionProps) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+export function InvoiceStatusToggle({ id, status, invoiceNumber = '', totalAmount = 0, paidAmount = 0 }: InvoiceActionProps) {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  
   const isPaid = status?.toLowerCase() === 'paid';
-
-  const handleToggleStatus = () => {
-    startTransition(async () => {
-      try {
-        await toggleInvoiceStatus(id, status || 'draft');
-        router.refresh();
-      } catch (err) {
-        console.error(err);
-      }
-    });
-  };
+  const isPartial = status?.toLowerCase() === 'partial_paid' || status?.toLowerCase() === 'partial payed';
+  const isInvoiced = status?.toLowerCase() === 'invoiced';
 
   return (
-    <button
-      onClick={handleToggleStatus}
-      disabled={isPending}
-      title="Toggle Invoice Status"
-      className={`inline-flex items-center justify-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-mono uppercase transition-all duration-200 min-w-[80px] ${
-        isPaid
-          ? 'bg-[#d4af37]/15 border border-[#d4af37]/50 text-[#f5d77f] hover:bg-[#d4af37]/25 shadow-[0_0_12px_rgba(212,175,55,0.25)]'
-          : 'bg-zinc-900 border border-[#d4af37]/30 text-[#d4af37] hover:border-[#f5d77f]'
-      } ${isPending ? 'opacity-50 cursor-not-allowed' : ''}`}
-    >
-      {isPaid ? (
-        <>
-          <CheckCircle className="w-3 h-3 text-[#f5d77f]" />
-          <span>PAID</span>
-        </>
-      ) : (
-        <>
-          <Clock className="w-3 h-3 text-[#d4af37]" />
-          <span>PENDING</span>
-        </>
-      )}
-    </button>
+    <>
+      <button
+        onClick={() => setIsModalOpen(true)}
+        title="Record Payment"
+        className={`inline-flex items-center justify-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-mono uppercase transition-all duration-200 min-w-[80px] ${
+          isPaid
+            ? 'bg-[#d4af37]/15 border border-[#d4af37]/50 text-[#f5d77f] hover:bg-[#d4af37]/25 shadow-[0_0_12px_rgba(212,175,55,0.25)]'
+            : isPartial
+            ? 'bg-blue-500/15 border border-blue-500/50 text-blue-400 hover:bg-blue-500/25 shadow-[0_0_12px_rgba(59,130,246,0.25)]'
+            : isInvoiced
+            ? 'bg-emerald-500/15 border border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/25 shadow-[0_0_12px_rgba(16,185,129,0.25)]'
+            : 'bg-zinc-900 border border-[#d4af37]/30 text-[#d4af37] hover:border-[#f5d77f]'
+        }`}
+      >
+        {isPaid ? (
+          <>
+            <CheckCircle className="w-3 h-3 text-[#f5d77f]" />
+            <span>PAID</span>
+          </>
+        ) : isPartial ? (
+          <>
+            <Clock className="w-3 h-3 text-blue-400" />
+            <span>PARTIAL</span>
+          </>
+        ) : isInvoiced ? (
+          <>
+            <CheckCircle className="w-3 h-3 text-emerald-400" />
+            <span>INVOICED</span>
+          </>
+        ) : (
+          <>
+            <Clock className="w-3 h-3 text-[#d4af37]" />
+            <span>PENDING</span>
+          </>
+        )}
+      </button>
+
+      <InvoicePaymentModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        invoiceId={id}
+        invoiceNumber={invoiceNumber}
+        totalAmount={totalAmount}
+        paidAmount={paidAmount}
+      />
+    </>
   );
 }
 

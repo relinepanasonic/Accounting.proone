@@ -22,6 +22,7 @@ interface InvoiceData {
   status: string;
   assignedWorkspaceId: string | null;
   assignedWorkspaceName: string;
+  paidAmount: number;
 }
 
 type SortField = 'invoiceNumber' | 'rawIssueDate' | 'clientName' | 'rawDueDate' | 'packageName' | 'packageQtt' | 'rawAmount' | 'status' | 'assignedWorkspaceName';
@@ -361,7 +362,13 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
                         QUOTE
                       </span>
                     ) : (
-                      <InvoiceStatusToggle id={inv.id} status={inv.status} />
+                      <InvoiceStatusToggle 
+                        id={inv.id} 
+                        status={inv.status} 
+                        invoiceNumber={inv.invoiceNumber}
+                        totalAmount={inv.rawAmount}
+                        paidAmount={inv.paidAmount}
+                      />
                     )}
                   </td>
                   <td className="py-3 px-3 text-center">

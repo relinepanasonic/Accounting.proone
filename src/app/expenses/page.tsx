@@ -25,6 +25,9 @@ async function ExpensesTable() {
     .select('id, due_date, description, category, amount, reconciled')
     .eq('workspace_id', activeWorkspaceId)
     .eq('type', 'expense')
+    // Exclude Fixed Asset purchases: any category whose COA code starts with '1' (Asset range: 10xx, 12xx, 15xx etc.)
+    // Real operating expenses use codes starting with '5' (COGS) or '6' (Opex)
+    .not('category', 'ilike', '1%')
     .order('transaction_date', { ascending: false });
 
   if (error) {

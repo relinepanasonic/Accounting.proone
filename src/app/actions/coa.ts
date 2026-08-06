@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 
 export interface COAAccount {
   id?: string;
@@ -17,6 +18,7 @@ export interface COAAccount {
 
 export async function upsertCOAAccount(account: COAAccount) {
   const supabase = await createClient();
+  const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
   // Basic validation
   if (!account.account_code || !account.account_name || !account.account_type) {
@@ -36,10 +38,11 @@ export async function upsertCOAAccount(account: COAAccount) {
         description: account.description,
         is_active: account.is_active,
         parent_code: account.parent_code || null,
-        workspace_id: account.workspace_id || null,
+        workspace_id: activeWorkspaceId,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', account.id);
+      .eq('id', account.id)
+      .eq('workspace_id', activeWorkspaceId);
     
     error = updateError;
   } else {
@@ -52,7 +55,7 @@ export async function upsertCOAAccount(account: COAAccount) {
         account_type: account.account_type,
         description: account.description,
         parent_code: account.parent_code || null,
-        workspace_id: account.workspace_id || null,
+        workspace_id: activeWorkspaceId,
         is_active: account.is_active !== undefined ? account.is_active : true,
       });
 
@@ -73,11 +76,13 @@ export async function upsertCOAAccount(account: COAAccount) {
 
 export async function deleteCOAAccount(id: string) {
   const supabase = await createClient();
+  const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
   const { error } = await supabase
     .from('global_chart_of_accounts')
     .delete()
-    .eq('id', id);
+    .eq('id', id)
+    .eq('workspace_id', activeWorkspaceId);
 
   if (error) {
     console.error('Error deleting COA:', error);

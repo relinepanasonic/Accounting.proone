@@ -28,10 +28,11 @@ export default async function COASettingsPage() {
     }
   }
 
-  // Fetch COA
+  // Fetch COA for active workspace
   const { data: accounts, error } = await supabase
     .from('global_chart_of_accounts')
     .select('*')
+    .eq('workspace_id', activeWorkspaceId)
     .order('account_code', { ascending: true });
 
   if (error) {
@@ -41,7 +42,8 @@ export default async function COASettingsPage() {
   // Fetch balances
   const { data: balancesData } = await supabase
     .from('journal_entries')
-    .select('account_code, debit_amount, credit_amount');
+    .select('account_code, debit_amount, credit_amount')
+    .eq('workspace_id', activeWorkspaceId);
 
   if (accounts && balancesData) {
     accounts.forEach((acc) => {
@@ -53,8 +55,8 @@ export default async function COASettingsPage() {
           credit += Number(b.credit_amount || 0);
         }
       });
-      // Asset and Expense normal balance is Debit
-      if (['Asset', 'Expense'].includes(acc.account_type)) {
+      // Asset, COGS, and Expense normal balance is Debit
+      if (['Asset', 'Expense', 'COGS'].includes(acc.account_type)) {
         (acc as any).balance = debit - credit;
       } else {
         (acc as any).balance = credit - debit;

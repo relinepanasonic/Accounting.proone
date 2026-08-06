@@ -14,7 +14,7 @@ interface COASettingsHUDProps {
   activeWorkspaceId?: string | null;
 }
 
-const ACCOUNT_TYPES = ['Asset', 'Liability', 'Equity', 'Revenue', 'Expense'];
+const ACCOUNT_TYPES = ['Asset', 'Liability', 'Equity', 'Revenue', 'COGS', 'Expense'];
 
 const getDepth = (acc: COAAccount, allAccounts: COAAccount[]): number => {
   let depth = 0;

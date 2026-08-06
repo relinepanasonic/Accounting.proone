@@ -5,6 +5,7 @@ import { X, Check } from 'lucide-react';
 import { RupiahInput } from '@/components/ui/RupiahInput';
 import { recordInvoicePayment } from '@/app/actions/invoices';
 import { useRouter } from 'next/navigation';
+import { createPortal } from 'react-dom';
 
 interface InvoicePaymentModalProps {
   isOpen: boolean;
@@ -57,14 +58,27 @@ export function InvoicePaymentModal({
       if (res.success) {
         onClose();
         router.refresh();
+        
+        // Generate Receipt PDF
+        if (amountToPay > 0) {
+          window.open(`/invoices/${invoiceId}?receipt=true`, '_blank');
+        }
       } else {
         setErrorMsg(res.error || 'Failed to record payment');
       }
     });
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+  // Only render on client to avoid hydration mismatch with document.body
+  const [mounted, setMounted] = useState(false);
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!isOpen || !mounted) return null;
+
+  const modalContent = (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-black/80 backdrop-blur-sm"
@@ -119,7 +133,7 @@ export function InvoicePaymentModal({
               <div className="flex-1">
                 <RupiahInput
                   value={paymentAmount}
-                  onChange={setPaymentAmount}
+                  onValueChange={setPaymentAmount}
                   className="w-full bg-zinc-900 border border-[#d4af37]/30 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37]/50 transition-all font-mono"
                   placeholder="0"
                 />
@@ -160,4 +174,6 @@ export function InvoicePaymentModal({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }

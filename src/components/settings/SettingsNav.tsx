@@ -10,10 +10,10 @@ export function SettingsNav() {
 
   const tabs = [
     {
-      label: 'WORKSPACE',
+      label: 'ABOUT',
       href: '/settings/workspaces',
       icon: Building2,
-      description: 'Enterprise tenants, identity & tax profiles',
+      description: 'Active enterprise tenant details & settings',
     },
     {
       label: 'CONTACT',

@@ -1,125 +1,103 @@
 import React from 'react';
+import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
-import { WorkspacesMasterList, type WorkspaceMasterItem } from '@/components/settings/WorkspacesMasterList';
+import { WorkspaceDetailTabs } from '@/components/settings/WorkspaceDetailTabs';
+import type { BankAccountItem } from '@/app/actions/settings';
+import type { CatalogProduct } from '@/components/settings/CatalogManager';
 
 export const dynamic = 'force-dynamic';
 
 export default async function WorkspacesMasterPage() {
   const supabase = await createClient();
   const wsContext = await getAuthenticatedWorkspaceContext();
+  const activeId = wsContext.activeWorkspaceId;
 
-  const activeId = wsContext.activeWorkspaceId || '';
+  if (!activeId) {
+    // If somehow no active workspace, redirect to general settings to create one
+    redirect('/settings/general');
+  }
 
-  // Fetch user details & all workspace memberships with full workspace data
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Concurrently fetch exact workspace entity, bank accounts, and products by active ID
+  const [wsRes, accountsRes, productsRes] = await Promise.all([
+    supabase.from('workspaces').select('*').eq('id', activeId).single(),
+    supabase.from('workspace_bank_accounts').select('*').eq('workspace_id', activeId).order('is_default', { ascending: false }),
+    supabase.from('products').select('*').eq('workspace_id', activeId).order('created_at', { ascending: false }),
+  ]);
 
-  let masterList: WorkspaceMasterItem[] = [];
+  const { data: ws, error: wsErr } = wsRes;
 
-  if (user) {
-    const isFounder = user.email?.toLowerCase() === 'nicojapar@gmail.com' || user.email?.toLowerCase() === 'relinepanasonic@gmail.com';
-
-    if (isFounder) {
-      const { createClient: createAdminClient } = await import('@supabase/supabase-js');
-      const adminClient = createAdminClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-      );
-      const { data: allWorkspaces } = await adminClient
-        .from('workspaces')
-        .select('*')
-        .order('created_at', { ascending: true });
-
-      if (allWorkspaces) {
-        masterList = allWorkspaces.map((ws: any) => {
-          const isTaxReg =
-            ws.is_tax_registered !== undefined && ws.is_tax_registered !== null
-              ? Boolean(ws.is_tax_registered)
-              : Number(ws.tax_rate_percent || 0) > 0;
-          return {
-            id: ws.id,
-            name: ws.name || 'Workspace Enterprise',
-            role: 'founder',
-            isTaxRegistered: isTaxReg,
-            taxRatePercent: Number(ws.tax_rate_percent || 0),
-            logoUrl: ws.logo_url || undefined,
-          };
-        });
-      }
-    } else {
-      let memberRows: any[] | null = null;
-      const { data: byUser, error } = await supabase
-        .from('workspace_members')
-        .select('workspace_id, role, workspaces (*)')
-        .eq('user_id', user.id);
-
-      if (!error && byUser && byUser.length > 0) {
-        memberRows = byUser;
-      } else if (user.email) {
-        const { data: byEmail } = await supabase
-          .from('workspace_members')
-          .select('workspace_id, role, workspaces (*)')
-          .ilike('email', user.email.trim());
-        if (byEmail && byEmail.length > 0) {
-          memberRows = byEmail;
-        }
-      }
-
-      if (memberRows && memberRows.length > 0) {
-      masterList = memberRows
-        .map((m: any) => {
-          const wsObj = Array.isArray(m.workspaces) ? m.workspaces[0] : m.workspaces;
-          if (!wsObj?.id) return null;
-          const isTaxReg =
-            wsObj.is_tax_registered !== undefined && wsObj.is_tax_registered !== null
-              ? Boolean(wsObj.is_tax_registered)
-              : Number(wsObj.tax_rate_percent || 0) > 0;
-          return {
-            id: wsObj.id,
-            name: wsObj.name || 'Enterprise Tenant',
-            role: (m.role as string) || 'accounting',
-            isTaxRegistered: isTaxReg,
-            taxRatePercent: wsObj.tax_rate_percent !== undefined ? Number(wsObj.tax_rate_percent) : (isTaxReg ? 11 : 0),
-          };
-        })
-        .filter(Boolean) as WorkspaceMasterItem[];
-      }
+  if (wsErr || !ws) {
+    // Check fallback in preview seed mode if not in database
+    const seedWs = wsContext.availableWorkspaces?.find((w) => w.id === activeId);
+    if (!seedWs) {
+      return notFound();
     }
   }
 
-  // If no explicit memberships found, fetch all real workspaces from database before ever using seed!
-  if (masterList.length === 0) {
-    const { data: realWs } = await supabase
-      .from('workspaces')
-      .select('*')
-      .order('created_at', { ascending: true });
+  const workspaceName =
+    ws?.name || wsContext.availableWorkspaces?.find((w) => w.id === activeId)?.name || 'Enterprise Tenant';
+  const isTaxRegistered =
+    ws?.is_tax_registered !== undefined && ws?.is_tax_registered !== null
+      ? Boolean(ws.is_tax_registered)
+      : Number(ws?.tax_rate_percent || 0) > 0;
+  const taxRatePercent = ws?.tax_rate_percent !== undefined ? Number(ws.tax_rate_percent) : (isTaxRegistered ? 11 : 0);
+  const logoUrl = ws?.logo_url || ws?.company_logo_url || '';
+  const tagline = ws?.brand_tagline || ws?.tagline || '';
+  const phone = ws?.contact_phone || ws?.phone || '';
+  const email = ws?.official_email || ws?.email || '';
+  const website = ws?.website_url || ws?.website || '';
 
-    if (realWs && realWs.length > 0) {
-      masterList = realWs.map((wsObj: any) => {
-        const isTaxReg =
-          wsObj.is_tax_registered !== undefined && wsObj.is_tax_registered !== null
-            ? Boolean(wsObj.is_tax_registered)
-            : Number(wsObj.tax_rate_percent || 0) > 0;
-        return {
-          id: wsObj.id,
-          name: wsObj.name || 'Enterprise Tenant',
-          role: 'accounting',
-          isTaxRegistered: isTaxReg,
-          taxRatePercent: wsObj.tax_rate_percent !== undefined ? Number(wsObj.tax_rate_percent) : (isTaxReg ? 11 : 0),
-        };
-      });
-    } else if (wsContext.availableWorkspaces) {
-      masterList = wsContext.availableWorkspaces.map((w) => ({
-        id: w.id,
-        name: w.name,
-        role: w.role,
-        isTaxRegistered: false,
-        taxRatePercent: 11,
+  // Process bank accounts data
+  let bankAccounts: BankAccountItem[] = [];
+  if (!accountsRes.error && accountsRes.data && accountsRes.data.length > 0) {
+    bankAccounts = accountsRes.data.map((acc: any) => ({
+      id: acc.id,
+      bank_name: acc.bank_name,
+      account_number: acc.account_number,
+      account_name: acc.account_name,
+      is_default: Boolean(acc.is_default),
+    }));
+  } else if (ws?.payment_instructions) {
+    const lines = ws.payment_instructions.split('\n').filter((l: string) => l.trim().length > 0);
+    if (lines.length > 0) {
+      bankAccounts = lines.map((line: string, idx: number) => ({
+        id: `temp-legacy-${idx}`,
+        bank_name: idx === 0 ? 'Bank Account' : `Bank Account (${idx + 1})`,
+        account_number: line.trim(),
+        account_name: workspaceName,
+        is_default: idx === 0,
       }));
     }
   }
 
-  return <WorkspacesMasterList workspaces={masterList} activeWorkspaceId={activeId} />;
+  // Process products data
+  const productList: CatalogProduct[] =
+    productsRes.data && productsRes.data.length > 0
+      ? productsRes.data.map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          description: p.description || undefined,
+          unit_price: Number(p.unit_price) || 0,
+          quantity: Number(p.quantity) || 1,
+          scale: p.scale || 'pc',
+        }))
+      : [];
+
+  return (
+    <WorkspaceDetailTabs
+      targetWorkspaceId={activeId}
+      workspaceName={workspaceName}
+      isTaxRegistered={isTaxRegistered}
+      taxRatePercent={taxRatePercent}
+      logoUrl={logoUrl}
+      tagline={tagline}
+      phone={phone}
+      email={email}
+      website={website}
+      bankAccounts={bankAccounts}
+      products={productList}
+      isCurrentActive={true}
+    />
+  );
 }

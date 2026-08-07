@@ -640,9 +640,9 @@ export async function recordInvoicePayment(invoiceId: string, amount: number, pa
     if (isFullyPaid) {
       newStatus = 'paid';
     } else if (newAmountPaid > 0) {
-      newStatus = 'partial_paid';
+      newStatus = 'sent'; // partial payment - stays as 'sent' until DB migration adds 'partial_paid'
     } else {
-      newStatus = 'invoiced'; // If payment is 0, just mark as sent/invoiced
+      newStatus = 'sent'; // 0 payment - mark as sent/invoiced
     }
 
     // 2. Insert Transaction (Only if amount > 0)

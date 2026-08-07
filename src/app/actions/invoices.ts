@@ -617,7 +617,7 @@ export async function deleteInvoice(invoiceId: string) {
 /**
  * Server Action: Record Payment against an Invoice
  */
-export async function recordInvoicePayment(invoiceId: string, amount: number, paymentDate: string, paymentMethod: string, reference?: string) {
+export async function recordInvoicePayment(invoiceId: string, amount: number, paymentDate: string, paymentMethod: string, reference?: string, transferToWorkspaceId?: string) {
   try {
     const supabase = await createClient();
     const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
@@ -684,6 +684,31 @@ export async function recordInvoicePayment(invoiceId: string, amount: number, pa
         { workspace_id: workspaceId, account_code: debitAccountCode, transaction_date: todayStr, debit_amount: amount, credit_amount: 0, description: `Payment for Invoice ${inv.invoice_number}${reference ? ' - ' + reference : ''}`, reference_id: invoiceId, reference_type: 'payment' },
         { workspace_id: workspaceId, account_code: arAccount, transaction_date: todayStr, debit_amount: 0, credit_amount: amount, description: `Payment for Invoice ${inv.invoice_number}${reference ? ' - ' + reference : ''}`, reference_id: invoiceId, reference_type: 'payment' }
       ]);
+
+      // If transferring to another workspace, create Expense here and Direct Income there
+      if (transferToWorkspaceId && transferToWorkspaceId !== workspaceId) {
+        // 1. Expense in current workspace (Transfer Out)
+        await supabase.from('transactions').insert({
+          workspace_id: workspaceId,
+          type: 'expense',
+          category: 'Inter-Company Transfer Out',
+          amount: amount,
+          transaction_date: paymentDate,
+          description: `Auto-transfer out for Invoice ${inv.invoice_number}`,
+          payment_method: paymentMethod
+        });
+
+        // 2. Direct Income in target workspace (Transfer In)
+        await supabase.from('transactions').insert({
+          workspace_id: transferToWorkspaceId,
+          type: 'income',
+          category: 'Direct Income (Inter-Company)',
+          amount: amount,
+          transaction_date: paymentDate,
+          description: `Auto-transfer in from Invoice ${inv.invoice_number}`,
+          payment_method: paymentMethod
+        });
+      }
     }
 
     // 4. Update Invoice

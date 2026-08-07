@@ -15,9 +15,11 @@ export interface ClientRecord {
 interface ContactCrmManagerProps {
   initialClients: ClientRecord[];
   currentUserRole?: string;
+  activeWorkspaceId?: string;
+  availableWorkspaces?: any[];
 }
 
-export function ContactCrmManager({ initialClients, currentUserRole }: ContactCrmManagerProps) {
+export function ContactCrmManager({ initialClients, currentUserRole, activeWorkspaceId, availableWorkspaces }: ContactCrmManagerProps) {
   const [clients, setClients] = useState<ClientRecord[]>(initialClients);
   const [name, setName] = useState('');
   const [contactPerson, setContactPerson] = useState('');
@@ -27,6 +29,7 @@ export function ContactCrmManager({ initialClients, currentUserRole }: ContactCr
 
   const [activeTab, setActiveTab] = useState<'client' | 'vendor'>('client');
   const [contactType, setContactType] = useState<'client' | 'vendor'>('client');
+  const [cloneWorkspaceIds, setCloneWorkspaceIds] = useState<string[]>([]);
 
   // Edit modal state
   const [editingClient, setEditingClient] = useState<ClientRecord | null>(null);
@@ -53,6 +56,7 @@ export function ContactCrmManager({ initialClients, currentUserRole }: ContactCr
           contactPerson,
           email,
           contactType,
+          cloneWorkspaceIds,
         });
 
         if (!res.success) {
@@ -72,6 +76,7 @@ export function ContactCrmManager({ initialClients, currentUserRole }: ContactCr
           setName('');
           setContactPerson('');
           setEmail('');
+          setCloneWorkspaceIds([]);
         }
       } catch (err: any) {
         setErrorMsg(err?.message || 'Error creating client');
@@ -225,6 +230,30 @@ export function ContactCrmManager({ initialClients, currentUserRole }: ContactCr
             </select>
           </div>
         </div>
+
+        {availableWorkspaces && availableWorkspaces.length > 1 && (
+          <div className="pt-2 border-t border-[#d4af37]/20">
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-2">
+              CLONE TO OTHER WORKSPACES?
+            </label>
+            <div className="space-y-2 max-h-32 overflow-y-auto pr-2 custom-scrollbar">
+              {availableWorkspaces.filter(ws => ws.id !== activeWorkspaceId).map(ws => (
+                <label key={ws.id} className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer hover:text-zinc-200">
+                  <input 
+                    type="checkbox" 
+                    className="rounded border-zinc-700 bg-zinc-900/50 text-[#d4af37] focus:ring-[#d4af37]"
+                    checked={cloneWorkspaceIds.includes(ws.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) setCloneWorkspaceIds(prev => [...prev, ws.id]);
+                      else setCloneWorkspaceIds(prev => prev.filter(id => id !== ws.id));
+                    }}
+                  />
+                  <span className="truncate">{ws.name}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
 
         <button
           type="submit"

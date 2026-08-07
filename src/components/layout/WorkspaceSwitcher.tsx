@@ -152,7 +152,17 @@ export function WorkspaceSwitcher({
             })}
           </div>
 
-          <div className="p-2 bg-zinc-950/90 border-t border-zinc-800">
+          <div className="p-2 bg-zinc-950/90 border-t border-zinc-800 space-y-1">
+            <button
+              type="button"
+              onClick={() => {
+                setIsOpen(false);
+                router.push('/settings/general');
+              }}
+              className="w-full py-2 rounded-xl text-center text-[10px] font-bold tracking-wider text-[#111111] bg-gradient-to-r from-[#d4af37] to-[#f5d77f] hover:opacity-90 transition-opacity uppercase shadow-[0_0_15px_rgba(212,175,55,0.4)]"
+            >
+              + NEW ENTERPRISE TENANT
+            </button>
             <button
               type="button"
               onClick={() => setIsOpen(false)}

@@ -14,9 +14,11 @@ interface InvoiceActionProps {
   invoiceNumber?: string;
   totalAmount?: number;
   paidAmount?: number;
+  assignedWorkspaceId?: string | null;
+  assignedWorkspaceName?: string | null;
 }
 
-export function InvoiceStatusToggle({ id, status, invoiceNumber = '', totalAmount = 0, paidAmount = 0 }: InvoiceActionProps) {
+export function InvoiceStatusToggle({ id, status, invoiceNumber = '', totalAmount = 0, paidAmount = 0, assignedWorkspaceId, assignedWorkspaceName }: InvoiceActionProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   
   const isPaid = status?.toLowerCase() === 'paid';
@@ -68,6 +70,8 @@ export function InvoiceStatusToggle({ id, status, invoiceNumber = '', totalAmoun
         invoiceNumber={invoiceNumber}
         totalAmount={totalAmount}
         paidAmount={paidAmount}
+        assignedWorkspaceId={assignedWorkspaceId}
+        assignedWorkspaceName={assignedWorkspaceName}
       />
     </>
   );

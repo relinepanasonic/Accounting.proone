@@ -22,5 +22,12 @@ export default async function ClientsSettingsPage() {
     contactType: c.contact_type || 'client',
   }));
 
-  return <ContactCrmManager initialClients={clientList} currentUserRole={wsCtx.role} />;
+  return (
+    <ContactCrmManager 
+      initialClients={clientList} 
+      currentUserRole={wsCtx.role} 
+      activeWorkspaceId={wsCtx.activeWorkspaceId}
+      availableWorkspaces={wsCtx.availableWorkspaces}
+    />
+  );
 }

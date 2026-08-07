@@ -14,6 +14,8 @@ interface InvoicePaymentModalProps {
   invoiceNumber: string;
   totalAmount: number;
   paidAmount: number;
+  assignedWorkspaceId?: string | null;
+  assignedWorkspaceName?: string | null;
 }
 
 export function InvoicePaymentModal({
@@ -23,11 +25,14 @@ export function InvoicePaymentModal({
   invoiceNumber,
   totalAmount,
   paidAmount,
+  assignedWorkspaceId,
+  assignedWorkspaceName,
 }: InvoicePaymentModalProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [paymentAmount, setPaymentAmount] = useState<number | ''>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [autoTransfer, setAutoTransfer] = useState(true);
 
   // Only render on client to avoid hydration mismatch with document.body
   const [mounted, setMounted] = useState(false);
@@ -60,7 +65,7 @@ export function InvoicePaymentModal({
     startTransition(async () => {
       setErrorMsg(null);
       const today = new Date().toISOString().split('T')[0];
-      const res = await recordInvoicePayment(invoiceId, amountToPay, today, 'Manual Payment');
+      const res = await recordInvoicePayment(invoiceId, amountToPay, today, 'Manual Payment', autoTransfer && assignedWorkspaceId ? assignedWorkspaceId : undefined);
       if (res.success) {
         onClose();
         router.refresh();
@@ -150,6 +155,34 @@ export function InvoicePaymentModal({
               Enter 0 and save to just mark as sent/invoiced without a payment.
             </p>
           </div>
+
+          {/* Inter-company transfer toggle */}
+          {assignedWorkspaceId && assignedWorkspaceId !== '11111111-1111-1111-1111-111111111111' && (
+            <div className="pt-2 border-t border-zinc-800/80">
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <div className="relative flex items-center justify-center">
+                  <input
+                    type="checkbox"
+                    checked={autoTransfer}
+                    onChange={(e) => setAutoTransfer(e.target.checked)}
+                    className="peer sr-only"
+                  />
+                  <div className="w-5 h-5 rounded border-2 border-zinc-600 bg-zinc-900 peer-checked:border-[#d4af37] peer-checked:bg-[#d4af37]/20 transition-all flex items-center justify-center">
+                    <Check className={`w-3.5 h-3.5 text-[#f5d77f] transition-opacity ${autoTransfer ? 'opacity-100' : 'opacity-0'}`} />
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-white uppercase tracking-wider group-hover:text-[#f5d77f] transition-colors">
+                    Auto-Transfer funds to {assignedWorkspaceName}
+                  </div>
+                  <div className="text-[10px] font-mono text-zinc-500 mt-0.5">
+                    Creates Expense here & Direct Income in {assignedWorkspaceName}
+                  </div>
+                </div>
+              </label>
+            </div>
+          )}
+
 
           {/* Footer Actions */}
           <div className="pt-4 border-t border-zinc-800/80 flex justify-end gap-3">

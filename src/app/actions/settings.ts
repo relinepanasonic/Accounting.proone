@@ -594,6 +594,7 @@ export async function createClientRecord(payload: {
   contactPerson?: string;
   email?: string;
   contactType?: 'client' | 'vendor';
+  cloneWorkspaceIds?: string[];
 }) {
   try {
     const supabase = await createClient();
@@ -604,6 +605,7 @@ export async function createClientRecord(payload: {
     }
 
     const insertObj: any = {
+      workspace_id: workspaceId,
       name: payload.name.trim(),
       contact_name: payload.contactPerson?.trim() || null,
       company_name: payload.name.trim(),
@@ -611,22 +613,37 @@ export async function createClientRecord(payload: {
       contact_type: payload.contactType || 'client',
     };
 
+    let inserts = [insertObj];
+    
+    // Add cloned entries
+    if (payload.cloneWorkspaceIds && payload.cloneWorkspaceIds.length > 0) {
+      for (const targetWs of payload.cloneWorkspaceIds) {
+        if (targetWs !== workspaceId) {
+          inserts.push({
+            ...insertObj,
+            workspace_id: targetWs
+          });
+        }
+      }
+    }
+
     let { data: inserted, error } = await supabase
       .from('clients')
-      .insert(insertObj)
-      .select('*')
-      .single();
+      .insert(inserts)
+      .select('*');
 
     if (error && (error.message?.includes('column') || error.code === '42703')) {
       // Fallback if schema only has basic columns (e.g. name, email)
+      const fallbackInserts = inserts.map(obj => ({
+        workspace_id: obj.workspace_id,
+        name: obj.name,
+        email: obj.email,
+      }));
+      
       const fallbackRes = await supabase
         .from('clients')
-        .insert({
-          name: payload.name.trim(),
-          email: payload.email?.trim() || null,
-        })
-        .select('*')
-        .single();
+        .insert(fallbackInserts)
+        .select('*');
       if (fallbackRes.error) {
         return { success: false, error: fallbackRes.error.message };
       }
@@ -635,10 +652,11 @@ export async function createClientRecord(payload: {
       return { success: false, error: error.message };
     }
 
-    revalidatePath('/settings');
-    revalidatePath('/settings/clients');
     revalidatePath('/invoices/new');
-    return { success: true, client: inserted };
+
+    // Return the specific client record for the active workspace so UI can update
+    const activeClient = (inserted || []).find((c: any) => c.workspace_id === workspaceId) || (inserted || [])[0];
+    return { success: true, client: activeClient };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Failed to create client.' };
   }

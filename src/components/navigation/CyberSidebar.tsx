@@ -186,6 +186,18 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
           isCollapsed={isCollapsed}
         />
 
+        {/* Add Workspace Button in Sidebar */}
+        {!isCollapsed && (
+          <div className="px-3 pt-2">
+            <Link
+              href="/settings/general"
+              className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-[10px] font-extrabold tracking-wider text-[#111111] bg-gradient-to-r from-[#d4af37] to-[#f5d77f] hover:opacity-90 transition-opacity uppercase shadow-[0_0_15px_rgba(212,175,55,0.4)]"
+            >
+              + NEW ENTERPRISE TENANT
+            </Link>
+          </div>
+        )}
+
         {/* Navigation Menu Links */}
         <nav className="p-3 space-y-1">
           {NAV_ITEMS.filter(item => {

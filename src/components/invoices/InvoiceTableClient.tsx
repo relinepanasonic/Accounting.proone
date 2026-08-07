@@ -368,6 +368,8 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
                         invoiceNumber={inv.invoiceNumber}
                         totalAmount={inv.rawAmount}
                         paidAmount={inv.paidAmount}
+                        assignedWorkspaceId={inv.assignedWorkspaceId}
+                        assignedWorkspaceName={inv.assignedWorkspaceName}
                       />
                     )}
                   </td>

@@ -16,7 +16,7 @@ export interface COAAccount {
   balance?: number;
 }
 
-export async function upsertCOAAccount(account: COAAccount) {
+export async function upsertCOAAccount(account: COAAccount, cloneWorkspaceIds?: string[]) {
   const supabase = await createClient();
   const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
@@ -27,8 +27,8 @@ export async function upsertCOAAccount(account: COAAccount) {
 
   let error;
 
-  if (account.id) {
-    // Update existing
+  if (account.id && (!cloneWorkspaceIds || cloneWorkspaceIds.length <= 1)) {
+    // Update existing single account
     const { error: updateError } = await supabase
       .from('global_chart_of_accounts')
       .update({
@@ -38,7 +38,7 @@ export async function upsertCOAAccount(account: COAAccount) {
         description: account.description,
         is_active: account.is_active,
         parent_code: account.parent_code || null,
-        workspace_id: activeWorkspaceId,
+        workspace_id: account.workspace_id !== undefined ? account.workspace_id : activeWorkspaceId,
         updated_at: new Date().toISOString(),
       })
       .eq('id', account.id)
@@ -46,18 +46,22 @@ export async function upsertCOAAccount(account: COAAccount) {
     
     error = updateError;
   } else {
-    // Insert new
+    // Insert new (single or cloned)
+    const targets = cloneWorkspaceIds && cloneWorkspaceIds.length > 0 ? cloneWorkspaceIds : [account.workspace_id !== undefined ? account.workspace_id : activeWorkspaceId];
+    
+    const insertPayload = targets.map(targetId => ({
+      account_code: account.account_code,
+      account_name: account.account_name,
+      account_type: account.account_type,
+      description: account.description,
+      parent_code: account.parent_code || null,
+      workspace_id: targetId || null,
+      is_active: account.is_active !== undefined ? account.is_active : true,
+    }));
+
     const { error: insertError } = await supabase
       .from('global_chart_of_accounts')
-      .insert({
-        account_code: account.account_code,
-        account_name: account.account_name,
-        account_type: account.account_type,
-        description: account.description,
-        parent_code: account.parent_code || null,
-        workspace_id: activeWorkspaceId,
-        is_active: account.is_active !== undefined ? account.is_active : true,
-      });
+      .insert(insertPayload);
 
     error = insertError;
   }

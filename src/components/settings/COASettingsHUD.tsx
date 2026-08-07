@@ -45,6 +45,7 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [], active
   const [formParentCode, setFormParentCode] = useState('');
   const [formWorkspaceId, setFormWorkspaceId] = useState('');
   const [formActive, setFormActive] = useState(true);
+  const [cloneWorkspaceIds, setCloneWorkspaceIds] = useState<string[]>([]);
 
   // Delete State
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -101,6 +102,7 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [], active
     setFormDesc(acc.description || '');
     setFormParentCode(acc.parent_code || '');
     setFormWorkspaceId(acc.workspace_id || '');
+    setCloneWorkspaceIds(acc.workspace_id ? [acc.workspace_id] : workspaces.map(w => w.id));
     setFormActive(acc.is_active);
     setIsFormOpen(true);
   };
@@ -132,7 +134,8 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [], active
       setFormType('Asset');
       setFormDesc('');
       setFormParentCode('');
-      setFormWorkspaceId('');
+      setFormWorkspaceId(activeWorkspaceId || '');
+      setCloneWorkspaceIds(activeWorkspaceId ? [activeWorkspaceId] : []);
       setFormActive(true);
     }
     setIsFormOpen(true);
@@ -145,6 +148,8 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [], active
 
     startTransition(async () => {
       try {
+        const isCloning = !formId && cloneWorkspaceIds.length > 1;
+
         await upsertCOAAccount({
           id: formId,
           account_code: formCode,
@@ -152,9 +157,9 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [], active
           account_type: formType,
           description: formDesc || null,
           parent_code: formParentCode || null,
-          workspace_id: formWorkspaceId || null,
+          workspace_id: isCloning ? undefined : (formWorkspaceId || null),
           is_active: formActive,
-        });
+        }, isCloning ? cloneWorkspaceIds : undefined);
         setIsFormOpen(false);
       } catch (err: any) {
         setError(err.message || 'Failed to save COA entry');
@@ -457,18 +462,42 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [], active
               
               <div>
                 <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-2">Workspace Assignment</label>
-                <select
-                  value={formWorkspaceId}
-                  onChange={(e) => setFormWorkspaceId(e.target.value)}
-                  className="w-full bg-black/60 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-[#f5d77f] focus:outline-none focus:border-[#d4af37]/60"
-                >
-                  <option value="">Global (All Workspaces)</option>
-                  {workspaces.map(w => (
-                    <option key={w.id} value={w.id}>
-                      {w.name}
-                    </option>
-                  ))}
-                </select>
+                {workspaces.length === 0 ? (
+                  <div className="text-xs text-zinc-500 font-mono italic p-3 border border-zinc-800 rounded-xl">No workspaces available</div>
+                ) : (
+                  <div className="space-y-2 p-3 bg-zinc-950/50 border border-zinc-800/80 rounded-xl max-h-32 overflow-y-auto custom-scrollbar">
+                    {workspaces.map(w => (
+                      <label key={w.id} className="flex items-center gap-3 cursor-pointer group">
+                        <div className="relative flex items-center justify-center">
+                          <input
+                            type="checkbox"
+                            checked={cloneWorkspaceIds.includes(w.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setCloneWorkspaceIds([...cloneWorkspaceIds, w.id]);
+                                if (cloneWorkspaceIds.length === 0) setFormWorkspaceId(w.id);
+                              } else {
+                                setCloneWorkspaceIds(cloneWorkspaceIds.filter(id => id !== w.id));
+                              }
+                            }}
+                            className="peer sr-only"
+                          />
+                          <div className="w-5 h-5 rounded-md border-2 border-zinc-700 bg-zinc-900 peer-checked:border-[#d4af37] peer-checked:bg-[#d4af37]/20 transition-all flex items-center justify-center">
+                            <Check className={`w-3.5 h-3.5 text-[#f5d77f] transition-opacity ${cloneWorkspaceIds.includes(w.id) ? 'opacity-100' : 'opacity-0'}`} />
+                          </div>
+                        </div>
+                        <span className="text-xs font-mono font-medium text-zinc-300 group-hover:text-white transition-colors">
+                          {w.name}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {cloneWorkspaceIds.length > 1 && !formId && (
+                  <p className="text-[10px] text-[#d4af37] font-mono mt-1 flex items-center gap-1">
+                    <Copy className="w-3 h-3" /> Will clone this account to {cloneWorkspaceIds.length} workspaces
+                  </p>
+                )}
               </div>
 
               <div>

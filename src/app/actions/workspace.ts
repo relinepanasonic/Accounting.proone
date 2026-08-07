@@ -133,6 +133,21 @@ export async function createWorkspace(workspaceName: string) {
       };
     }
 
+    // Step 3.5: Seed Default Chart of Accounts for the new workspace
+    const defaultCOA = [
+      { account_code: '1000', account_name: 'Cash & Cash Equivalents', account_type: 'Asset', description: 'Liquid assets and bank accounts', workspace_id: newWs.id },
+      { account_code: '1100', account_name: 'Accounts Receivable', account_type: 'Asset', description: 'Money owed by customers', workspace_id: newWs.id },
+      { account_code: '2000', account_name: 'Accounts Payable', account_type: 'Liability', description: 'Money owed to vendors', workspace_id: newWs.id },
+      { account_code: '3000', account_name: 'Retained Earnings', account_type: 'Equity', description: 'Accumulated net income', workspace_id: newWs.id },
+      { account_code: '4000', account_name: 'Sales Revenue', account_type: 'Revenue', description: 'Income from core business', workspace_id: newWs.id },
+      { account_code: '4100', account_name: 'Direct Income', account_type: 'Revenue', description: 'Inter-company transfers and direct income', workspace_id: newWs.id },
+      { account_code: '5000', account_name: 'Cost of Goods Sold', account_type: 'COGS', description: 'Direct costs of production', workspace_id: newWs.id },
+      { account_code: '6000', account_name: 'Operating Expenses', account_type: 'Expense', description: 'General operational costs', workspace_id: newWs.id },
+      { account_code: '6100', account_name: 'Inter-Company Transfer Out', account_type: 'Expense', description: 'Transfers to other workspaces', workspace_id: newWs.id },
+    ];
+
+    await supabase.from('global_chart_of_accounts').insert(defaultCOA);
+
     // Step 4: Set the active_workspace_id cookie so user is instantly switched to the new company
     cookieStore.set('active_workspace_id', newWs.id, {
       path: '/',

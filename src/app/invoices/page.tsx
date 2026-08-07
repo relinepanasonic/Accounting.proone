@@ -9,7 +9,7 @@ import { InvoiceTableClient } from '@/components/invoices/InvoiceTableClient';
 
 export const dynamic = 'force-dynamic';
 
-async function InvoicesTableServer() {
+async function InvoicesTableServer({ activeTab }: { activeTab: string }) {
   const supabase = await createClient();
   const { activeWorkspaceId, activeWorkspaceName, availableWorkspaces } = await getAuthenticatedWorkspaceContext(supabase);
 
@@ -82,14 +82,17 @@ async function InvoicesTableServer() {
         }))
       : [];
 
-  const finalInvoices = [...displayInvoices, ...displayIncomeTx].sort(
+  const finalInvoices = (activeTab === 'direct' ? displayIncomeTx : displayInvoices).sort(
     (a, b) => new Date(b.rawIssueDate || 0).getTime() - new Date(a.rawIssueDate || 0).getTime()
   );
 
   return <InvoiceTableClient initialInvoices={finalInvoices} availableWorkspaces={availableWorkspaces} activeWorkspaceName={activeWorkspaceName} />;
 }
 
-export default function InvoicesPage() {
+export default async function InvoicesPage({ searchParams }: { searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {
+  const resolvedParams = await searchParams;
+  const activeTab = typeof resolvedParams.tab === 'string' ? resolvedParams.tab : 'invoices';
+
   return (
     <div className="max-w-[1500px] mx-auto px-6 py-8 space-y-6">
       {/* Page Header Bar */}
@@ -118,12 +121,36 @@ export default function InvoicesPage() {
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-[#d4af37]/20 w-fit">
+        <Link
+          href="?tab=invoices"
+          className={`px-6 py-2 rounded-lg text-xs font-bold tracking-widest uppercase transition-all ${
+            activeTab === 'invoices'
+              ? 'bg-gradient-to-r from-[#d4af37]/20 to-[#d4af37]/5 text-[#f5d77f] border border-[#d4af37]/40 shadow-[0_0_15px_rgba(212,175,55,0.15)]'
+              : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
+          }`}
+        >
+          Invoices
+        </Link>
+        <Link
+          href="?tab=direct"
+          className={`px-6 py-2 rounded-lg text-xs font-bold tracking-widest uppercase transition-all ${
+            activeTab === 'direct'
+              ? 'bg-gradient-to-r from-[#d4af37]/20 to-[#d4af37]/5 text-[#f5d77f] border border-[#d4af37]/40 shadow-[0_0_15px_rgba(212,175,55,0.15)]'
+              : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
+          }`}
+        >
+          Direct Income
+        </Link>
+      </div>
+
       <Suspense
         fallback={
           <div className="gold-glass-panel rounded-2xl h-80 animate-pulse p-6"></div>
         }
       >
-        <InvoicesTableServer />
+        <InvoicesTableServer activeTab={activeTab} />
       </Suspense>
     </div>
   );

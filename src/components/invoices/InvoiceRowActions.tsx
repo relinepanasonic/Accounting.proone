@@ -77,7 +77,7 @@ export function InvoiceStatusToggle({ id, status, invoiceNumber = '', totalAmoun
   );
 }
 
-export function InvoiceActionGroup({ id, isQuotation, status }: InvoiceActionProps) {
+export function InvoiceActionGroup({ id, isQuotation, status, invoiceNumber }: InvoiceActionProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 

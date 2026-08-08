@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useTransition, useEffect } from 'react';
-import { X, Check, Trash2 } from 'lucide-react';
+import { X, Check, Trash2, FileText } from 'lucide-react';
 import { RupiahInput } from '@/components/ui/RupiahInput';
 import { recordInvoicePayment, getInvoicePayments, deleteInvoicePayment } from '@/app/actions/invoices';
 import { useRouter } from 'next/navigation';
@@ -47,6 +47,9 @@ export function InvoicePaymentModal({
 
   useEffect(() => {
     if (isOpen && invoiceId) {
+      setPaymentAmount('');
+      setErrorMsg(null);
+      setSelectedBankId('default');
       loadHistory();
     }
   }, [isOpen, invoiceId]);
@@ -283,15 +286,26 @@ export function InvoicePaymentModal({
                           {p.date} • {p.bankName || 'Default Account'}
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        disabled={isPending}
-                        onClick={() => handleDeletePayment(p.id)}
-                        className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-                        title="Delete Payment"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <a
+                          href={`/invoices/${invoiceId}?receipt=true`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2 rounded-lg bg-[#d4af37]/10 text-[#d4af37] hover:bg-[#d4af37]/20 hover:text-[#f5d77f] transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                          title="View Receipt"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                        </a>
+                        <button
+                          type="button"
+                          disabled={isPending}
+                          onClick={() => handleDeletePayment(p.id)}
+                          className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                          title="Delete Payment"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>

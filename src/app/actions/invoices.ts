@@ -670,19 +670,30 @@ export async function recordInvoicePayment(invoiceId: string, amount: number, pa
     if (arAccount === '1002') arAccount = '1200';
     
     let chosenBank: any = null;
-    if (bankAccountId && bankAccountId !== 'all' && bankAccountId !== 'custom') {
+    let debitAccountCode = '1000';
+    
+    if (bankAccountId === 'cash') {
+      debitAccountCode = '1000';
+      chosenBank = { id: 'cash', bank_name: 'Cash', coa_account_code: '1000' };
+    } else if (bankAccountId && bankAccountId !== 'all' && bankAccountId !== 'custom') {
       const { data: bankRes } = await supabase.from('workspace_bank_accounts').select('*').eq('id', bankAccountId).single();
       if (bankRes) chosenBank = bankRes;
     }
+    
     if (!chosenBank && inv.bank_account_id && inv.bank_account_id !== 'all' && inv.bank_account_id !== 'custom') {
       const { data: bankRes } = await supabase.from('workspace_bank_accounts').select('*').eq('id', inv.bank_account_id).single();
       if (bankRes) chosenBank = bankRes;
     }
+    
     if (!chosenBank) {
       const { data: firstBank } = await supabase.from('workspace_bank_accounts').select('*').eq('workspace_id', workspaceId).order('is_default', { ascending: false }).limit(1);
       if (firstBank && firstBank.length > 0) chosenBank = firstBank[0];
     }
-    let debitAccountCode = chosenBank?.coa_account_code || '1000';
+    
+    if (chosenBank && bankAccountId !== 'cash') {
+      debitAccountCode = chosenBank.coa_account_code || '1000';
+    }
+    
     if (debitAccountCode === '1010' || debitAccountCode === '1001') debitAccountCode = '1000';
 
       const todayStr = paymentDate || new Date().toISOString().split('T')[0];
@@ -767,6 +778,9 @@ export async function getInvoicePayments(invoiceId: string) {
 
     const payments = (txs || []).map(tx => {
       const bank = banks?.find(b => b.id === tx.bank_reference);
+      let bName = bank ? `${bank.bank_name} - ${bank.account_number}`.replace(/ - $/, '') : null;
+      if (tx.bank_reference === 'cash') bName = 'Cash (Manual)';
+      
       return {
         id: tx.id,
         amount: Number(tx.amount || 0),
@@ -774,7 +788,7 @@ export async function getInvoicePayments(invoiceId: string) {
         method: tx.payment_method,
         description: tx.description,
         bankAccountId: tx.bank_reference,
-        bankName: bank ? `${bank.bank_name} - ${bank.account_number}`.replace(/ - $/, '') : null
+        bankName: bName
       };
     });
 

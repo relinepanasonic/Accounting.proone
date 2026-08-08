@@ -20,7 +20,7 @@ async function InvoicesTableServer({ activeTab }: { activeTab: string }) {
     supabase
       .from('invoices')
       .select('id, invoice_number, is_quotation, status, total_amount, amount_paid, issue_date, due_date, client_id, assigned_workspace_id, clients(name, contact_name), invoice_line_items(package_name, description, quantity, scale), assignedWorkspaces:workspaces!invoices_assigned_workspace_id_fkey(name)')
-      .or(`workspace_id.eq.${activeWorkspaceId},assigned_workspace_id.eq.${activeWorkspaceId}`)
+      .eq('workspace_id', activeWorkspaceId)
       .order('created_at', { ascending: false }),
     supabase
       .from('transactions')

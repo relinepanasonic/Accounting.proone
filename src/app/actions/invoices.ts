@@ -640,7 +640,7 @@ export async function recordInvoicePayment(invoiceId: string, amount: number, pa
     if (isFullyPaid) {
       newStatus = 'paid';
     } else if (newAmountPaid > 0) {
-      newStatus = 'sent'; // partial payment - stays as 'sent' until DB migration adds 'partial_paid'
+      newStatus = 'partial_paid';
     } else {
       newStatus = 'sent'; // 0 payment - mark as sent/invoiced
     }
@@ -854,7 +854,7 @@ export async function deleteInvoicePayment(transactionId: string, invoiceId: str
     let newStatus = 'sent';
     if (inv) {
       if (totalPaidNow >= Number(inv.total_amount)) newStatus = 'paid';
-      else if (totalPaidNow > 0) newStatus = 'sent'; // partial_paid in future
+      else if (totalPaidNow > 0) newStatus = 'partial_paid';
       else newStatus = 'sent'; // zero
     }
 

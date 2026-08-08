@@ -617,7 +617,7 @@ export async function deleteInvoice(invoiceId: string) {
 /**
  * Server Action: Record Payment against an Invoice
  */
-export async function recordInvoicePayment(invoiceId: string, amount: number, paymentDate: string, paymentMethod: string, reference?: string, transferToWorkspaceId?: string) {
+export async function recordInvoicePayment(invoiceId: string, amount: number, paymentDate: string, paymentMethod: string, reference?: string, transferToWorkspaceId?: string, bankAccountId?: string) {
   try {
     const supabase = await createClient();
     const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
@@ -646,8 +646,9 @@ export async function recordInvoicePayment(invoiceId: string, amount: number, pa
     }
 
     // 2. Insert Transaction (Only if amount > 0)
+    let newTxId = '';
     if (amount > 0) {
-      const { error: txErr } = await supabase.from('transactions').insert({
+      const { data: txData, error: txErr } = await supabase.from('transactions').insert({
       workspace_id: workspaceId,
       type: 'income',
       category: 'Client Payment',
@@ -656,10 +657,12 @@ export async function recordInvoicePayment(invoiceId: string, amount: number, pa
       description: `Payment for ${inv.invoice_number}${reference ? ' - ' + reference : ''}`,
       client_id: inv.client_id,
       invoice_id: inv.id,
-      payment_method: paymentMethod
-    });
+      payment_method: paymentMethod,
+      bank_reference: bankAccountId || null
+    }).select('id').single();
 
     if (txErr) throw new Error('Failed to create payment transaction.');
+    newTxId = txData.id;
 
     // 3. Ledger Double-Entry
     const mappings = await getWorkspaceMappings(workspaceId);
@@ -667,7 +670,11 @@ export async function recordInvoicePayment(invoiceId: string, amount: number, pa
     if (arAccount === '1002') arAccount = '1200';
     
     let chosenBank: any = null;
-    if (inv.bank_account_id && inv.bank_account_id !== 'all' && inv.bank_account_id !== 'custom') {
+    if (bankAccountId && bankAccountId !== 'all' && bankAccountId !== 'custom') {
+      const { data: bankRes } = await supabase.from('workspace_bank_accounts').select('*').eq('id', bankAccountId).single();
+      if (bankRes) chosenBank = bankRes;
+    }
+    if (!chosenBank && inv.bank_account_id && inv.bank_account_id !== 'all' && inv.bank_account_id !== 'custom') {
       const { data: bankRes } = await supabase.from('workspace_bank_accounts').select('*').eq('id', inv.bank_account_id).single();
       if (bankRes) chosenBank = bankRes;
     }
@@ -681,8 +688,8 @@ export async function recordInvoicePayment(invoiceId: string, amount: number, pa
       const todayStr = paymentDate || new Date().toISOString().split('T')[0];
       
       const { error: jeErr } = await supabase.from('journal_entries').insert([
-        { workspace_id: workspaceId, account_code: debitAccountCode, transaction_date: todayStr, debit_amount: amount, credit_amount: 0, description: `Payment for Invoice ${inv.invoice_number}${reference ? ' - ' + reference : ''}`, reference_id: invoiceId, reference_type: 'payment' },
-        { workspace_id: workspaceId, account_code: arAccount, transaction_date: todayStr, debit_amount: 0, credit_amount: amount, description: `Payment for Invoice ${inv.invoice_number}${reference ? ' - ' + reference : ''}`, reference_id: invoiceId, reference_type: 'payment' }
+        { workspace_id: workspaceId, account_code: debitAccountCode, transaction_date: todayStr, debit_amount: amount, credit_amount: 0, description: `Payment for Invoice ${inv.invoice_number}${reference ? ' - ' + reference : ''}`, reference_id: newTxId || invoiceId, reference_type: 'payment_tx' },
+        { workspace_id: workspaceId, account_code: arAccount, transaction_date: todayStr, debit_amount: 0, credit_amount: amount, description: `Payment for Invoice ${inv.invoice_number}${reference ? ' - ' + reference : ''}`, reference_id: newTxId || invoiceId, reference_type: 'payment_tx' }
       ]);
 
       // If transferring to another workspace, create Expense here and Direct Income there
@@ -731,6 +738,128 @@ export async function recordInvoicePayment(invoiceId: string, amount: number, pa
     return { success: false, error: err?.message || 'Error recording payment.' };
   }
 }
+
+export async function getInvoicePayments(invoiceId: string) {
+  try {
+    const supabase = await createClient();
+    const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+
+    const { data: txs, error } = await supabase
+      .from('transactions')
+      .select(`
+        id,
+        amount,
+        transaction_date,
+        payment_method,
+        description,
+        bank_reference
+      `)
+      .eq('invoice_id', invoiceId)
+      .eq('workspace_id', workspaceId)
+      .eq('type', 'income')
+      .order('transaction_date', { ascending: false })
+      .order('created_at', { ascending: false });
+
+    if (error) throw new Error(error.message);
+
+    // Fetch bank accounts to map names
+    const { data: banks } = await supabase.from('workspace_bank_accounts').select('id, bank_name, account_number').eq('workspace_id', workspaceId);
+
+    const payments = (txs || []).map(tx => {
+      const bank = banks?.find(b => b.id === tx.bank_reference);
+      return {
+        id: tx.id,
+        amount: Number(tx.amount || 0),
+        date: tx.transaction_date,
+        method: tx.payment_method,
+        description: tx.description,
+        bankAccountId: tx.bank_reference,
+        bankName: bank ? `${bank.bank_name} - ${bank.account_number}`.replace(/ - $/, '') : null
+      };
+    });
+
+    return { success: true, payments, bankAccounts: banks || [] };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Error fetching payments.', payments: [], bankAccounts: [] };
+  }
+}
+
+export async function deleteInvoicePayment(transactionId: string, invoiceId: string) {
+  try {
+    const supabase = await createClient();
+    const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+
+    // 1. Fetch the transaction to ensure it exists and get its amount
+    const { data: tx, error: fetchErr } = await supabase
+      .from('transactions')
+      .select('amount')
+      .eq('id', transactionId)
+      .eq('invoice_id', invoiceId)
+      .eq('workspace_id', workspaceId)
+      .single();
+
+    if (fetchErr || !tx) throw new Error('Payment not found or you do not have permission to delete it.');
+
+    // 2. Delete the specific transaction
+    await supabase.from('transactions').delete().eq('id', transactionId).eq('workspace_id', workspaceId);
+
+    // 3. Delete the associated journal entries using reference_id = transaction.id
+    // If it's an old payment, the journal entries might use reference_id = invoiceId. We delete both just in case,
+    // but wait! We can't delete by invoiceId broadly or we lose other payments!
+    // We will delete explicitly by transactionId. If it's an old payment, we use a fuzzy match to delete exactly 2 rows.
+    const { data: exactJEs } = await supabase.from('journal_entries').select('id').eq('reference_id', transactionId);
+    if (exactJEs && exactJEs.length > 0) {
+      await supabase.from('journal_entries').delete().eq('reference_id', transactionId);
+    } else {
+      // Fuzzy match for old payments (matching amount, date, and invoiceId)
+      // This is a best-effort cleanup for old legacy payments
+      const { data: legacyJEs } = await supabase.from('journal_entries')
+        .select('id')
+        .eq('reference_id', invoiceId)
+        .eq('reference_type', 'payment')
+        .or(`debit_amount.eq.${tx.amount},credit_amount.eq.${tx.amount}`)
+        .limit(2);
+      
+      if (legacyJEs && legacyJEs.length > 0) {
+        const idsToDelete = legacyJEs.map(j => j.id);
+        await supabase.from('journal_entries').delete().in('id', idsToDelete);
+      }
+    }
+
+    // 4. Recalculate Invoice amount_paid
+    const { data: allRemainingTxs } = await supabase
+      .from('transactions')
+      .select('amount')
+      .eq('invoice_id', invoiceId)
+      .eq('workspace_id', workspaceId)
+      .eq('type', 'income');
+
+    const totalPaidNow = (allRemainingTxs || []).reduce((sum, t) => sum + Number(t.amount || 0), 0);
+
+    const { data: inv } = await supabase.from('invoices').select('total_amount').eq('id', invoiceId).single();
+    let newStatus = 'sent';
+    if (inv) {
+      if (totalPaidNow >= Number(inv.total_amount)) newStatus = 'paid';
+      else if (totalPaidNow > 0) newStatus = 'sent'; // partial_paid in future
+      else newStatus = 'sent'; // zero
+    }
+
+    await supabase.from('invoices').update({
+      amount_paid: totalPaidNow,
+      status: newStatus,
+      updated_at: new Date().toISOString()
+    }).eq('id', invoiceId).eq('workspace_id', workspaceId);
+
+    revalidatePath('/invoices');
+    revalidatePath(`/invoices/${invoiceId}`);
+    revalidatePath('/ledger');
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Error deleting payment.' };
+  }
+}
+
 
 export async function uploadTaxDocument(invoiceId: string, docType: 'faktur_pajak' | 'bukti_potong', base64Data: string) {
   try {

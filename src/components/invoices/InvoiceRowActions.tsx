@@ -123,6 +123,26 @@ export function InvoiceActionGroup({ id, isQuotation, status }: InvoiceActionPro
     }
   };
 
+  if (invoiceNumber === 'DIRECT INCOME') {
+    return (
+      <div className="inline-flex items-center gap-2">
+        {/* Direct Income transactions cannot be viewed as PDF or edited via the Invoice editor. */}
+        <span className="text-xs text-zinc-600 font-mono italic">
+          Quick Income
+        </span>
+        {/* Delete Invoice Action for Direct Income */}
+        <button
+          onClick={handleDelete}
+          disabled={isPending}
+          title="Permanently Delete Income"
+          className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-red-500/50 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="inline-flex items-center gap-2">
       {isQuotation && (

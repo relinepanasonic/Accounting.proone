@@ -591,6 +591,7 @@ export async function duplicateProduct(productId: string, targetWorkspaceId?: st
  */
 export async function createClientRecord(payload: {
   name: string;
+  company_legal_name?: string;
   contactPerson?: string;
   email?: string;
   contactType?: 'client' | 'vendor';
@@ -607,6 +608,7 @@ export async function createClientRecord(payload: {
     const insertObj: any = {
       workspace_id: workspaceId,
       name: payload.name.trim(),
+      company_legal_name: payload.company_legal_name?.trim() || null,
       contact_name: payload.contactPerson?.trim() || null,
       company_name: payload.name.trim(),
       email: payload.email?.trim() || null,
@@ -668,7 +670,8 @@ export async function createClientRecord(payload: {
 export async function updateClientRecord(payload: {
   id: string;
   name: string;
-  contactPerson: string;
+  company_legal_name?: string;
+  contactPerson?: string;
   email: string;
 }) {
   try {
@@ -685,6 +688,7 @@ export async function updateClientRecord(payload: {
 
     const updateObj: any = {
       name: payload.name.trim(),
+      company_legal_name: payload.company_legal_name?.trim() || null,
       contact_name: payload.contactPerson?.trim() || null,
       company_name: payload.name.trim(),
       email: payload.email?.trim() || null,
@@ -701,6 +705,7 @@ export async function updateClientRecord(payload: {
         .from('clients')
         .update({
           name: payload.name.trim(),
+          company_legal_name: payload.company_legal_name?.trim() || null,
           email: payload.email?.trim() || null,
           updated_at: new Date().toISOString(),
         })

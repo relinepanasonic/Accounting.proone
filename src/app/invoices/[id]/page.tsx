@@ -95,6 +95,7 @@ export default async function InvoiceDetailPage({ params, searchParams }: Invoic
     : '15 Jul 2026';
 
   const clientName = clientObj?.name || 'Client Payee';
+  const clientLegalName = clientObj?.company_legal_name || '';
   const clientBrand = clientObj?.company_name || clientObj?.company || '';
   const clientContact = clientObj?.contact_name || clientObj?.name || '';
   const clientAddress = clientObj?.billing_address || clientObj?.address || '';
@@ -164,6 +165,7 @@ export default async function InvoiceDetailPage({ params, searchParams }: Invoic
       rawIssueDate={inv?.issue_date}
       issueDate={issueDate}
       clientName={clientName}
+      clientLegalName={clientLegalName}
       clientBrand={clientBrand}
       clientContact={clientContact}
       clientAddress={clientAddress}

@@ -43,6 +43,7 @@ export interface InvoiceDocumentProps {
   rawIssueDate?: string;
   issueDate: string;
   clientName: string;
+  clientLegalName?: string;
   clientBrand?: string;
   clientContact: string;
   clientAddress: string;
@@ -74,7 +75,8 @@ export function InvoicePDFDocument({
   invoiceDate = '16 Jul, 2026',
   rawIssueDate,
   issueDate = '16 Jul, 2026',
-  clientName = 'Client Payee',
+  clientName = '',
+  clientLegalName,
   clientBrand = '',
   clientContact = '',
   clientAddress = '',
@@ -300,17 +302,19 @@ export function InvoicePDFDocument({
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-8">
             {/* Left: Bill To */}
             <div className="space-y-1.5 text-xs">
-              <span className="text-sm font-serif italic text-[#c5a059] block mb-1">
-                {isQuotation ? 'Prepared For / Pitch To:' : 'Bill To:'}
+              <span className="block text-[10px] font-bold text-[#c5a059] tracking-widest uppercase mb-1">
+                {isQuotation ? 'Prepared For / Pitch To:' : 'Billed To:'}
               </span>
-              <div className="text-base font-bold text-[#1e2536] font-serif">
-                {clientName}
-              </div>
+              <h3 className="text-sm font-bold text-[#1e2536] uppercase tracking-wide">{clientName}</h3>
+              {clientLegalName && (
+                <div className="text-xs text-zinc-500 font-serif italic mb-1">{clientLegalName}</div>
+              )}
               {clientBrand && <div className="text-zinc-700 font-bold">{clientBrand}</div>}
               {clientContact && clientContact !== clientName && (
-                <div className="text-zinc-500 font-medium">{clientContact}</div>
+                <div className="text-xs text-[#1e2536] font-medium mt-1">{clientContact}</div>
               )}
-              <div className="text-zinc-600 pt-1 leading-relaxed">
+              <div className="text-zinc-600 mt-1 leading-relaxed max-w-[200px]">
+                {clientAddress && <div>{clientAddress}</div>}
                 {clientPhone && <div>{clientPhone}</div>}
                 {clientEmail && <div className="text-[#1e2536] font-medium">{clientEmail}</div>}
               </div>

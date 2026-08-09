@@ -22,6 +22,7 @@ interface ContactCrmManagerProps {
 export function ContactCrmManager({ initialClients, currentUserRole, activeWorkspaceId, availableWorkspaces }: ContactCrmManagerProps) {
   const [clients, setClients] = useState<ClientRecord[]>(initialClients);
   const [name, setName] = useState('');
+  const [companyLegalName, setCompanyLegalName] = useState('');
   const [contactPerson, setContactPerson] = useState('');
   const [email, setEmail] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -34,6 +35,7 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
   // Edit modal state
   const [editingClient, setEditingClient] = useState<ClientRecord | null>(null);
   const [editName, setEditName] = useState('');
+  const [editLegalName, setEditLegalName] = useState('');
   const [editContact, setEditContact] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editPending, setEditPending] = useState(false);
@@ -53,6 +55,7 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
       try {
         const res = await createClientRecord({
           name,
+          company_legal_name: companyLegalName,
           contactPerson,
           email,
           contactType,
@@ -67,13 +70,15 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
             {
               id: newId,
               name,
-              company: contactPerson || name,
+              company: companyLegalName || name,
+              company_legal_name: companyLegalName,
               email,
               contactType,
             },
             ...prev,
           ]);
           setName('');
+          setCompanyLegalName('');
           setContactPerson('');
           setEmail('');
           setCloneWorkspaceIds([]);
@@ -87,6 +92,7 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
   const handleOpenEdit = (client: ClientRecord) => {
     setEditingClient(client);
     setEditName(client.name);
+    setEditLegalName(client.company_legal_name || '');
     setEditContact(client.company || '');
     setEditEmail(client.email || '');
     setEditError(null);
@@ -102,6 +108,7 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
       const res = await updateClientRecord({
         id: editingClient.id,
         name: editName,
+        company_legal_name: editLegalName,
         contactPerson: editContact,
         email: editEmail,
       });
@@ -399,13 +406,25 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
             <form onSubmit={handleSaveEdit} className="space-y-3">
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1">
-                  COMPANY NAME *
+                  BRAND NAME *
                 </label>
                 <input
                   type="text"
                   required
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#d4af37]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1">
+                  COMPANY LEGAL NAME
+                </label>
+                <input
+                  type="text"
+                  value={editLegalName}
+                  onChange={(e) => setEditLegalName(e.target.value)}
                   className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#d4af37]"
                 />
               </div>

@@ -22,19 +22,31 @@ const formatIndoDateStr = (dateStr: string) => {
 };
 
 function FormattedDateInput({ value, onChange }: { value: string, onChange: (val: string) => void }) {
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  
   return (
-    <div className="relative w-full group">
-      <div className="absolute inset-0 flex items-center justify-between px-4 bg-zinc-950 border border-zinc-800 rounded-xl pointer-events-none group-focus-within:border-[#d4af37]">
+    <div 
+      className="relative w-full h-[46px] group bg-zinc-950 border border-zinc-800 rounded-xl hover:border-[#d4af37]/50 focus-within:border-[#d4af37] transition-colors cursor-pointer overflow-hidden"
+      onClick={() => {
+        try {
+          inputRef.current?.showPicker();
+        } catch (e) {
+          // fallback if showPicker is not supported
+        }
+      }}
+    >
+      <div className="absolute inset-0 flex items-center justify-between px-4 pointer-events-none">
         <span className="text-sm font-bold text-white font-mono">
           {formatIndoDateStr(value) || 'Select Date'}
         </span>
         <Calendar className="w-4 h-4 text-[#d4af37]" />
       </div>
       <input
+        ref={inputRef}
         type="date"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full h-[46px] opacity-0 cursor-pointer"
+        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
         required
       />
     </div>

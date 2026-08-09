@@ -34,6 +34,8 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
   const { data: clients } = await supabase.from('clients').select('id, name, company_name').order('name', { ascending: true });
   const { data: products } = await supabase.from('products').select('*').eq('workspace_id', activeWorkspaceId).order('name', { ascending: true });
   const { data: bankAccounts } = await supabase.from('workspace_bank_accounts').select('*').eq('workspace_id', activeWorkspaceId).order('is_default', { ascending: false });
+  const { data: workspaces } = await supabase.from('workspaces').select('is_tax_registered').eq('id', activeWorkspaceId).single();
+  const isTaxRegistered = workspaces?.is_tax_registered || false;
 
   const clientList = clients || [];
   const productList = products || [];
@@ -60,6 +62,12 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
     })),
     globalDiscount: invoice.discount_amount || 0,
     assignedWorkspaceId: invoice.assigned_workspace_id || '',
+    taxCalculationType: invoice.tax_calculation_type || 'exclude',
+    hasPpn: invoice.has_ppn || false,
+    hasPph: invoice.has_pph || false,
+    pphRate: invoice.pph_rate || 2,
+    pphAmount: invoice.pph_amount || 0,
+    dppAmount: invoice.dpp_amount || 0,
   };
 
   return (
@@ -100,6 +108,7 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
           initialData={initialData}
           activeWorkspaceId={activeWorkspaceId}
           availableWorkspaces={availableWorkspaces}
+          isTaxRegistered={isTaxRegistered}
         />
       </Suspense>
     </div>

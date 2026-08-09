@@ -58,6 +58,13 @@ export interface InvoiceDocumentProps {
   workspaceBrand?: WorkspaceBrandInfo;
   documentType?: 'INVOICE' | 'QUOTATION' | 'RECEIPT';
   notes?: string;
+  isHistorical?: boolean;
+  taxCalculationType?: string;
+  hasPpn?: boolean;
+  hasPph?: boolean;
+  pphRate?: number;
+  pphAmount?: number;
+  dppAmount?: number;
 }
 
 export function InvoicePDFDocument({
@@ -83,6 +90,13 @@ export function InvoicePDFDocument({
   payments = [],
   workspaceBrand,
   documentType = 'INVOICE',
+  isHistorical,
+  taxCalculationType,
+  hasPpn,
+  hasPph,
+  pphRate,
+  pphAmount,
+  dppAmount,
 }: Partial<InvoiceDocumentProps>) {
   const isQuotation = documentType === 'QUOTATION';
   const isReceipt = documentType === 'RECEIPT';
@@ -419,8 +433,38 @@ export function InvoicePDFDocument({
                     </span>
                   </div>
                 )}
-                {taxAmount > 0 && (
+                
+                {taxCalculationType && taxCalculationType !== 'none' && (
+                  <div className="flex justify-between py-1 px-2 text-zinc-600">
+                    <span className="font-serif tracking-widest text-[10px] uppercase">DPP (Base)</span>
+                    <span className="font-mono font-semibold text-[#1e2536]">
+                      Rp {(dppAmount || 0).toLocaleString('en-US')}
+                    </span>
+                  </div>
+                )}
+                {hasPpn && (
+                  <div className="flex justify-between py-1 px-2 text-[#c5a059]">
+                    <span className="font-serif">
+                      Tax: PPN (11%)
+                    </span>
+                    <span className="font-mono font-semibold">
+                      +Rp {(taxAmount || 0).toLocaleString('en-US')}
+                    </span>
+                  </div>
+                )}
+                {hasPph && (
                   <div className="flex justify-between py-1 px-2 text-red-600">
+                    <span className="font-serif">
+                      Withholding: PPH ({pphRate || 2}%)
+                    </span>
+                    <span className="font-mono font-semibold">
+                      -Rp {(pphAmount || 0).toLocaleString('en-US')}
+                    </span>
+                  </div>
+                )}
+                
+                {(!taxCalculationType || taxCalculationType === 'none') && taxAmount > 0 && (
+                  <div className="flex justify-between py-1 px-2 text-[#c5a059]">
                     <span className="font-serif">
                       Tax: PPN ({workspaceBrand?.taxRatePercent || 11}%)
                     </span>

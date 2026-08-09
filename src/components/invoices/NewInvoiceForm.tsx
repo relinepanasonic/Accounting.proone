@@ -88,9 +88,10 @@ interface NewInvoiceFormProps {
   initialData?: any;
   activeWorkspaceId?: string;
   availableWorkspaces?: Array<{ id: string; name: string }>;
+  isTaxRegistered?: boolean;
 }
 
-export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHistorical = false, initialData, activeWorkspaceId, availableWorkspaces = [] }: NewInvoiceFormProps) {
+export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHistorical = false, initialData, activeWorkspaceId, availableWorkspaces = [], isTaxRegistered = false }: NewInvoiceFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -121,6 +122,12 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
     (activeWorkspaceId && activeWorkspaceId !== '11111111-1111-1111-1111-111111111111' ? activeWorkspaceId : '')
   );
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Tax Settings
+  const [taxCalculationType, setTaxCalculationType] = useState<'include' | 'exclude' | 'none'>(initialData?.taxCalculationType || 'exclude');
+  const [hasPpn, setHasPpn] = useState<boolean>(initialData?.hasPpn || false);
+  const [hasPph, setHasPph] = useState<boolean>(initialData?.hasPph || false);
+  const [pphRate, setPphRate] = useState<number>(initialData?.pphRate || 2);
 
   const [lineItems, setLineItems] = useState<LineItem[]>(initialData?.lineItems || []);
 
@@ -180,7 +187,30 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
     0
   );
 
-  const grandTotal = Math.max(0, subTotal - globalDiscount);
+  const subTotalAfterDiscount = Math.max(0, subTotal - globalDiscount);
+
+  let dpp = subTotalAfterDiscount;
+  let ppnAmount = 0;
+  let pphAmount = 0;
+  let grandTotal = subTotalAfterDiscount;
+
+  if (isTaxRegistered) {
+    if (taxCalculationType === 'include' && hasPpn) {
+      dpp = subTotalAfterDiscount / 1.11;
+      ppnAmount = subTotalAfterDiscount - dpp;
+    } else if (taxCalculationType === 'exclude' && hasPpn) {
+      dpp = subTotalAfterDiscount;
+      ppnAmount = dpp * 0.11;
+    } else {
+      dpp = subTotalAfterDiscount;
+    }
+
+    if (hasPph) {
+      pphAmount = dpp * (pphRate / 100);
+    }
+
+    grandTotal = dpp + ppnAmount - pphAmount;
+  }
 
   const handleQuickAddClient = async () => {
     if (!quickAddName.trim()) return;
@@ -236,6 +266,13 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
             })),
             isQuotation: submitAsQuotation,
             assignedWorkspaceId: assignedWorkspaceId || undefined,
+            taxCalculationType,
+            hasPpn,
+            hasPph,
+            pphRate,
+            pphAmount,
+            dppAmount: dpp,
+            taxAmount: ppnAmount,
           });
           if (res.success && !res.error) {
             router.push(`/invoices/${res.invoiceId}`);
@@ -266,8 +303,15 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
             isHistorical,
             isQuotation: submitAsQuotation,
             assignedWorkspaceId: assignedWorkspaceId || undefined,
+            taxCalculationType,
+            hasPpn,
+            hasPph,
+            pphRate,
+            pphAmount,
+            dppAmount: dpp,
+            taxAmount: ppnAmount,
           });
-          if (res.success && !res.error) {
+          if (res.success && res.invoiceId) {
             router.push(`/invoices/${res.invoiceId}`);
           } else if (res.success && res.error) {
             setErrorMsg(res.error);
@@ -596,7 +640,79 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                     className="w-32 bg-black/40 border border-red-500/30 rounded-lg px-2 py-1 text-red-400 text-right font-mono text-sm focus:outline-none focus:border-red-500/60"
                 />
                 </div>
-                <div className="flex justify-between w-full md:w-1/3 items-center pt-3 border-t border-[#d4af37]/20">
+                
+                {isTaxRegistered && (
+                  <div className="w-full md:w-1/2 p-4 bg-zinc-950 rounded-xl border border-[#d4af37]/20 flex flex-col gap-3 mt-2 shadow-[inset_0_0_10px_rgba(212,175,55,0.05)]">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-[#d4af37] tracking-wider uppercase">Tax Configuration</span>
+                      <select
+                        value={taxCalculationType}
+                        onChange={(e) => setTaxCalculationType(e.target.value as any)}
+                        className="bg-black/60 border border-[#d4af37]/30 rounded-lg px-2 py-1.5 text-xs text-[#f5d77f] focus:outline-none focus:border-[#d4af37]"
+                      >
+                        <option value="exclude">Exclude Tax (Subtotal = DPP)</option>
+                        <option value="include">Include Tax (Total includes PPN)</option>
+                        <option value="none">No Tax Calculation</option>
+                      </select>
+                    </div>
+
+                    {taxCalculationType !== 'none' && (
+                      <>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-zinc-800/50">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input 
+                              type="checkbox" 
+                              checked={hasPpn}
+                              onChange={(e) => setHasPpn(e.target.checked)}
+                              className="accent-[#d4af37] w-4 h-4 cursor-pointer"
+                            />
+                            <span className="text-sm text-zinc-300">Apply PPN (11%)</span>
+                          </label>
+                          {hasPpn && (
+                            <span className="text-sm font-mono text-[#f5d77f]">
+                              + Rp {ppnAmount.toLocaleString('en-US', {maximumFractionDigits: 0})}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-zinc-800/50">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input 
+                              type="checkbox" 
+                              checked={hasPph}
+                              onChange={(e) => setHasPph(e.target.checked)}
+                              className="accent-[#d4af37] w-4 h-4 cursor-pointer"
+                            />
+                            <span className="text-sm text-zinc-300">Apply PPH (Withholding)</span>
+                          </label>
+                          {hasPph && (
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                value={pphRate}
+                                onChange={(e) => setPphRate(Number(e.target.value))}
+                                step="0.5"
+                                className="w-14 bg-black/60 border border-[#d4af37]/30 rounded-lg px-2 py-1 text-sm text-[#f5d77f] text-center focus:outline-none focus:border-[#d4af37]"
+                              />
+                              <span className="text-sm text-zinc-400">%</span>
+                              <span className="text-sm font-mono text-red-400">
+                                - Rp {pphAmount.toLocaleString('en-US', {maximumFractionDigits: 0})}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        
+                        {taxCalculationType === 'include' && hasPpn && (
+                           <div className="flex justify-between items-center pt-2 border-t border-zinc-800/50">
+                             <span className="text-xs text-zinc-400 uppercase tracking-widest font-bold">DPP (Base)</span>
+                             <span className="text-xs font-mono text-zinc-400">Rp {dpp.toLocaleString('en-US', {maximumFractionDigits: 0})}</span>
+                           </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex justify-between w-full md:w-1/3 items-center pt-3 border-t border-[#d4af37]/20 mt-2">
                 <span className="text-lg font-bold text-[#d4af37]">Grand Total:</span>
                 <span className="text-xl font-mono font-bold text-white">Rp {grandTotal.toLocaleString('en-US')}</span>
                 </div>

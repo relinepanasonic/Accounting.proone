@@ -25,6 +25,13 @@ export interface CreateInvoicePayload {
   discountAmount?: number;
   lineItems: LineItem[];
   assignedWorkspaceId?: string;
+  taxCalculationType?: 'include' | 'exclude' | 'none';
+  hasPpn?: boolean;
+  hasPph?: boolean;
+  pphRate?: number;
+  pphAmount?: number;
+  dppAmount?: number;
+  taxAmount?: number;
 }
 
 export interface UpdateInvoicePayload extends CreateInvoicePayload {
@@ -143,7 +150,13 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
       0
     );
     const globalDiscount = Number(payload.discountAmount) || 0;
-    const totalAmount = Math.max(0, subtotal - globalDiscount);
+    let totalAmount = Math.max(0, subtotal - globalDiscount);
+    if (payload.taxCalculationType && payload.taxCalculationType !== 'none') {
+      const dpp = Number(payload.dppAmount) || 0;
+      const tax = Number(payload.taxAmount) || 0;
+      const pph = Number(payload.pphAmount) || 0;
+      totalAmount = dpp + tax - pph;
+    }
 
     const updateData: any = {
       client_id: payload.clientId,
@@ -154,6 +167,13 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
       subtotal: subtotal,
       total_amount: totalAmount,
       discount_amount: globalDiscount,
+      tax_calculation_type: payload.taxCalculationType || 'exclude',
+      has_ppn: payload.hasPpn || false,
+      has_pph: payload.hasPph || false,
+      pph_rate: payload.pphRate || 2,
+      pph_amount: payload.pphAmount || 0,
+      dpp_amount: payload.dppAmount || 0,
+      tax_amount: payload.taxAmount || 0,
       notes: payload.notes || null,
       bank_account_id: payload.bankAccountId || null,
       payment_instructions: payload.paymentInstructions || null,
@@ -279,7 +299,13 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
       0
     );
     const globalDiscount = Number(payload.discountAmount) || 0;
-    const totalAmount = Math.max(0, subtotal - globalDiscount);
+    let totalAmount = Math.max(0, subtotal - globalDiscount);
+    if (payload.taxCalculationType && payload.taxCalculationType !== 'none') {
+      const dpp = Number(payload.dppAmount) || 0;
+      const tax = Number(payload.taxAmount) || 0;
+      const pph = Number(payload.pphAmount) || 0;
+      totalAmount = dpp + tax - pph;
+    }
 
     // 4a. Inject workspace_id into parent invoices payload, with auto-retry on duplicate key collision
     let invoiceNumberToUse = payload.invoiceNumber || `INV-2026-${Math.floor(100 + Math.random() * 900)}`;
@@ -298,6 +324,13 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
         subtotal: subtotal,
         total_amount: totalAmount,
         discount_amount: globalDiscount,
+        tax_calculation_type: payload.taxCalculationType || 'exclude',
+        has_ppn: payload.hasPpn || false,
+        has_pph: payload.hasPph || false,
+        pph_rate: payload.pphRate || 2,
+        pph_amount: payload.pphAmount || 0,
+        dpp_amount: payload.dppAmount || 0,
+        tax_amount: payload.taxAmount || 0,
         notes: payload.notes || null,
       };
       if (payload.assignedWorkspaceId) insertData.assigned_workspace_id = payload.assignedWorkspaceId;

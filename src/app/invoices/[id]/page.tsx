@@ -125,8 +125,16 @@ export default async function InvoiceDetailPage({ params, searchParams }: Invoic
       : Number(wsObj?.tax_rate_percent || 0) > 0;
   const taxRate = wsObj?.tax_rate_percent !== undefined ? Number(wsObj.tax_rate_percent) : (isTaxReg ? 11 : 0);
   const taxableAmount = Math.max(0, subtotal - globalDiscount);
-  const taxAmount = isTaxReg ? Math.round(taxableAmount * (taxRate / 100)) : 0;
-  const grandTotal = taxableAmount + taxAmount;
+  
+  let taxAmount = isTaxReg ? Math.round(taxableAmount * (taxRate / 100)) : 0;
+  let grandTotal = taxableAmount + taxAmount;
+
+  if (inv?.tax_calculation_type && inv.tax_calculation_type !== 'none') {
+    taxAmount = Number(inv.tax_amount) || 0;
+    grandTotal = Number(inv.total_amount) || 0;
+  } else if (inv?.total_amount) {
+    grandTotal = Number(inv.total_amount);
+  }
 
   const workspaceBrand = {
     name: wsObj?.name || 'Workspace Enterprise',
@@ -169,6 +177,12 @@ export default async function InvoiceDetailPage({ params, searchParams }: Invoic
       grandTotal={grandTotal}
       workspaceBrand={workspaceBrand}
       documentType={isReceipt ? 'RECEIPT' : inv?.is_quotation ? 'QUOTATION' : 'INVOICE'}
+      taxCalculationType={inv?.tax_calculation_type}
+      hasPpn={inv?.has_ppn}
+      hasPph={inv?.has_pph}
+      pphRate={Number(inv?.pph_rate || 2)}
+      pphAmount={Number(inv?.pph_amount || 0)}
+      dppAmount={Number(inv?.dpp_amount || 0)}
     />
   );
 }

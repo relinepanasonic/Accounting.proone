@@ -19,6 +19,9 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: P
   const { data: products } = await supabase.from('products').select('*').eq('workspace_id', activeWorkspaceId).order('name', { ascending: true });
   const { data: bankAccounts } = await supabase.from('workspace_bank_accounts').select('*').eq('workspace_id', activeWorkspaceId).order('is_default', { ascending: false });
 
+  const { data: workspaces } = await supabase.from('workspaces').select('is_tax_registered').eq('id', activeWorkspaceId).single();
+  const isTaxRegistered = workspaces?.is_tax_registered || false;
+
   const clientList = clients || [];
   const productList = products || [];
 
@@ -64,7 +67,7 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: P
       )}
 
       <Suspense fallback={<div className="h-40 bg-zinc-900 rounded-xl animate-pulse" />}>
-        <NewInvoiceForm clients={clientList} products={productList} bankAccounts={bankAccounts || []} isHistorical={isHistorical} activeWorkspaceId={activeWorkspaceId} availableWorkspaces={availableWorkspaces} />
+        <NewInvoiceForm clients={clientList} products={productList} bankAccounts={bankAccounts || []} isHistorical={isHistorical} activeWorkspaceId={activeWorkspaceId} availableWorkspaces={availableWorkspaces} isTaxRegistered={isTaxRegistered} />
       </Suspense>
     </div>
   );

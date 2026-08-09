@@ -185,14 +185,27 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
         <div className="space-y-3">
           <div>
             <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1">
-              COMPANY NAME *
+              BRAND NAME *
             </label>
             <input
               type="text"
               required
-              placeholder="e.g. Nüman Kitchenware Indonesia"
+              placeholder="e.g. Nüman"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#d4af37]"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1">
+              COMPANY LEGAL NAME
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. PT Nüman Kitchenware Indonesia"
+              value={companyLegalName}
+              onChange={(e) => setCompanyLegalName(e.target.value)}
               className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#d4af37]"
             />
           </div>

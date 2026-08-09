@@ -8,11 +8,17 @@ export const dynamic = 'force-dynamic';
 export default async function CatalogSettingsPage() {
   const supabase = await createClient();
   const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
-  const { data: products } = await supabase
-    .from('products')
-    .select('*')
-    .eq('workspace_id', activeWorkspaceId)
-    .order('created_at', { ascending: false });
+  let query = supabase.from('products').select('*');
+  if (activeWorkspaceId === '11111111-1111-1111-1111-111111111111') {
+    query = query.in('workspace_id', [
+      '11111111-1111-1111-1111-111111111111', // PT Pintu Langit
+      'f7262187-2a08-4454-b046-b4fd91f2f642', // Prof Toko Online
+      'b9f6425f-ad1f-4911-a182-ab788c5fa0e3', // New Wave
+    ]);
+  } else {
+    query = query.eq('workspace_id', activeWorkspaceId);
+  }
+  const { data: products } = await query.order('created_at', { ascending: false });
 
   const fallbackCatalog: CatalogProduct[] = [
     {

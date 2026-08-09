@@ -78,7 +78,16 @@ async function syncInvoiceToNewWave(invoiceId: string, supabase: any): Promise<{
     if (!inv) return { success: false, error: 'Invoice not found in database for sync.' };
 
     const { data: wsData } = await supabase.from('workspaces').select('name').eq('id', inv.workspace_id).single();
-    if (wsData && !wsData.name.toLowerCase().includes('new wave')) {
+    let isNewWave = wsData && wsData.name.toLowerCase().includes('new wave');
+    
+    if (!isNewWave && inv.assigned_workspace_id) {
+      const { data: assignedWsData } = await supabase.from('workspaces').select('name').eq('id', inv.assigned_workspace_id).single();
+      if (assignedWsData && assignedWsData.name.toLowerCase().includes('new wave')) {
+        isNewWave = true;
+      }
+    }
+
+    if (!isNewWave) {
       return { success: true }; // Silently succeed without pushing
     }
     
@@ -266,7 +275,16 @@ export async function updateInvoiceAssignment(invoiceId: string, assignedWorkspa
       return { success: false, error: error.message };
     }
 
+    // Attempt to sync to New Wave API in case it was just assigned to New Wave
+    const syncRes = await syncInvoiceToNewWave(invoiceId, supabase);
+
     revalidatePath('/invoices');
+    revalidatePath(`/invoices/${invoiceId}`);
+    
+    if (syncRes && !syncRes.success) {
+      return { success: true, invoiceId, error: `Assigned successfully, but New Wave sync failed: ${syncRes.error}` };
+    }
+
     return { success: true, invoiceId };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Failed to update assignment.' };

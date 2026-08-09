@@ -31,7 +31,7 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
   }
 
   // Fetch required form options
-  const { data: clients } = await supabase.from('clients').select('id, name, company_name').order('name', { ascending: true });
+  const { data: clients } = await supabase.from('clients').select('id, name, company_name, company_legal_name').order('name', { ascending: true });
   let productQuery = supabase.from('products').select('*');
   if (activeWorkspaceId === '11111111-1111-1111-1111-111111111111') {
     productQuery = productQuery.in('workspace_id', [

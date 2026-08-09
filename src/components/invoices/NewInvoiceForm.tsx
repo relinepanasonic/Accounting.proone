@@ -81,7 +81,7 @@ export interface BankAccountOption {
 }
 
 interface NewInvoiceFormProps {
-  clients: Array<{ id: string; name: string, company_name?: string }>;
+  clients: Array<{ id: string; name: string, company_name?: string, company_legal_name?: string }>;
   products?: CatalogProductOption[];
   bankAccounts?: BankAccountOption[];
   isHistorical?: boolean;
@@ -194,7 +194,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
   let pphAmount = 0;
   let grandTotal = subTotalAfterDiscount;
 
-  if (isTaxRegistered) {
+  if (isTaxRegistered || activeWorkspaceId === '11111111-1111-1111-1111-111111111111') {
     if (taxCalculationType === 'include' && hasPpn) {
       dpp = subTotalAfterDiscount / 1.11;
       ppnAmount = subTotalAfterDiscount - dpp;
@@ -393,31 +393,48 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
               ))}
             </select>
             
-            {activeWorkspaceId === '11111111-1111-1111-1111-111111111111' && (
-              <div className="mt-4">
-                <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-2">
-                  <div className="flex items-center gap-1.5 text-orange-400">
-                    <Building2 className="w-3.5 h-3.5" />
-                    Assign To
+            {(() => {
+              const selectedClient = localClients.find((c: any) => c.id === clientId);
+              return (
+                <div className="mt-4 space-y-2">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">
+                        Company Legal Name
+                      </label>
+                      <div className="w-full bg-zinc-950/50 border border-zinc-900 rounded-xl px-4 py-3 text-sm text-zinc-400 font-serif italic truncate">
+                        {selectedClient?.company_legal_name || '—'}
+                      </div>
+                    </div>
+                    {activeWorkspaceId === '11111111-1111-1111-1111-111111111111' && (
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-orange-400 mb-2 flex items-center gap-1.5">
+                          <Building2 className="w-3.5 h-3.5" />
+                          Assign To
+                        </label>
+                        <select
+                          value={assignedWorkspaceId}
+                          onChange={(e) => setAssignedWorkspaceId(e.target.value)}
+                          className="w-full bg-zinc-950 border border-orange-500/30 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-orange-500"
+                        >
+                          <option value="">No Assignment</option>
+                          {availableWorkspaces.filter(w => w.id !== '11111111-1111-1111-1111-111111111111').map(w => (
+                            <option key={w.id} value={w.id}>
+                              {w.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </div>
-                </label>
-                <select
-                  value={assignedWorkspaceId}
-                  onChange={(e) => setAssignedWorkspaceId(e.target.value)}
-                  className="w-full bg-zinc-950 border border-orange-500/30 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-orange-500"
-                >
-                  <option value="">No Assignment</option>
-                  {availableWorkspaces.filter(w => w.id !== '11111111-1111-1111-1111-111111111111').map(w => (
-                    <option key={w.id} value={w.id}>
-                      {w.name}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-[10px] text-zinc-500 mt-1 font-mono">
-                  This invoice and its revenue will reflect on the assigned workspace's dashboard.
-                </p>
-              </div>
-            )}
+                  {activeWorkspaceId === '11111111-1111-1111-1111-111111111111' && (
+                    <p className="text-[10px] text-zinc-500 font-mono">
+                      This invoice and its revenue will reflect on the assigned workspace's dashboard.
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           <div>
@@ -641,7 +658,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                 />
                 </div>
                 
-                {isTaxRegistered && (
+                {(isTaxRegistered || activeWorkspaceId === '11111111-1111-1111-1111-111111111111') && (
                   <div className="w-full md:w-1/2 p-4 bg-zinc-950 rounded-xl border border-[#d4af37]/20 flex flex-col gap-3 mt-2 shadow-[inset_0_0_10px_rgba(212,175,55,0.05)]">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <span className="text-xs font-bold text-[#d4af37] tracking-wider uppercase">Tax Configuration</span>

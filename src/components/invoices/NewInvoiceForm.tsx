@@ -642,99 +642,100 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                 </div>
               );
             })}
-            {/* SUMMARY */}
-            {!isQuotation && (
-              <div className="flex flex-col items-end pt-4 border-t border-[#d4af37]/20 gap-3">
-                <div className="flex justify-between w-full md:w-1/3 items-center">
-                <span className="text-sm text-[#d4af37]/60">Subtotal:</span>
-                <span className="font-mono text-[#f5d77f]">Rp {subTotal.toLocaleString('en-US')}</span>
+          </div>
+        )}
+
+        {/* SUMMARY */}
+        {!isQuotation && (
+          <div className="flex flex-col items-end pt-4 border-t border-[#d4af37]/20 gap-3 mt-4">
+            <div className="flex justify-between w-full md:w-1/3 items-center">
+            <span className="text-sm text-[#d4af37]/60">Subtotal:</span>
+            <span className="font-mono text-[#f5d77f]">Rp {subTotal.toLocaleString('en-US')}</span>
+            </div>
+            <div className="flex justify-between w-full md:w-1/3 items-center">
+            <span className="text-sm text-red-400/80">Invoice Discount:</span>
+            <RupiahInput
+                value={globalDiscount}
+                onChange={(e: any) => setGlobalDiscount(Number(e.target.value) || 0)}
+                className="w-32 bg-black/40 border border-red-500/30 rounded-lg px-2 py-1 text-red-400 text-right font-mono text-sm focus:outline-none focus:border-red-500/60"
+            />
+            </div>
+            
+            {(isTaxRegistered || activeWorkspaceId === '11111111-1111-1111-1111-111111111111') && (
+              <div className="w-full md:w-1/2 p-4 bg-zinc-950 rounded-xl border border-[#d4af37]/20 flex flex-col gap-3 mt-2 shadow-[inset_0_0_10px_rgba(212,175,55,0.05)]">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-[#d4af37] tracking-wider uppercase">Tax Configuration</span>
+                  <select
+                    value={taxCalculationType}
+                    onChange={(e) => setTaxCalculationType(e.target.value as any)}
+                    className="bg-black/60 border border-[#d4af37]/30 rounded-lg px-2 py-1.5 text-xs text-[#f5d77f] focus:outline-none focus:border-[#d4af37]"
+                  >
+                    <option value="exclude">Exclude Tax (Subtotal = DPP)</option>
+                    <option value="include">Include Tax (Total includes PPN)</option>
+                    <option value="none">No Tax Calculation</option>
+                  </select>
                 </div>
-                <div className="flex justify-between w-full md:w-1/3 items-center">
-                <span className="text-sm text-red-400/80">Invoice Discount:</span>
-                <RupiahInput
-                    value={globalDiscount}
-                    onChange={(e: any) => setGlobalDiscount(Number(e.target.value) || 0)}
-                    className="w-32 bg-black/40 border border-red-500/30 rounded-lg px-2 py-1 text-red-400 text-right font-mono text-sm focus:outline-none focus:border-red-500/60"
-                />
-                </div>
-                
-                {(isTaxRegistered || activeWorkspaceId === '11111111-1111-1111-1111-111111111111') && (
-                  <div className="w-full md:w-1/2 p-4 bg-zinc-950 rounded-xl border border-[#d4af37]/20 flex flex-col gap-3 mt-2 shadow-[inset_0_0_10px_rgba(212,175,55,0.05)]">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <span className="text-xs font-bold text-[#d4af37] tracking-wider uppercase">Tax Configuration</span>
-                      <select
-                        value={taxCalculationType}
-                        onChange={(e) => setTaxCalculationType(e.target.value as any)}
-                        className="bg-black/60 border border-[#d4af37]/30 rounded-lg px-2 py-1.5 text-xs text-[#f5d77f] focus:outline-none focus:border-[#d4af37]"
-                      >
-                        <option value="exclude">Exclude Tax (Subtotal = DPP)</option>
-                        <option value="include">Include Tax (Total includes PPN)</option>
-                        <option value="none">No Tax Calculation</option>
-                      </select>
+
+                {taxCalculationType !== 'none' && (
+                  <>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-zinc-800/50">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input 
+                          type="checkbox" 
+                          checked={hasPpn}
+                          onChange={(e) => setHasPpn(e.target.checked)}
+                          className="accent-[#d4af37] w-4 h-4 cursor-pointer"
+                        />
+                        <span className="text-sm text-zinc-300">Apply PPN (11%)</span>
+                      </label>
+                      {hasPpn && (
+                        <span className="text-sm font-mono text-[#f5d77f]">
+                          + Rp {ppnAmount.toLocaleString('en-US', {maximumFractionDigits: 0})}
+                        </span>
+                      )}
                     </div>
-
-                    {taxCalculationType !== 'none' && (
-                      <>
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-zinc-800/50">
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input 
-                              type="checkbox" 
-                              checked={hasPpn}
-                              onChange={(e) => setHasPpn(e.target.checked)}
-                              className="accent-[#d4af37] w-4 h-4 cursor-pointer"
-                            />
-                            <span className="text-sm text-zinc-300">Apply PPN (11%)</span>
-                          </label>
-                          {hasPpn && (
-                            <span className="text-sm font-mono text-[#f5d77f]">
-                              + Rp {ppnAmount.toLocaleString('en-US', {maximumFractionDigits: 0})}
-                            </span>
-                          )}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-zinc-800/50">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input 
+                          type="checkbox" 
+                          checked={hasPph}
+                          onChange={(e) => setHasPph(e.target.checked)}
+                          className="accent-[#d4af37] w-4 h-4 cursor-pointer"
+                        />
+                        <span className="text-sm text-zinc-300">Apply PPH (Withholding)</span>
+                      </label>
+                      {hasPph && (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            value={pphRate}
+                            onChange={(e) => setPphRate(Number(e.target.value))}
+                            step="0.5"
+                            className="w-14 bg-black/60 border border-[#d4af37]/30 rounded-lg px-2 py-1 text-sm text-[#f5d77f] text-center focus:outline-none focus:border-[#d4af37]"
+                          />
+                          <span className="text-sm text-zinc-400">%</span>
+                          <span className="text-sm font-mono text-red-400">
+                            - Rp {pphAmount.toLocaleString('en-US', {maximumFractionDigits: 0})}
+                          </span>
                         </div>
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-zinc-800/50">
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input 
-                              type="checkbox" 
-                              checked={hasPph}
-                              onChange={(e) => setHasPph(e.target.checked)}
-                              className="accent-[#d4af37] w-4 h-4 cursor-pointer"
-                            />
-                            <span className="text-sm text-zinc-300">Apply PPH (Withholding)</span>
-                          </label>
-                          {hasPph && (
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="number"
-                                value={pphRate}
-                                onChange={(e) => setPphRate(Number(e.target.value))}
-                                step="0.5"
-                                className="w-14 bg-black/60 border border-[#d4af37]/30 rounded-lg px-2 py-1 text-sm text-[#f5d77f] text-center focus:outline-none focus:border-[#d4af37]"
-                              />
-                              <span className="text-sm text-zinc-400">%</span>
-                              <span className="text-sm font-mono text-red-400">
-                                - Rp {pphAmount.toLocaleString('en-US', {maximumFractionDigits: 0})}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                        
-                        {taxCalculationType === 'include' && hasPpn && (
-                           <div className="flex justify-between items-center pt-2 border-t border-zinc-800/50">
-                             <span className="text-xs text-zinc-400 uppercase tracking-widest font-bold">DPP (Base)</span>
-                             <span className="text-xs font-mono text-zinc-400">Rp {dpp.toLocaleString('en-US', {maximumFractionDigits: 0})}</span>
-                           </div>
-                        )}
-                      </>
+                      )}
+                    </div>
+                    
+                    {taxCalculationType === 'include' && hasPpn && (
+                       <div className="flex justify-between items-center pt-2 border-t border-zinc-800/50">
+                         <span className="text-xs text-zinc-400 uppercase tracking-widest font-bold">DPP (Base)</span>
+                         <span className="text-xs font-mono text-zinc-400">Rp {dpp.toLocaleString('en-US', {maximumFractionDigits: 0})}</span>
+                       </div>
                     )}
-                  </div>
+                  </>
                 )}
-
-                <div className="flex justify-between w-full md:w-1/3 items-center pt-3 border-t border-[#d4af37]/20 mt-2">
-                <span className="text-lg font-bold text-[#d4af37]">Grand Total:</span>
-                <span className="text-xl font-mono font-bold text-white">Rp {grandTotal.toLocaleString('en-US')}</span>
-                </div>
               </div>
             )}
+
+            <div className="flex justify-between w-full md:w-1/3 items-center pt-3 border-t border-[#d4af37]/20 mt-2">
+            <span className="text-lg font-bold text-[#d4af37]">Grand Total:</span>
+            <span className="text-xl font-mono font-bold text-white">Rp {grandTotal.toLocaleString('en-US')}</span>
+            </div>
           </div>
         )}
       </div>

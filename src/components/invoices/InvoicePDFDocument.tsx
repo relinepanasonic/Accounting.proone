@@ -305,10 +305,9 @@ export function InvoicePDFDocument({
               <span className="block text-[10px] font-bold text-[#c5a059] tracking-widest uppercase mb-1">
                 {isQuotation ? 'Prepared For / Pitch To:' : 'Billed To:'}
               </span>
-              <h3 className="text-sm font-bold text-[#1e2536] uppercase tracking-wide">{clientName}</h3>
-              {clientLegalName && (
-                <div className="text-xs text-zinc-500 font-serif italic mb-1">{clientLegalName}</div>
-              )}
+              <h3 className="text-sm font-bold text-[#1e2536] uppercase tracking-wide">
+                {clientLegalName ? `${clientLegalName} - ${clientName}` : clientName}
+              </h3>
               {clientBrand && <div className="text-zinc-700 font-bold">{clientBrand}</div>}
               {clientContact && clientContact !== clientName && (
                 <div className="text-xs text-[#1e2536] font-medium mt-1">{clientContact}</div>

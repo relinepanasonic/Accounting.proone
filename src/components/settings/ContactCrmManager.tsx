@@ -39,6 +39,7 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
   const [editLegalName, setEditLegalName] = useState('');
   const [editContact, setEditContact] = useState('');
   const [editEmail, setEditEmail] = useState('');
+  const [editCloneWorkspaceIds, setEditCloneWorkspaceIds] = useState<string[]>([]);
   const [editPending, setEditPending] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -96,6 +97,7 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
     setEditLegalName(client.company_legal_name || '');
     setEditContact(client.company || '');
     setEditEmail(client.email || '');
+    setEditCloneWorkspaceIds([]);
     setEditError(null);
   };
 
@@ -112,6 +114,7 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
         company_legal_name: editLegalName,
         contactPerson: editContact,
         email: editEmail,
+        cloneWorkspaceIds: editCloneWorkspaceIds
       });
 
       if (!res.success) {
@@ -482,6 +485,30 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
                   className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-300 focus:outline-none focus:border-[#d4af37]"
                 />
               </div>
+
+              {availableWorkspaces && availableWorkspaces.length > 1 && (
+                <div className="pt-2 border-t border-[#d4af37]/20">
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-2">
+                    CLONE TO OTHER WORKSPACES?
+                  </label>
+                  <div className="space-y-2 max-h-32 overflow-y-auto pr-2 custom-scrollbar">
+                    {availableWorkspaces.filter(ws => ws.id !== activeWorkspaceId).map(ws => (
+                      <label key={ws.id} className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer hover:text-zinc-200">
+                        <input 
+                          type="checkbox" 
+                          className="rounded border-zinc-700 bg-zinc-900/50 text-[#d4af37] focus:ring-[#d4af37]"
+                          checked={editCloneWorkspaceIds.includes(ws.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) setEditCloneWorkspaceIds(prev => [...prev, ws.id]);
+                            else setEditCloneWorkspaceIds(prev => prev.filter(id => id !== ws.id));
+                          }}
+                        />
+                        <span className="truncate">{ws.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-800/80">
                 <button

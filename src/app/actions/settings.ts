@@ -673,6 +673,7 @@ export async function updateClientRecord(payload: {
   company_legal_name?: string;
   contactPerson?: string;
   email: string;
+  cloneWorkspaceIds?: string[];
 }) {
   try {
     const supabase = await createClient();
@@ -715,6 +716,28 @@ export async function updateClientRecord(payload: {
       }
     } else if (error) {
       return { success: false, error: error.message };
+    }
+
+    if (payload.cloneWorkspaceIds && payload.cloneWorkspaceIds.length > 0) {
+      const inserts = payload.cloneWorkspaceIds.map(wsId => ({
+        workspace_id: wsId,
+        name: updateObj.name,
+        company_legal_name: updateObj.company_legal_name,
+        contact_name: updateObj.contact_name,
+        company_name: updateObj.company_name,
+        email: updateObj.email,
+        contact_type: 'client'
+      }));
+      
+      const { error: cloneErr } = await supabase.from('clients').insert(inserts);
+      if (cloneErr && (cloneErr.message?.includes('column') || cloneErr.code === '42703')) {
+         const fallbackInserts = payload.cloneWorkspaceIds.map(wsId => ({
+          workspace_id: wsId,
+          name: updateObj.name,
+          email: updateObj.email,
+        }));
+        await supabase.from('clients').insert(fallbackInserts);
+      }
     }
 
     revalidatePath('/settings');

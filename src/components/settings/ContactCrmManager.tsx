@@ -11,6 +11,7 @@ export interface ClientRecord {
   company_legal_name?: string;
   email?: string;
   contactType?: 'client' | 'vendor';
+  workspace_id?: string;
 }
 
 interface ContactCrmManagerProps {
@@ -357,6 +358,7 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
                   <th className="py-3 px-3">COMPANY NAME</th>
                   <th className="py-3 px-3">CONTACT PERSON</th>
                   <th className="py-3 px-3">BILLING EMAIL</th>
+                  {activeWorkspaceId === '11111111-1111-1111-1111-111111111111' && <th className="py-3 px-3">SOURCE</th>}
                   {isSuperAdmin && activeWorkspaceId !== '11111111-1111-1111-1111-111111111111' && <th className="py-3 px-3 text-right">ACTIONS</th>}
                 </tr>
               </thead>
@@ -368,6 +370,13 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
                     </td>
                     <td className="py-3.5 px-3 text-zinc-300">{c.company || '—'}</td>
                     <td className="py-3.5 px-3 font-mono text-[#f5d77f]">{c.email || '—'}</td>
+                    {activeWorkspaceId === '11111111-1111-1111-1111-111111111111' && (
+                      <td className="py-3.5 px-3">
+                        <span className="text-[9px] font-mono uppercase px-2 py-1 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
+                          {c.workspace_id ? (availableWorkspaces?.find(w => w.id === c.workspace_id)?.name || 'Unknown') : 'Legacy'}
+                        </span>
+                      </td>
+                    )}
                     {isSuperAdmin && activeWorkspaceId !== '11111111-1111-1111-1111-111111111111' && (
                       <td className="py-3.5 px-3 text-right">
                         <div className="inline-flex items-center justify-end gap-2">

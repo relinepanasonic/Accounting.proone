@@ -24,6 +24,7 @@ export default async function ClientsSettingsPage() {
     company: c.contact_name || c.company_name || c.company || c.name || '',
     email: c.email || '',
     contactType: c.contact_type || 'client',
+    workspace_id: c.workspace_id,
   }));
 
   return (

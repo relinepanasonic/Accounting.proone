@@ -43,7 +43,7 @@ async function extractTextLines(buffer: Buffer): Promise<string[]> {
   if (!g.ImageData) g.ImageData = class ImageData {};
 
   const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs' as any);
-  pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+  pdfjsLib.GlobalWorkerOptions.workerSrc = require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs');
 
   const loadingTask = pdfjsLib.getDocument({
     data: new Uint8Array(buffer),

@@ -29,8 +29,7 @@ function parseIndonesianNumber(s: string): number {
 
 export async function POST(request: Request) {
   try {
-    // Use require() inside function body so it stays as a server-only dynamic require
-    const PDFParser = require('pdf2json');
+    const pdf = require('pdf-parse');
 
     const formData = await request.formData();
     const file = formData.get('file') as File;
@@ -42,15 +41,8 @@ export async function POST(request: Request) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Use pdf2json's raw text mode (2nd arg = 1 enables raw text extraction)
-    const rawText: string = await new Promise((resolve, reject) => {
-      const pdfParser = new PDFParser(null, 1);
-      pdfParser.on("pdfParser_dataError", (errData: any) => reject(new Error(errData.parserError)));
-      pdfParser.on("pdfParser_dataReady", () => {
-        resolve(pdfParser.getRawTextContent());
-      });
-      pdfParser.parseBuffer(buffer);
-    });
+    const data = await pdf(buffer);
+    const rawText = data.text;
 
     // Clean page break markers
     const cleanedText = rawText.replace(/[-]+Page\s*\(\d+\)\s*Break[-]+/g, '');

@@ -52,7 +52,16 @@ export async function POST(request: Request) {
       .map((l: string) => l.replace(/\t/g, ' ').trim())
       .filter((l: string) => l.length > 0);
 
-    const bankFormat = formData.get('bankFormat') as string || 'jago';
+    let bankFormat = formData.get('bankFormat') as string || 'jago';
+    
+    // Auto-detect bank format based on PDF contents to prevent user error
+    const fullText = rawLines.join(' ').toUpperCase();
+    if (fullText.includes('REKENING GIRO') && fullText.includes('PERIODE') && fullText.includes('MUTASI SALDO')) {
+      bankFormat = 'bca_business';
+    } else if (fullText.includes('KANTOR CABANG') && fullText.includes('MUTASI') && !fullText.includes('REKENING GIRO')) {
+      // Future-proofing for other formats, if needed
+    }
+
     let transactions: any[] = [];
 
     if (bankFormat === 'bca_individual') {

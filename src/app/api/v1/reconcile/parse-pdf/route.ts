@@ -27,34 +27,6 @@ function parseIndonesianNumber(s: string): number {
   return parseFloat(cleaned);
 }
 
-async function extractTextLines(buffer: Buffer): Promise<string[]> {
-  // Polyfill browser APIs that pdfjs needs in Node.js (Fixes DOMMatrix is not defined)
-  const g = globalThis as any;
-  if (!g.DOMMatrix) {
-    g.DOMMatrix = class DOMMatrix {
-      a=1; b=0; c=0; d=1; e=0; f=0;
-      is2D=true; isIdentity=true;
-      transformPoint(p: any) { return p; }
-      multiply() { return this; }
-      static fromMatrix() { return new g.DOMMatrix(); }
-    };
-  }
-  if (!g.Path2D) g.Path2D = class Path2D {};
-  if (!g.ImageData) g.ImageData = class ImageData {};
-
-  const pdf = require('pdf-parse');
-  const data = await pdf(buffer);
-  const rawText = data.text;
-
-  // Clean page break markers
-  const cleanedText = rawText.replace(/[-]+Page\s*\(\d+\)\s*Break[-]+/g, '');
-
-  // Split by newline, clean whitespace
-  return cleanedText.split('\n')
-    .map((l: string) => l.replace(/\t/g, ' ').trim())
-    .filter((l: string) => l.length > 0);
-}
-
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
@@ -67,7 +39,18 @@ export async function POST(request: Request) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    const rawLines = await extractTextLines(buffer);
+    // Use unpdf for robust serverless extraction without worker/DOM errors
+    const { extractText, getDocumentProxy } = await import('unpdf');
+    const pdfDoc = await getDocumentProxy(new Uint8Array(buffer));
+    const { text: rawText } = await extractText(pdfDoc, { mergePages: true });
+
+    // Clean page break markers
+    const cleanedText = rawText.replace(/[-]+Page\s*\(\d+\)\s*Break[-]+/g, '');
+
+    // Split by newline, clean whitespace
+    const rawLines = cleanedText.split('\n')
+      .map((l: string) => l.replace(/\t/g, ' ').trim())
+      .filter((l: string) => l.length > 0);
 
     const bankFormat = formData.get('bankFormat') as string || 'jago';
     let transactions: any[] = [];
@@ -145,7 +128,7 @@ export async function POST(request: Request) {
         }
       }
     } else {
-      // Bank Jago
+      // Bank Jago logic
       const dateRegex = /^(\d{2}\s[A-Za-z]{3}\s\d{4})\s+(.*)/;
       const timeIdRegex = /^\d{2}:\d{2}\s/;
 

@@ -386,11 +386,20 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
               required
             >
               <option value="">-- Choose Client Profile --</option>
-              {localClients.map((c: any) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} {c.company_name && c.company_name !== c.name ? `(${c.company_name})` : ''}
-                </option>
-              ))}
+              {localClients
+                .filter((c: any) => c.contact_type !== 'vendor')
+                .map((c: any) => {
+                  let sourceStr = '';
+                  if (activeWorkspaceId === '11111111-1111-1111-1111-111111111111' && availableWorkspaces) {
+                    const ws = availableWorkspaces.find(w => w.id === c.workspace_id);
+                    sourceStr = `[${ws ? ws.name : 'Legacy'}] `;
+                  }
+                  return (
+                    <option key={c.id} value={c.id}>
+                      {sourceStr}{c.name} {c.company_name && c.company_name !== c.name ? `(${c.company_name})` : ''}
+                    </option>
+                  );
+                })}
             </select>
             
             {(() => {

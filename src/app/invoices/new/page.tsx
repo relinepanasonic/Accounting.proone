@@ -15,7 +15,7 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: P
   const supabase = await createClient();
   const { activeWorkspaceId, availableWorkspaces } = await getAuthenticatedWorkspaceContext(supabase);
 
-  let clientQuery = supabase.from('clients').select('id, name, company_legal_name, company_name');
+  let clientQuery = supabase.from('clients').select('id, name, company_legal_name, company_name, workspace_id, contact_type');
   if (activeWorkspaceId === '11111111-1111-1111-1111-111111111111') {
     clientQuery = clientQuery.or(`workspace_id.in.(11111111-1111-1111-1111-111111111111,f7262187-2a08-4454-b046-b4fd91f2f642,b9f6425f-ad1f-4911-a182-ab788c5fa0e3),workspace_id.is.null`);
   } else {

@@ -28,7 +28,7 @@ function parseIndonesianNumber(s: string): number {
 }
 
 async function extractTextLines(buffer: Buffer): Promise<string[]> {
-  // Polyfill browser APIs that pdfjs-dist needs in Node.js
+  // Polyfill browser APIs that pdfjs needs in Node.js (Fixes DOMMatrix is not defined)
   const g = globalThis as any;
   if (!g.DOMMatrix) {
     g.DOMMatrix = class DOMMatrix {
@@ -42,48 +42,17 @@ async function extractTextLines(buffer: Buffer): Promise<string[]> {
   if (!g.Path2D) g.Path2D = class Path2D {};
   if (!g.ImageData) g.ImageData = class ImageData {};
 
-  const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs' as any);
-  pdfjsLib.GlobalWorkerOptions.workerSrc = require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs');
+  const pdf = require('pdf-parse');
+  const data = await pdf(buffer);
+  const rawText = data.text;
 
-  const loadingTask = pdfjsLib.getDocument({
-    data: new Uint8Array(buffer),
-    useWorkerFetch: false,
-    isEvalSupported: false,
-    useSystemFonts: true,
-    disableFontFace: true,
-  });
-  
-  const pdfDoc = await loadingTask.promise;
-  const allLines: string[] = [];
+  // Clean page break markers
+  const cleanedText = rawText.replace(/[-]+Page\s*\(\d+\)\s*Break[-]+/g, '');
 
-  for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
-    const page = await pdfDoc.getPage(pageNum);
-    const textContent = await page.getTextContent();
-
-    // Group text items by rounded y-position to reconstruct lines
-    const itemsByY: Map<number, { x: number; text: string }[]> = new Map();
-
-    for (const item of textContent.items as any[]) {
-      if (!item.str || item.str.trim() === '') continue;
-      const y = Math.round(item.transform[5]);
-      const x = item.transform[4];
-      if (!itemsByY.has(y)) itemsByY.set(y, []);
-      itemsByY.get(y)!.push({ x, text: item.str });
-    }
-
-    // Sort y descending (top to bottom), x ascending (left to right)
-    const sortedYs = Array.from(itemsByY.keys()).sort((a, b) => b - a);
-    for (const y of sortedYs) {
-      const lineText = itemsByY.get(y)!
-        .sort((a, b) => a.x - b.x)
-        .map(i => i.text)
-        .join(' ')
-        .trim();
-      if (lineText.length > 0) allLines.push(lineText);
-    }
-  }
-
-  return allLines;
+  // Split by newline, clean whitespace
+  return cleanedText.split('\n')
+    .map((l: string) => l.replace(/\t/g, ' ').trim())
+    .filter((l: string) => l.length > 0);
 }
 
 export async function POST(request: Request) {

@@ -82,6 +82,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   const [expandedCoaGroups, setExpandedCoaGroups] = useState<Record<string, boolean>>({});
   
   const [activeBankId, setActiveBankId] = useState<string>(bankAccounts.length > 0 ? bankAccounts[0].id : '');
+  const [bankFormat, setBankFormat] = useState<string>('jago');
 
   const activeBankLine = bankLines.find((b) => b.id === selectedBankId);
   const autoMatchRecord = activeBankLine ? findAutoMatch(activeBankLine) : null;
@@ -121,6 +122,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
       startTransition(async () => {
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('bankFormat', bankFormat);
         try {
           const res = await fetch('/api/v1/reconcile/parse-pdf', {
             method: 'POST',
@@ -382,6 +384,16 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                 );
               })
             )}
+          </select>
+
+          <select
+            value={bankFormat}
+            onChange={(e) => setBankFormat(e.target.value)}
+            className="bg-black/60 border border-[#d4af37]/30 text-white text-xs font-bold rounded-lg px-3 py-2.5 outline-none focus:border-[#d4af37] transition-all min-w-[160px]"
+          >
+            <option value="jago">Bank Jago</option>
+            <option value="bca_business">BCA Business (Giro)</option>
+            <option value="bca_individual" disabled>BCA Individual (Soon)</option>
           </select>
 
           <label className="group relative flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-transparent via-[#d4af37]/10 to-transparent border border-[#d4af37]/40 rounded-full text-[#f5d77f] text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-[#d4af37]/20 hover:border-[#d4af37] transition-all w-full md:w-auto justify-center">

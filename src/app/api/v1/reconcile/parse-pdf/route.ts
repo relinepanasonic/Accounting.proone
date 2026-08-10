@@ -27,10 +27,67 @@ function parseIndonesianNumber(s: string): number {
   return parseFloat(cleaned);
 }
 
+async function extractTextLines(buffer: Buffer): Promise<string[]> {
+  // Polyfill browser APIs that pdfjs-dist needs in Node.js
+  const g = globalThis as any;
+  if (!g.DOMMatrix) {
+    g.DOMMatrix = class DOMMatrix {
+      a=1; b=0; c=0; d=1; e=0; f=0;
+      is2D=true; isIdentity=true;
+      transformPoint(p: any) { return p; }
+      multiply() { return this; }
+      static fromMatrix() { return new g.DOMMatrix(); }
+    };
+  }
+  if (!g.Path2D) g.Path2D = class Path2D {};
+  if (!g.ImageData) g.ImageData = class ImageData {};
+
+  const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs' as any);
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+
+  const loadingTask = pdfjsLib.getDocument({
+    data: new Uint8Array(buffer),
+    useWorkerFetch: false,
+    isEvalSupported: false,
+    useSystemFonts: true,
+    disableFontFace: true,
+  });
+  
+  const pdfDoc = await loadingTask.promise;
+  const allLines: string[] = [];
+
+  for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+    const page = await pdfDoc.getPage(pageNum);
+    const textContent = await page.getTextContent();
+
+    // Group text items by rounded y-position to reconstruct lines
+    const itemsByY: Map<number, { x: number; text: string }[]> = new Map();
+
+    for (const item of textContent.items as any[]) {
+      if (!item.str || item.str.trim() === '') continue;
+      const y = Math.round(item.transform[5]);
+      const x = item.transform[4];
+      if (!itemsByY.has(y)) itemsByY.set(y, []);
+      itemsByY.get(y)!.push({ x, text: item.str });
+    }
+
+    // Sort y descending (top to bottom), x ascending (left to right)
+    const sortedYs = Array.from(itemsByY.keys()).sort((a, b) => b - a);
+    for (const y of sortedYs) {
+      const lineText = itemsByY.get(y)!
+        .sort((a, b) => a.x - b.x)
+        .map(i => i.text)
+        .join(' ')
+        .trim();
+      if (lineText.length > 0) allLines.push(lineText);
+    }
+  }
+
+  return allLines;
+}
+
 export async function POST(request: Request) {
   try {
-    const pdf = require('pdf-parse');
-
     const formData = await request.formData();
     const file = formData.get('file') as File;
 
@@ -41,16 +98,7 @@ export async function POST(request: Request) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    const data = await pdf(buffer);
-    const rawText = data.text;
-
-    // Clean page break markers
-    const cleanedText = rawText.replace(/[-]+Page\s*\(\d+\)\s*Break[-]+/g, '');
-
-    // Split by newline, clean whitespace
-    const rawLines = cleanedText.split('\n')
-      .map((l: string) => l.replace(/\t/g, ' ').trim())
-      .filter((l: string) => l.length > 0);
+    const rawLines = await extractTextLines(buffer);
 
     const bankFormat = formData.get('bankFormat') as string || 'jago';
     let transactions: any[] = [];
@@ -61,18 +109,14 @@ export async function POST(request: Request) {
 
     if (bankFormat === 'bca_business') {
       let year = new Date().getFullYear().toString();
-      
+
+      // Extract year from PERIODE header
       for (const line of rawLines) {
-        if (line.toUpperCase().includes('PERIODE') && line.includes(':')) {
-           const parts = line.split(':');
-           if (parts.length > 1) {
-             const periodeStr = parts[1].trim().toLowerCase(); 
-             const pParts = periodeStr.split(/\s+/);
-             if (pParts.length >= 2) {
-               year = pParts[1];
-             }
-           }
-           break;
+        const periodMatch = line.match(/PERIODE\s*[:\-]?\s*\S+\s+(\d{4})/i);
+        if (periodMatch) { year = periodMatch[1]; break; }
+        const dateRangeMatch = line.match(/\b(\d{4})\b/);
+        if (dateRangeMatch && !line.match(/^(\d{2})\/(\d{2})/)) {
+          year = dateRangeMatch[1]; break;
         }
       }
 
@@ -82,13 +126,16 @@ export async function POST(request: Request) {
 
       for (let i = 0; i < rawLines.length; i++) {
         const line = rawLines[i];
-        if (line.includes('SALDO AWAL') || line.includes('SALDO AKHIR') || line.includes('MUTASI CR') || line.includes('MUTASI DB')) continue;
+        if (
+          line.includes('SALDO AWAL') || line.includes('SALDO AKHIR') ||
+          line.includes('MUTASI CR') || line.includes('MUTASI DB')
+        ) continue;
 
         const dateMatch = line.match(dateRegex);
         if (dateMatch) {
           if (currentTx) parsedBlocks.push(currentTx);
           currentTx = {
-            dateStr: `${year}-${dateMatch[2]}-${dateMatch[1]}`, 
+            dateStr: `${year}-${dateMatch[2]}-${dateMatch[1]}`,
             rawLines: [dateMatch[3].trim()],
             id: `bca-${i}`,
           };
@@ -101,20 +148,19 @@ export async function POST(request: Request) {
       for (const tx of parsedBlocks) {
         let amount = 0;
         let isDebit = false;
-        
-        const mutasiRegex = /([\d]{1,3}(?:,[\d]{3})*\.\d{2})\s*(DB)?(?:\s+([\d]{1,3}(?:,[\d]{3})*\.\d{2}))?\s*$/i;
-        
+
+        const mutasiRegex = /([\d]{1,3}(?:,[\d]{3})*\.[\d]{2})\s*(DB)?\s*$/i;
+
         for (let j = tx.rawLines.length - 1; j >= 0; j--) {
           const match = tx.rawLines[j].match(mutasiRegex);
           if (match) {
-            const amtStr = match[1].replace(/,/g, '');
-            amount = parseFloat(amtStr);
-            if (match[2] && match[2].toUpperCase() === 'DB') isDebit = true;
+            amount = parseFloat(match[1].replace(/,/g, ''));
+            if (match[2]?.toUpperCase() === 'DB') isDebit = true;
             tx.rawLines[j] = tx.rawLines[j].replace(match[0], '').trim();
             break;
           }
         }
-        
+
         if (amount > 0) {
           const finalAmount = isDebit ? -amount : amount;
           const desc = tx.rawLines.filter((l: string) => l.length > 0).join(' | ');
@@ -130,14 +176,13 @@ export async function POST(request: Request) {
         }
       }
     } else {
-      // Bank Jago (Original Logic)
+      // Bank Jago
       const dateRegex = /^(\d{2}\s[A-Za-z]{3}\s\d{4})\s+(.*)/;
       const timeIdRegex = /^\d{2}:\d{2}\s/;
 
       for (let i = 0; i < rawLines.length; i++) {
         const line = rawLines[i];
         const dateMatch = line.match(dateRegex);
-
         if (!dateMatch) continue;
 
         const dateStr = dateMatch[1];
@@ -150,17 +195,14 @@ export async function POST(request: Request) {
 
         const numRegex = /([-+]?\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?)/g;
         const matches = rest.match(numRegex);
-
         if (!matches || matches.length < 2) continue;
 
         const amountStr = matches[matches.length - 2];
         const amount = parseIndonesianNumber(amountStr);
-
         if (isNaN(amount)) continue;
 
         const amtIndex = rest.lastIndexOf(amountStr);
         const bodyStr = rest.substring(0, amtIndex).trim();
-
         const parts = bodyStr.split(/\s{2,}/).map((p: string) => p.trim()).filter((p: string) => p.length > 0);
 
         const sourceDestination = parts[0] || 'Unknown';
@@ -175,7 +217,7 @@ export async function POST(request: Request) {
 
         transactions.push({
           id: `jago-${Date.now()}-${i}-${Math.random().toString(36).substring(7)}`,
-          date: parseBankDate(dateStr), 
+          date: parseBankDate(dateStr),
           sourceDestination,
           transactionDetails,
           notes,
@@ -188,7 +230,7 @@ export async function POST(request: Request) {
     if (transactions.length === 0) {
       return NextResponse.json({
         success: false,
-        error: 'No transactions found. First 30 lines:\n' + rawLines.slice(0, 30).join('\n'),
+        error: 'No transactions found. Please verify this is a valid statement PDF.\n\nFirst 30 lines:\n' + rawLines.slice(0, 30).join('\n'),
       });
     }
 

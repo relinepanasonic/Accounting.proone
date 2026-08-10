@@ -475,14 +475,18 @@ export async function duplicateInvoice(invoiceId: string) {
         workspace_id: workspaceId,
         client_id: orig.client_id,
         invoice_number: copyNumber,
-        status: 'pending',
+        status: orig.is_quotation ? 'draft' : 'pending',
+        is_quotation: orig.is_quotation || false,
         issue_date: issueDateStr,
         due_date: dueDateStr,
         subtotal: orig.subtotal,
         total_amount: orig.total_amount,
+        discount_amount: orig.discount_amount || 0,
+        tax_amount: orig.tax_amount || 0,
         notes: orig.notes,
         bank_account_id: orig.bank_account_id || null,
         payment_instructions: orig.payment_instructions || null,
+        assigned_workspace_id: orig.assigned_workspace_id || workspaceId,
       })
       .select('id')
       .single();
@@ -495,9 +499,12 @@ export async function duplicateInvoice(invoiceId: string) {
       const linesToInsert = origLines.map((l) => ({
         workspace_id: workspaceId,
         invoice_id: newInv.id,
+        package_name: l.package_name || null,
         description: l.description,
         quantity: l.quantity,
+        scale: l.scale || 'pc',
         unit_price: l.unit_price,
+        discount_amount: l.discount_amount || 0,
         sort_order: l.sort_order,
       }));
       await supabase.from('invoice_line_items').insert(linesToInsert);

@@ -7,6 +7,7 @@ import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 
 export interface CreateExpensePayload {
   vendor: string;
+  vendorId?: string;
   category: string;
   dueDate: string;
   amount: number;
@@ -24,6 +25,7 @@ export async function createExpense(payload: CreateExpensePayload) {
 
   const { data: txData, error } = await supabase.from('transactions').insert({
     workspace_id: activeWorkspaceId,
+    client_id: payload.vendorId || null,
     description: finalDescription,
     category: payload.category,
     amount: payload.amount,
@@ -85,6 +87,7 @@ export async function updateExpense(id: string, payload: CreateExpensePayload) {
 
   const { error } = await supabase.from('transactions')
     .update({
+      client_id: payload.vendorId || null,
       description: finalDescription,
       category: payload.category,
       amount: payload.amount,

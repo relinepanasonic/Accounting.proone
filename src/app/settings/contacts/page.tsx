@@ -18,6 +18,18 @@ export default async function ClientsSettingsPage() {
 
   const { data: clients } = await clientQuery.order('name', { ascending: true });
 
+  const { data: invoices } = await supabase.from('invoices').select('client_id, total_amount').neq('status', 'void');
+  const invoiceTotals = (invoices || []).reduce((acc, inv) => {
+    if (inv.client_id) acc[inv.client_id] = (acc[inv.client_id] || 0) + (Number(inv.total_amount) || 0);
+    return acc;
+  }, {} as Record<string, number>);
+
+  const { data: transactions } = await supabase.from('transactions').select('client_id, amount').not('client_id', 'is', null);
+  const expenseTotals = (transactions || []).reduce((acc, tx) => {
+    if (tx.client_id) acc[tx.client_id] = (acc[tx.client_id] || 0) + (Number(tx.amount) || 0);
+    return acc;
+  }, {} as Record<string, number>);
+
   const clientList: ClientRecord[] = (clients || []).map((c: any) => ({
     id: c.id,
     name: c.name || 'Client',
@@ -25,6 +37,8 @@ export default async function ClientsSettingsPage() {
     email: c.email || '',
     contactType: c.contact_type || 'client',
     workspace_id: c.workspace_id,
+    totalSales: invoiceTotals[c.id] || 0,
+    totalExpenses: expenseTotals[c.id] || 0,
   }));
 
   return (

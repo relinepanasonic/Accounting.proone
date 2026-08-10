@@ -944,3 +944,42 @@ export async function deleteTeamMember(payload: { memberId: string }) {
     return { success: false, error: err?.message || 'Failed to remove team member.' };
   }
 }
+
+/**
+ * Server Action: Get Invoice History for a Client
+ */
+export async function getClientInvoiceHistory(clientId: string) {
+  try {
+    const supabase = await createClient();
+    const { data: invoices, error } = await supabase
+      .from('invoices')
+      .select('id, invoice_number, issue_date, status, total_amount')
+      .eq('client_id', clientId)
+      .neq('status', 'void')
+      .order('issue_date', { ascending: false });
+
+    if (error) throw error;
+    return { success: true, invoices: invoices || [] };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to fetch invoice history.' };
+  }
+}
+
+/**
+ * Server Action: Get Expense History for a Vendor
+ */
+export async function getClientExpenseHistory(clientId: string) {
+  try {
+    const supabase = await createClient();
+    const { data: expenses, error } = await supabase
+      .from('transactions')
+      .select('id, description, transaction_date, amount, due_date')
+      .eq('client_id', clientId)
+      .order('transaction_date', { ascending: false });
+
+    if (error) throw error;
+    return { success: true, expenses: expenses || [] };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to fetch expense history.' };
+  }
+}

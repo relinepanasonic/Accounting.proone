@@ -100,6 +100,7 @@ export function NewExpenseForm({ contacts, isHistorical, coaAccounts = [], initi
         const finalNotes = isHistorical ? `[HISTORICAL_OPENING_BALANCE] ${notes}` : notes;
         const payload = {
           vendor: finalVendorName,
+          vendorId,
           category,
           dueDate,
           amount: Number(amount),

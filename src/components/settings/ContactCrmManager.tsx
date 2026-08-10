@@ -12,6 +12,8 @@ export interface ClientRecord {
   email?: string;
   contactType?: 'client' | 'vendor';
   workspace_id?: string;
+  totalSales?: number;
+  totalExpenses?: number;
 }
 
 interface ContactCrmManagerProps {
@@ -46,6 +48,11 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
 
   // Delete confirmation state
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // History Modal State
+  const [historyModalClient, setHistoryModalClient] = useState<ClientRecord | null>(null);
+  const [historyData, setHistoryData] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const isSuperAdmin = !currentUserRole || currentUserRole === 'superadmin' || currentUserRole === 'founder';
 
@@ -155,6 +162,27 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
       alert(err?.message || 'Error deleting client');
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const handleOpenHistory = async (client: ClientRecord) => {
+    setHistoryModalClient(client);
+    setHistoryLoading(true);
+    setHistoryData([]);
+    try {
+      if (client.contactType === 'client') {
+        const { getClientInvoiceHistory } = await import('@/app/actions/settings');
+        const res = await getClientInvoiceHistory(client.id);
+        if (res.success) setHistoryData(res.invoices);
+      } else {
+        const { getClientExpenseHistory } = await import('@/app/actions/settings');
+        const res = await getClientExpenseHistory(client.id);
+        if (res.success) setHistoryData(res.expenses);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setHistoryLoading(false);
     }
   };
 
@@ -359,6 +387,7 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
                   <th className="py-3 px-3">CONTACT PERSON</th>
                   <th className="py-3 px-3">BILLING EMAIL</th>
                   {activeWorkspaceId === '11111111-1111-1111-1111-111111111111' && <th className="py-3 px-3">SOURCE</th>}
+                  <th className="py-3 px-3 text-right">{activeTab === 'client' ? 'TOTAL SALES' : 'TOTAL EXPENSES'}</th>
                   {isSuperAdmin && activeWorkspaceId !== '11111111-1111-1111-1111-111111111111' && <th className="py-3 px-3 text-right">ACTIONS</th>}
                 </tr>
               </thead>
@@ -377,6 +406,14 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
                         </span>
                       </td>
                     )}
+                    <td className="py-3.5 px-3 text-right">
+                      <button 
+                        onClick={() => handleOpenHistory(c)}
+                        className="text-[#f5d77f] font-mono hover:underline hover:text-[#d4af37]"
+                      >
+                        {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(activeTab === 'client' ? (c.totalSales || 0) : (c.totalExpenses || 0))}
+                      </button>
+                    </td>
                     {isSuperAdmin && activeWorkspaceId !== '11111111-1111-1111-1111-111111111111' && (
                       <td className="py-3.5 px-3 text-right">
                         <div className="inline-flex items-center justify-end gap-2">
@@ -541,6 +578,61 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* History Modal */}
+      {historyModalClient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="bg-zinc-950 rounded-3xl p-6 max-w-2xl w-full border border-zinc-800 shadow-2xl flex flex-col max-h-[80vh]">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-4 mb-4">
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-wider text-white">
+                  {historyModalClient.contactType === 'client' ? 'SALES HISTORY' : 'EXPENSE HISTORY'}
+                </h3>
+                <p className="text-xs text-zinc-400 mt-1">{historyModalClient.name}</p>
+              </div>
+              <button
+                onClick={() => setHistoryModalClient(null)}
+                className="text-zinc-400 hover:text-white p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
+              {historyLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 animate-spin text-[#d4af37]" />
+                </div>
+              ) : historyData.length === 0 ? (
+                <div className="text-center py-12 text-sm text-zinc-500 font-mono">
+                  No historical records found.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {historyData.map((item: any) => (
+                    <div key={item.id} className="p-4 rounded-xl border border-zinc-800/50 bg-zinc-900/50 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-bold text-white mb-1">
+                          {historyModalClient.contactType === 'client' ? item.invoice_number : item.description}
+                        </div>
+                        <div className="text-[10px] text-zinc-400 font-mono flex items-center gap-2">
+                          <span>{historyModalClient.contactType === 'client' ? item.issue_date : item.transaction_date}</span>
+                          {historyModalClient.contactType === 'client' && (
+                            <span className="px-1.5 py-0.5 bg-zinc-800 rounded uppercase border border-zinc-700">{item.status}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-sm font-bold text-[#f5d77f] font-mono text-right">
+                        {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(item.total_amount || item.amount || 0)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

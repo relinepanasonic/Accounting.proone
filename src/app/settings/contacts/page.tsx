@@ -9,11 +9,14 @@ export default async function ClientsSettingsPage() {
   const supabase = await createClient();
   const wsCtx = await getAuthenticatedWorkspaceContext(supabase);
 
-  const { data: clients } = await supabase
-    .from('clients')
-    .select('*')
-    .eq('workspace_id', wsCtx.activeWorkspaceId)
-    .order('name', { ascending: true });
+  let clientQuery = supabase.from('clients').select('*');
+  if (wsCtx.activeWorkspaceId === '11111111-1111-1111-1111-111111111111') {
+    clientQuery = clientQuery.or(`workspace_id.in.(11111111-1111-1111-1111-111111111111,f7262187-2a08-4454-b046-b4fd91f2f642,b9f6425f-ad1f-4911-a182-ab788c5fa0e3),workspace_id.is.null`);
+  } else {
+    clientQuery = clientQuery.or(`workspace_id.eq.${wsCtx.activeWorkspaceId},workspace_id.is.null`);
+  }
+
+  const { data: clients } = await clientQuery.order('name', { ascending: true });
 
   const clientList: ClientRecord[] = (clients || []).map((c: any) => ({
     id: c.id,

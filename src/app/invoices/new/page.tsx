@@ -15,7 +15,13 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: P
   const supabase = await createClient();
   const { activeWorkspaceId, availableWorkspaces } = await getAuthenticatedWorkspaceContext(supabase);
 
-  const { data: clients } = await supabase.from('clients').select('id, name, company_legal_name, company_name').eq('workspace_id', activeWorkspaceId).order('name', { ascending: true });
+  let clientQuery = supabase.from('clients').select('id, name, company_legal_name, company_name');
+  if (activeWorkspaceId === '11111111-1111-1111-1111-111111111111') {
+    clientQuery = clientQuery.or(`workspace_id.in.(11111111-1111-1111-1111-111111111111,f7262187-2a08-4454-b046-b4fd91f2f642,b9f6425f-ad1f-4911-a182-ab788c5fa0e3),workspace_id.is.null`);
+  } else {
+    clientQuery = clientQuery.or(`workspace_id.eq.${activeWorkspaceId},workspace_id.is.null`);
+  }
+  const { data: clients } = await clientQuery.order('name', { ascending: true });
   let productQuery = supabase.from('products').select('*');
   if (activeWorkspaceId === '11111111-1111-1111-1111-111111111111') {
     productQuery = productQuery.in('workspace_id', [

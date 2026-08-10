@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useState, useTransition } from 'react';
-import { Plus, Users, Mail, Building2, Loader2, AlertCircle, Edit3, Trash2, X, Check, Shield } from 'lucide-react';
+import { Plus, Users, Mail, Building2, Loader2, AlertCircle, Edit3, Trash2, X, Check, Shield, Lock } from 'lucide-react';
 import { createClientRecord, updateClientRecord, deleteClientRecord } from '@/app/actions/settings';
 
 export interface ClientRecord {
   id: string;
   name: string;
   company?: string;
+  company_legal_name?: string;
   email?: string;
   contactType?: 'client' | 'vendor';
 }
@@ -156,6 +157,19 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 relative">
       {/* Quick Add Client Form */}
+      {activeWorkspaceId === '11111111-1111-1111-1111-111111111111' ? (
+        <div className="gold-glass-panel rounded-3xl p-6 space-y-4 lg:col-span-1 h-fit flex flex-col items-center justify-center text-center">
+          <div className="w-12 h-12 rounded-full bg-zinc-900/80 border border-[#d4af37]/30 flex items-center justify-center text-[#d4af37] mb-2 mt-4">
+            <Lock className="w-5 h-5" />
+          </div>
+          <h3 className="text-sm font-bold uppercase tracking-wider text-white">
+            READ-ONLY MODE
+          </h3>
+          <p className="text-xs text-zinc-400 mb-4">
+            Contacts in PT Pintu Langit are mirrored from Prof Toko Online and New Wave. Please switch to the original workspace to onboard or edit a contact.
+          </p>
+        </div>
+      ) : (
       <form
         onSubmit={handleAddClient}
         className="gold-glass-panel rounded-3xl p-6 space-y-4 lg:col-span-1 h-fit"
@@ -288,6 +302,7 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
           <span>REGISTER ACCOUNT</span>
         </button>
       </form>
+      )}
 
       {/* Clients CRM Table */}
       <div className="gold-glass-panel rounded-3xl p-6 lg:col-span-2 space-y-4">
@@ -339,7 +354,7 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
                   <th className="py-3 px-3">COMPANY NAME</th>
                   <th className="py-3 px-3">CONTACT PERSON</th>
                   <th className="py-3 px-3">BILLING EMAIL</th>
-                  {isSuperAdmin && <th className="py-3 px-3 text-right">ACTIONS</th>}
+                  {isSuperAdmin && activeWorkspaceId !== '11111111-1111-1111-1111-111111111111' && <th className="py-3 px-3 text-right">ACTIONS</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-900 text-xs">
@@ -350,7 +365,7 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
                     </td>
                     <td className="py-3.5 px-3 text-zinc-300">{c.company || '—'}</td>
                     <td className="py-3.5 px-3 font-mono text-[#f5d77f]">{c.email || '—'}</td>
-                    {isSuperAdmin && (
+                    {isSuperAdmin && activeWorkspaceId !== '11111111-1111-1111-1111-111111111111' && (
                       <td className="py-3.5 px-3 text-right">
                         <div className="inline-flex items-center justify-end gap-2">
                           <button

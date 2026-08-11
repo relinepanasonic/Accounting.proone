@@ -7,7 +7,7 @@ import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 export interface LedgerMapping {
   id?: string;
   workspace_id: string;
-  mapping_type: 'AR' | 'SALES' | 'AP' | 'EXPENSE';
+  mapping_type: string;
   account_code: string;
 }
 
@@ -25,7 +25,7 @@ export async function getWorkspaceMappings(workspaceId: string) {
   return data as LedgerMapping[];
 }
 
-export async function saveWorkspaceMapping(workspaceId: string, mappingType: 'AR' | 'SALES' | 'AP' | 'EXPENSE', accountCode: string) {
+export async function saveWorkspaceMapping(workspaceId: string, mappingType: string, accountCode: string) {
   const supabase = await createClient();
   
   // Upsert the mapping (we use unique constraint on workspace_id + mapping_type)

@@ -70,6 +70,12 @@ export default async function COASettingsPage() {
     .select('id, name')
     .order('name', { ascending: true });
 
+  // Fetch bank accounts
+  const { data: bankAccounts } = await supabase
+    .from('workspace_bank_accounts')
+    .select('id, bank_name, account_number, account_name, is_default')
+    .eq('workspace_id', activeWorkspaceId);
+
     return (
       <div className="space-y-6">
         <COASettingsHUD 
@@ -77,6 +83,7 @@ export default async function COASettingsPage() {
           hasClearance={hasClearance} 
           workspaces={workspaces || []}
           activeWorkspaceId={activeWorkspaceId}
+          bankAccounts={bankAccounts || []}
         />
       </div>
     );

@@ -12,6 +12,7 @@ interface COASettingsHUDProps {
   hasClearance: boolean;
   workspaces?: { id: string; name: string }[];
   activeWorkspaceId?: string | null;
+  bankAccounts?: any[];
 }
 
 const ACCOUNT_TYPES = ['Asset', 'Liability', 'Equity', 'Revenue', 'COGS', 'Expense'];
@@ -28,7 +29,7 @@ const getDepth = (acc: COAAccount, allAccounts: COAAccount[]): number => {
   return depth;
 };
 
-export function COASettingsHUD({ accounts, hasClearance, workspaces = [], activeWorkspaceId }: COASettingsHUDProps) {
+export function COASettingsHUD({ accounts, hasClearance, workspaces = [], activeWorkspaceId, bankAccounts = [] }: COASettingsHUDProps) {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('All');
   
@@ -661,8 +662,9 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [], active
           isOpen={isMappingModalOpen}
           onClose={() => setIsMappingModalOpen(false)}
           accounts={accounts}
-          workspaceId={activeWorkspaceId}
-          workspaceName={workspaces.find(w => w.id === activeWorkspaceId)?.name || 'Active Workspace'}
+          workspaceId={activeWorkspaceId || ''}
+          workspaceName={workspaces.find(w => w.id === activeWorkspaceId)?.name || 'Unknown'}
+          bankAccounts={bankAccounts}
         />
       )}
     </div>

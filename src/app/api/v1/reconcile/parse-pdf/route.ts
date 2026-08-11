@@ -110,21 +110,35 @@ export async function POST(request: Request) {
         let amount = 0;
         let isDebit = false;
 
-        const mutasiRegex = /([\d]{1,3}(?:,[\d]{3})*\.[\d]{2})\s*(DB)?\s*$/i;
+        const twoNumbersRegex = /((?:\d{1,3}(?:,\d{3})+|\d{1,3})\.\d{2})\s*(DB)?\s+((?:\d{1,3}(?:,\d{3})+|\d{1,3})\.\d{2})\s*$/i;
+        const oneNumberRegex = /((?:\d{1,3}(?:,\d{3})+|\d{1,3})\.\d{2})\s*(DB)?\s*$/i;
 
         for (let j = tx.rawLines.length - 1; j >= 0; j--) {
-          const match = tx.rawLines[j].match(mutasiRegex);
-          if (match) {
-            amount = parseFloat(match[1].replace(/,/g, ''));
-            if (match[2]?.toUpperCase() === 'DB') isDebit = true;
-            tx.rawLines[j] = tx.rawLines[j].replace(match[0], '').trim();
+          const twoMatch = tx.rawLines[j].match(twoNumbersRegex);
+          if (twoMatch) {
+            amount = parseFloat(twoMatch[1].replace(/,/g, ''));
+            if (twoMatch[2] && twoMatch[2].toUpperCase() === 'DB') isDebit = true;
+            tx.rawLines[j] = tx.rawLines[j].replace(twoMatch[0], '').trim();
+            break;
+          }
+
+          const oneMatch = tx.rawLines[j].match(oneNumberRegex);
+          if (oneMatch) {
+            amount = parseFloat(oneMatch[1].replace(/,/g, ''));
+            if (oneMatch[2] && oneMatch[2].toUpperCase() === 'DB') isDebit = true;
+            tx.rawLines[j] = tx.rawLines[j].replace(oneMatch[0], '').trim();
             break;
           }
         }
 
         if (amount > 0) {
           const finalAmount = isDebit ? -amount : amount;
-          const desc = tx.rawLines.filter((l: string) => l.length > 0).join(' | ');
+          const desc = tx.rawLines
+            .filter((l: string) => l.length > 0 && !l.match(/^(?:IDR|PERIODE|C A T A T A N)/))
+            .join(' | ')
+            .replace(/\|\s*$/, '')
+            .replace(/^\|\s*/, '');
+            
           transactions.push({
             id: `bca-${Date.now()}-${tx.id}-${Math.random().toString(36).substring(7)}`,
             date: tx.dateStr,

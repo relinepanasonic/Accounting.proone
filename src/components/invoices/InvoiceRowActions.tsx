@@ -22,7 +22,7 @@ export function InvoiceStatusToggle({ id, status, invoiceNumber = '', totalAmoun
   const [isModalOpen, setIsModalOpen] = useState(false);
   
   const isPaid = status?.toLowerCase() === 'paid';
-  const isPartial = status?.toLowerCase() === 'partial_paid' || status?.toLowerCase() === 'partial payed';
+  const isPartial = status?.toLowerCase() === 'partial_paid' || status?.toLowerCase() === 'partial payed' || (paidAmount > 0 && paidAmount < totalAmount);
   const isInvoiced = status?.toLowerCase() === 'invoiced';
 
   return (

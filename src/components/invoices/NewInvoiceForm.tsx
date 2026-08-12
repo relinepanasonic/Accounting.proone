@@ -8,6 +8,7 @@ import { createInvoice, updateInvoice } from '@/app/actions/invoices';
 import { createClientRecord } from '@/app/actions/settings';
 import { RupiahInput } from '@/components/ui/RupiahInput';
 import { BulletTextarea } from '@/components/ui/BulletTextarea';
+import { ClientSelect } from '@/components/ui/ClientSelect';
 
 // Helper for Indonesian abbreviated months
 const formatIndoDateStr = (dateStr: string) => {
@@ -379,28 +380,25 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
               </div>
             )}
             
-            <select
+            <ClientSelect
               value={clientId}
-              onChange={(e) => setClientId(e.target.value)}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#d4af37]"
-              required
-            >
-              <option value="">-- Choose Client Profile --</option>
-              {localClients
+              onChange={setClientId}
+              options={localClients
                 .filter((c: any) => c.contact_type !== 'vendor')
                 .map((c: any) => {
                   let sourceStr = '';
                   if (activeWorkspaceId === '11111111-1111-1111-1111-111111111111' && availableWorkspaces) {
-                    const ws = availableWorkspaces.find(w => w.id === c.workspace_id);
-                    sourceStr = `[${ws ? ws.name : 'Legacy'}] `;
+                    const ws = availableWorkspaces.find((w: any) => w.id === c.workspace_id);
+                    sourceStr = ws ? ws.name : 'Legacy';
                   }
-                  return (
-                    <option key={c.id} value={c.id}>
-                      {sourceStr}{c.name} {c.company_name && c.company_name !== c.name ? `(${c.company_name})` : ''}
-                    </option>
-                  );
+                  return {
+                    id: c.id,
+                    name: c.name,
+                    company_name: c.company_name,
+                    sourceStr
+                  };
                 })}
-            </select>
+            />
             
             {(() => {
               const selectedClient = localClients.find((c: any) => c.id === clientId);

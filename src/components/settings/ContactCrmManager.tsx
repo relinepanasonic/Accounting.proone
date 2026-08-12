@@ -135,6 +135,7 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
                   ...c,
                   name: editName,
                   company: editContact || editName,
+                  company_legal_name: editLegalName,
                   email: editEmail,
                 }
               : c

@@ -385,7 +385,7 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
                 <tr className="border-b border-zinc-800 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
                   <th className="py-3 px-3">COMPANY NAME</th>
                   <th className="py-3 px-3">CONTACT PERSON</th>
-                  <th className="py-3 px-3">BILLING EMAIL</th>
+                  <th className="py-3 px-3">LEGAL COMPANY NAME</th>
                   {activeWorkspaceId === '11111111-1111-1111-1111-111111111111' && <th className="py-3 px-3">SOURCE</th>}
                   <th className="py-3 px-3 text-right">{activeTab === 'client' ? 'TOTAL SALES' : 'TOTAL EXPENSES'}</th>
                   {isSuperAdmin && activeWorkspaceId !== '11111111-1111-1111-1111-111111111111' && <th className="py-3 px-3 text-right">ACTIONS</th>}
@@ -398,7 +398,7 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
                       {c.name}
                     </td>
                     <td className="py-3.5 px-3 text-zinc-300">{c.company || '—'}</td>
-                    <td className="py-3.5 px-3 font-mono text-[#f5d77f]">{c.email || '—'}</td>
+                    <td className="py-3.5 px-3 font-mono text-[#f5d77f]">{c.company_legal_name || '—'}</td>
                     {activeWorkspaceId === '11111111-1111-1111-1111-111111111111' && (
                       <td className="py-3.5 px-3">
                         <span className="text-[9px] font-mono uppercase px-2 py-1 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">

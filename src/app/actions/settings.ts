@@ -687,6 +687,9 @@ export async function updateClientRecord(payload: {
       return { success: false, error: 'Company Name is required.' };
     }
 
+    let { data: existing } = await supabase.from('clients').select('contact_type').eq('id', payload.id).single();
+    const originalContactType = existing?.contact_type || 'client';
+
     const updateObj: any = {
       name: payload.name.trim(),
       company_legal_name: payload.company_legal_name?.trim() || null,
@@ -726,7 +729,7 @@ export async function updateClientRecord(payload: {
         contact_name: updateObj.contact_name,
         company_name: updateObj.company_name,
         email: updateObj.email,
-        contact_type: 'client'
+        contact_type: originalContactType
       }));
       
       const { error: cloneErr } = await supabase.from('clients').insert(inserts);

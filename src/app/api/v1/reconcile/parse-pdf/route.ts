@@ -152,51 +152,63 @@ export async function POST(request: Request) {
       }
     } else {
       // Bank Jago logic
-      const dateRegex = /^(\d{2}\s[A-Za-z]{3}\s\d{4})\s+(.*)/;
-      const timeIdRegex = /^\d{2}:\d{2}\s/;
+      const dateRegex = /^(\d{2}\s[A-Za-z]{3}\s\d{4})/;
+      
+      const parsedBlocks: any[] = [];
+      let currentTx: any = null;
 
       for (let i = 0; i < rawLines.length; i++) {
         const line = rawLines[i];
         const dateMatch = line.match(dateRegex);
-        if (!dateMatch) continue;
-
-        const dateStr = dateMatch[1];
-        const rest = dateMatch[2];
-
-        let sourceBankInfo = '';
-        if (i + 1 < rawLines.length && timeIdRegex.test(rawLines[i + 1])) {
-          sourceBankInfo = rawLines[i + 1];
+        
+        // Skip header lines that look like date ranges, e.g. "01 Jan 2026 - 31 Jan 2026"
+        if (dateMatch && line.includes('-') && line.match(/\d{2}\s[A-Za-z]{3}\s\d{4}.*?-.*\d{2}\s[A-Za-z]{3}\s\d{4}/)) {
+          continue;
         }
 
-        const numRegex = /([-+]?\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?)/g;
-        const matches = rest.match(numRegex);
-        if (!matches || matches.length < 2) continue;
+        if (dateMatch) {
+          if (currentTx) parsedBlocks.push(currentTx);
+          currentTx = {
+            dateStr: dateMatch[1],
+            rawLines: []
+          };
+          const rest = line.substring(dateMatch[0].length).trim();
+          if (rest) currentTx.rawLines.push(rest);
+        } else if (currentTx) {
+          currentTx.rawLines.push(line);
+        }
+      }
+      if (currentTx) parsedBlocks.push(currentTx);
 
+      for (let i = 0; i < parsedBlocks.length; i++) {
+        const tx = parsedBlocks[i];
+        const flatLine = tx.rawLines.join(' ');
+        
+        // Match numbers formatted like 1.000.000,00 or -500.000
+        const numRegex = /([-+]?\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?)/g;
+        const matches = flatLine.match(numRegex);
+        
+        if (!matches || matches.length < 2) continue;
+        
+        // Usually the second to last is amount, last is balance
         const amountStr = matches[matches.length - 2];
         const amount = parseIndonesianNumber(amountStr);
         if (isNaN(amount)) continue;
-
-        const amtIndex = rest.lastIndexOf(amountStr);
-        const bodyStr = rest.substring(0, amtIndex).trim();
-        const parts = bodyStr.split(/\s{2,}/).map((p: string) => p.trim()).filter((p: string) => p.length > 0);
-
-        const sourceDestination = parts[0] || 'Unknown';
-        const transactionDetails = parts[1] || '';
-        const notes = parts.length > 2 ? parts.slice(2).join(' ') : '';
-
-        let rekFrom = '';
-        const bankParts = sourceBankInfo.split(/\s{2,}/).map((p: string) => p.trim()).filter((p: string) => p.length > 0);
-        if (bankParts.length >= 2 && !bankParts[1].startsWith('ID#')) {
-          rekFrom = bankParts[1];
-        }
-
+        
+        const amtIndex = flatLine.lastIndexOf(amountStr);
+        const bodyStr = flatLine.substring(0, amtIndex).trim();
+        
+        // The first part is usually time, e.g. "15.15" or "10.27"
+        const timeRegex = /^\d{2}\.\d{2}\s/;
+        const cleanBody = bodyStr.replace(timeRegex, '').trim();
+        
         transactions.push({
           id: `jago-${Date.now()}-${i}-${Math.random().toString(36).substring(7)}`,
-          date: parseBankDate(dateStr),
-          sourceDestination,
-          transactionDetails,
-          notes,
-          rekFrom,
+          date: parseBankDate(tx.dateStr),
+          sourceDestination: cleanBody,
+          transactionDetails: '',
+          notes: '',
+          rekFrom: '',
           amount,
         });
       }

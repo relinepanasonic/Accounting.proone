@@ -304,7 +304,7 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
               CLONE TO OTHER WORKSPACES?
             </label>
             <div className="space-y-2 max-h-32 overflow-y-auto pr-2 custom-scrollbar">
-              {availableWorkspaces.filter(ws => ws.id !== activeWorkspaceId).map(ws => (
+              {availableWorkspaces.filter(ws => ws.id !== activeWorkspaceId && ws.id !== '11111111-1111-1111-1111-111111111111').map(ws => (
                 <label key={ws.id} className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer hover:text-zinc-200">
                   <input 
                     type="checkbox" 
@@ -539,7 +539,7 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
                     CLONE TO OTHER WORKSPACES?
                   </label>
                   <div className="space-y-2 max-h-32 overflow-y-auto pr-2 custom-scrollbar">
-                    {availableWorkspaces.filter(ws => ws.id !== activeWorkspaceId).map(ws => (
+                    {availableWorkspaces.filter(ws => ws.id !== activeWorkspaceId && ws.id !== '11111111-1111-1111-1111-111111111111').map(ws => (
                       <label key={ws.id} className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer hover:text-zinc-200">
                         <input 
                           type="checkbox" 

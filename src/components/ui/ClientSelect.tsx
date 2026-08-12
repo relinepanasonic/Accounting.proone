@@ -18,7 +18,9 @@ interface ClientSelectProps {
 
 export function ClientSelect({ value, onChange, options }: ClientSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -30,7 +32,24 @@ export function ClientSelect({ value, onChange, options }: ClientSelectProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    if (isOpen && searchInputRef.current) {
+      searchInputRef.current.focus();
+    } else {
+      setSearchQuery('');
+    }
+  }, [isOpen]);
+
   const selectedOption = options.find((opt) => opt.id === value);
+
+  const filteredOptions = options.filter(opt => {
+    const query = searchQuery.toLowerCase();
+    return (
+      opt.name.toLowerCase().includes(query) ||
+      (opt.company_name && opt.company_name.toLowerCase().includes(query)) ||
+      (opt.sourceStr && opt.sourceStr.toLowerCase().includes(query))
+    );
+  });
 
   return (
     <div className="relative w-full" ref={dropdownRef}>
@@ -60,9 +79,20 @@ export function ClientSelect({ value, onChange, options }: ClientSelectProps) {
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 w-full mt-2 bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl max-h-60 overflow-y-auto">
-          <div className="p-1">
-            {options.map((opt) => (
+        <div className="absolute z-50 w-full mt-2 bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden flex flex-col">
+          <div className="p-2 border-b border-zinc-800 shrink-0">
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Type to search..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#d4af37] placeholder-zinc-500"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+          <div className="p-1 max-h-60 overflow-y-auto">
+            {filteredOptions.map((opt) => (
               <button
                 key={opt.id}
                 type="button"
@@ -89,7 +119,7 @@ export function ClientSelect({ value, onChange, options }: ClientSelectProps) {
                 )}
               </button>
             ))}
-            {options.length === 0 && (
+            {filteredOptions.length === 0 && (
               <div className="px-3 py-4 text-center text-sm text-zinc-500">
                 No clients found
               </div>

@@ -384,7 +384,7 @@ export function InvoicePDFDocument({
                           />
                         </td>
                         <td className="py-2.5 px-2 text-right font-mono font-semibold text-[#1e2536] align-top">
-                          Rp {item.unitPrice.toLocaleString('id-ID')}
+                          Rp {item.unitPrice.toLocaleString('id-ID', {minimumFractionDigits: 0, maximumFractionDigits: 2})}
                         </td>
                         <td className="py-2.5 px-2 text-center font-mono font-semibold align-top">
                           {item.quantity} <span className="text-[10px] text-zinc-400 font-sans ml-0.5">{item.scale || 'pc'}</span>
@@ -482,7 +482,7 @@ export function InvoicePDFDocument({
                     GRAND TOTAL
                   </span>
                   <span className="font-mono text-base">
-                    Rp {(grandTotal || 0).toLocaleString('id-ID')}
+                    Rp {Math.ceil(grandTotal || 0).toLocaleString('id-ID', {maximumFractionDigits: 0})}
                   </span>
                 </div>
                 

@@ -754,7 +754,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
 
             <div className="flex justify-between w-full md:w-1/3 items-center pt-3 border-t border-[#d4af37]/20 mt-2">
             <span className="text-lg font-bold text-[#d4af37]">Grand Total:</span>
-            <span className="text-xl font-mono font-bold text-white">Rp {grandTotal.toLocaleString('id-ID')}</span>
+            <span className="text-xl font-mono font-bold text-white">Rp {Math.ceil(grandTotal).toLocaleString('id-ID', {maximumFractionDigits: 0})}</span>
             </div>
           </div>
         )}

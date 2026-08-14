@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 export interface RupiahInputProps
   extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> {
@@ -21,25 +21,56 @@ export function RupiahInput({
   ...rest
 }: RupiahInputProps) {
   const [isFocused, setIsFocused] = useState(false);
+  const [localDisplay, setLocalDisplay] = useState<string>('');
 
-  const formatToDisplay = (val: number | string | undefined | null): string => {
-    if (val === undefined || val === null || val === '') return isFocused ? '' : 'Rp 0';
-    if (val === 0 || val === '0') return isFocused ? '' : 'Rp 0';
+  const formatExternalValue = (val: string | number | undefined | null, focused: boolean) => {
+    if (val === undefined || val === null || val === '') return focused ? '' : 'Rp 0';
+    if (val === 0 || val === '0') return focused ? '' : 'Rp 0';
+    
+    // val could be a raw number or string like "1000.5" from state
+    let str = String(val);
+    str = str.replace('.', ','); // Convert float decimal to comma
+    str = str.replace(/[^0-9,]/g, ''); // strip invalid chars
 
-    const str = String(val);
-    const digits = str.replace(/\D/g, '');
-    if (!digits) return isFocused ? '' : 'Rp 0';
+    const parts = str.split(',');
+    let intPart = parts[0] || '0';
+    let decPart = parts.length > 1 ? parts[1] : null;
 
-    const trimmedDigits = digits.replace(/^0+/, '') || '0';
-    if (trimmedDigits === '0' && isFocused) return '';
+    intPart = intPart.replace(/^0+/, '') || '0';
+    if (intPart === '0' && focused && !decPart && !str.includes(',')) return '';
 
-    const formatted = trimmedDigits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-    return `Rp ${formatted}`;
+    const formattedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    if (decPart !== null) {
+      return `Rp ${formattedInt},${decPart}`;
+    } else if (str.endsWith(',')) {
+      return `Rp ${formattedInt},`;
+    }
+    return `Rp ${formattedInt}`;
   };
 
+  useEffect(() => {
+    if (!isFocused) {
+      setLocalDisplay(formatExternalValue(value, false));
+    }
+  }, [value, isFocused]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawDigits = e.target.value.replace(/\D/g, '');
-    const numericVal = rawDigits ? parseInt(rawDigits, 10) : 0;
+    let rawStr = e.target.value;
+    
+    // Clean up input: remove "Rp " and thousand separator dots
+    rawStr = rawStr.replace(/^Rp\s?/, '');
+    rawStr = rawStr.replace(/\./g, '');
+    rawStr = rawStr.replace(/[^0-9,]/g, '');
+
+    const commaParts = rawStr.split(',');
+    if (commaParts.length > 2) {
+      rawStr = commaParts[0] + ',' + commaParts.slice(1).join('');
+    }
+
+    setLocalDisplay(formatExternalValue(rawStr, true));
+
+    const stringForNumber = rawStr.replace(',', '.');
+    const numericVal = stringForNumber ? parseFloat(stringForNumber) : 0;
 
     if (onValueChange) {
       onValueChange(numericVal);
@@ -50,7 +81,7 @@ export function RupiahInput({
         ...e,
         target: {
           ...e.target,
-          value: rawDigits,
+          value: stringForNumber,
         },
       };
       onChange(syntheticEvent as any);
@@ -59,19 +90,21 @@ export function RupiahInput({
 
   const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
     setIsFocused(true);
+    setLocalDisplay(formatExternalValue(value, true));
     if (onFocus) onFocus(e);
   };
 
   const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     setIsFocused(false);
+    setLocalDisplay(formatExternalValue(value, false));
     if (onBlur) onBlur(e);
   };
 
   return (
     <input
       type="text"
-      inputMode="numeric"
-      value={formatToDisplay(value)}
+      inputMode="decimal"
+      value={isFocused ? localDisplay : formatExternalValue(value, false)}
       onChange={handleChange}
       onFocus={handleFocus}
       onBlur={handleBlur}

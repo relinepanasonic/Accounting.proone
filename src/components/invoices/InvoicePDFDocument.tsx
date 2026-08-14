@@ -384,13 +384,13 @@ export function InvoicePDFDocument({
                           />
                         </td>
                         <td className="py-2.5 px-2 text-right font-mono font-semibold text-[#1e2536] align-top">
-                          Rp {item.unitPrice.toLocaleString('en-US')}
+                          Rp {item.unitPrice.toLocaleString('id-ID')}
                         </td>
                         <td className="py-2.5 px-2 text-center font-mono font-semibold align-top">
                           {item.quantity} <span className="text-[10px] text-zinc-400 font-sans ml-0.5">{item.scale || 'pc'}</span>
                         </td>
                         <td className="py-2.5 px-2 text-right font-mono font-bold text-[#1e2536] align-top">
-                          Rp {(hasDiscount ? grossTotal : item.total).toLocaleString('en-US')}
+                          Rp {(hasDiscount ? grossTotal : item.total).toLocaleString('id-ID')}
                         </td>
                       </tr>
                       {hasDiscount && (
@@ -399,14 +399,14 @@ export function InvoicePDFDocument({
                             <td colSpan={2}></td>
                             <td className="py-1 px-2 text-right font-serif text-[11px] text-zinc-500">Discount</td>
                             <td className="py-1 px-2 text-right font-mono font-semibold text-red-600 text-[11px]">
-                              -Rp {item.discountAmount!.toLocaleString('en-US')}
+                              -Rp {item.discountAmount!.toLocaleString('id-ID')}
                             </td>
                           </tr>
                           <tr className="text-zinc-700">
                             <td colSpan={2}></td>
                             <td className="py-1 px-2 text-right font-serif font-bold text-[#1e2536] text-[11px]">Sub Total</td>
                             <td className="py-1 px-2 text-right font-mono font-bold text-[#1e2536] text-[11px]">
-                              Rp {item.total.toLocaleString('en-US')}
+                              Rp {item.total.toLocaleString('id-ID')}
                             </td>
                           </tr>
                         </>
@@ -425,14 +425,14 @@ export function InvoicePDFDocument({
                 <div className="flex justify-between py-1 px-2 text-zinc-600">
                   <span className="font-serif">Sub-Total</span>
                   <span className="font-mono font-semibold text-[#1e2536]">
-                    Rp {(subtotal || 0).toLocaleString('en-US')}
+                    Rp {(subtotal || 0).toLocaleString('id-ID')}
                   </span>
                 </div>
                 {globalDiscount > 0 && (
                   <div className="flex justify-between py-1 px-2 text-red-600">
                     <span className="font-serif">Global Discount</span>
                     <span className="font-mono font-semibold">
-                      -Rp {globalDiscount.toLocaleString('en-US')}
+                      -Rp {globalDiscount.toLocaleString('id-ID')}
                     </span>
                   </div>
                 )}
@@ -441,7 +441,7 @@ export function InvoicePDFDocument({
                   <div className="flex justify-between py-1 px-2 text-zinc-600">
                     <span className="font-serif tracking-widest text-[10px] uppercase">DPP (Base)</span>
                     <span className="font-mono font-semibold text-[#1e2536]">
-                      Rp {(dppAmount || 0).toLocaleString('en-US')}
+                      Rp {(dppAmount || 0).toLocaleString('id-ID')}
                     </span>
                   </div>
                 )}
@@ -451,7 +451,7 @@ export function InvoicePDFDocument({
                       Tax: PPN (11%)
                     </span>
                     <span className="font-mono font-semibold">
-                      +Rp {(taxAmount || 0).toLocaleString('en-US')}
+                      +Rp {(taxAmount || 0).toLocaleString('id-ID')}
                     </span>
                   </div>
                 )}
@@ -461,7 +461,7 @@ export function InvoicePDFDocument({
                       Withholding: PPH ({pphRate || 2}%)
                     </span>
                     <span className="font-mono font-semibold">
-                      -Rp {(pphAmount || 0).toLocaleString('en-US')}
+                      -Rp {(pphAmount || 0).toLocaleString('id-ID')}
                     </span>
                   </div>
                 )}
@@ -472,7 +472,7 @@ export function InvoicePDFDocument({
                       Tax: PPN ({workspaceBrand?.taxRatePercent || 11}%)
                     </span>
                     <span className="font-mono font-semibold">
-                      Rp {taxAmount.toLocaleString('en-US')}
+                      Rp {taxAmount.toLocaleString('id-ID')}
                     </span>
                   </div>
                 )}
@@ -482,7 +482,7 @@ export function InvoicePDFDocument({
                     GRAND TOTAL
                   </span>
                   <span className="font-mono text-base">
-                    Rp {(grandTotal || 0).toLocaleString('en-US')}
+                    Rp {(grandTotal || 0).toLocaleString('id-ID')}
                   </span>
                 </div>
                 
@@ -504,8 +504,8 @@ export function InvoicePDFDocument({
                         return (
                           <div key={i} className="flex justify-between py-1 px-2 text-zinc-600 text-[11px] items-center">
                             <span className="w-1/3 text-zinc-500">{formatIndoDate(p.transaction_date)}</span>
-                            <span className="w-1/3 text-right font-mono text-[#1e2536] font-bold">Rp {Number(p.amount).toLocaleString('en-US')}</span>
-                            <span className="w-1/3 text-right font-mono text-zinc-500">Rp {runningBalance.toLocaleString('en-US')}</span>
+                            <span className="w-1/3 text-right font-mono text-[#1e2536] font-bold">Rp {Number(p.amount).toLocaleString('id-ID')}</span>
+                            <span className="w-1/3 text-right font-mono text-zinc-500">Rp {runningBalance.toLocaleString('id-ID')}</span>
                           </div>
                         );
                       });
@@ -518,7 +518,7 @@ export function InvoicePDFDocument({
                       BALANCE DUE
                     </span>
                     <span className="font-mono text-base">
-                      Rp {balanceDue.toLocaleString('en-US')}
+                      Rp {balanceDue.toLocaleString('id-ID')}
                     </span>
                   </div>
                 )}

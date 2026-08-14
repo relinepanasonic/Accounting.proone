@@ -114,7 +114,6 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
   const [invoiceNumber, setInvoiceNumber] = useState(() => initialData?.invoiceNumber || (initialData?.isQuotation || (typeof searchParams !== 'undefined' && searchParams.get('type') === 'quotation') ? `QUOTE-2026-${Math.floor(100 + Math.random() * 900)}` : `INV-2026-${Math.floor(100 + Math.random() * 900)}`));
   const [issueDate, setIssueDate] = useState(() => initialData?.issueDate || new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState(() => initialData?.dueDate || getNet7Date());
-  const [projectDate, setProjectDate] = useState(() => initialData?.projectDate || new Date().toISOString().split('T')[0]);
   const [globalDiscount, setGlobalDiscount] = useState<number>(initialData?.discountAmount || 0);
   const [notes, setNotes] = useState(initialData?.notes || '');
   const [bankAccountId, setBankAccountId] = useState(initialData?.bankAccountId || (bankAccounts && bankAccounts.length > 0 ? bankAccounts[0].id : 'all'));
@@ -254,7 +253,6 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
             invoiceNumber,
             issueDate,
             dueDate,
-            projectDate,
             notes,
             bankAccountId: bankAccountId === 'all' ? undefined : bankAccountId,
             paymentInstructions: customPaymentInstructions,
@@ -291,7 +289,6 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
             invoiceNumber,
             issueDate,
             dueDate,
-            projectDate,
             notes: finalNotes,
             bankAccountId: bankAccountId !== 'all' ? bankAccountId : undefined,
             paymentInstructions: bankAccountId === 'custom' ? customPaymentInstructions : undefined,
@@ -461,20 +458,10 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t border-zinc-800/80">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-zinc-800/80">
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-2">
-              Date the Project
-            </label>
-            <FormattedDateInput 
-              value={projectDate}
-              onChange={setProjectDate}
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-2">
-              {isQuotation ? 'Date Make' : 'Date the invoice'}
+              {isQuotation ? 'Date Make' : 'Issue Date'}
             </label>
             <FormattedDateInput 
               value={issueDate}
@@ -487,7 +474,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
 
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-2">
-              {isQuotation ? 'Date Expired' : 'Date Due (Auto 7-Days)'}
+              {isQuotation ? 'Date Expired' : 'Due Date (Auto 7-Day Terms)'}
             </label>
             <FormattedDateInput 
               value={dueDate}

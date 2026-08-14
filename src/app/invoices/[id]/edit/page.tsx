@@ -63,7 +63,6 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
     invoiceNumber: invoice.invoice_number,
     issueDate: invoice.issue_date,
     dueDate: invoice.due_date,
-    projectDate: invoice.project_date,
     notes: invoice.notes || '',
     bankAccountId: invoice.bank_account_id || 'all',
     paymentInstructions: invoice.payment_instructions || '',

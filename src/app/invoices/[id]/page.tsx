@@ -164,7 +164,6 @@ export default async function InvoiceDetailPage({ params, searchParams }: Invoic
       invoiceDate={invoiceDate}
       rawIssueDate={inv?.issue_date}
       issueDate={issueDate}
-      projectDate={inv?.project_date ? formatIndoDate(inv.project_date) : undefined}
       clientName={clientName}
       clientLegalName={clientLegalName}
       clientBrand={clientBrand}

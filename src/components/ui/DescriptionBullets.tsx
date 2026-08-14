@@ -54,16 +54,16 @@ export function DescriptionBullets({
   const subTextColor = isDark ? 'text-zinc-400' : 'text-[#1e2536]/80 font-normal';
 
   return (
-    <div className={`space-y-1 font-sans ${className}`}>
+    <div className={`space-y-0.5 font-sans ${className}`}>
       {title && (
-        <div className={`leading-snug ${headerClassName || textColor}`}>
+        <div className={`leading-tight ${headerClassName || textColor}`}>
           {title}
         </div>
       )}
-      <ul className="space-y-1 mt-1 list-none pl-0">
+      <ul className="space-y-0.5 mt-0.5 list-none pl-0">
         {bullets.map((line, idx) => (
-          <li key={idx} className={`flex items-start gap-2 text-xs leading-relaxed ${bulletClassName || subTextColor}`}>
-            <span className={`inline-block mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotColor}`} />
+          <li key={idx} className={`flex items-start gap-2 text-xs leading-tight ${bulletClassName || subTextColor}`}>
+            <span className={`inline-block mt-1 w-1 h-1 rounded-full flex-shrink-0 ${dotColor}`} />
             <span>{line}</span>
           </li>
         ))}

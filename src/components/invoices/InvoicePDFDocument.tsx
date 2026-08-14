@@ -358,10 +358,10 @@ export function InvoicePDFDocument({
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-y-2 border-[#1e2536] text-[#1e2536] uppercase text-[10px] tracking-wider font-bold font-serif">
-                  <th className="py-3 px-2">{isQuotation ? 'DELIVERABLE / SERVICE PITCH' : 'PACKAGE & DESCRIPTION'}</th>
-                  <th className="py-3 px-2 text-right">{isQuotation ? 'UNIT INVESTMENT' : 'UNIT PRICE'}</th>
-                  <th className="py-3 px-2 text-center w-16">QTY</th>
-                  <th className="py-3 px-2 text-right">TOTAL</th>
+                  <th className="py-1.5 px-2">{isQuotation ? 'DELIVERABLE / SERVICE PITCH' : 'PACKAGE & DESCRIPTION'}</th>
+                  <th className="py-1.5 px-2 text-right">{isQuotation ? 'UNIT INVESTMENT' : 'UNIT PRICE'}</th>
+                  <th className="py-1.5 px-2 text-center w-16">QTY</th>
+                  <th className="py-1.5 px-2 text-right">TOTAL</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-200 text-xs">
@@ -371,25 +371,25 @@ export function InvoicePDFDocument({
                   return (
                     <React.Fragment key={item.id || idx}>
                       <tr className="text-zinc-700">
-                        <td className="py-2.5 px-2 font-medium text-[#1e2536]">
+                        <td className="py-1 px-2 font-medium text-[#1e2536]">
                           {item.packageName && (
-                            <div className="font-bold text-[#c5a059] uppercase tracking-wider text-[11px] mb-1">
+                            <div className="font-bold text-[#c5a059] uppercase tracking-wider text-[10px] mb-0.5">
                               {item.packageName}
                             </div>
                           )}
                           <DescriptionBullets
                             description={item.description}
                             isDark={false}
-                            className="text-xs"
+                            className="text-[10px]"
                           />
                         </td>
-                        <td className="py-2.5 px-2 text-right font-mono font-semibold text-[#1e2536] align-top">
+                        <td className="py-1 px-2 text-right font-mono font-semibold text-[#1e2536] align-top text-[11px]">
                           Rp {item.unitPrice.toLocaleString('id-ID', {minimumFractionDigits: 0, maximumFractionDigits: 2})}
                         </td>
-                        <td className="py-2.5 px-2 text-center font-mono font-semibold align-top">
-                          {item.quantity} <span className="text-[10px] text-zinc-400 font-sans ml-0.5">{item.scale || 'pc'}</span>
+                        <td className="py-1 px-2 text-center font-mono font-semibold align-top text-[11px]">
+                          {item.quantity} <span className="text-[9px] text-zinc-400 font-sans ml-0.5">{item.scale || 'pc'}</span>
                         </td>
-                        <td className="py-2.5 px-2 text-right font-mono font-bold text-[#1e2536] align-top">
+                        <td className="py-1 px-2 text-right font-mono font-bold text-[#1e2536] align-top text-[11px]">
                           Rp {(hasDiscount ? grossTotal : item.total).toLocaleString('id-ID')}
                         </td>
                       </tr>

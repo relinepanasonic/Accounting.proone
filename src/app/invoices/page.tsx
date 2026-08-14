@@ -19,7 +19,7 @@ async function InvoicesTableServer({ activeTab }: { activeTab: string }) {
   ] = await Promise.all([
     supabase
       .from('invoices')
-      .select('id, invoice_number, is_quotation, status, total_amount, amount_paid, issue_date, due_date, client_id, assigned_workspace_id, clients(name, contact_name), invoice_line_items(package_name, description, quantity, scale), assignedWorkspaces:workspaces!invoices_assigned_workspace_id_fkey(name)')
+      .select('id, invoice_number, is_quotation, status, total_amount, amount_paid, issue_date, due_date, notes, client_id, assigned_workspace_id, clients(name, contact_name), invoice_line_items(package_name, description, quantity, scale), assignedWorkspaces:workspaces!invoices_assigned_workspace_id_fkey(name)')
       .or(`workspace_id.eq.${activeWorkspaceId},assigned_workspace_id.eq.${activeWorkspaceId}`)
       .order('created_at', { ascending: false }),
     supabase
@@ -37,9 +37,12 @@ async function InvoicesTableServer({ activeTab }: { activeTab: string }) {
           const lineItems = Array.isArray(inv.invoice_line_items) ? inv.invoice_line_items : (inv.invoice_line_items ? [inv.invoice_line_items] : []);
           const firstPackage = lineItems.length > 0 ? (lineItems[0].package_name || lineItems[0].description || '—') : '—';
           const firstPackageQtt = lineItems.length > 0 ? `${Number(lineItems[0].quantity)} ${lineItems[0].scale || ''}`.trim() : '—';
+          const projectDateMatch = (inv.notes || '').match(/\[ProjectDate:([^\]]+)\]/);
+          const projectDate = projectDateMatch ? formatIndoDate(projectDateMatch[1]) : '—';
           return {
             id: inv.id,
             invoiceNumber: inv.invoice_number,
+            projectDate,
             issueDate: formatIndoDate(inv.issue_date),
             rawIssueDate: inv.issue_date || '',
             clientName: clientObj?.name || 'Client',
@@ -64,6 +67,7 @@ async function InvoicesTableServer({ activeTab }: { activeTab: string }) {
       ? incomeTx.map((tx) => ({
           id: tx.id,
           invoiceNumber: 'DIRECT INCOME',
+          projectDate: '—',
           issueDate: formatIndoDate(tx.transaction_date),
           rawIssueDate: tx.transaction_date || '',
           clientName: tx.description || 'Quick Income',

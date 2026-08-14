@@ -8,6 +8,7 @@ import { InvoiceStatusToggle, InvoiceActionGroup } from '@/components/invoices/I
 interface InvoiceData {
   id: string;
   invoiceNumber: string;
+  projectDate: string;
   issueDate: string;
   rawIssueDate: string;
   clientName: string;
@@ -287,19 +288,19 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
                   <div className="flex items-center justify-between">No. Invoice {getSortIcon('invoiceNumber')}</div>
                 </th>
                 <th className="py-3 px-3 cursor-pointer select-none group" onClick={() => handleSort('rawIssueDate')}>
-                  <div className="flex items-center justify-between">Tanggal {getSortIcon('rawIssueDate')}</div>
+                  <div className="flex items-center justify-between">Tgl Project {getSortIcon('rawIssueDate')}</div>
                 </th>
-                <th className="py-3 px-3 cursor-pointer select-none group" onClick={() => handleSort('clientName')}>
-                  <div className="flex items-center justify-between">Client {getSortIcon('clientName')}</div>
+                <th className="py-3 px-3 cursor-pointer select-none group" onClick={() => handleSort('rawIssueDate')}>
+                  <div className="flex items-center justify-between">Tgl Invoice {getSortIcon('rawIssueDate')}</div>
                 </th>
                 <th className="py-3 px-3 cursor-pointer select-none group" onClick={() => handleSort('rawDueDate')}>
                   <div className="flex items-center justify-between">Due Date {getSortIcon('rawDueDate')}</div>
                 </th>
+                <th className="py-3 px-3 cursor-pointer select-none group" onClick={() => handleSort('clientName')}>
+                  <div className="flex items-center justify-between">Client {getSortIcon('clientName')}</div>
+                </th>
                 <th className="py-3 px-3 cursor-pointer select-none group" onClick={() => handleSort('packageName')}>
                   <div className="flex items-center justify-between">Package {getSortIcon('packageName')}</div>
-                </th>
-                <th className="py-3 px-3 cursor-pointer select-none group" onClick={() => handleSort('packageQtt')}>
-                  <div className="flex items-center justify-between">Qtt {getSortIcon('packageQtt')}</div>
                 </th>
                 <th className="py-3 px-3 cursor-pointer select-none group" onClick={() => handleSort('rawAmount')}>
                   <div className="flex items-center justify-end gap-2">Amount Billed {getSortIcon('rawAmount')}</div>
@@ -319,35 +320,43 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
                   key={inv.id}
                   className={`hover:bg-zinc-800/30 transition-colors group ${inv.isQuotation ? 'opacity-75' : ''}`}
                 >
+                  {/* No Invoice */}
                   <td className="py-3 px-3 font-bold text-[#f5d77f]">
                     <div className="flex items-center gap-2">
                       <div className="w-1 h-4 bg-[#d4af37] rounded-sm"></div>
                       {inv.invoiceNumber}
                     </div>
                   </td>
+                  {/* Tanggal Project */}
+                  <td className={`py-3 px-3 font-sans text-zinc-400`}>
+                    {inv.projectDate}
+                  </td>
+                  {/* Tanggal Invoice */}
                   <td className={`py-3 px-3 font-sans ${inv.isQuotation ? 'text-white' : 'text-zinc-400'}`}>
                     {inv.issueDate}
                   </td>
+                  {/* Due Date */}
+                  <td className={`py-3 px-3 font-sans ${inv.isQuotation ? 'text-white' : 'text-zinc-400'}`}>
+                    {inv.dueDate}
+                  </td>
+                  {/* Client */}
                   <td className="py-3 px-3">
                     <div className="font-sans font-semibold text-white group-hover:text-[#f5d77f] transition-colors">
                       {inv.clientName}
                     </div>
-                    {inv.clientContact && <div className="text-[10px] text-zinc-500 font-sans mt-0.5">{inv.clientContact}</div>}
                   </td>
-                  <td className={`py-3 px-3 font-sans ${inv.isQuotation ? 'text-white' : 'text-zinc-400'}`}>
-                    {inv.dueDate}
+                  {/* Package */}
+                  <td className={`py-3 px-3 font-sans max-w-[180px] truncate ${inv.isQuotation ? 'text-white' : 'text-zinc-400'}`} title={`${inv.packageName} — ${inv.packageQtt}`}>
+                    <div>{inv.packageName}</div>
+                    <div className="text-[10px] text-zinc-500">{inv.packageQtt}</div>
                   </td>
-                  <td className={`py-3 px-3 font-sans max-w-[200px] truncate ${inv.isQuotation ? 'text-white' : 'text-zinc-400'}`} title={inv.packageName}>
-                    {inv.packageName}
-                  </td>
-                  <td className={`py-3 px-3 font-sans font-medium ${inv.isQuotation ? 'text-white' : 'text-zinc-400'}`}>
-                    {inv.packageQtt}
-                  </td>
+                  {/* Amount Billed */}
                   <td className="py-3 px-3 text-right">
                     <div className="text-sm font-extrabold text-[#f5d77f] drop-shadow-[0_0_10px_rgba(245,215,127,0.35)]">
                       {inv.amount}
                     </div>
                   </td>
+                  {/* Assignment */}
                   <td className="py-3 px-3 text-zinc-400 font-sans">
                     <InvoiceAssignmentDropdown 
                       invoiceId={inv.id} 
@@ -356,6 +365,7 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
                       activeWorkspaceName={activeWorkspaceName}
                     />
                   </td>
+                  {/* Status */}
                   <td className="py-3 px-3 text-center">
                     {inv.isQuotation ? (
                       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 font-bold text-[10px] tracking-widest uppercase">
@@ -373,6 +383,7 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
                       />
                     )}
                   </td>
+                  {/* Aksi */}
                   <td className="py-3 px-3 text-center">
                     <InvoiceActionGroup id={inv.id} isQuotation={inv.isQuotation} status={inv.status} />
                   </td>

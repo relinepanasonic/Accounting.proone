@@ -174,12 +174,11 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
       is_quotation: payload.isQuotation || false,
       issue_date: payload.issueDate,
       due_date: payload.dueDate,
-      project_date: payload.projectDate || null,
       subtotal: subtotal,
       total_amount: totalAmount,
       discount_amount: globalDiscount,
       tax_amount: payload.taxAmount || 0,
-      notes: payload.notes || null,
+      notes: payload.projectDate ? `[ProjectDate:${payload.projectDate}]\n${payload.notes || ''}`.trim() : (payload.notes || null),
       bank_account_id: payload.bankAccountId || null,
       payment_instructions: payload.paymentInstructions || null,
       assigned_workspace_id: payload.assignedWorkspaceId || null,
@@ -335,12 +334,11 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
         status: 'draft',
         issue_date: payload.issueDate,
         due_date: payload.dueDate,
-        project_date: payload.projectDate || null,
         subtotal: subtotal,
         total_amount: totalAmount,
         discount_amount: globalDiscount,
         tax_amount: payload.taxAmount || 0,
-        notes: payload.notes || null,
+        notes: payload.projectDate ? `[ProjectDate:${payload.projectDate}]\n${payload.notes || ''}`.trim() : (payload.notes || null),
       };
       if (payload.assignedWorkspaceId) insertData.assigned_workspace_id = payload.assignedWorkspaceId;
       if (payload.bankAccountId) insertData.bank_account_id = payload.bankAccountId;

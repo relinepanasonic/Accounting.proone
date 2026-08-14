@@ -458,7 +458,7 @@ export function InvoicePDFDocument({
                 {(hasPph || (pphAmount && pphAmount > 0)) && (
                   <div className="flex justify-between py-1 px-2 text-red-600">
                     <span className="font-serif">
-                      Withholding: PPH ({pphRate || 2}%)
+                      PPH ({pphRate || 2}%)
                     </span>
                     <span className="font-mono font-semibold">
                       -Rp {(pphAmount || 0).toLocaleString('id-ID')}

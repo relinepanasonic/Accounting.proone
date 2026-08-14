@@ -743,6 +743,10 @@ export async function updateClientRecord(payload: {
         }));
         await supabase.from('clients').insert(fallbackInserts);
       }
+      
+      for (const wsId of payload.cloneWorkspaceIds) {
+        revalidatePath(`/settings/workspaces/${wsId}`);
+      }
     }
 
     revalidatePath('/settings');

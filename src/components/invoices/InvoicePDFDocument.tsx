@@ -42,6 +42,7 @@ export interface InvoiceDocumentProps {
   invoiceDate: string;
   rawIssueDate?: string;
   issueDate: string;
+  projectDate?: string;
   clientName: string;
   clientLegalName?: string;
   clientBrand?: string;
@@ -75,6 +76,7 @@ export function InvoicePDFDocument({
   invoiceDate = '16 Jul, 2026',
   rawIssueDate,
   issueDate = '16 Jul, 2026',
+  projectDate,
   clientName = '',
   clientLegalName,
   clientBrand = '',
@@ -349,6 +351,16 @@ export function InvoicePDFDocument({
                     {issueDate}
                   </span>
                 </div>
+                {projectDate && (
+                  <div className="border-l border-zinc-200 pl-3">
+                    <span className="block text-[10px] text-zinc-400 uppercase font-mono">
+                      Project Date
+                    </span>
+                    <span className="font-semibold text-[#1e2536]">
+                      {projectDate}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </div>

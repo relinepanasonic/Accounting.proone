@@ -17,6 +17,7 @@ export interface CreateInvoicePayload {
   invoiceNumber: string;
   issueDate: string;
   dueDate: string;
+  projectDate?: string;
   notes?: string;
   bankAccountId?: string;
   paymentInstructions?: string;
@@ -173,6 +174,7 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
       is_quotation: payload.isQuotation || false,
       issue_date: payload.issueDate,
       due_date: payload.dueDate,
+      project_date: payload.projectDate || null,
       subtotal: subtotal,
       total_amount: totalAmount,
       discount_amount: globalDiscount,
@@ -333,6 +335,7 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
         status: 'draft',
         issue_date: payload.issueDate,
         due_date: payload.dueDate,
+        project_date: payload.projectDate || null,
         subtotal: subtotal,
         total_amount: totalAmount,
         discount_amount: globalDiscount,

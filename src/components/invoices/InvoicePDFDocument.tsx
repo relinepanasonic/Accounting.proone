@@ -579,9 +579,7 @@ export function InvoicePDFDocument({
 
             {/* Right: Signature Line */}
             <div className="text-right flex flex-col items-end">
-              <div className="font-serif italic text-2xl text-zinc-400 mb-3 pr-4 select-none">
-                Authorized Signature
-              </div>
+              <div className="h-8 mb-3 pr-4 select-none" />
               <div className="w-56 border-b-2 border-[#1e2536] pb-1" />
               <div className="mt-2 text-right">
                 <div className="font-bold text-[#1e2536] text-xs uppercase tracking-wider">

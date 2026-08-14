@@ -191,11 +191,30 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
       updated_at: new Date().toISOString(),
     };
 
-    const { error: updateError } = await supabase
+    let { error: updateError } = await supabase
       .from('invoices')
       .update(updateData)
       .eq('id', payload.id)
       .eq('workspace_id', workspaceId);
+
+    // Fallback: if schema cache doesn't know about the new tax columns, strip and retry
+    if (updateError && (updateError.code === '42703' || updateError.message?.includes('does not exist') || updateError.message?.includes('Could not find the'))) {
+      const safeUpdate = { ...updateData };
+      delete safeUpdate.tax_calculation_type;
+      delete safeUpdate.has_ppn;
+      delete safeUpdate.has_pph;
+      delete safeUpdate.pph_rate;
+      delete safeUpdate.pph_amount;
+      delete safeUpdate.dpp_amount;
+      delete safeUpdate.bank_account_id;
+      delete safeUpdate.payment_instructions;
+      const retry = await supabase
+        .from('invoices')
+        .update(safeUpdate)
+        .eq('id', payload.id)
+        .eq('workspace_id', workspaceId);
+      updateError = retry.error;
+    }
 
     if (updateError) {
       return { success: false, error: updateError.message };

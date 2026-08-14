@@ -178,6 +178,12 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
       total_amount: totalAmount,
       discount_amount: globalDiscount,
       tax_amount: payload.taxAmount || 0,
+      tax_calculation_type: payload.taxCalculationType || 'none',
+      has_ppn: payload.hasPpn || false,
+      has_pph: payload.hasPph || false,
+      pph_rate: payload.pphRate || 2,
+      pph_amount: payload.pphAmount || 0,
+      dpp_amount: payload.dppAmount || 0,
       notes: payload.projectDate ? `[ProjectDate:${payload.projectDate}]\n${payload.notes || ''}`.trim() : (payload.notes || null),
       bank_account_id: payload.bankAccountId || null,
       payment_instructions: payload.paymentInstructions || null,
@@ -338,6 +344,12 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
         total_amount: totalAmount,
         discount_amount: globalDiscount,
         tax_amount: payload.taxAmount || 0,
+        tax_calculation_type: payload.taxCalculationType || 'none',
+        has_ppn: payload.hasPpn || false,
+        has_pph: payload.hasPph || false,
+        pph_rate: payload.pphRate || 2,
+        pph_amount: payload.pphAmount || 0,
+        dpp_amount: payload.dppAmount || 0,
         notes: payload.projectDate ? `[ProjectDate:${payload.projectDate}]\n${payload.notes || ''}`.trim() : (payload.notes || null),
       };
       if (payload.assignedWorkspaceId) insertData.assigned_workspace_id = payload.assignedWorkspaceId;
@@ -353,6 +365,12 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
       if (res.error && (res.error.code === '42703' || res.error.message?.includes('does not exist') || res.error.message?.includes('Could not find the'))) {
         delete insertData.bank_account_id;
         delete insertData.payment_instructions;
+        delete insertData.tax_calculation_type;
+        delete insertData.has_ppn;
+        delete insertData.has_pph;
+        delete insertData.pph_rate;
+        delete insertData.pph_amount;
+        delete insertData.dpp_amount;
         res = await supabase.from('invoices').insert(insertData).select('id').single();
       }
 

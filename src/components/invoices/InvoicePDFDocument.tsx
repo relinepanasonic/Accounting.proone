@@ -445,7 +445,7 @@ export function InvoicePDFDocument({
                     </span>
                   </div>
                 )}
-                {hasPpn && (
+                {(hasPpn || (taxAmount && taxAmount > 0 && taxCalculationType && taxCalculationType !== 'none')) && (
                   <div className="flex justify-between py-1 px-2 text-[#c5a059]">
                     <span className="font-serif">
                       Tax: PPN (11%)
@@ -455,7 +455,7 @@ export function InvoicePDFDocument({
                     </span>
                   </div>
                 )}
-                {hasPph && (
+                {(hasPph || (pphAmount && pphAmount > 0)) && (
                   <div className="flex justify-between py-1 px-2 text-red-600">
                     <span className="font-serif">
                       Withholding: PPH ({pphRate || 2}%)

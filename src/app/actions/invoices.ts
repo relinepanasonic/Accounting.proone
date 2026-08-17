@@ -191,11 +191,16 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
       updated_at: new Date().toISOString(),
     };
 
-    let { error: updateError } = await supabase
+    let updateQuery = supabase
       .from('invoices')
       .update(updateData)
-      .eq('id', payload.id)
-      .eq('workspace_id', workspaceId);
+      .eq('id', payload.id);
+      
+    if (workspaceId !== '11111111-1111-1111-1111-111111111111') {
+      updateQuery = updateQuery.or(`workspace_id.eq.${workspaceId},assigned_workspace_id.eq.${workspaceId}`);
+    }
+    
+    let { error: updateError } = await updateQuery;
 
     // Fallback: if schema cache doesn't know about the new tax columns, strip and retry
     if (updateError && (updateError.code === '42703' || updateError.message?.includes('does not exist') || updateError.message?.includes('Could not find the'))) {
@@ -208,11 +213,16 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
       delete safeUpdate.dpp_amount;
       delete safeUpdate.bank_account_id;
       delete safeUpdate.payment_instructions;
-      const retry = await supabase
+      let retryQuery = supabase
         .from('invoices')
         .update(safeUpdate)
-        .eq('id', payload.id)
-        .eq('workspace_id', workspaceId);
+        .eq('id', payload.id);
+        
+      if (workspaceId !== '11111111-1111-1111-1111-111111111111') {
+        retryQuery = retryQuery.or(`workspace_id.eq.${workspaceId},assigned_workspace_id.eq.${workspaceId}`);
+      }
+      
+      const retry = await retryQuery;
       updateError = retry.error;
     }
 

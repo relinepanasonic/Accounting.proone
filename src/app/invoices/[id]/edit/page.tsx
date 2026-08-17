@@ -16,15 +16,19 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
   const { activeWorkspaceId, availableWorkspaces } = await getAuthenticatedWorkspaceContext(supabase);
 
   // Fetch the invoice
-  const { data: invoice } = await supabase
+  let invoiceQuery = supabase
     .from('invoices')
     .select(`
       *,
       invoice_line_items (*)
     `)
-    .eq('id', id)
-    .eq('workspace_id', activeWorkspaceId)
-    .single();
+    .eq('id', id);
+
+  if (activeWorkspaceId !== '11111111-1111-1111-1111-111111111111') {
+    invoiceQuery = invoiceQuery.or(`workspace_id.eq.${activeWorkspaceId},assigned_workspace_id.eq.${activeWorkspaceId}`);
+  }
+
+  const { data: invoice } = await invoiceQuery.single();
 
   if (!invoice) {
     notFound();

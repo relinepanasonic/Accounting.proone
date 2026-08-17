@@ -96,12 +96,18 @@ async function syncInvoiceToNewWave(invoiceId: string, supabase: any): Promise<{
 
     const rawLineItems = Array.isArray(inv.invoice_line_items) ? inv.invoice_line_items : (inv.invoice_line_items ? [inv.invoice_line_items] : []);
 
+    // Extract project_date from the [ProjectDate:YYYY-MM-DD] tag stored in notes.
+    // If not set, fall back to invoice_date so New Wave always receives an explicit value.
+    const projectDateMatch = (inv.notes || '').match(/\[ProjectDate:([^\]]+)\]/);
+    const project_date = projectDateMatch ? projectDateMatch[1] : inv.issue_date;
+
     const payload = {
       source: 'proone',
       external_id: inv.id,
       invoice_number: inv.invoice_number,
       brand: clientName || 'Unknown Client',
       invoice_date: inv.issue_date,
+      project_date,          // NEW — Tgl Project (falls back to invoice_date if not set)
       due_date: inv.due_date,
       status: inv.status,
       notes: inv.notes,

@@ -9,6 +9,7 @@ interface InvoiceData {
   id: string;
   invoiceNumber: string;
   projectDate: string;
+  rawProjectDate: string;
   issueDate: string;
   rawIssueDate: string;
   clientName: string;
@@ -29,7 +30,56 @@ interface InvoiceData {
 type SortField = 'invoiceNumber' | 'rawIssueDate' | 'clientName' | 'rawDueDate' | 'packageName' | 'packageQtt' | 'rawAmount' | 'status' | 'assignedWorkspaceName';
 type SortOrder = 'asc' | 'desc';
 
-import { updateInvoiceAssignment } from '@/app/actions/invoices';
+import { updateInvoiceAssignment, updateInvoiceProjectDate } from '@/app/actions/invoices';
+
+function InvoiceProjectDateDropdown({
+  invoiceId,
+  currentRawDate,
+}: {
+  invoiceId: string;
+  currentRawDate: string;
+}) {
+  const [isPending, startTransition] = React.useTransition();
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newDate = e.target.value;
+    startTransition(async () => {
+      try {
+        await updateInvoiceProjectDate(invoiceId, newDate);
+      } catch (err) {
+        console.error(err);
+      }
+    });
+  };
+
+  return (
+    <div className="relative group flex items-center gap-1 cursor-pointer w-full max-w-[120px]">
+      <div 
+        className="text-zinc-400 group-hover:text-zinc-200 transition-colors"
+        onClick={() => {
+          try {
+            inputRef.current?.showPicker();
+          } catch (e) {}
+        }}
+      >
+        {currentRawDate ? (
+           <span className="border-b border-dashed border-zinc-700 pb-0.5">{new Date(currentRawDate).toLocaleDateString('id-ID', { month: 'short', year: 'numeric', day: 'numeric' })}</span>
+        ) : (
+           <span className="border-b border-dashed border-zinc-700 pb-0.5 text-zinc-600 italic">Set date...</span>
+        )}
+      </div>
+      <input
+        ref={inputRef}
+        type="date"
+        value={currentRawDate || ''}
+        onChange={handleChange}
+        disabled={isPending}
+        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-wait"
+      />
+    </div>
+  );
+}
 
 function InvoiceAssignmentDropdown({ 
   invoiceId, 
@@ -328,8 +378,11 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
                     </div>
                   </td>
                   {/* Tanggal Project */}
-                  <td className={`py-3 px-3 font-sans text-zinc-400`}>
-                    {inv.projectDate}
+                  <td className={`py-3 px-3 font-sans`}>
+                    <InvoiceProjectDateDropdown 
+                      invoiceId={inv.id}
+                      currentRawDate={inv.rawProjectDate}
+                    />
                   </td>
                   {/* Tanggal Invoice */}
                   <td className={`py-3 px-3 font-sans ${inv.isQuotation ? 'text-white' : 'text-zinc-400'}`}>

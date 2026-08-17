@@ -38,11 +38,13 @@ async function InvoicesTableServer({ activeTab }: { activeTab: string }) {
           const firstPackage = lineItems.length > 0 ? (lineItems[0].package_name || lineItems[0].description || '—') : '—';
           const firstPackageQtt = lineItems.length > 0 ? `${Number(lineItems[0].quantity)} ${lineItems[0].scale || ''}`.trim() : '—';
           const projectDateMatch = (inv.notes || '').match(/\[ProjectDate:([^\]]+)\]/);
+          const rawProjectDate = projectDateMatch ? projectDateMatch[1] : '';
           const projectDate = projectDateMatch ? formatIndoDate(projectDateMatch[1]) : '—';
           return {
             id: inv.id,
             invoiceNumber: inv.invoice_number,
             projectDate,
+            rawProjectDate,
             issueDate: formatIndoDate(inv.issue_date),
             rawIssueDate: inv.issue_date || '',
             clientName: clientObj?.name || 'Client',

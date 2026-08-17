@@ -321,6 +321,57 @@ export async function updateInvoiceAssignment(invoiceId: string, assignedWorkspa
   }
 }
 
+export async function updateInvoiceProjectDate(invoiceId: string, newDate: string): Promise<InvoiceActionResult> {
+  try {
+    const supabase = await createClient();
+    const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+
+    // Fetch existing notes
+    let query = supabase.from('invoices').select('notes').eq('id', invoiceId);
+    if (workspaceId !== '11111111-1111-1111-1111-111111111111') {
+      query = query.or(`workspace_id.eq.${workspaceId},assigned_workspace_id.eq.${workspaceId}`);
+    }
+    
+    const { data: inv } = await query.single();
+    if (!inv) throw new Error('Invoice not found or unauthorized');
+
+    let oldNotes = inv.notes || '';
+    let newNotes = '';
+    
+    if (oldNotes.match(/\[ProjectDate:([^\]]+)\]/)) {
+      if (newDate) {
+        newNotes = oldNotes.replace(/\[ProjectDate:([^\]]+)\]/, `[ProjectDate:${newDate}]`);
+      } else {
+        newNotes = oldNotes.replace(/\[ProjectDate:([^\]]+)\]\n?/, '');
+      }
+    } else {
+      if (newDate) {
+        newNotes = `[ProjectDate:${newDate}]\n${oldNotes}`.trim();
+      } else {
+        newNotes = oldNotes;
+      }
+    }
+
+    let updateQuery = supabase
+      .from('invoices')
+      .update({ notes: newNotes })
+      .eq('id', invoiceId);
+      
+    if (workspaceId !== '11111111-1111-1111-1111-111111111111') {
+      updateQuery = updateQuery.or(`workspace_id.eq.${workspaceId},assigned_workspace_id.eq.${workspaceId}`);
+    }
+
+    const { error } = await updateQuery;
+    if (error) throw new Error(error.message);
+
+    revalidatePath('/invoices');
+    revalidatePath(`/invoices/${invoiceId}`);
+    return { success: true, invoiceId };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to update project date.' };
+  }
+}
+
 /**
  * Server Action: Create a new action-oriented invoice and its line items.
  * Strictly enforces authentication and RLS workspace context.

@@ -198,17 +198,17 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
 
   if (isTaxRegistered || activeWorkspaceId === '11111111-1111-1111-1111-111111111111') {
     if (taxCalculationType === 'include' && hasPpn) {
-      dpp = subTotalAfterDiscount / 1.11;
-      ppnAmount = subTotalAfterDiscount - dpp;
+      dpp = Math.round(subTotalAfterDiscount / 1.11);
+      ppnAmount = Math.round(subTotalAfterDiscount - dpp);
     } else if (taxCalculationType === 'exclude' && hasPpn) {
-      dpp = subTotalAfterDiscount;
-      ppnAmount = dpp * 0.11;
+      dpp = Math.round(subTotalAfterDiscount);
+      ppnAmount = Math.round(dpp * 0.11);
     } else {
-      dpp = subTotalAfterDiscount;
+      dpp = Math.round(subTotalAfterDiscount);
     }
 
     if (hasPph) {
-      pphAmount = dpp * (pphRate / 100);
+      pphAmount = Math.round(dpp * (pphRate / 100));
     }
 
     grandTotal = dpp + ppnAmount - pphAmount;

@@ -415,7 +415,6 @@ export function InvoicePDFDocument({
               <tbody className="divide-y divide-zinc-200 text-xs">
                 {items?.map((item, idx) => {
                   const hasDiscount = (item.discountAmount ?? 0) > 0;
-                  const grossTotal = item.unitPrice * item.quantity;
                   return (
                     <React.Fragment key={item.id || idx}>
                       <tr className="text-zinc-700">
@@ -432,13 +431,13 @@ export function InvoicePDFDocument({
                           />
                         </td>
                         <td className="py-1 px-2 text-right font-mono font-semibold text-[#1e2536] align-top text-[11px]">
-                          Rp {item.unitPrice.toLocaleString('id-ID', {minimumFractionDigits: 0, maximumFractionDigits: 2})}
+                          Rp {Math.round(item.unitPrice || 0).toLocaleString('id-ID')}
                         </td>
                         <td className="py-1 px-2 text-center font-mono font-semibold align-top text-[11px]">
                           {item.quantity} <span className="text-[9px] text-zinc-400 font-sans ml-0.5">{item.scale || 'pc'}</span>
                         </td>
                         <td className="py-1 px-2 text-right font-mono font-bold text-[#1e2536] align-top text-[11px]">
-                          Rp {(hasDiscount ? grossTotal : item.total).toLocaleString('id-ID')}
+                          Rp {Math.round((hasDiscount ? (item.unitPrice * item.quantity - (item.discountAmount ?? 0)) : item.total) || 0).toLocaleString('id-ID')}
                         </td>
                       </tr>
                       {hasDiscount && (
@@ -447,14 +446,14 @@ export function InvoicePDFDocument({
                             <td colSpan={2}></td>
                             <td className="py-1 px-2 text-right font-serif text-[11px] text-zinc-500">Discount</td>
                             <td className="py-1 px-2 text-right font-mono font-semibold text-red-600 text-[11px]">
-                              -Rp {item.discountAmount!.toLocaleString('id-ID')}
+                              -Rp {Math.round(item.discountAmount || 0).toLocaleString('id-ID')}
                             </td>
                           </tr>
                           <tr className="text-zinc-700">
                             <td colSpan={2}></td>
                             <td className="py-1 px-2 text-right font-serif font-bold text-[#1e2536] text-[11px]">Sub Total</td>
                             <td className="py-1 px-2 text-right font-mono font-bold text-[#1e2536] text-[11px]">
-                              Rp {item.total.toLocaleString('id-ID')}
+                              Rp {Math.round(item.total || 0).toLocaleString('id-ID')}
                             </td>
                           </tr>
                         </>
@@ -473,14 +472,14 @@ export function InvoicePDFDocument({
                 <div className="flex justify-between py-1 px-2 text-zinc-600">
                   <span className="font-serif">Sub-Total</span>
                   <span className="font-mono font-semibold text-[#1e2536]">
-                    Rp {(subtotal || 0).toLocaleString('id-ID')}
+                    Rp {Math.round(subtotal || 0).toLocaleString('id-ID')}
                   </span>
                 </div>
                 {globalDiscount > 0 && (
                   <div className="flex justify-between py-1 px-2 text-red-600">
                     <span className="font-serif">Global Discount</span>
                     <span className="font-mono font-semibold">
-                      -Rp {globalDiscount.toLocaleString('id-ID')}
+                      -Rp {Math.round(globalDiscount || 0).toLocaleString('id-ID')}
                     </span>
                   </div>
                 )}
@@ -489,7 +488,7 @@ export function InvoicePDFDocument({
                   <div className="flex justify-between py-1 px-2 text-zinc-600">
                     <span className="font-serif tracking-widest text-[10px] uppercase">DPP (Base)</span>
                     <span className="font-mono font-semibold text-[#1e2536]">
-                      Rp {(dppAmount || 0).toLocaleString('id-ID')}
+                      Rp {Math.round(dppAmount || 0).toLocaleString('id-ID')}
                     </span>
                   </div>
                 )}
@@ -499,7 +498,7 @@ export function InvoicePDFDocument({
                       Tax: PPN (11%)
                     </span>
                     <span className="font-mono font-semibold">
-                      +Rp {(taxAmount || 0).toLocaleString('id-ID')}
+                      +Rp {Math.round(taxAmount || 0).toLocaleString('id-ID')}
                     </span>
                   </div>
                 )}
@@ -509,7 +508,7 @@ export function InvoicePDFDocument({
                       PPH ({pphRate || 2}%)
                     </span>
                     <span className="font-mono font-semibold">
-                      -Rp {(pphAmount || 0).toLocaleString('id-ID')}
+                      -Rp {Math.round(pphAmount || 0).toLocaleString('id-ID')}
                     </span>
                   </div>
                 )}
@@ -520,7 +519,7 @@ export function InvoicePDFDocument({
                       Tax: PPN ({workspaceBrand?.taxRatePercent || 11}%)
                     </span>
                     <span className="font-mono font-semibold">
-                      Rp {taxAmount.toLocaleString('id-ID')}
+                      Rp {Math.round(taxAmount || 0).toLocaleString('id-ID')}
                     </span>
                   </div>
                 )}

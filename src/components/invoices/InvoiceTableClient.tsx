@@ -40,10 +40,11 @@ function InvoiceProjectDateDropdown({
   currentRawDate: string;
 }) {
   const [isPending, startTransition] = React.useTransition();
-  const inputRef = React.useRef<HTMLInputElement>(null);
+  const [localDate, setLocalDate] = React.useState(currentRawDate);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newDate = e.target.value;
+    setLocalDate(newDate);
     startTransition(async () => {
       try {
         await updateInvoiceProjectDate(invoiceId, newDate);
@@ -54,30 +55,20 @@ function InvoiceProjectDateDropdown({
   };
 
   return (
-    <div 
-      className="relative group inline-flex items-center gap-1 cursor-pointer w-full"
-      onClick={() => {
-        try {
-          if (inputRef.current) {
-            inputRef.current.showPicker();
-          }
-        } catch (e) {}
-      }}
-    >
-      <div className="text-zinc-400 group-hover:text-zinc-200 transition-colors">
-        {currentRawDate ? (
-           <span className="border-b border-dashed border-zinc-700 pb-0.5">{new Date(currentRawDate).toLocaleDateString('id-ID', { month: 'short', year: 'numeric', day: 'numeric' })}</span>
+    <div className="relative group inline-flex items-center gap-1 cursor-pointer w-full min-w-[100px] h-full py-1">
+      <div className="text-zinc-400 group-hover:text-zinc-200 transition-colors pointer-events-none">
+        {localDate ? (
+           <span className="border-b border-dashed border-zinc-700 pb-0.5">{new Date(localDate).toLocaleDateString('id-ID', { month: 'short', year: 'numeric', day: 'numeric' })}</span>
         ) : (
            <span className="border-b border-dashed border-zinc-700 pb-0.5 text-zinc-600 italic">Set date...</span>
         )}
       </div>
       <input
-        ref={inputRef}
         type="date"
-        value={currentRawDate || ''}
+        value={localDate || ''}
         onChange={handleChange}
         disabled={isPending}
-        className="w-0 h-0 opacity-0 overflow-hidden absolute pointer-events-none"
+        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-wait [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
       />
     </div>
   );

@@ -39,42 +39,38 @@ function InvoiceProjectDateDropdown({
   invoiceId: string;
   currentRawDate: string;
 }) {
-  const [isPending, startTransition] = React.useTransition();
-  const [localDate, setLocalDate] = React.useState(currentRawDate);
+  const [visualDate, setVisualDate] = React.useState(currentRawDate);
   const debounceRef = React.useRef<NodeJS.Timeout | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newDate = e.target.value;
-    setLocalDate(newDate);
+    setVisualDate(newDate);
     
     if (debounceRef.current) clearTimeout(debounceRef.current);
     
     debounceRef.current = setTimeout(() => {
-      startTransition(async () => {
-        try {
-          await updateInvoiceProjectDate(invoiceId, newDate);
-        } catch (err) {
-          console.error(err);
-        }
+      // Intentionally not using startTransition to prevent React from 
+      // doing any concurrent rendering that might touch the DOM node.
+      updateInvoiceProjectDate(invoiceId, newDate).catch(err => {
+        console.error('Failed to save date silently:', err);
       });
-    }, 500);
+    }, 800);
   };
 
   return (
     <div className="relative group inline-flex items-center gap-1 cursor-pointer w-full min-w-[100px] h-full py-1">
       <div className="text-zinc-400 group-hover:text-zinc-200 transition-colors pointer-events-none">
-        {localDate ? (
-           <span className="border-b border-dashed border-zinc-700 pb-0.5">{new Date(localDate).toLocaleDateString('id-ID', { month: 'short', year: 'numeric', day: 'numeric' })}</span>
+        {visualDate ? (
+           <span className="border-b border-dashed border-zinc-700 pb-0.5">{new Date(visualDate).toLocaleDateString('id-ID', { month: 'short', year: 'numeric', day: 'numeric' })}</span>
         ) : (
            <span className="border-b border-dashed border-zinc-700 pb-0.5 text-zinc-600 italic">Set date...</span>
         )}
       </div>
       <input
         type="date"
-        value={localDate || ''}
+        defaultValue={currentRawDate || ''}
         onChange={handleChange}
-        disabled={isPending}
-        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-wait [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
       />
     </div>
   );

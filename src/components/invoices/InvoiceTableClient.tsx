@@ -41,17 +41,23 @@ function InvoiceProjectDateDropdown({
 }) {
   const [isPending, startTransition] = React.useTransition();
   const [localDate, setLocalDate] = React.useState(currentRawDate);
+  const debounceRef = React.useRef<NodeJS.Timeout | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newDate = e.target.value;
     setLocalDate(newDate);
-    startTransition(async () => {
-      try {
-        await updateInvoiceProjectDate(invoiceId, newDate);
-      } catch (err) {
-        console.error(err);
-      }
-    });
+    
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    
+    debounceRef.current = setTimeout(() => {
+      startTransition(async () => {
+        try {
+          await updateInvoiceProjectDate(invoiceId, newDate);
+        } catch (err) {
+          console.error(err);
+        }
+      });
+    }, 500);
   };
 
   return (

@@ -364,7 +364,10 @@ export async function updateInvoiceProjectDate(invoiceId: string, newDate: strin
     const { error } = await updateQuery;
     if (error) throw new Error(error.message);
 
-    revalidatePath('/invoices');
+    // Skip revalidatePath('/invoices') here to prevent the Server Component from 
+    // force-refreshing the table row, which destroys the native <input type="date"> DOM node 
+    // and causes the picker popup to abruptly close while the user is still interacting with it.
+    // revalidatePath('/invoices');
     revalidatePath(`/invoices/${invoiceId}`);
     return { success: true, invoiceId };
   } catch (err: any) {

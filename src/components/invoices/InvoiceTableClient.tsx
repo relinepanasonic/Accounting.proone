@@ -54,15 +54,17 @@ function InvoiceProjectDateDropdown({
   };
 
   return (
-    <div className="relative group flex items-center gap-1 cursor-pointer w-full max-w-[120px]">
-      <div 
-        className="text-zinc-400 group-hover:text-zinc-200 transition-colors"
-        onClick={() => {
-          try {
-            inputRef.current?.showPicker();
-          } catch (e) {}
-        }}
-      >
+    <div 
+      className="relative group inline-flex items-center gap-1 cursor-pointer w-full"
+      onClick={() => {
+        try {
+          if (inputRef.current) {
+            inputRef.current.showPicker();
+          }
+        } catch (e) {}
+      }}
+    >
+      <div className="text-zinc-400 group-hover:text-zinc-200 transition-colors">
         {currentRawDate ? (
            <span className="border-b border-dashed border-zinc-700 pb-0.5">{new Date(currentRawDate).toLocaleDateString('id-ID', { month: 'short', year: 'numeric', day: 'numeric' })}</span>
         ) : (
@@ -75,7 +77,7 @@ function InvoiceProjectDateDropdown({
         value={currentRawDate || ''}
         onChange={handleChange}
         disabled={isPending}
-        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-wait"
+        className="w-0 h-0 opacity-0 overflow-hidden absolute pointer-events-none"
       />
     </div>
   );

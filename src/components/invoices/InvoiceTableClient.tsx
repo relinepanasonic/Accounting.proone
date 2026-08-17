@@ -30,7 +30,7 @@ interface InvoiceData {
 type SortField = 'invoiceNumber' | 'rawIssueDate' | 'clientName' | 'rawDueDate' | 'packageName' | 'packageQtt' | 'rawAmount' | 'status' | 'assignedWorkspaceName';
 type SortOrder = 'asc' | 'desc';
 
-import { updateInvoiceAssignment, updateInvoiceProjectDate } from '@/app/actions/invoices';
+import { updateInvoiceAssignment, updateInvoiceProjectDate, bulkResyncToNewWave } from '@/app/actions/invoices';
 
 function InvoiceProjectDateDropdown({
   invoiceId,
@@ -239,9 +239,46 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
     return filtered;
   }, [initialInvoices, filterClient, filterIssueMonth, filterDueMonth, filterAssignment, filterStatus, sortField, sortOrder]);
 
+  const [isSyncing, setIsSyncing] = React.useState(false);
+  const [syncResult, setSyncResult] = React.useState<{ synced: number; errors: string[] } | null>(null);
+
+  const handleBulkResync = async () => {
+    setIsSyncing(true);
+    setSyncResult(null);
+    try {
+      const res = await bulkResyncToNewWave();
+      setSyncResult({ synced: res.synced, errors: res.errors });
+    } catch (e: any) {
+      setSyncResult({ synced: 0, errors: [e?.message || 'Unknown error'] });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   return (
     <div className="gold-glass-panel rounded-2xl p-6">
       
+      {/* Re-sync banner */}
+      <div className="flex items-center justify-between mb-4 px-1">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleBulkResync}
+            disabled={isSyncing}
+            className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 hover:text-white transition-all disabled:opacity-50 disabled:cursor-wait"
+          >
+            <svg className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {isSyncing ? 'Syncing to New Wave...' : 'Re-sync All → New Wave'}
+          </button>
+          {syncResult && (
+            <span className={`text-xs ${syncResult.errors.length > 0 ? 'text-yellow-400' : 'text-green-400'}`}>
+              ✓ {syncResult.synced} synced{syncResult.errors.length > 0 ? ` · ${syncResult.errors.length} errors` : ''}
+            </span>
+          )}
+        </div>
+      </div>
+
       {/* Filters Bar */}
       <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6 p-3 rounded-xl bg-zinc-900/50 border border-zinc-800">
         <div>

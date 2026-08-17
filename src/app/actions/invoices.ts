@@ -375,9 +375,64 @@ export async function updateInvoiceProjectDate(invoiceId: string, newDate: strin
     // and causes the picker popup to abruptly close while the user is still interacting with it.
     // revalidatePath('/invoices');
     revalidatePath(`/invoices/${invoiceId}`);
+
+    // Fire-and-forget sync to New Wave in the background (non-blocking)
+    syncInvoiceToNewWave(invoiceId, supabase).catch(err => {
+      console.warn('New Wave sync after project date update failed silently:', err);
+    });
+
     return { success: true, invoiceId };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Failed to update project date.' };
+  }
+}
+
+/**
+ * Server Action: Re-sync ALL New Wave invoices to the New Wave app.
+ * Useful for back-filling project_date on existing invoices.
+ */
+export async function bulkResyncToNewWave(): Promise<{ success: boolean; synced: number; errors: string[] }> {
+  try {
+    const supabase = await createClient();
+    const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+
+    // Get all New Wave workspaces
+    const { data: newWaveWs } = await supabase
+      .from('workspaces')
+      .select('id')
+      .ilike('name', '%new wave%');
+
+    if (!newWaveWs || newWaveWs.length === 0) {
+      return { success: false, synced: 0, errors: ['No New Wave workspace found'] };
+    }
+
+    const nwIds = newWaveWs.map((w: any) => w.id);
+
+    // Fetch all invoices owned by or assigned to New Wave
+    const { data: invoices } = await supabase
+      .from('invoices')
+      .select('id')
+      .or(nwIds.map((id: string) => `workspace_id.eq.${id},assigned_workspace_id.eq.${id}`).join(','));
+
+    if (!invoices || invoices.length === 0) {
+      return { success: true, synced: 0, errors: [] };
+    }
+
+    const errors: string[] = [];
+    let synced = 0;
+
+    for (const inv of invoices) {
+      const res = await syncInvoiceToNewWave(inv.id, supabase);
+      if (res.success) {
+        synced++;
+      } else {
+        errors.push(`${inv.id}: ${res.error}`);
+      }
+    }
+
+    return { success: true, synced, errors };
+  } catch (err: any) {
+    return { success: false, synced: 0, errors: [err?.message || 'Unknown error'] };
   }
 }
 

@@ -258,9 +258,9 @@ export function InvoicePDFDocument({
       )}
 
       {/* A4/Letter Document Container */}
-      <div className="max-w-[850px] mx-auto bg-white shadow-2xl overflow-hidden print:shadow-none print:max-w-none print:w-full font-sans text-[#2d3748]">
+      <div id="invoice-pdf-container" className="max-w-[850px] mx-auto bg-white shadow-2xl overflow-hidden print:shadow-none print:max-w-none print:w-full font-sans text-[#2d3748]">
         {/* HEADER SECTION (Dark Navy/Charcoal #1e2536 with Left Gold Accent Strip) */}
-        <header className="relative bg-[#1e2536] text-white px-8 sm:px-12 py-6 flex items-center justify-between">
+        <header className="relative bg-[#1e2536] text-white px-8 sm:px-12 py-4 flex items-center justify-between">
           {/* Vertical Beige/Gold Accent Strip on Far Left Edge */}
           <div className="absolute top-0 left-0 bottom-0 w-3 bg-[#c5a059]" />
 
@@ -297,7 +297,7 @@ export function InvoicePDFDocument({
         <div className="w-3 h-8 bg-[#e2d5ba]" />
 
         {/* BODY CONTAINER */}
-        <div className="px-8 sm:px-12 pt-2 pb-8 space-y-6">
+        <div className="px-8 sm:px-12 pt-1 pb-4 space-y-4">
           {/* META SECTION: Bill To (Left) & Document Title + Details (Right) */}
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-8">
             {/* Left: Bill To */}
@@ -321,7 +321,7 @@ export function InvoicePDFDocument({
 
             {/* Right: Title & 3-Column Meta Table */}
             <div className="sm:text-right flex flex-col sm:items-end">
-              <h2 className="text-4xl font-serif tracking-[0.25em] text-[#1e2536] font-normal mb-3">
+              <h2 className="text-3xl font-serif tracking-[0.25em] text-[#1e2536] font-normal mb-2">
                 {isQuotation ? 'QUOTATION' : isReceipt ? 'PAYMENT RECEIPT' : 'INVOICE'}
               </h2>
               <div className="w-full sm:w-80 border-t border-[#1e2536] pt-2 grid grid-cols-3 gap-3 text-center sm:text-left text-[11px]">
@@ -354,7 +354,7 @@ export function InvoicePDFDocument({
           </div>
 
           {/* LINE ITEMS TABLE */}
-          <div className="pt-4">
+          <div className="pt-2">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-y-2 border-[#1e2536] text-[#1e2536] uppercase text-[10px] tracking-wider font-bold font-serif">
@@ -540,7 +540,7 @@ export function InvoicePDFDocument({
           )}
 
           {/* BOTTOM AREA: Payment Method & Signature Line */}
-          <div className="pt-6 grid grid-cols-1 sm:grid-cols-2 gap-8 items-end">
+          <div className="pt-2 grid grid-cols-1 sm:grid-cols-2 gap-8 items-end">
             {/* Left: Payment Method & Terms */}
             <div className="space-y-4 text-xs">
               {!isQuotation && (
@@ -579,7 +579,7 @@ export function InvoicePDFDocument({
 
             {/* Right: Signature Line */}
             <div className="text-right flex flex-col items-end">
-              <div className="h-8 mb-3 pr-4 select-none" />
+              <div className="h-8 mb-2 pr-4 select-none" />
               <div className="w-56 border-b-2 border-[#1e2536] pb-1" />
               <div className="mt-2 text-right">
                 <div className="font-bold text-[#1e2536] text-xs uppercase tracking-wider">
@@ -592,7 +592,7 @@ export function InvoicePDFDocument({
         </div>
 
         {/* PIC 4 STYLE FOOTER */}
-        <div className="mt-8 flex h-24 border-t border-zinc-200">
+        <div className="mt-4 flex h-24 border-t border-zinc-200">
           {/* Dark Left Block */}
           <div className="w-1/3 bg-[#333333] text-white flex flex-col justify-center px-8">
             <div className="text-sm tracking-wide font-sans leading-tight">THANK YOU</div>
@@ -640,3 +640,6 @@ export function InvoicePDFDocument({
     </div>
   );
 }
+
+
+

@@ -126,29 +126,50 @@ export function InvoicePDFDocument({
 
   // Format default filename: DocumentType.ClientName.DDMMYY
   const getFormattedFilename = () => {
-    const docTypeName = isQuotation ? 'Quotation' : (isReceipt ? 'PaymentReceipt' : 'Invoice');
-    const cleanClient = (clientName || 'Client').replace(/[^a-zA-Z0-9 ]/g, '');
+    const cleanNo = (accountNumber || invoiceNumber).replace(/[^a-zA-Z0-9]/g, '');
+    const cleanClient = (clientName || 'Client').replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_');
     
-    let ddmmyy = '';
+    let month = '';
     if (rawIssueDate) {
       const d = new Date(rawIssueDate);
       if (!isNaN(d.getTime())) {
-        ddmmyy = `${String(d.getDate()).padStart(2, '0')}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getFullYear()).slice(-2)}`;
+        month = String(d.getMonth() + 1).padStart(2, '0');
       }
     }
     
-    if (!ddmmyy) ddmmyy = 'Date';
+    if (!month) month = 'XX';
     
-    return `${docTypeName}.${cleanClient}.${ddmmyy}`;
+    return `${cleanNo}.${cleanClient}.${month}.pdf`;
   };
 
   useEffect(() => {
     document.title = getFormattedFilename();
   }, [invoiceNumber, invoiceDate, issueDate, clientName, isQuotation, rawIssueDate]);
 
-  const handlePrintPDF = () => {
-    document.title = getFormattedFilename();
-    window.print();
+  const handlePrintPDF = async () => {
+    const element = document.getElementById('invoice-pdf-container');
+    if (!element) {
+      window.print();
+      return;
+    }
+    
+    try {
+      const module = await import('html2pdf.js');
+      const html2pdf = module.default || module;
+      const opt = {
+        margin:       0,
+        filename:     getFormattedFilename(),
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2, useCORS: true },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+      html2pdf().set(opt).from(element).save();
+    } catch (e: any) {
+      console.error('Failed to load html2pdf, falling back to window.print', e);
+      alert('PDF direct download failed: ' + (e.message || 'Unknown error') + '. Falling back to print preview.');
+      document.title = getFormattedFilename();
+      window.print();
+    }
   };
 
   const brandName = workspaceBrand?.name || 'Workspace Enterprise';

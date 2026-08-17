@@ -160,18 +160,36 @@ export function InvoicePDFDocument({
     setIsDownloading(true);
     
     try {
-      const module = await import('html2pdf.js');
-      const html2pdf = module.default || module;
-      const opt = {
-        margin:       0,
-        filename:     getFormattedFilename(),
-        image:        { type: 'jpeg', quality: 1 },
-        html2canvas:  { scale: 2, useCORS: true, logging: true },
-        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      };
-      await html2pdf().set(opt).from(element).save();
+      const domtoimage = (await import('dom-to-image-more')).default;
+      const { jsPDF } = await import('jspdf');
+
+      const scale = 2;
+      const dataUrl = await domtoimage.toPng(element, {
+        quality: 1,
+        bgcolor: '#ffffff',
+        width: element.offsetWidth * scale,
+        height: element.offsetHeight * scale,
+        style: {
+          transform: `scale(${scale})`,
+          transformOrigin: 'top left',
+          width: `${element.offsetWidth}px`,
+          height: `${element.offsetHeight}px`
+        }
+      });
+
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (element.offsetHeight * pdfWidth) / element.offsetWidth;
+
+      pdf.addImage(dataUrl, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(getFormattedFilename());
     } catch (e: any) {
-      console.error('Failed to load html2pdf, falling back to window.print', e);
+      console.error('Failed to generate PDF, falling back to window.print', e);
       alert('PDF direct download failed: ' + (e?.message || 'Unknown error') + '. Falling back to print preview.');
       document.title = getFormattedFilename();
       window.print();

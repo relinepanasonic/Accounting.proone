@@ -146,12 +146,18 @@ export function InvoicePDFDocument({
     document.title = getFormattedFilename();
   }, [invoiceNumber, invoiceDate, issueDate, clientName, isQuotation, rawIssueDate]);
 
+  const [isDownloading, setIsDownloading] = useState(false);
+
   const handlePrintPDF = async () => {
+    if (isDownloading) return;
+    
     const element = document.getElementById('invoice-pdf-container');
     if (!element) {
       window.print();
       return;
     }
+    
+    setIsDownloading(true);
     
     try {
       const module = await import('html2pdf.js');
@@ -159,16 +165,18 @@ export function InvoicePDFDocument({
       const opt = {
         margin:       0,
         filename:     getFormattedFilename(),
-        image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2, useCORS: true },
+        image:        { type: 'jpeg', quality: 1 },
+        html2canvas:  { scale: 2, useCORS: true, logging: true },
         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
       };
-      html2pdf().set(opt).from(element).save();
+      await html2pdf().set(opt).from(element).save();
     } catch (e: any) {
       console.error('Failed to load html2pdf, falling back to window.print', e);
-      alert('PDF direct download failed: ' + (e.message || 'Unknown error') + '. Falling back to print preview.');
+      alert('PDF direct download failed: ' + (e?.message || 'Unknown error') + '. Falling back to print preview.');
       document.title = getFormattedFilename();
       window.print();
+    } finally {
+      setIsDownloading(false);
     }
   };
 
@@ -206,10 +214,11 @@ export function InvoicePDFDocument({
           )}
           <button
             onClick={handlePrintPDF}
-            className="gold-btn inline-flex items-center gap-2 px-6 py-2.5 rounded-full text-xs font-extrabold uppercase tracking-wider shadow-[0_0_20px_rgba(212,175,55,0.4)] transition-all hover:scale-105"
+            disabled={isDownloading}
+            className="gold-btn inline-flex items-center gap-2 px-6 py-2.5 rounded-full text-xs font-extrabold uppercase tracking-wider shadow-[0_0_20px_rgba(212,175,55,0.4)] transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Printer className="w-4 h-4" />
-            <span>DOWNLOAD / PRINT {isQuotation ? 'QUOTATION' : isReceipt ? 'RECEIPT' : 'INVOICE'} PDF</span>
+            {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
+            <span>{isDownloading ? 'GENERATING PDF...' : `DOWNLOAD / PRINT ${isQuotation ? 'QUOTATION' : isReceipt ? 'RECEIPT' : 'INVOICE'} PDF`}</span>
           </button>
         </div>
       </div>

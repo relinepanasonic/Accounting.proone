@@ -156,15 +156,15 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
     }
 
     const subtotal = payload.lineItems.reduce(
-      (acc: number, item: any) => acc + (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0) - (Number(item.discountAmount) || 0),
+      (acc: number, item: any) => acc + Math.round((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0)) - (Number(item.discountAmount) || 0),
       0
     );
     const globalDiscount = Number(payload.discountAmount) || 0;
     let totalAmount = Math.max(0, subtotal - globalDiscount);
     if (payload.taxCalculationType && payload.taxCalculationType !== 'none') {
-      const dpp = Number(payload.dppAmount) || 0;
-      const tax = Number(payload.taxAmount) || 0;
-      const pph = Number(payload.pphAmount) || 0;
+      const dpp = Math.round(Number(payload.dppAmount) || 0);
+      const tax = Math.round(Number(payload.taxAmount) || 0);
+      const pph = Math.round(Number(payload.pphAmount) || 0);
       totalAmount = dpp + tax - pph;
     }
 
@@ -248,8 +248,8 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
       description: item.description || 'Deliverable Item',
       quantity: Number(item.quantity) || 1,
       scale: item.scale || 'pc',
-      unit_price: Number(item.unitPrice) || 0,
-      discount_amount: Number(item.discountAmount) || 0,
+      unit_price: Math.round(Number(item.unitPrice) || 0),
+      discount_amount: Math.round(Number(item.discountAmount) || 0),
       sort_order: idx + 1,
     }));
 
@@ -491,8 +491,8 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
       description: item.description || 'Deliverable Item',
       quantity: Number(item.quantity) || 1,
       scale: item.scale || 'pc',
-      unit_price: Number(item.unitPrice) || 0,
-      discount_amount: Number(item.discountAmount) || 0,
+      unit_price: Math.round(Number(item.unitPrice) || 0),
+      discount_amount: Math.round(Number(item.discountAmount) || 0),
       sort_order: idx + 1,
     }));
 

@@ -173,7 +173,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                 ...item,
                 packageName: prod.name,
                 description: prod.description || '',
-                unitPrice: Number(prod.unit_price),
+                unitPrice: Math.round(Number(prod.unit_price)),
                 quantity: Number(prod.quantity) || 1,
                 scale: prod.scale || 'pc',
                 discountAmount: 0,
@@ -185,7 +185,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
   };
 
   const subTotal = lineItems.reduce(
-    (acc, item) => acc + item.quantity * item.unitPrice - (item.discountAmount || 0),
+    (acc, item) => acc + Math.round(item.quantity * item.unitPrice) - (item.discountAmount || 0),
     0
   );
 
@@ -639,7 +639,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                     <div className="col-span-12 md:col-span-2 flex flex-col items-end justify-start">
                       <div className="md:hidden text-[10px] font-bold text-[#d4af37]/60 w-full text-left mb-1">BASE TOTAL</div>
                       <div className="text-xs font-mono text-zinc-400 mt-1 md:mt-2">
-                          Rp {(item.quantity * item.unitPrice).toLocaleString('id-ID')}
+                          Rp {Math.round(item.quantity * item.unitPrice).toLocaleString('id-ID')}
                       </div>
                     </div>
                   </div>
@@ -656,7 +656,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                       />
                     </div>
                     <div className="w-28 text-right text-sm font-bold text-[#f5d77f]">
-                        Rp {(item.quantity * item.unitPrice - (item.discountAmount || 0)).toLocaleString('id-ID')}
+                        Rp {Math.round(item.quantity * item.unitPrice - (item.discountAmount || 0)).toLocaleString('id-ID')}
                     </div>
                   </div>
                 </div>

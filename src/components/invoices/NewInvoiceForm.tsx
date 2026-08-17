@@ -173,7 +173,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                 ...item,
                 packageName: prod.name,
                 description: prod.description || '',
-                unitPrice: Math.round(Number(prod.unit_price)),
+                unitPrice: Number(prod.unit_price), // keep full precision from DB
                 quantity: Number(prod.quantity) || 1,
                 scale: prod.scale || 'pc',
                 discountAmount: 0,
@@ -185,7 +185,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
   };
 
   const subTotal = lineItems.reduce(
-    (acc, item) => acc + Math.round(item.quantity * item.unitPrice) - (item.discountAmount || 0),
+    (acc, item) => acc + item.quantity * item.unitPrice - (item.discountAmount || 0),
     0
   );
 
@@ -198,17 +198,17 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
 
   if (isTaxRegistered || activeWorkspaceId === '11111111-1111-1111-1111-111111111111') {
     if (taxCalculationType === 'include' && hasPpn) {
-      dpp = Math.round(subTotalAfterDiscount / 1.11);
-      ppnAmount = Math.round(subTotalAfterDiscount - dpp);
+      dpp = subTotalAfterDiscount / 1.11;
+      ppnAmount = subTotalAfterDiscount - dpp;
     } else if (taxCalculationType === 'exclude' && hasPpn) {
-      dpp = Math.round(subTotalAfterDiscount);
-      ppnAmount = Math.round(dpp * 0.11);
+      dpp = subTotalAfterDiscount;
+      ppnAmount = dpp * 0.11;
     } else {
-      dpp = Math.round(subTotalAfterDiscount);
+      dpp = subTotalAfterDiscount;
     }
 
     if (hasPph) {
-      pphAmount = Math.round(dpp * (pphRate / 100));
+      pphAmount = Math.ceil(dpp * (pphRate / 100)); // PPH always rounds UP
     }
 
     grandTotal = dpp + ppnAmount - pphAmount;
@@ -639,7 +639,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                     <div className="col-span-12 md:col-span-2 flex flex-col items-end justify-start">
                       <div className="md:hidden text-[10px] font-bold text-[#d4af37]/60 w-full text-left mb-1">BASE TOTAL</div>
                       <div className="text-xs font-mono text-zinc-400 mt-1 md:mt-2">
-                          Rp {Math.round(item.quantity * item.unitPrice).toLocaleString('id-ID')}
+                          Rp {(item.quantity * item.unitPrice).toLocaleString('id-ID', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                       </div>
                     </div>
                   </div>
@@ -656,7 +656,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                       />
                     </div>
                     <div className="w-28 text-right text-sm font-bold text-[#f5d77f]">
-                        Rp {Math.round(item.quantity * item.unitPrice - (item.discountAmount || 0)).toLocaleString('id-ID')}
+                        Rp {(item.quantity * item.unitPrice - (item.discountAmount || 0)).toLocaleString('id-ID', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                     </div>
                   </div>
                 </div>
@@ -710,7 +710,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                       </label>
                       {hasPpn && (
                         <span className="text-sm font-mono text-[#f5d77f]">
-                          + Rp {ppnAmount.toLocaleString('id-ID', {maximumFractionDigits: 0})}
+                          + Rp {ppnAmount.toLocaleString('id-ID', {minimumFractionDigits: 1, maximumFractionDigits: 1})}
                         </span>
                       )}
                     </div>
@@ -744,7 +744,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                     {taxCalculationType === 'include' && hasPpn && (
                        <div className="flex justify-between items-center pt-2 border-t border-zinc-800/50">
                          <span className="text-xs text-zinc-400 uppercase tracking-widest font-bold">DPP (Base)</span>
-                         <span className="text-xs font-mono text-zinc-400">Rp {dpp.toLocaleString('id-ID', {maximumFractionDigits: 0})}</span>
+                         <span className="text-xs font-mono text-zinc-400">Rp {dpp.toLocaleString('id-ID', {maximumFractionDigits: 2})}</span>
                        </div>
                     )}
                   </>

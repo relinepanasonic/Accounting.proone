@@ -156,15 +156,15 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
     }
 
     const subtotal = payload.lineItems.reduce(
-      (acc: number, item: any) => acc + Math.round((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0)) - (Number(item.discountAmount) || 0),
+      (acc: number, item: any) => acc + (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0) - (Number(item.discountAmount) || 0),
       0
     );
     const globalDiscount = Number(payload.discountAmount) || 0;
     let totalAmount = Math.max(0, subtotal - globalDiscount);
     if (payload.taxCalculationType && payload.taxCalculationType !== 'none') {
-      const dpp = Math.round(Number(payload.dppAmount) || 0);
-      const tax = Math.round(Number(payload.taxAmount) || 0);
-      const pph = Math.round(Number(payload.pphAmount) || 0);
+      const dpp = Number(payload.dppAmount) || 0;
+      const tax = Number(payload.taxAmount) || 0;
+      const pph = Math.ceil(Number(payload.pphAmount) || 0); // PPH always rounds UP
       totalAmount = dpp + tax - pph;
     }
 

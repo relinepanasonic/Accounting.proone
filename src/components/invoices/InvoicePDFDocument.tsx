@@ -431,13 +431,13 @@ export function InvoicePDFDocument({
                           />
                         </td>
                         <td className="py-1 px-2 text-right font-mono font-semibold text-[#1e2536] align-top text-[11px]">
-                          Rp {Math.round(item.unitPrice || 0).toLocaleString('id-ID')}
+                          Rp {(item.unitPrice || 0).toLocaleString('id-ID', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                         </td>
                         <td className="py-1 px-2 text-center font-mono font-semibold align-top text-[11px]">
                           {item.quantity} <span className="text-[9px] text-zinc-400 font-sans ml-0.5">{item.scale || 'pc'}</span>
                         </td>
                         <td className="py-1 px-2 text-right font-mono font-bold text-[#1e2536] align-top text-[11px]">
-                          Rp {Math.round((hasDiscount ? (item.unitPrice * item.quantity - (item.discountAmount ?? 0)) : item.total) || 0).toLocaleString('id-ID')}
+                          Rp {((hasDiscount ? (item.unitPrice * item.quantity - (item.discountAmount ?? 0)) : item.total) || 0).toLocaleString('id-ID', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                         </td>
                       </tr>
                       {hasDiscount && (
@@ -498,7 +498,7 @@ export function InvoicePDFDocument({
                       Tax: PPN (11%)
                     </span>
                     <span className="font-mono font-semibold">
-                      +Rp {Math.round(taxAmount || 0).toLocaleString('id-ID')}
+                      +Rp {(taxAmount || 0).toLocaleString('id-ID', {minimumFractionDigits: 1, maximumFractionDigits: 1})}
                     </span>
                   </div>
                 )}
@@ -508,7 +508,7 @@ export function InvoicePDFDocument({
                       PPH ({pphRate || 2}%)
                     </span>
                     <span className="font-mono font-semibold">
-                      -Rp {Math.round(pphAmount || 0).toLocaleString('id-ID')}
+                      -Rp {Math.ceil(pphAmount || 0).toLocaleString('id-ID', {maximumFractionDigits: 0})}
                     </span>
                   </div>
                 )}

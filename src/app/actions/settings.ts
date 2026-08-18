@@ -749,6 +749,24 @@ export async function updateClientRecord(payload: {
       }
     }
 
+    // ── RE-SYNC INVOICES TO NEW WAVE ─────────────────────────────────────────
+    // If a client is renamed, all of their previously pushed invoices in New
+    // Wave must be updated to reflect the new brand name.
+    const { data: affectedInvoices } = await supabase
+      .from('invoices')
+      .select('id')
+      .eq('client_id', payload.id)
+      .neq('status', 'draft');
+
+    if (affectedInvoices && affectedInvoices.length > 0) {
+      const { syncInvoiceToNewWave } = await import('@/app/actions/invoices');
+      // Fire-and-forget sync for all affected invoices
+      Promise.allSettled(
+        affectedInvoices.map((inv: any) => syncInvoiceToNewWave(inv.id, supabase))
+      ).catch(err => console.warn('Background client rename sync failed:', err));
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     revalidatePath('/settings');
     revalidatePath('/settings/contacts');
     revalidatePath('/invoices/new');

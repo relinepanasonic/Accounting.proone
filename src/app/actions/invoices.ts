@@ -65,7 +65,23 @@ async function getAuthenticatedWorkspaceContext(supabase: any): Promise<{
   };
 }
 
-async function syncInvoiceToNewWave(invoiceId: string, supabase: any): Promise<{ success: boolean; error?: string }> {
+// Statuses that are considered "draft" — must NEVER be pushed to New Wave
+const DRAFT_STATUSES = new Set(['draft']);
+
+/**
+ * Push a DELETE for a specific invoice to New Wave (fire-and-forget safe).
+ * Used when an invoice is deleted, reverted to draft, or reassigned away from New Wave.
+ */
+async function deleteFromNewWave(invoiceId: string): Promise<void> {
+  const apiKey = process.env.ACCOUNTING_API_KEY || process.env.NEWWAVE_INTEGRATION_TOKEN;
+  if (!apiKey) return;
+  fetch(
+    `https://app.newwave.id/api/accounting/invoices?source=proone&external_id=${invoiceId}`,
+    { method: 'DELETE', headers: { Authorization: `Bearer ${apiKey}` } }
+  ).catch(err => console.warn('[NewWave] DELETE failed (non-fatal):', err));
+}
+
+export async function syncInvoiceToNewWave(invoiceId: string, supabase: any): Promise<{ success: boolean; error?: string }> {
   try {
     const apiKey = process.env.ACCOUNTING_API_KEY || process.env.NEWWAVE_INTEGRATION_TOKEN;
     if (!apiKey) return { success: false, error: 'API Key missing (ACCOUNTING_API_KEY or NEWWAVE_INTEGRATION_TOKEN)' };
@@ -77,6 +93,18 @@ async function syncInvoiceToNewWave(invoiceId: string, supabase: any): Promise<{
       .single();
 
     if (!inv) return { success: false, error: 'Invoice not found in database for sync.' };
+
+    // ── DRAFT GUARD ──────────────────────────────────────────────────────────
+    // Drafts (including scratch/duplicate copies) must NEVER be pushed to New
+    // Wave. They create phantom clients and inflate hour quotas. Only finalized
+    // invoices (sent, invoiced, paid, partial_paid, overdue, cancelled) may be
+    // pushed. If a draft later gets finalized, the next save will push it then.
+    // If it was already pushed and is now reverted to draft, we must delete it.
+    if (DRAFT_STATUSES.has((inv.status || '').toLowerCase())) {
+      deleteFromNewWave(invoiceId); // fire-and-forget delete
+      return { success: true }; // Silently skip — correct behaviour
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     const { data: wsData } = await supabase.from('workspaces').select('name').eq('id', inv.workspace_id).single();
     let isNewWave = wsData && wsData.name.toLowerCase().includes('new wave');
@@ -408,10 +436,12 @@ export async function bulkResyncToNewWave(): Promise<{ success: boolean; synced:
 
     const nwIds = newWaveWs.map((w: any) => w.id);
 
-    // Fetch all invoices owned by or assigned to New Wave
+    // Fetch all NON-DRAFT invoices owned by or assigned to New Wave
+    // Drafts are excluded because they must never be pushed to New Wave.
     const { data: invoices } = await supabase
       .from('invoices')
       .select('id')
+      .neq('status', 'draft')
       .or(nwIds.map((id: string) => `workspace_id.eq.${id},assigned_workspace_id.eq.${id}`).join(','));
 
     if (!invoices || invoices.length === 0) {
@@ -759,26 +789,35 @@ export async function deleteInvoice(invoiceId: string) {
     const adminClient = createAdminClient();
 
     // ── Step 0: Push DELETE to New Wave BEFORE removing locally ──────────────
-    // Fetch the invoice workspace to check if it belongs to New Wave
+    // Must check BOTH workspace_id and assigned_workspace_id since cross-workspace
+    // invoices are assigned (not owned) by New Wave.
+    // Also: if the invoice is a DRAFT it was never pushed, so no delete needed.
     const { data: invForSync } = await supabase
       .from('invoices')
-      .select('id, workspace_id, workspaces:workspace_id(name)')
+      .select('id, status, workspace_id, assigned_workspace_id, workspaces:workspace_id(name)')
       .eq('id', invoiceId)
       .single();
 
-    if (invForSync) {
+    if (invForSync && !DRAFT_STATUSES.has((invForSync.status || '').toLowerCase())) {
       const wsName: string = (Array.isArray(invForSync.workspaces)
         ? (invForSync.workspaces as any[])[0]?.name
         : (invForSync.workspaces as any)?.name) || '';
 
-      if (wsName.toLowerCase().includes('new wave')) {
-        const apiKey = process.env.ACCOUNTING_API_KEY || process.env.NEWWAVE_INTEGRATION_TOKEN;
-        if (apiKey) {
-          fetch(
-            `https://app.newwave.id/api/accounting/invoices?source=proone&external_id=${invoiceId}`,
-            { method: 'DELETE', headers: { 'Authorization': `Bearer ${apiKey}` } }
-          ).catch(syncErr => console.warn('New Wave DELETE sync failed (non-fatal):', syncErr));
+      // Check both the owning workspace AND any assigned workspace
+      let isNewWaveInvoice = wsName.toLowerCase().includes('new wave');
+      if (!isNewWaveInvoice && invForSync.assigned_workspace_id) {
+        const { data: assignedWs } = await supabase
+          .from('workspaces')
+          .select('name')
+          .eq('id', invForSync.assigned_workspace_id)
+          .single();
+        if (assignedWs?.name?.toLowerCase().includes('new wave')) {
+          isNewWaveInvoice = true;
         }
+      }
+
+      if (isNewWaveInvoice) {
+        deleteFromNewWave(invoiceId); // fire-and-forget
       }
     }
     // ─────────────────────────────────────────────────────────────────────────

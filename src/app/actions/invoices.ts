@@ -628,7 +628,7 @@ export async function duplicateInvoice(invoiceId: string) {
     const issueDateStr = today.toISOString().split('T')[0];
     const due = new Date(today.getTime() + 15 * 24 * 60 * 60 * 1000);
     const dueDateStr = due.toISOString().split('T')[0];
-    const copyNumber = `INV-${today.getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const copyNumber = `DRAFT-COPY-${Math.floor(100000 + Math.random() * 900000)}`;
 
     const { data: newInv, error: dupErr } = await supabase
       .from('invoices')

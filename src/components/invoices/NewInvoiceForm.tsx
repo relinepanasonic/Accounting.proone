@@ -111,7 +111,13 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [quickAddName, setQuickAddName] = useState('');
   const [isQuickAdding, setIsQuickAdding] = useState(false);
-  const [invoiceNumber, setInvoiceNumber] = useState(() => initialData?.invoiceNumber || (initialData?.isQuotation || (typeof searchParams !== 'undefined' && searchParams.get('type') === 'quotation') ? `QUOTE-2026-${Math.floor(100 + Math.random() * 900)}` : `INV-2026-${Math.floor(100 + Math.random() * 900)}`));
+  const [invoiceNumber, setInvoiceNumber] = useState(() => {
+    if (initialData?.invoiceNumber) {
+      if (initialData.invoiceNumber.startsWith('DRAFT-COPY-')) return '';
+      return initialData.invoiceNumber;
+    }
+    return (initialData?.isQuotation || (typeof searchParams !== 'undefined' && searchParams.get('type') === 'quotation') ? `QUOTE-2026-${Math.floor(100 + Math.random() * 900)}` : `INV-2026-${Math.floor(100 + Math.random() * 900)}`);
+  });
   const [issueDate, setIssueDate] = useState(() => initialData?.issueDate || new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState(() => initialData?.dueDate || getNet7Date());
   const [projectDate, setProjectDate] = useState(() => initialData?.projectDate || new Date().toISOString().split('T')[0]);
@@ -449,7 +455,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
 
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-2">
-              {isQuotation ? 'Quotation Number *' : 'Invoice Reference Number *'}
+              {isQuotation ? 'Quotation Number *' : 'No Invoice *'}
             </label>
             <input
               type="text"

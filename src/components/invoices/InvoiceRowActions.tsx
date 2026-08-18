@@ -2,7 +2,7 @@
 
 import React, { useTransition, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Copy, CheckCircle, Clock, FileText, Trash2, Edit2 } from 'lucide-react';
+import { Copy, CheckCircle, Clock, FileText, Trash2, Edit2, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { duplicateInvoice, deleteInvoice, convertQuotationToInvoice } from '@/app/actions/invoices';
 import { InvoicePaymentModal } from './InvoicePaymentModal';
@@ -80,8 +80,10 @@ export function InvoiceStatusToggle({ id, status, invoiceNumber = '', totalAmoun
 export function InvoiceActionGroup({ id, isQuotation, status, invoiceNumber }: InvoiceActionProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [activeAction, setActiveAction] = useState<'duplicate' | 'delete' | 'convert' | null>(null);
 
   const handleDuplicate = () => {
+    setActiveAction('duplicate');
     startTransition(async () => {
       try {
         const res = await duplicateInvoice(id);
@@ -95,12 +97,15 @@ export function InvoiceActionGroup({ id, isQuotation, status, invoiceNumber }: I
       } catch (err) {
         console.error(err);
         alert('Failed to duplicate invoice');
+      } finally {
+        setActiveAction(null);
       }
     });
   };
 
   const handleDelete = () => {
     if (confirm('Are you sure you want to permanently delete this invoice and its line items?')) {
+      setActiveAction('delete');
       startTransition(async () => {
         try {
           const res = await deleteInvoice(id);
@@ -112,6 +117,8 @@ export function InvoiceActionGroup({ id, isQuotation, status, invoiceNumber }: I
         } catch (err: any) {
           console.error(err);
           alert('Failed to delete invoice');
+        } finally {
+          setActiveAction(null);
         }
       });
     }
@@ -119,12 +126,15 @@ export function InvoiceActionGroup({ id, isQuotation, status, invoiceNumber }: I
 
   const handleConvert = () => {
     if (confirm('Convert this Quotation into an Invoice?')) {
+      setActiveAction('convert');
       startTransition(async () => {
         try {
           await convertQuotationToInvoice(id);
           router.refresh();
         } catch (err) {
           console.error(err);
+        } finally {
+          setActiveAction(null);
         }
       });
     }
@@ -195,20 +205,28 @@ export function InvoiceActionGroup({ id, isQuotation, status, invoiceNumber }: I
       <button
         onClick={handleDuplicate}
         disabled={isPending}
-        title="Duplicate Invoice to New Draft"
+        title={activeAction === 'duplicate' ? 'Processing...' : 'Duplicate Invoice to New Draft'}
         className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-[#d4af37]/50 text-zinc-400 hover:text-[#f5d77f] transition-all duration-200"
       >
-        <Copy className="w-3.5 h-3.5" />
+        {activeAction === 'duplicate' ? (
+          <Loader2 className="w-3.5 h-3.5 animate-spin text-[#d4af37]" />
+        ) : (
+          <Copy className="w-3.5 h-3.5" />
+        )}
       </button>
 
       {/* Delete Invoice Action */}
       <button
         onClick={handleDelete}
         disabled={isPending}
-        title="Permanently Delete Invoice"
+        title={activeAction === 'delete' ? 'Processing...' : 'Permanently Delete Invoice'}
         className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-red-500/50 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"
       >
-        <Trash2 className="w-3.5 h-3.5" />
+        {activeAction === 'delete' ? (
+          <Loader2 className="w-3.5 h-3.5 animate-spin text-red-500" />
+        ) : (
+          <Trash2 className="w-3.5 h-3.5" />
+        )}
       </button>
     </div>
   );

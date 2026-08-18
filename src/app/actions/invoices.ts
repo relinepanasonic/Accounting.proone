@@ -676,7 +676,7 @@ export async function duplicateInvoice(invoiceId: string) {
 
     // Sync the new duplicate to New Wave (it has a fresh UUID = stable external_id for New Wave)
     // This is non-fatal: a failure here won't block the duplication from succeeding.
-    await syncInvoiceToNewWave(newInv.id, supabase);
+    syncInvoiceToNewWave(newInv.id, supabase).catch(err => console.error('Background sync failed:', err));
 
     return { success: true, newInvoiceId: newInv.id };
   } catch (err: any) {
@@ -774,14 +774,10 @@ export async function deleteInvoice(invoiceId: string) {
       if (wsName.toLowerCase().includes('new wave')) {
         const apiKey = process.env.ACCOUNTING_API_KEY || process.env.NEWWAVE_INTEGRATION_TOKEN;
         if (apiKey) {
-          try {
-            await fetch(
-              `https://app.newwave.id/api/accounting/invoices?source=proone&external_id=${invoiceId}`,
-              { method: 'DELETE', headers: { 'Authorization': `Bearer ${apiKey}` } }
-            );
-          } catch (syncErr) {
-            console.warn('New Wave DELETE sync failed (non-fatal):', syncErr);
-          }
+          fetch(
+            `https://app.newwave.id/api/accounting/invoices?source=proone&external_id=${invoiceId}`,
+            { method: 'DELETE', headers: { 'Authorization': `Bearer ${apiKey}` } }
+          ).catch(syncErr => console.warn('New Wave DELETE sync failed (non-fatal):', syncErr));
         }
       }
     }

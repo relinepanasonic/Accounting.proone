@@ -638,6 +638,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                           value={item.unitPrice}
                           onChange={(e: any) => handleUpdateItem(item.id, 'unitPrice', Number(e.target.value) || 0)}
                           placeholder="Price"
+                          decimals={isPTPL ? 2 : 0}
                           className="w-full bg-black/40 border border-[#d4af37]/20 rounded-lg px-2.5 py-1.5 text-[#f5d77f] focus:outline-none focus:border-[#d4af37]/50 text-xs"
                       />
                     </div>
@@ -716,7 +717,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                       </label>
                       {hasPpn && (
                         <span className="text-sm font-mono text-[#f5d77f]">
-                          + Rp {ppnAmount.toLocaleString('id-ID', {minimumFractionDigits: 1, maximumFractionDigits: 1})}
+                          + Rp {ppnAmount.toLocaleString('id-ID', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                         </span>
                       )}
                     </div>

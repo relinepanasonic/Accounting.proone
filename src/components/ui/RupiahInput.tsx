@@ -8,6 +8,7 @@ export interface RupiahInputProps
   onChange?: (e: React.ChangeEvent<HTMLInputElement> & { target: { value: string; name?: string } }) => void;
   onValueChange?: (numericValue: number) => void;
   className?: string;
+  decimals?: number;
 }
 
 export function RupiahInput({
@@ -16,6 +17,7 @@ export function RupiahInput({
   onValueChange,
   className = '',
   placeholder = 'Rp 0',
+  decimals = 0,
   onFocus,
   onBlur,
   ...rest
@@ -24,8 +26,8 @@ export function RupiahInput({
   const [localDisplay, setLocalDisplay] = useState<string>('');
 
   const formatExternalValue = (val: string | number | undefined | null, focused: boolean) => {
-    if (val === undefined || val === null || val === '') return focused ? '' : 'Rp 0';
-    if (val === 0 || val === '0') return focused ? '' : 'Rp 0';
+    if (val === undefined || val === null || val === '') return focused ? '' : (decimals > 0 ? `Rp 0,${'0'.repeat(decimals)}` : 'Rp 0');
+    if (val === 0 || val === '0') return focused ? '' : (decimals > 0 ? `Rp 0,${'0'.repeat(decimals)}` : 'Rp 0');
     
     // val could be a raw number or string like "1000.5" from state
     let str = String(val);
@@ -40,6 +42,13 @@ export function RupiahInput({
     if (intPart === '0' && focused && !decPart && !str.includes(',')) return '';
 
     const formattedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
+    if (!focused && decimals > 0) {
+      // When blurred, always show exactly `decimals` decimal places
+      const paddedDec = (decPart || '').padEnd(decimals, '0').slice(0, decimals);
+      return `Rp ${formattedInt},${paddedDec}`;
+    }
+
     if (decPart !== null) {
       return `Rp ${formattedInt},${decPart}`;
     } else if (str.endsWith(',')) {

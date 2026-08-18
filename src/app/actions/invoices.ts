@@ -129,27 +129,43 @@ export async function syncInvoiceToNewWave(invoiceId: string, supabase: any): Pr
     const projectDateMatch = (inv.notes || '').match(/\[ProjectDate:([^\]]+)\]/);
     const project_date = projectDateMatch ? projectDateMatch[1] : inv.issue_date;
 
+    const mappedItems = rawLineItems.map((item: any) => {
+      const discountedPrice = Number(item.unit_price) - ((Number(item.discount_amount) || 0) / Number(item.quantity));
+      return {
+        name: item.package_name || 'Service Item',
+        description: item.description,
+        is_free: false,
+        scale: item.scale || 'pc',
+        qty: Number(item.quantity) || 1,
+        price: Math.max(0, discountedPrice)
+      };
+    });
+
+    const itemsSum = mappedItems.reduce((acc: number, item: any) => acc + (item.qty * item.price), 0);
+    const totalDiff = Number(inv.total_amount) - itemsSum;
+    
+    if (Math.abs(totalDiff) > 1) { 
+      mappedItems.push({
+        name: totalDiff > 0 ? 'Tax & Adjustments' : 'Global Discount',
+        description: 'Calculated automatically to match ProOne Grand Total',
+        is_free: false,
+        scale: 'pc',
+        qty: 1,
+        price: totalDiff
+      });
+    }
+
     const payload = {
       source: 'proone',
       external_id: inv.id,
       invoice_number: inv.invoice_number,
       brand: clientName || 'Unknown Client',
       invoice_date: inv.issue_date,
-      project_date,          // NEW — Tgl Project (falls back to invoice_date if not set)
+      project_date,
       due_date: inv.due_date,
       status: inv.status,
       notes: inv.notes,
-      items: rawLineItems.map((item: any) => {
-        const discountedPrice = Number(item.unit_price) - ((Number(item.discount_amount) || 0) / Number(item.quantity));
-        return {
-          name: item.package_name || 'Service Item',
-          description: item.description,
-          is_free: false,
-          scale: item.scale || 'pc',
-          qty: Number(item.quantity) || 1,
-          price: Math.max(0, discountedPrice)
-        };
-      })
+      items: mappedItems
     };
 
     const res = await fetch('https://app.newwave.id/api/accounting/invoices', {

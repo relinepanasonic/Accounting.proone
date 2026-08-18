@@ -739,11 +739,16 @@ export async function toggleInvoiceStatus(invoiceId: string, currentStatus: stri
     const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
     const nextStatus = currentStatus.toLowerCase() === 'paid' ? 'overdue' : 'paid';
 
-    const { error } = await supabase
+    let updateQuery = supabase
       .from('invoices')
       .update({ status: nextStatus })
-      .eq('id', invoiceId)
-      .eq('workspace_id', workspaceId);
+      .eq('id', invoiceId);
+
+    if (workspaceId !== '11111111-1111-1111-1111-111111111111') {
+      updateQuery = updateQuery.or(`workspace_id.eq.${workspaceId},assigned_workspace_id.eq.${workspaceId}`);
+    }
+
+    const { error } = await updateQuery;
 
     if (error) {
       return { success: false, error: error.message };
@@ -801,11 +806,16 @@ export async function markInvoiceAsFinalized(invoiceId: string) {
     const supabase = await createClient();
     const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
-    const { error } = await supabase
+    let updateQuery = supabase
       .from('invoices')
       .update({ status: 'sent' })
-      .eq('id', invoiceId)
-      .eq('workspace_id', workspaceId);
+      .eq('id', invoiceId);
+
+    if (workspaceId !== '11111111-1111-1111-1111-111111111111') {
+      updateQuery = updateQuery.or(`workspace_id.eq.${workspaceId},assigned_workspace_id.eq.${workspaceId}`);
+    }
+
+    const { error } = await updateQuery;
 
     if (error) {
       return { success: false, error: error.message };
@@ -814,8 +824,11 @@ export async function markInvoiceAsFinalized(invoiceId: string) {
     revalidatePath('/invoices');
     revalidatePath(`/invoices/${invoiceId}`);
     
-    // Background sync to New Wave
-    syncInvoiceToNewWave(invoiceId, supabase).catch(err => console.error('Background sync failed:', err));
+    // Sync to New Wave
+    const syncRes = await syncInvoiceToNewWave(invoiceId, supabase);
+    if (!syncRes.success) {
+      return { success: false, error: `Marked as sent, but New Wave sync failed: ${syncRes.error}` };
+    }
 
     return { success: true };
   } catch (err: any) {

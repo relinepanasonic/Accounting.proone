@@ -436,7 +436,7 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
                     <div className="text-[10px] text-zinc-500">{inv.packageQtt}</div>
                   </td>
                   {/* Amount Billed */}
-                  <td className="py-3 px-3 text-right">
+                  <td className="py-3 px-3 text-right whitespace-nowrap">
                     <div className="text-sm font-extrabold text-[#f5d77f] drop-shadow-[0_0_10px_rgba(245,215,127,0.35)]">
                       {inv.amount}
                     </div>

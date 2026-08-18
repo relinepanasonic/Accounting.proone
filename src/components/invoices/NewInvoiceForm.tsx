@@ -753,8 +753,33 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
             )}
 
             <div className="flex justify-between w-full md:w-1/3 items-center pt-3 border-t border-[#d4af37]/20 mt-2">
-            <span className="text-lg font-bold text-[#d4af37]">Grand Total:</span>
-            <span className="text-xl font-mono font-bold text-white">Rp {Math.ceil(grandTotal).toLocaleString('id-ID', {maximumFractionDigits: 0})}</span>
+              <span className="text-lg font-bold text-[#d4af37]">Grand Total:</span>
+              <div className="flex items-center gap-2">
+                {activeWorkspaceId === '11111111-1111-1111-1111-111111111111' && (hasPpn || hasPph) && (() => {
+                  const rawTotal = Math.ceil(grandTotal);
+                  const roundedTarget = Math.round(rawTotal / 1000) * 1000;
+                  const diff = rawTotal - roundedTarget;
+                  if (diff === 0) return null;
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // Adjust globalDiscount so grand total becomes the nearest round 1000
+                        // grandTotal = subTotalAfterDiscount + PPN - PPH
+                        // We need to increase globalDiscount by 'diff' to reduce grandTotal by 'diff'
+                        // But since PPN is 11% of DPP, adjusting discount affects PPN too.
+                        // Simplest approach: directly add 'diff' to globalDiscount (small adjustment)
+                        setGlobalDiscount(prev => Math.max(0, prev + diff));
+                      }}
+                      title={`Click to auto-apply Rp ${diff.toLocaleString('id-ID')} discount → Grand Total = Rp ${roundedTarget.toLocaleString('id-ID')}`}
+                      className="text-[10px] font-mono px-2 py-0.5 rounded border border-[#d4af37]/40 text-[#d4af37]/70 hover:text-[#d4af37] hover:border-[#d4af37] transition-colors"
+                    >
+                      ⚡ Round −Rp {diff.toLocaleString('id-ID')}
+                    </button>
+                  );
+                })()}
+                <span className="text-xl font-mono font-bold text-white">Rp {Math.ceil(grandTotal).toLocaleString('id-ID', {maximumFractionDigits: 0})}</span>
+              </div>
             </div>
           </div>
         )}

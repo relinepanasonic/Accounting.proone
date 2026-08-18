@@ -636,7 +636,7 @@ export async function duplicateInvoice(invoiceId: string) {
         workspace_id: workspaceId,
         client_id: orig.client_id,
         invoice_number: copyNumber,
-        status: orig.is_quotation ? 'draft' : 'pending',
+        status: 'draft',
         is_quotation: orig.is_quotation || false,
         issue_date: issueDateStr,
         due_date: dueDateStr,

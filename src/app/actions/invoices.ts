@@ -794,6 +794,36 @@ export async function toggleInvoiceStatus(invoiceId: string, currentStatus: stri
 }
 
 /**
+ * Server Action: Mark Draft Invoice as Finalized (Sent)
+ */
+export async function markInvoiceAsFinalized(invoiceId: string) {
+  try {
+    const supabase = await createClient();
+    const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+
+    const { error } = await supabase
+      .from('invoices')
+      .update({ status: 'sent' })
+      .eq('id', invoiceId)
+      .eq('workspace_id', workspaceId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/invoices');
+    revalidatePath(`/invoices/${invoiceId}`);
+    
+    // Background sync to New Wave
+    syncInvoiceToNewWave(invoiceId, supabase).catch(err => console.error('Background sync failed:', err));
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Error finalizing invoice.' };
+  }
+}
+
+/**
  * Server Action: Permanently Delete Invoice and its Line Items
  */
 export async function deleteInvoice(invoiceId: string) {

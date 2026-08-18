@@ -2,9 +2,9 @@
 
 import React, { useTransition, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Copy, CheckCircle, Clock, FileText, Trash2, Edit2, Loader2 } from 'lucide-react';
+import { Copy, CheckCircle, Clock, FileText, Trash2, Edit2, Loader2, Send } from 'lucide-react';
 import Link from 'next/link';
-import { duplicateInvoice, deleteInvoice, convertQuotationToInvoice } from '@/app/actions/invoices';
+import { duplicateInvoice, deleteInvoice, convertQuotationToInvoice, markInvoiceAsFinalized } from '@/app/actions/invoices';
 import { InvoicePaymentModal } from './InvoicePaymentModal';
 
 interface InvoiceActionProps {
@@ -24,6 +24,7 @@ export function InvoiceStatusToggle({ id, status, invoiceNumber = '', totalAmoun
   const isPaid = status?.toLowerCase() === 'paid';
   const isPartial = status?.toLowerCase() === 'partial_paid' || status?.toLowerCase() === 'partial payed' || (paidAmount > 0 && paidAmount < totalAmount);
   const isInvoiced = status?.toLowerCase() === 'invoiced';
+  const isDraft = status?.toLowerCase() === 'draft';
 
   return (
     <>
@@ -37,6 +38,8 @@ export function InvoiceStatusToggle({ id, status, invoiceNumber = '', totalAmoun
             ? 'bg-blue-500/15 border border-blue-500/50 text-blue-400 hover:bg-blue-500/25 shadow-[0_0_12px_rgba(59,130,246,0.25)]'
             : isInvoiced
             ? 'bg-emerald-500/15 border border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/25 shadow-[0_0_12px_rgba(16,185,129,0.25)]'
+            : isDraft
+            ? 'bg-zinc-800/50 border border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-300'
             : 'bg-zinc-900 border border-[#d4af37]/30 text-[#d4af37] hover:border-[#f5d77f]'
         }`}
       >
@@ -54,6 +57,11 @@ export function InvoiceStatusToggle({ id, status, invoiceNumber = '', totalAmoun
           <>
             <CheckCircle className="w-3 h-3 text-emerald-400" />
             <span>INVOICED</span>
+          </>
+        ) : isDraft ? (
+          <>
+            <Edit2 className="w-3 h-3" />
+            <span>DRAFT</span>
           </>
         ) : (
           <>
@@ -140,6 +148,26 @@ export function InvoiceActionGroup({ id, isQuotation, status, invoiceNumber }: I
     }
   };
 
+  const handleFinalize = () => {
+    if (confirm('Mark this Invoice as Finalized/Sent and sync to New Wave?')) {
+      setActiveAction('convert'); // Reusing 'convert' state for the loader
+      startTransition(async () => {
+        try {
+          const res = await markInvoiceAsFinalized(id);
+          if (res?.error) {
+            alert(res.error);
+          } else {
+            router.refresh();
+          }
+        } catch (err) {
+          console.error(err);
+        } finally {
+          setActiveAction(null);
+        }
+      });
+    }
+  };
+
   if (invoiceNumber === 'DIRECT INCOME') {
     return (
       <div className="inline-flex items-center gap-2">
@@ -169,7 +197,18 @@ export function InvoiceActionGroup({ id, isQuotation, status, invoiceNumber }: I
           title="Convert to Invoice"
           className="p-1.5 rounded-lg bg-blue-900/20 border border-blue-500/30 hover:border-blue-400 text-blue-400 hover:text-blue-300 hover:scale-105 transition-all duration-200"
         >
-          <CheckCircle className="w-3.5 h-3.5" />
+          {activeAction === 'convert' ? <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" /> : <CheckCircle className="w-3.5 h-3.5" />}
+        </button>
+      )}
+
+      {status?.toLowerCase() === 'draft' && !isQuotation && (
+        <button
+          onClick={handleFinalize}
+          disabled={isPending}
+          title="Mark as Finalized/Sent & Sync to New Wave"
+          className="p-1.5 rounded-lg bg-purple-900/20 border border-purple-500/30 hover:border-purple-400 text-purple-400 hover:text-purple-300 hover:scale-105 transition-all duration-200"
+        >
+          {activeAction === 'convert' ? <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" /> : <Send className="w-3.5 h-3.5" />}
         </button>
       )}
 

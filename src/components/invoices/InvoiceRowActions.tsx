@@ -84,10 +84,17 @@ export function InvoiceActionGroup({ id, isQuotation, status, invoiceNumber }: I
   const handleDuplicate = () => {
     startTransition(async () => {
       try {
-        await duplicateInvoice(id);
-        router.refresh();
+        const res = await duplicateInvoice(id);
+        if (res?.error) {
+          alert(res.error);
+        } else if (res?.newInvoiceId) {
+          router.push(`/invoices/${res.newInvoiceId}/edit`);
+        } else {
+          router.refresh();
+        }
       } catch (err) {
         console.error(err);
+        alert('Failed to duplicate invoice');
       }
     });
   };

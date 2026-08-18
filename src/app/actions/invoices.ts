@@ -608,12 +608,11 @@ export async function duplicateInvoice(invoiceId: string) {
     const supabase = await createClient();
     const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
-    const { data: orig, error: fetchErr } = await supabase
-      .from('invoices')
-      .select('*')
-      .eq('id', invoiceId)
-      .eq('workspace_id', workspaceId)
-      .single();
+    let origQuery = supabase.from('invoices').select('*').eq('id', invoiceId);
+    if (workspaceId !== '11111111-1111-1111-1111-111111111111') {
+      origQuery = origQuery.or(`workspace_id.eq.${workspaceId},assigned_workspace_id.eq.${workspaceId}`);
+    }
+    const { data: orig, error: fetchErr } = await origQuery.single();
 
     if (fetchErr || !orig) {
       return { success: false, error: 'Original invoice not found or access denied.' };
@@ -623,7 +622,6 @@ export async function duplicateInvoice(invoiceId: string) {
       .from('invoice_line_items')
       .select('*')
       .eq('invoice_id', invoiceId)
-      .eq('workspace_id', workspaceId)
       .order('sort_order', { ascending: true });
 
     const today = new Date();

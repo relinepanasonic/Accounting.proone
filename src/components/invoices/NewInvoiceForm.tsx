@@ -130,6 +130,8 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
   const [hasPpn, setHasPpn] = useState<boolean>(initialData?.hasPpn || false);
   const [hasPph, setHasPph] = useState<boolean>(initialData?.hasPph || false);
   const [pphRate, setPphRate] = useState<number>(initialData?.pphRate || 2);
+  // Rounding adjustment (PT Pintu Langit only): direct post-tax deduction shown as its own line
+  const [adjustmentAmount, setAdjustmentAmount] = useState<number>(0);
 
   const [lineItems, setLineItems] = useState<LineItem[]>(initialData?.lineItems || []);
 
@@ -214,6 +216,10 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
     grandTotal = dpp + ppnAmount - pphAmount;
   }
 
+  // Post-tax rounding adjustment (PT Pintu Langit only) — direct deduction from final total
+  const isPTPL = activeWorkspaceId === '11111111-1111-1111-1111-111111111111';
+  const displayedGrandTotal = Math.ceil(grandTotal) - (isPTPL && (hasPpn || hasPph) ? adjustmentAmount : 0);
+
   const handleQuickAddClient = async () => {
     if (!quickAddName.trim()) return;
     setIsQuickAdding(true);
@@ -258,7 +264,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
             notes,
             bankAccountId: bankAccountId === 'all' ? undefined : bankAccountId,
             paymentInstructions: customPaymentInstructions,
-            discountAmount: globalDiscount,
+            discountAmount: globalDiscount + (isPTPL && (hasPpn || hasPph) ? adjustmentAmount : 0),
             lineItems: lineItems.map((l) => ({
               packageName: l.packageName,
               description: l.description,
@@ -295,7 +301,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
             notes: finalNotes,
             bankAccountId: bankAccountId !== 'all' ? bankAccountId : undefined,
             paymentInstructions: bankAccountId === 'custom' ? customPaymentInstructions : undefined,
-            discountAmount: globalDiscount,
+            discountAmount: globalDiscount + (isPTPL && (hasPpn || hasPph) ? adjustmentAmount : 0),
             lineItems: lineItems.map((l) => ({
               packageName: l.packageName,
               description: l.description,
@@ -752,34 +758,26 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
               </div>
             )}
 
+            {isPTPL && (hasPpn || hasPph) && (
+              <div className="flex justify-between w-full md:w-1/2 items-center">
+                <span className="text-sm text-zinc-400">Adjustment:</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-600 font-mono">− Rp</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={adjustmentAmount || ''}
+                    onChange={(e) => setAdjustmentAmount(Number(e.target.value) || 0)}
+                    placeholder="0"
+                    className="w-28 bg-black/40 border border-zinc-700 rounded-lg px-2 py-1 text-zinc-300 text-right font-mono text-sm focus:outline-none focus:border-[#d4af37]/60"
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-between w-full md:w-1/3 items-center pt-3 border-t border-[#d4af37]/20 mt-2">
               <span className="text-lg font-bold text-[#d4af37]">Grand Total:</span>
-              <div className="flex items-center gap-2">
-                {activeWorkspaceId === '11111111-1111-1111-1111-111111111111' && (hasPpn || hasPph) && (() => {
-                  const rawTotal = Math.ceil(grandTotal);
-                  const roundedTarget = Math.round(rawTotal / 1000) * 1000;
-                  const diff = rawTotal - roundedTarget;
-                  if (diff === 0) return null;
-                  return (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        // Adjust globalDiscount so grand total becomes the nearest round 1000
-                        // grandTotal = subTotalAfterDiscount + PPN - PPH
-                        // We need to increase globalDiscount by 'diff' to reduce grandTotal by 'diff'
-                        // But since PPN is 11% of DPP, adjusting discount affects PPN too.
-                        // Simplest approach: directly add 'diff' to globalDiscount (small adjustment)
-                        setGlobalDiscount(prev => Math.max(0, prev + diff));
-                      }}
-                      title={`Click to auto-apply Rp ${diff.toLocaleString('id-ID')} discount → Grand Total = Rp ${roundedTarget.toLocaleString('id-ID')}`}
-                      className="text-[10px] font-mono px-2 py-0.5 rounded border border-[#d4af37]/40 text-[#d4af37]/70 hover:text-[#d4af37] hover:border-[#d4af37] transition-colors"
-                    >
-                      ⚡ Round −Rp {diff.toLocaleString('id-ID')}
-                    </button>
-                  );
-                })()}
-                <span className="text-xl font-mono font-bold text-white">Rp {Math.ceil(grandTotal).toLocaleString('id-ID', {maximumFractionDigits: 0})}</span>
-              </div>
+              <span className="text-xl font-mono font-bold text-white">Rp {displayedGrandTotal.toLocaleString('id-ID', {maximumFractionDigits: 0})}</span>
             </div>
           </div>
         )}

@@ -239,9 +239,10 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   };
 
 
-  const handleMatchAndClear = () => {
-    if (!activeBankLine || !currentTargetRecordId) return;
-    const targetRecord = recordsList.find((r) => r.id === currentTargetRecordId);
+  const handleMatchAndClear = (overrideTargetId?: string) => {
+    const activeTargetId = typeof overrideTargetId === 'string' ? overrideTargetId : currentTargetRecordId;
+    if (!activeBankLine || !activeTargetId) return;
+    const targetRecord = recordsList.find((r) => r.id === activeTargetId);
     if (!targetRecord) return;
 
     startTransition(async () => {
@@ -341,12 +342,15 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
         } else {
           return rec.type === 'expense' || rec.type === 'payroll';
         }
+      filteredRecords = filteredRecords.sort((a, b) => {
+        const aAuto = autoMatchRecord?.id === a.id;
+        const bAuto = autoMatchRecord?.id === b.id;
+        if (aAuto && !bAuto) return -1;
+        if (!aAuto && bAuto) return 1;
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
       });
-
-      filteredRecords.sort((a, b) => {
-        const aDiff = Math.abs(a.amount - Math.abs(activeBankLine.amount));
-        const bDiff = Math.abs(b.amount - Math.abs(activeBankLine.amount));
-        if (aDiff !== bDiff) return aDiff - bDiff;
+    } else {
+      filteredRecords = filteredRecords.sort((a, b) => {
         return new Date(b.date).getTime() - new Date(a.date).getTime();
       });
     }
@@ -404,7 +408,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
               {rec.type}
             </span>
           </div>
-          <div className="text-[10px] text-zinc-500 font-mono font-normal tracking-wider mt-2 flex items-center justify-between">
+          <div className="text-[10px] text-zinc-500 font-mono font-normal tracking-wider mt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <span className="truncate pr-2">{rec.notes || 'NO NOTES'}</span>
             <div className="flex items-center gap-2 flex-shrink-0">
               {rec.reconciled && (
@@ -412,6 +416,19 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
               )}
               {isAuto && (
                  <span className="text-[#f5d77f] font-bold bg-[#d4af37]/10 px-1 rounded">RECOMMENDED MATCH</span>
+              )}
+              {activeBankLine && !rec.reconciled && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedRecordId(rec.id);
+                    handleMatchAndClear(rec.id);
+                  }}
+                  className="bg-[#d4af37] hover:bg-[#b5952f] text-black font-extrabold px-3 py-1.5 rounded transition-colors text-[10px]"
+                >
+                  {isPending ? '...' : 'MATCH'}
+                </button>
               )}
             </div>
           </div>

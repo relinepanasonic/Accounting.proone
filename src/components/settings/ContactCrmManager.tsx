@@ -174,11 +174,11 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
       if (client.contactType === 'client') {
         const { getClientInvoiceHistory } = await import('@/app/actions/settings');
         const res = await getClientInvoiceHistory(client.id);
-        if (res.success) setHistoryData(res.invoices);
+        if (res.success && res.invoices) setHistoryData(res.invoices);
       } else {
         const { getClientExpenseHistory } = await import('@/app/actions/settings');
         const res = await getClientExpenseHistory(client.id);
-        if (res.success) setHistoryData(res.expenses);
+        if (res.success && res.expenses) setHistoryData(res.expenses);
       }
     } catch (err) {
       console.error(err);

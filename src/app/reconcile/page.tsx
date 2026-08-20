@@ -64,13 +64,13 @@ async function ReconciliationCore() {
       .from('invoices')
       .select('id, invoice_number, total_amount, issue_date, clients(name), reconciled, workspace_id, assigned_workspace_id')
       .or(`workspace_id.eq.${activeWorkspaceId},assigned_workspace_id.eq.${activeWorkspaceId}`)
-      .or('reconciled.is.null,reconciled.eq.false')
+      // Removed reconciled filter so user can match already-reconciled items to bank statement
       .order('issue_date', { ascending: false }),
     supabase
       .from('transactions')
       .select('id, description, amount, due_date, category, reconciled, workspace_id, type')
       .eq('workspace_id', activeWorkspaceId)
-      .or('reconciled.is.null,reconciled.eq.false')
+      // Removed reconciled filter so user can match already-reconciled items to bank statement
       .order('due_date', { ascending: false }),
     supabase
       .from('payroll')
@@ -125,7 +125,7 @@ async function ReconciliationCore() {
 
   let bankAccounts = bankRes.data ? bankRes.data.map(b => ({
     ...b,
-    account_holder: (b as any).account_name || b.account_holder
+    account_holder: (b as any).account_name || (b as any).account_holder
   })) : [];
   const ws = workspaceRes.data;
   const coaAccounts = coaRes.data || [];
@@ -185,23 +185,29 @@ async function ReconciliationCore() {
         payeeOrClient: clientObj?.name || 'Client Payee',
         date: inv.issue_date || '2026-07-02',
         amount: Number(inv.total_amount || 0),
+        reconciled: Boolean(inv.reconciled),
+        notes: `Invoice ${inv.invoice_number || ''}`,
       };
     }),
     ...rawTransactions.map((tx) => ({
       id: tx.id,
-      type: (tx.type === 'income' ? 'income' : 'expense') as const,
+      type: tx.type === 'income' ? ('income' as const) : ('expense' as const),
       reference: tx.category || 'CATEGORY-REF',
       payeeOrClient: tx.description || 'System Record',
       date: tx.due_date || '2026-07-07',
       amount: Number(tx.amount || 0),
+      reconciled: Boolean(tx.reconciled),
+      notes: tx.description || '',
     })),
     ...rawPayroll.map((pr) => ({
       id: pr.id,
       type: 'payroll' as const,
-      reference: 'PAYROLL-RUN',
+      reference: 'PAYROLL',
       payeeOrClient: pr.employee_name || 'Employee',
-      date: pr.pay_period_end || '2026-01-25',
+      date: pr.pay_period_end || '2026-07-15',
       amount: Number(pr.total_payment || 0),
+      reconciled: Boolean(pr.status === 'paid'),
+      notes: `Payroll for ${pr.employee_name || ''}`,
     })),
   ];
 

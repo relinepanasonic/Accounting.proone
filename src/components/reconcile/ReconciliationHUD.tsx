@@ -20,6 +20,8 @@ export interface UnreconciledSystemRecord {
   payeeOrClient: string;
   date: string;
   amount: number;
+  reconciled?: boolean;
+  notes?: string;
 }
 
 interface BankLine {
@@ -83,6 +85,13 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   
   const [activeBankId, setActiveBankId] = useState<string>(bankAccounts.length > 0 ? bankAccounts[0].id : '');
   const [bankFormat, setBankFormat] = useState<string>('jago');
+  
+  const currentMonth = new Date().getMonth() + 1;
+  const currentYear = new Date().getFullYear();
+  const [filterMonth, setFilterMonth] = useState<number>(currentMonth);
+  const [filterYear, setFilterYear] = useState<number>(currentYear);
+  const [activeFilterTab, setActiveFilterTab] = useState<'all' | 'matched' | 'unmatched'>('all');
+  const [showReconciled, setShowReconciled] = useState(false);
 
   const activeBankLine = bankLines.find((b) => b.id === selectedBankId);
   const autoMatchRecord = activeBankLine ? findAutoMatch(activeBankLine) : null;
@@ -114,6 +123,19 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
     );
   }
 
+  const filteredBankLines = React.useMemo(() => {
+    return bankLines.filter((b) => {
+      const d = new Date(b.date);
+      const matchesMonth = (d.getMonth() + 1) === filterMonth && d.getFullYear() === filterYear;
+      if (!matchesMonth) return false;
+      
+      const autoMatch = findAutoMatch(b);
+      if (activeFilterTab === 'matched') return !!autoMatch;
+      if (activeFilterTab === 'unmatched') return !autoMatch;
+      return true;
+    });
+  }, [bankLines, filterMonth, filterYear, activeFilterTab, recordsList]);
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -143,6 +165,13 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
             }
 
             const sortedData = filteredData.sort((a: BankLine, b: BankLine) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            
+            if (sortedData.length > 0) {
+              const firstDate = new Date(sortedData[0].date);
+              setFilterMonth(firstDate.getMonth() + 1);
+              setFilterYear(firstDate.getFullYear());
+            }
+            
             setBankLines(sortedData);
             setSelectedBankId(sortedData[0].id);
           } else {
@@ -191,6 +220,14 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
             return;
           }
 
+          if (filteredParsed.length > 0) {
+            const firstDate = new Date(filteredParsed[0].date);
+            if (!isNaN(firstDate.getTime())) {
+              setFilterMonth(firstDate.getMonth() + 1);
+              setFilterYear(firstDate.getFullYear());
+            }
+          }
+
           const sortedParsed = filteredParsed.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
           setBankLines(sortedParsed);
           setSelectedBankId(sortedParsed[0].id);
@@ -208,11 +245,16 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
 
     startTransition(async () => {
       try {
+        const bankAmountAbs = Math.abs(activeBankLine.amount);
+        const recordAmountAbs = Math.abs(targetRecord.amount);
+        const needsAdjustment = bankAmountAbs !== recordAmountAbs;
+        
         await reconcileRecord(
           targetRecord.id,
           targetRecord.type,
           `BANK-REF:${activeBankLine.date}:${activeBankLine.amount}:${activeBankLine.sourceDestination}`,
-          activeBankId
+          activeBankId,
+          needsAdjustment ? bankAmountAbs : undefined
         );
 
         setBankLines((prev) => prev.filter((b) => b.id !== activeBankLine.id));
@@ -281,7 +323,11 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   };
 
   const renderSystemRecordsList = () => {
-    let filteredRecords = [...recordsList];
+    let filteredRecords = recordsList.filter((r) => {
+      if (!showReconciled && r.reconciled) return false;
+      const d = new Date(r.date);
+      return (d.getMonth() + 1) === filterMonth && d.getFullYear() === filterYear;
+    });
     
     if (activeBankLine) {
       filteredRecords = filteredRecords.filter((rec) => {
@@ -300,18 +346,34 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
       });
     }
 
+    const items = [
+      <div key="toggle" className="flex items-center gap-2 mb-2 px-1">
+        <input 
+          type="checkbox" 
+          id="showReconciledToggle" 
+          checked={showReconciled}
+          onChange={(e) => setShowReconciled(e.target.checked)}
+          className="accent-[#d4af37]"
+        />
+        <label htmlFor="showReconciledToggle" className="text-xs font-bold text-zinc-400 cursor-pointer hover:text-white transition-colors">
+          Show already-reconciled records (e.g. manually cleared)
+        </label>
+      </div>
+    ];
+
     if (filteredRecords.length === 0) {
-      return (
-        <div className="p-8 text-center text-zinc-500 font-mono text-xs border border-dashed border-zinc-800 rounded-xl space-y-2">
+      items.push(
+        <div key="empty" className="p-8 text-center text-zinc-500 font-mono text-xs border border-dashed border-zinc-800 rounded-xl space-y-2">
           <div className="text-white font-bold">NO UNRECONCILED SYSTEM RECORDS</div>
           <div className="text-[10px] text-zinc-400 font-sans">
             {activeBankLine ? `No ${activeBankLine.amount > 0 ? 'income/invoices' : 'expense/payroll'} available to match.` : 'All invoices and expenses are cleared or none have been issued yet.'}
           </div>
         </div>
       );
+      return items;
     }
 
-    return filteredRecords.map((rec) => {
+    items.push(...filteredRecords.map((rec) => {
       const isHighlighted = rec.id === currentTargetRecordId;
       const isAuto = autoMatchRecord?.id === rec.id;
 
@@ -325,28 +387,34 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
               : 'bg-zinc-950/60 border-zinc-800/80 hover:border-zinc-700'
           }`}
         >
-          <div className="flex items-center justify-between text-xs font-mono mb-1">
+          <div className="flex items-center justify-between text-xs font-mono mb-2">
             <span className="text-zinc-400">{rec.date}</span>
-            <span className="font-bold text-[#f5d77f]">
-              Rp {rec.amount.toLocaleString('en-US')}
+            <span className={`font-bold ${rec.amount > 0 ? 'text-[#f5d77f]' : 'text-red-400'}`}>
+              {rec.amount > 0 ? `+Rp ${rec.amount.toLocaleString('en-US')}` : `-Rp ${Math.abs(rec.amount).toLocaleString('en-US')}`}
             </span>
           </div>
           <div className="text-xs font-sans text-white font-medium flex items-center justify-between">
-            <span>{rec.payeeOrClient}</span>
+            <span>{rec.payeeOrClient || rec.reference}</span>
             <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-900 text-[#d4af37] uppercase border border-[#d4af37]/20">
-              {rec.reference}
+              {rec.type}
             </span>
           </div>
-
-          {isAuto && (
-            <div className="mt-2.5 pt-2 border-t border-zinc-800/80 flex items-center justify-between text-[10px] font-mono text-[#f5d77f]">
-              <span>PARITY CONFIRMED</span>
-              <span className="font-bold">100% GOLD MATCH</span>
+          <div className="text-[10px] text-zinc-500 font-mono font-normal tracking-wider mt-2 flex items-center justify-between">
+            <span className="truncate pr-2">{rec.notes || 'NO NOTES'}</span>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {rec.reconciled && (
+                 <span className="text-emerald-500 font-bold bg-emerald-500/10 px-1 rounded">ALREADY RECONCILED</span>
+              )}
+              {isAuto && (
+                 <span className="text-[#f5d77f] font-bold bg-[#d4af37]/10 px-1 rounded">RECOMMENDED MATCH</span>
+              )}
             </div>
-          )}
+          </div>
         </div>
       );
-    });
+    }));
+
+    return items;
   };
 
   return (
@@ -396,9 +464,31 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
             <option value="bca_individual" disabled>BCA Individual (Soon)</option>
           </select>
 
+          <div className="flex items-center gap-2 border border-zinc-700/50 rounded-lg p-1 bg-black/40">
+            <select
+              value={filterMonth}
+              onChange={(e) => setFilterMonth(Number(e.target.value))}
+              className="bg-transparent text-white text-xs font-bold rounded px-2 py-1.5 outline-none hover:bg-zinc-800/50 cursor-pointer"
+            >
+              {Array.from({ length: 12 }).map((_, i) => (
+                <option key={i} value={i + 1}>
+                  {new Date(2000, i, 1).toLocaleString('default', { month: 'short' }).toUpperCase()}
+                </option>
+              ))}
+            </select>
+            <input
+              type="number"
+              value={filterYear}
+              onChange={(e) => setFilterYear(Number(e.target.value))}
+              className="bg-transparent text-white text-xs font-bold font-mono rounded px-2 py-1.5 outline-none w-16 hover:bg-zinc-800/50 focus:bg-zinc-800/80"
+              min="2000"
+              max="2100"
+            />
+          </div>
+
           <label className="group relative flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-transparent via-[#d4af37]/10 to-transparent border border-[#d4af37]/40 rounded-full text-[#f5d77f] text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-[#d4af37]/20 hover:border-[#d4af37] transition-all w-full md:w-auto justify-center">
             <UploadCloud className="w-4 h-4" />
-            <span>Upload Statement (.CSV / .PDF)</span>
+            <span>Upload Bank Statement</span>
             <input
               type="file"
               accept=".csv,.pdf"
@@ -423,19 +513,24 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
               <h3 className="text-xs font-bold uppercase tracking-wider text-[#d4af37]">
                 BANK STATEMENT FEED
               </h3>
+              <div className="flex bg-zinc-950 rounded-lg p-1 border border-zinc-800">
+                <button onClick={() => setActiveFilterTab('all')} className={`px-2 py-1 text-[10px] rounded font-bold transition-all ${activeFilterTab === 'all' ? 'bg-[#d4af37]/20 text-[#f5d77f]' : 'text-zinc-500 hover:text-zinc-400'}`}>ALL</button>
+                <button onClick={() => setActiveFilterTab('matched')} className={`px-2 py-1 text-[10px] rounded font-bold transition-all ${activeFilterTab === 'matched' ? 'bg-emerald-500/20 text-emerald-400' : 'text-zinc-500 hover:text-zinc-400'}`}>MATCHED</button>
+                <button onClick={() => setActiveFilterTab('unmatched')} className={`px-2 py-1 text-[10px] rounded font-bold transition-all ${activeFilterTab === 'unmatched' ? 'bg-red-500/20 text-red-400' : 'text-zinc-500 hover:text-zinc-400'}`}>NOT FOUND</button>
+              </div>
               <span className="text-[10px] font-mono text-zinc-400">
-                {bankLines.length} UNCLEARED ITEMS
+                {filteredBankLines.length} ITEMS
               </span>
             </div>
 
             <div className="space-y-3">
-              {bankLines.length === 0 ? (
+              {filteredBankLines.length === 0 ? (
                 <div className="p-8 text-center text-zinc-500 font-mono text-xs border border-dashed border-zinc-800 rounded-xl space-y-2">
-                  <div className="text-white font-bold">NO BANK FEED TRANSACTIONS LOADED</div>
-                  <div className="text-[10px] text-zinc-400 font-sans">Click "UPLOAD STATEMENT" above to import Bank Jago PDFs or standard CSVs.</div>
+                  <div className="text-white font-bold">NO BANK FEED TRANSACTIONS FOUND</div>
+                  <div className="text-[10px] text-zinc-400 font-sans">For {new Date(filterYear, filterMonth - 1, 1).toLocaleString('default', { month: 'long', year: 'numeric' })}</div>
                 </div>
               ) : (
-                bankLines.map((bank) => {
+                filteredBankLines.map((bank) => {
                   const isSelected = bank.id === selectedBankId;
                   const autoMatch = findAutoMatch(bank);
 
@@ -456,11 +551,18 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                     >
                       <div className="flex items-center justify-between text-xs font-mono mb-1">
                         <span className="text-zinc-400">{bank.date}</span>
-                        <span className={`font-bold ${bank.amount >= 0 ? 'text-[#f5d77f]' : 'text-red-400'}`}>
-                          {bank.amount >= 0
-                            ? `+Rp ${bank.amount.toLocaleString('en-US')}`
-                            : `-Rp ${Math.abs(bank.amount).toLocaleString('en-US')}`}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          {autoMatch ? (
+                            <span className="bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded text-[10px] font-bold">MATCHED</span>
+                          ) : (
+                            <span className="bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded text-[10px] font-bold">NOT FOUND</span>
+                          )}
+                          <span className={`font-bold ${bank.amount >= 0 ? 'text-[#f5d77f]' : 'text-red-400'}`}>
+                            {bank.amount >= 0
+                              ? `+Rp ${bank.amount.toLocaleString('en-US')}`
+                              : `-Rp ${Math.abs(bank.amount).toLocaleString('en-US')}`}
+                          </span>
+                        </div>
                       </div>
                       <div className="text-sm font-sans text-white font-bold tracking-wide flex flex-col gap-1 mt-2">
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -508,7 +610,13 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                     className="gold-btn inline-flex items-center gap-2 px-6 py-2 rounded-full text-[10px] uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>{isPending ? 'RECONCILING...' : 'FORCE MATCH & CLEAR'}</span>
+                    <span>
+                      {isPending 
+                        ? 'RECONCILING...' 
+                        : (activeBankLine && currentTargetRecordId && Math.abs(recordsList.find(r => r.id === currentTargetRecordId)?.amount || 0) !== Math.abs(activeBankLine.amount))
+                          ? 'ADJUST RECORD & RECONCILE' 
+                          : 'FORCE MATCH & CLEAR'}
+                    </span>
                   </button>
                 ) : (
                   <button
@@ -744,11 +852,19 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
               {/* ACTION BUTTON HUD */}
               <div className="mt-6 pt-4 border-t border-zinc-800 flex items-center justify-between">
                 <div className="text-xs font-mono text-zinc-400">
-                  {activeBankLine && currentTargetRecordId ? (
-                    <span className="text-[#f5d77f] font-bold">READY TO CLEAR</span>
-                  ) : (
-                    <span>SELECT BANK & SYSTEM RECORD</span>
-                  )}
+                  {(() => {
+                    if (!activeBankLine || !currentTargetRecordId) return <span>SELECT BANK & SYSTEM RECORD</span>;
+                    const rec = recordsList.find(r => r.id === currentTargetRecordId);
+                    if (rec && Math.abs(rec.amount) !== Math.abs(activeBankLine.amount)) {
+                      const diff = Math.abs(rec.amount) - Math.abs(activeBankLine.amount);
+                      return (
+                        <span className="text-yellow-400 font-bold">
+                          NEEDS ADJUSTMENT (DIFF: {diff > 0 ? '+' : ''}Rp {diff.toLocaleString('en-US')})
+                        </span>
+                      );
+                    }
+                    return <span className="text-[#f5d77f] font-bold">READY TO CLEAR (EXACT MATCH)</span>;
+                  })()}
                 </div>
                 <button
                   type="button"
@@ -757,7 +873,13 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                   className="gold-btn inline-flex items-center gap-2 px-7 py-3 rounded-full text-xs uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>{isPending ? 'RECONCILING...' : 'MATCH & CLEAR RECORD'}</span>
+                  <span>
+                    {isPending 
+                      ? 'RECONCILING...' 
+                      : (activeBankLine && currentTargetRecordId && Math.abs(recordsList.find(r => r.id === currentTargetRecordId)?.amount || 0) !== Math.abs(activeBankLine.amount))
+                        ? 'ADJUST RECORD & RECONCILE' 
+                        : 'MATCH & CLEAR RECORD'}
+                  </span>
                 </button>
               </div>
             </div>

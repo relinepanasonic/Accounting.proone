@@ -7,20 +7,26 @@ import { getWorkspaceMappings } from './mappings';
 
 export async function reconcileRecord(
   recordId: string,
-  recordType: 'invoice' | 'expense' | 'payroll',
+  recordType: 'invoice' | 'expense' | 'payroll' | 'income',
   bankReference: string,
-  bankAccountId?: string
+  bankAccountId?: string,
+  adjustedAmount?: number
 ) {
   const supabase = await createClient();
   
   if (recordType === 'payroll') {
+    const updateData: any = {
+      status: 'paid',
+      payment_date: new Date().toISOString().split('T')[0],
+      notes: `PAID VIA RECONCILIATION - ${bankReference}`,
+    };
+    if (adjustedAmount !== undefined) {
+      updateData.total_payment = adjustedAmount;
+    }
+    
     const { error } = await supabase
       .from('payroll')
-      .update({
-        status: 'paid',
-        payment_date: new Date().toISOString().split('T')[0],
-        notes: `PAID VIA RECONCILIATION - ${bankReference}`,
-      })
+      .update(updateData)
       .eq('id', recordId);
 
     if (error) {
@@ -29,13 +35,22 @@ export async function reconcileRecord(
     }
   } else {
     const table = recordType === 'invoice' ? 'invoices' : 'transactions';
+    const updateData: any = {
+      reconciled: true,
+      bank_reference: bankReference || 'BANK-MATCHED',
+      ...(bankAccountId && table === 'invoices' ? { bank_account_id: bankAccountId } : {})
+    };
+    if (adjustedAmount !== undefined) {
+      if (table === 'invoices') {
+        updateData.total_amount = adjustedAmount;
+      } else {
+        updateData.amount = adjustedAmount;
+      }
+    }
+
     const { error } = await supabase
       .from(table)
-      .update({
-        reconciled: true,
-        bank_reference: bankReference || 'BANK-MATCHED',
-        ...(bankAccountId && table === 'invoices' ? { bank_account_id: bankAccountId } : {})
-      })
+      .update(updateData)
       .eq('id', recordId);
 
     if (error) {

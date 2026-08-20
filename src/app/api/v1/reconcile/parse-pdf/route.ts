@@ -21,8 +21,9 @@ export async function POST(request: Request) {
     const pdfDoc = await getDocumentProxy(new Uint8Array(buffer));
     const { text: rawText } = await extractText(pdfDoc, { mergePages: true });
 
-    // Clean page break markers
-    const cleanedText = rawText.replace(/[-]+Page\s*\(\d+\)\s*Break[-]+/g, '');
+    // Clean page break markers and Jago footers
+    let cleanedText = rawText.replace(/[-]+Page\s*\(\d+\)\s*Break[-]+/g, '');
+    cleanedText = cleanedText.replace(/PT Bank Jago Tbk is licensed[\s\S]*?Page \d+\s*of\s*\d+/gi, '');
 
     // Split by newline, clean whitespace
     const rawLines = cleanedText.split('\n')

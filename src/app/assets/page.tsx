@@ -4,6 +4,8 @@ import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
 import { RunDepreciationButton } from '@/components/assets/RunDepreciationButton';
 
+import { AssetRowActions } from '@/components/assets/AssetRowActions';
+
 export const dynamic = 'force-dynamic';
 
 interface FixedAssetRecord {
@@ -132,13 +134,7 @@ async function FixedAssetsRegistry() {
                     </span>
                   </td>
                   <td className="py-3 px-3 text-right">
-                    <Link
-                      href={`/assets/${item.id}/edit`}
-                      className="inline-flex p-1.5 rounded-lg bg-zinc-800/40 border border-zinc-700 hover:border-[#d4af37] text-zinc-400 hover:text-[#d4af37] hover:scale-105 transition-all duration-200"
-                      title="Edit Asset Schedule"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </Link>
+                    <AssetRowActions id={item.id} />
                   </td>
                 </tr>
               ))}
@@ -158,10 +154,10 @@ export default function AssetsPage() {
         <div>
           <h1 className="text-lg font-extrabold tracking-wider uppercase text-white flex items-center gap-2">
             <Box className="w-5 h-5 text-[#d4af37]" />
-            <span>FIXED ASSETS • CAPITAL EQUIPMENT & DEPRECIATION HUD</span>
+            <span>Fixed Asset</span>
           </h1>
-          <p className="text-xs text-[#d4af37] font-mono">
-            LUXURY EXECUTIVE PANELS • INSTANT REALTIME VALUE COMPUTATION
+          <p className="text-xs text-[#d4af37] font-mono uppercase tracking-wider">
+            CAPITAL EQUIPMENT & DEPRECIATION HUD
           </p>
         </div>
         <RunDepreciationButton />

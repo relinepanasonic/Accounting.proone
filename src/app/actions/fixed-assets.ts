@@ -31,6 +31,26 @@ export async function updateFixedAsset(id: string, payload: any) {
   }
 }
 
+export async function deleteFixedAsset(id: string) {
+  try {
+    const supabase = await createClient();
+    const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+
+    const { error } = await supabase
+      .from('fixed_assets')
+      .delete()
+      .eq('id', id)
+      .eq('workspace_id', activeWorkspaceId);
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath('/assets');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Error deleting fixed asset' };
+  }
+}
+
 export async function runMonthlyDepreciation() {
   try {
     const supabase = await createClient();

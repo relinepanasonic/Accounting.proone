@@ -47,160 +47,173 @@ async function ActivityLedgerTimeline() {
 
   if (!hasClearance) {
     return (
-      <div className="gold-glass-panel border-red-500/40 rounded-2xl p-12 text-center max-w-xl mx-auto my-12 shadow-[0_0_40px_rgba(239,68,68,0.15)]">
-        <div className="w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/40 flex items-center justify-center mx-auto mb-4 text-red-400">
-          <ShieldAlert className="w-7 h-7 animate-pulse" />
+      <div className=\"gold-glass-panel border-red-500/40 rounded-2xl p-12 text-center max-w-xl mx-auto my-12 shadow-[0_0_40px_rgba(239,68,68,0.15)]\">
+        <div className=\"w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/40 flex items-center justify-center mx-auto mb-4 text-red-400\">
+          <ShieldAlert className=\"w-7 h-7 animate-pulse\" />
         </div>
-        <h2 className="text-sm font-black uppercase tracking-widest text-red-400 mb-2">
+        <h2 className=\"text-sm font-black uppercase tracking-widest text-red-400 mb-2\">
           SECURITY CLEARANCE DENIED
         </h2>
-        <p className="text-xs text-zinc-300 font-mono leading-relaxed">
+        <p className=\"text-xs text-zinc-300 font-mono leading-relaxed\">
           DOUBLE-ENTRY LEDGER ACCESS IS RESTRICTED TO SUPERADMIN & ACCOUNTING ROLES.
         </p>
       </div>
     );
   }
 
-  const { data: entries } = await supabase
+  // Fetch flat journal_entries
+  const { data: rawLines } = await supabase
     .from('journal_entries')
-    .select('*, journal_entry_lines(*)')
+    .select('*, global_chart_of_accounts(account_name)')
     .eq('workspace_id', activeWorkspaceId)
-    .order('entry_date', { ascending: false });
+    .order('transaction_date', { ascending: false });
 
-  const displayEntries: JournalEntryRecord[] =
-    entries && entries.length > 0
-      ? entries.map((entry) => ({
-          id: entry.id,
-          entry_number: entry.entry_number || 'JE-2026-001',
-          entry_date: entry.entry_date || '2026-07-12',
-          description: entry.description || 'System Entry',
-          source_module: entry.source_module || 'System',
-          lines: Array.isArray(entry.journal_entry_lines)
-            ? entry.journal_entry_lines.map((l: any) => ({
-                id: l.id,
-                account_name: l.account_name,
-                debit_amount: Number(l.debit_amount || 0),
-                credit_amount: Number(l.credit_amount || 0),
-              }))
-            : [],
-        }))
-      : [];
+  // Group by reference_id
+  const grouped: Record<string, JournalEntryRecord> = {};
+
+  if (rawLines) {
+    rawLines.forEach((line) => {
+      const ref = line.reference_id || line.id; // fallback to line id if no ref
+      if (!grouped[ref]) {
+        grouped[ref] = {
+          id: ref,
+          entry_number: \JE-\\,
+          entry_date: line.transaction_date,
+          description: line.description || 'System Entry',
+          source_module: line.reference_type || 'System',
+          lines: []
+        };
+      }
+      grouped[ref].lines.push({
+        id: line.id,
+        account_name: (line.global_chart_of_accounts && line.global_chart_of_accounts.length > 0) ? line.global_chart_of_accounts[0]?.account_name || line.account_code : line.account_code,
+        debit_amount: Number(line.debit_amount || 0),
+        credit_amount: Number(line.credit_amount || 0),
+      });
+    });
+  }
+
+  const displayEntries = Object.values(grouped).sort((a, b) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime());
 
   return (
-    <div className="space-y-6">
+    <div className=\"space-y-6\">
       {displayEntries.length === 0 ? (
-        <div className="gold-glass-panel rounded-2xl p-16 text-center space-y-4">
-          <div className="w-12 h-12 rounded-full bg-[#d4af37]/10 border border-[#d4af37]/30 flex items-center justify-center mx-auto text-[#f5d77f]">
-            <BookOpen className="w-6 h-6" />
+        <div className=\"gold-glass-panel rounded-2xl p-16 text-center space-y-4\">
+          <div className=\"w-12 h-12 rounded-full bg-[#d4af37]/10 border border-[#d4af37]/30 flex items-center justify-center mx-auto text-[#f5d77f]\">
+            <BookOpen className=\"w-6 h-6\" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider">No Double-Entry Journal Entries Posted Yet</h3>
-            <p className="text-xs text-zinc-400 font-sans mt-1">Activity ledger transactions are automatically generated when you issue invoices, record expenses, or reconcile bank statements.</p>
+            <h3 className=\"text-sm font-bold text-white uppercase tracking-wider\">No Double-Entry Journal Entries Posted Yet</h3>
+            <p className=\"text-xs text-zinc-400 font-sans mt-1\">Activity ledger transactions are automatically generated when you issue invoices, record expenses, or reconcile bank statements.</p>
           </div>
         </div>
       ) : (
-        displayEntries.map((entry) => {
-        const totalDebits = entry.lines.reduce((s: number, l: any) => s + l.debit_amount, 0);
-        const totalCredits = entry.lines.reduce((s: number, l: any) => s + l.credit_amount, 0);
-        const isBalanced = Math.abs(totalDebits - totalCredits) < 0.01;
-
-        return (
-          <div
-            key={entry.id}
-            className="gold-glass-panel gold-glass-panel-hover rounded-2xl p-6 relative border-l-4 border-l-[#d4af37]"
-          >
-            {/* Top Timeline Node Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 mb-4 border-b border-zinc-800">
-              <div className="flex items-center gap-3">
-                <div className="w-3 h-3 rounded-full bg-[#f5d77f] shadow-[0_0_10px_#f5d77f]"></div>
+        <div className=\"space-y-6\">
+          {displayEntries.map((entry) => (
+            <div
+              key={entry.id}
+              className=\"gold-glass-panel rounded-2xl p-6 transition-all hover:border-[#d4af37]/30 hover:shadow-[0_0_20px_rgba(212,175,55,0.05)]\"
+            >
+              <div className=\"flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-zinc-800/80\">
                 <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-[#f5d77f] font-mono">
-                      {entry.entry_date}
-                    </span>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-900 text-zinc-300 border border-zinc-800">
+                  <div className=\"flex items-center gap-3 mb-1\">
+                    <span className=\"text-sm font-bold text-white font-mono bg-zinc-900 px-2 py-0.5 rounded\">
                       {entry.entry_number}
                     </span>
+                    <span className=\"text-xs font-semibold px-2 py-0.5 rounded-full bg-[#d4af37]/10 text-[#f5d77f] border border-[#d4af37]/20\">
+                      {entry.source_module.toUpperCase()}
+                    </span>
                   </div>
-                  <h3 className="text-sm font-bold text-white mt-1">
-                    {entry.description}
-                  </h3>
+                  <p className=\"text-xs text-zinc-400 font-sans\">{entry.description}</p>
+                </div>
+                <div className=\"text-right\">
+                  <div className=\"text-xs font-bold text-white bg-zinc-900/50 px-3 py-1 rounded-full border border-zinc-800 inline-block\">
+                    {entry.entry_date}
+                  </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
-                <span className="text-[10px] font-mono uppercase px-3 py-1 rounded-full bg-zinc-900 text-[#d4af37] border border-[#d4af37]/30">
-                  SOURCE: {entry.source_module}
-                </span>
-
-                {/* Glowing Gold BALANCED Badge */}
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-mono uppercase bg-[#d4af37]/20 text-[#f5d77f] border border-[#d4af37]/50 shadow-[0_0_12px_rgba(212,175,55,0.35)] font-extrabold">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-[#f5d77f]" />
-                  <span>{isBalanced ? 'BALANCED' : 'REVIEW'}</span>
-                </span>
+              <div className=\"overflow-x-auto\">
+                <table className=\"w-full text-left text-xs font-mono\">
+                  <thead>
+                    <tr className=\"text-zinc-500 uppercase tracking-wider border-b border-zinc-800/60\">
+                      <th className=\"pb-3 pl-2 font-medium\">Account</th>
+                      <th className=\"pb-3 text-right font-medium w-1/4\">Debit</th>
+                      <th className=\"pb-3 pr-2 text-right font-medium w-1/4\">Credit</th>
+                    </tr>
+                  </thead>
+                  <tbody className=\"divide-y divide-zinc-800/30\">
+                    {entry.lines.map((line, idx) => (
+                      <tr key={line.id} className=\"group hover:bg-zinc-800/20 transition-colors\">
+                        <td className=\"py-3 pl-2 text-zinc-300 font-sans font-medium flex items-center gap-2\">
+                          {line.credit_amount > 0 && <span className=\"w-4\" />}
+                          {line.account_name}
+                        </td>
+                        <td className=\"py-3 text-right\">
+                          {line.debit_amount > 0 ? (
+                            <span className=\"text-white font-bold\">
+                              Rp {line.debit_amount.toLocaleString('en-US')}
+                            </span>
+                          ) : (
+                            <span className=\"text-zinc-700\">-</span>
+                          )}
+                        </td>
+                        <td className=\"py-3 pr-2 text-right\">
+                          {line.credit_amount > 0 ? (
+                            <span className=\"text-[#d4af37] font-bold\">
+                              Rp {line.credit_amount.toLocaleString('en-US')}
+                            </span>
+                          ) : (
+                            <span className=\"text-zinc-700\">-</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className=\"border-t border-zinc-700/80 bg-zinc-900/30\">
+                      <td className=\"py-3 pl-2 font-bold text-zinc-400 uppercase tracking-widest text-[10px]\">Totals</td>
+                      <td className=\"py-3 text-right font-bold text-white\">
+                        Rp {entry.lines.reduce((sum, l) => sum + l.debit_amount, 0).toLocaleString('en-US')}
+                      </td>
+                      <td className=\"py-3 pr-2 text-right font-bold text-[#d4af37]\">
+                        Rp {entry.lines.reduce((sum, l) => sum + l.credit_amount, 0).toLocaleString('en-US')}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
               </div>
             </div>
-
-            {/* Split Debit & Credit Ledger Rows */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {entry.lines.map((line) => (
-                <div
-                  key={line.id}
-                  className="p-3.5 rounded-xl bg-black/60 border border-zinc-800/80 flex items-center justify-between text-xs font-mono"
-                >
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`text-[9px] px-2 py-0.5 rounded font-bold uppercase ${
-                        line.debit_amount > 0
-                          ? 'bg-[#d4af37]/20 text-[#f5d77f]'
-                          : 'bg-zinc-900 text-zinc-300'
-                      }`}
-                    >
-                      {line.debit_amount > 0 ? 'Debit' : 'Credit'}
-                    </span>
-                    <span className="text-zinc-200 font-sans font-medium">
-                      {line.account_name}
-                    </span>
-                  </div>
-
-                  <span
-                    className={`font-extrabold ${
-                      line.debit_amount > 0
-                        ? 'text-[#f5d77f] drop-shadow-[0_0_8px_rgba(245,215,127,0.35)]'
-                        : 'text-zinc-100'
-                    }`}
-                  >
-                    Rp {(line.debit_amount || line.credit_amount).toLocaleString('en-US')}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      }))}
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-export default function ActivityLedgerPage() {
+export default function LedgerPage() {
   return (
-    <div className="max-w-[1500px] mx-auto px-6 py-8 space-y-6">
-      {/* Header Bar */}
-      <div className="pb-4 border-b border-[#d4af37]/20">
-        <h1 className="text-lg font-extrabold tracking-wider uppercase text-white flex items-center gap-2">
-          <BookOpen className="w-5 h-5 text-[#d4af37]" />
-          <span>ACTIVITY LEDGER â€¢ SYSTEM TIMELINE FEED HUD</span>
-        </h1>
-        <p className="text-xs text-[#d4af37] font-mono">
-          BRUSHED GOLD DOUBLE-ENTRY AUDIT TRAIL â€¢ STRICT ZERO-SUM PARITY
-        </p>
+    <div className=\"max-w-[1200px] mx-auto px-6 py-8 space-y-6\">
+      <div className=\"flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#d4af37]/20\">
+        <div>
+          <h1 className=\"text-lg font-extrabold tracking-wider uppercase text-white flex items-center gap-2\">
+            <BookOpen className=\"w-5 h-5 text-[#d4af37]\" />
+            <span>ACTIVITY LEDGER • REALTIME DOUBLE-ENTRY MATRIX</span>
+          </h1>
+          <p className=\"text-xs text-[#d4af37] font-mono mt-1\">
+            GLOBAL FINANCIAL TELEMETRY • IMMUTABLE AUDIT TRAIL
+          </p>
+        </div>
+        <div className=\"flex items-center gap-2 text-[10px] font-mono text-zinc-400 uppercase tracking-wider bg-zinc-900 px-4 py-2 rounded-full border border-zinc-800\">
+          <CheckCircle2 className=\"w-3 h-3 text-[#d4af37]\" />
+          LEDGER SYNCHRONIZED
+        </div>
       </div>
 
       <Suspense
         fallback={
-          <div className="space-y-4 animate-pulse">
-            <div className="gold-glass-panel rounded-2xl h-44"></div>
-            <div className="gold-glass-panel rounded-2xl h-44"></div>
+          <div className=\"gold-glass-panel rounded-2xl p-12 text-center text-[#d4af37] font-mono text-xs uppercase tracking-widest animate-pulse\">
+            Decrypting Global Ledger Matrix...
           </div>
         }
       >

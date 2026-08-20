@@ -40,7 +40,7 @@ export function AssetRowActions({ id }: AssetRowActionsProps) {
   return (
     <div className="inline-flex items-center justify-end gap-2">
       <Link
-        href={/assets/ + id + /edit}
+        href={`/assets/${id}/edit`}
         className="inline-flex p-1.5 rounded-lg bg-zinc-800/40 border border-zinc-700 hover:border-[#d4af37] text-zinc-400 hover:text-[#d4af37] hover:scale-105 transition-all duration-200"
         title="Edit Asset Schedule"
       >

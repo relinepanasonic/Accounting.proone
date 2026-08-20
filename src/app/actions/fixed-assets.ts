@@ -36,6 +36,27 @@ export async function deleteFixedAsset(id: string) {
     const supabase = await createClient();
     const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
+    // 1. Get the fixed asset details before deleting to find the connected transaction
+    const { data: asset } = await supabase.from('fixed_assets').select('*').eq('id', id).single();
+    
+    if (asset) {
+      // 2. Try to find the matching transaction that created this asset
+      const { data: txList } = await supabase.from('transactions')
+        .select('id')
+        .eq('workspace_id', activeWorkspaceId)
+        .eq('amount', asset.initial_value)
+        .eq('category', asset.category)
+        .limit(1);
+        
+      if (txList && txList.length > 0) {
+        // Use admin client to delete the original expense and its journal entries
+        const { createAdminClient } = await import('@/lib/api/supabase-admin');
+        const adminClient = createAdminClient();
+        await adminClient.from('journal_entries').delete().eq('reference_id', txList[0].id);
+        await adminClient.from('transactions').delete().eq('id', txList[0].id);
+      }
+    }
+
     const { error } = await supabase
       .from('fixed_assets')
       .delete()
@@ -45,6 +66,8 @@ export async function deleteFixedAsset(id: string) {
     if (error) throw new Error(error.message);
 
     revalidatePath('/assets');
+    revalidatePath('/expenses');
+    revalidatePath('/ledger');
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Error deleting fixed asset' };

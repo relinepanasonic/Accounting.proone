@@ -27,14 +27,18 @@ export function ExpenseRowActions({ id, status }: ExpenseRowActionsProps) {
     });
   };
 
-  const handleDelete = () => {
+  const handleDelete = (e: React.MouseEvent<HTMLButtonElement>) => {
     if (confirm('Are you sure you want to permanently delete this expense?')) {
+      const row = e.currentTarget.closest('tr');
+      if (row) row.style.display = 'none';
+
       startTransition(async () => {
         try {
           await deleteExpense(id);
           router.refresh(); // Ensure Client Component state forces a refresh to remove the item instantly
         } catch (err: any) {
           console.error(err);
+          if (row) row.style.display = ''; // Revert on failure
           alert(err.message || 'Failed to delete expense');
         }
       });

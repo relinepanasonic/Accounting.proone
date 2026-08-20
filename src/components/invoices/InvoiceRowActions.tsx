@@ -111,19 +111,24 @@ export function InvoiceActionGroup({ id, isQuotation, status, invoiceNumber }: I
     });
   };
 
-  const handleDelete = () => {
+  const handleDelete = (e: React.MouseEvent<HTMLButtonElement>) => {
     if (confirm('Are you sure you want to permanently delete this invoice and its line items?')) {
+      const row = e.currentTarget.closest('tr');
+      if (row) row.style.display = 'none';
+      
       setActiveAction('delete');
       startTransition(async () => {
         try {
           const res = await deleteInvoice(id);
           if (res?.error) {
+            if (row) row.style.display = '';
             alert(res.error);
           } else {
             router.refresh();
           }
         } catch (err: any) {
           console.error(err);
+          if (row) row.style.display = '';
           alert('Failed to delete invoice');
         } finally {
           setActiveAction(null);

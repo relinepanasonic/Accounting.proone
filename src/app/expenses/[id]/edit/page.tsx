@@ -33,6 +33,7 @@ export default async function EditExpensePage(props: { params: Promise<{ id: str
     .from('global_chart_of_accounts')
     .select('account_code, account_name, account_type')
     .eq('is_active', true)
+    .eq('workspace_id', activeWorkspaceId)
     .order('account_code', { ascending: true });
 
   return (

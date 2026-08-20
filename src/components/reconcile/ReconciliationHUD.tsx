@@ -117,6 +117,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   function findAutoMatch(bankLine: BankLine) {
     return recordsList.find(
       (r) =>
+        !r.reconciled &&
         Math.abs(r.amount - Math.abs(bankLine.amount)) < 0.01 &&
         ((bankLine.amount > 0 && (r.type === 'invoice' || r.type === 'income')) ||
           (bankLine.amount < 0 && (r.type === 'expense' || r.type === 'payroll')))
@@ -325,6 +326,10 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   const renderSystemRecordsList = () => {
     let filteredRecords = recordsList.filter((r) => {
       if (!showReconciled && r.reconciled) return false;
+      
+      // Bypass month filter if user is actively trying to match a selected bank line
+      if (activeBankLine) return true;
+      
       const d = new Date(r.date);
       return (d.getMonth() + 1) === filterMonth && d.getFullYear() === filterYear;
     });

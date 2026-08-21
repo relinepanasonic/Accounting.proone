@@ -65,7 +65,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   const [bankLines, setBankLines] = useState<BankLine[]>([]);
   const [recordsList, setRecordsList] = useState<UnreconciledSystemRecord[]>(systemRecords);
   const [selectedBankId, setSelectedBankId] = useState<string | null>(null);
-  const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
+  const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
   const [isPending, startTransition] = useTransition();
 
   // Resolution Widget State
@@ -95,7 +95,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
 
   const activeBankLine = bankLines.find((b) => b.id === selectedBankId);
   const autoMatchRecord = activeBankLine ? findAutoMatch(activeBankLine) : null;
-  const currentTargetRecordId = selectedRecordId || autoMatchRecord?.id;
+  const currentTargetRecordIds = selectedRecordIds.length > 0 ? selectedRecordIds : (autoMatchRecord ? [autoMatchRecord.id] : []);
 
   React.useEffect(() => {
     if (activeBankLine) {
@@ -105,12 +105,8 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
       setQuickAmount(Math.abs(activeBankLine.amount || 0));
       setQuickNotes([activeBankLine.notes, activeBankLine.transactionDetails].filter(Boolean).join(' | '));
       
-      // Auto-switch tab based on amount polarity
-      if (activeBankLine.amount > 0) {
-        setResolutionTab('income');
-      } else {
-        setResolutionTab('expense');
-      }
+      // Default to manual match so user sees system records
+      setResolutionTab('manual');
     }
   }, [activeBankLine]);
 
@@ -240,28 +236,36 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
 
 
   const handleMatchAndClear = (overrideTargetId?: string) => {
-    const activeTargetId = typeof overrideTargetId === 'string' ? overrideTargetId : currentTargetRecordId;
-    if (!activeBankLine || !activeTargetId) return;
-    const targetRecord = recordsList.find((r) => r.id === activeTargetId);
-    if (!targetRecord) return;
+    const activeTargetIds = typeof overrideTargetId === 'string' ? [overrideTargetId] : currentTargetRecordIds;
+    if (!activeBankLine || activeTargetIds.length === 0) return;
+    const targetRecords = recordsList.filter((r) => activeTargetIds.includes(r.id));
+    if (targetRecords.length === 0) return;
 
     startTransition(async () => {
       try {
         const bankAmountAbs = Math.abs(activeBankLine.amount);
-        const recordAmountAbs = Math.abs(targetRecord.amount);
-        const needsAdjustment = bankAmountAbs !== recordAmountAbs;
+        const recordAmountAbs = Math.abs(targetRecords.reduce((sum, r) => sum + Math.abs(r.amount), 0));
         
-        await reconcileRecord(
-          targetRecord.id,
-          targetRecord.type,
-          `BANK-REF:${activeBankLine.date}:${activeBankLine.amount}:${activeBankLine.sourceDestination}`,
-          activeBankId,
-          needsAdjustment ? bankAmountAbs : undefined
-        );
+        let shouldClearDiff = false;
+        if (bankAmountAbs !== recordAmountAbs) {
+          if (targetRecords.length > 1) {
+            alert(`Amount mismatch!\nBank: ${bankAmountAbs}\nSystem: ${recordAmountAbs}\n\nYou cannot auto-adjust multiple records. Please manually adjust the system records to match the bank statement.`);
+            return;
+          }
+          const proceed = confirm(`Amount mismatch!\nBank: ${bankAmountAbs}\nSystem: ${recordAmountAbs}\n\nDo you want to adjust the system record to match the bank statement and continue?`);
+          if (!proceed) return;
+          shouldClearDiff = true;
+        }
+
+        const uniqueRef = `BANK-REF:${activeBankLine.date}:${activeBankLine.amount}:${activeBankLine.sourceDestination}`;
+        
+        for (const targetRecord of targetRecords) {
+          await reconcileRecord(targetRecord.id, targetRecord.type, uniqueRef, activeBankId, shouldClearDiff ? activeBankLine.amount : undefined);
+        }
 
         setBankLines((prev) => prev.filter((b) => b.id !== activeBankLine.id));
-        setRecordsList((prev) => prev.filter((r) => r.id !== targetRecord.id));
-        setSelectedRecordId(null);
+        setRecordsList((prev) => prev.filter((r) => !activeTargetIds.includes(r.id)));
+        setSelectedRecordIds([]);
         setSelectedBankId(null);
       } catch (err) {
         console.error(err);
@@ -384,13 +388,13 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
     }
 
     items.push(...filteredRecords.map((rec) => {
-      const isHighlighted = rec.id === currentTargetRecordId;
+      const isHighlighted = currentTargetRecordIds.includes(rec.id);
       const isAuto = autoMatchRecord?.id === rec.id;
 
       return (
         <div
           key={rec.id}
-          onClick={() => setSelectedRecordId(rec.id)}
+          onClick={() => setSelectedRecordIds(prev => prev.includes(rec.id) ? prev.filter(id => id !== rec.id) : [...prev, rec.id])}
           className={`cursor-pointer rounded-xl p-4 border transition-all duration-200 ${
             isHighlighted
               ? 'bg-[#d4af37]/20 border-[#f5d77f] shadow-[0_0_20px_rgba(212,175,55,0.25)]'
@@ -423,7 +427,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setSelectedRecordId(rec.id);
+                    setSelectedRecordIds([rec.id]);
                     handleMatchAndClear(rec.id);
                   }}
                   className="bg-[#d4af37] hover:bg-[#b5952f] text-black font-extrabold px-3 py-1.5 rounded transition-colors text-[10px]"
@@ -628,17 +632,17 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                 {resolutionTab === 'manual' ? (
                   <button
                     type="button"
-                    disabled={!currentTargetRecordId || isPending}
-                    onClick={handleMatchAndClear}
+                    disabled={currentTargetRecordIds.length === 0 || isPending}
+                    onClick={() => handleMatchAndClear()}
                     className="gold-btn inline-flex items-center gap-2 px-6 py-2 rounded-full text-[10px] uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <CheckCircle2 className="w-4 h-4" />
                     <span>
                       {isPending 
                         ? 'RECONCILING...' 
-                        : (activeBankLine && currentTargetRecordId && Math.abs(recordsList.find(r => r.id === currentTargetRecordId)?.amount || 0) !== Math.abs(activeBankLine.amount))
+                        : (activeBankLine && currentTargetRecordIds.length > 0 && Math.abs(recordsList.filter(r => currentTargetRecordIds.includes(r.id)).reduce((sum, r) => sum + r.amount, 0)) !== Math.abs(activeBankLine.amount))
                           ? 'ADJUST RECORD & RECONCILE' 
-                          : 'FORCE MATCH & CLEAR'}
+                          : `FORCE MATCH & CLEAR ${currentTargetRecordIds.length > 1 ? `(${currentTargetRecordIds.length})` : ''}`}
                     </span>
                   </button>
                 ) : (
@@ -876,10 +880,10 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
               <div className="mt-6 pt-4 border-t border-zinc-800 flex items-center justify-between">
                 <div className="text-xs font-mono text-zinc-400">
                   {(() => {
-                    if (!activeBankLine || !currentTargetRecordId) return <span>SELECT BANK & SYSTEM RECORD</span>;
-                    const rec = recordsList.find(r => r.id === currentTargetRecordId);
-                    if (rec && Math.abs(rec.amount) !== Math.abs(activeBankLine.amount)) {
-                      const diff = Math.abs(rec.amount) - Math.abs(activeBankLine.amount);
+                    if (!activeBankLine || currentTargetRecordIds.length === 0) return <span>SELECT BANK & SYSTEM RECORD</span>;
+                    const recAmounts = recordsList.filter(r => currentTargetRecordIds.includes(r.id)).reduce((sum, r) => sum + Math.abs(r.amount), 0);
+                    if (recAmounts !== Math.abs(activeBankLine.amount)) {
+                      const diff = recAmounts - Math.abs(activeBankLine.amount);
                       return (
                         <span className="text-yellow-400 font-bold">
                           NEEDS ADJUSTMENT (DIFF: {diff > 0 ? '+' : ''}Rp {diff.toLocaleString('en-US')})
@@ -891,17 +895,17 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                 </div>
                 <button
                   type="button"
-                  disabled={!activeBankLine || !currentTargetRecordId || isPending}
-                  onClick={handleMatchAndClear}
+                  disabled={!activeBankLine || currentTargetRecordIds.length === 0 || isPending}
+                  onClick={() => handleMatchAndClear()}
                   className="gold-btn inline-flex items-center gap-2 px-7 py-3 rounded-full text-xs uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   <span>
                     {isPending 
                       ? 'RECONCILING...' 
-                      : (activeBankLine && currentTargetRecordId && Math.abs(recordsList.find(r => r.id === currentTargetRecordId)?.amount || 0) !== Math.abs(activeBankLine.amount))
+                      : (activeBankLine && currentTargetRecordIds.length > 0 && Math.abs(recordsList.filter(r => currentTargetRecordIds.includes(r.id)).reduce((sum, r) => sum + r.amount, 0)) !== Math.abs(activeBankLine.amount))
                         ? 'ADJUST RECORD & RECONCILE' 
-                        : 'MATCH & CLEAR RECORD'}
+                        : `MATCH & CLEAR ${currentTargetRecordIds.length > 1 ? currentTargetRecordIds.length + ' RECORDS' : 'RECORD'}`}
                   </span>
                 </button>
               </div>

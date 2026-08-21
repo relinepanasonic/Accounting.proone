@@ -11,6 +11,7 @@ interface ExpenseRecord {
   id: string;
   date: string;
   vendor: string;
+  notes: string;
   category: string;
   amount: number;
   status: string;
@@ -36,14 +37,29 @@ async function ExpensesTable() {
 
   const displayRecords: ExpenseRecord[] =
     records && records.length > 0
-      ? records.map((r) => ({
-          id: r.id,
-          date: r.due_date || '2026-07-15',
-          vendor: r.description || 'Vendor Payee',
-          category: r.category || 'Software & Operations',
-          amount: Number(r.amount || 0),
-          status: r.reconciled ? 'paid' : 'pending',
-        }))
+      ? records.map((r) => {
+          const rawDesc = r.description || 'Vendor Payee';
+          let vendorPart = rawDesc;
+          let notesPart = '-';
+          if (rawDesc.includes(' | ')) {
+             const parts = rawDesc.split(' | ');
+             vendorPart = parts[0];
+             notesPart = parts.slice(1).join(' | ');
+          } else if (rawDesc.includes(' - ')) {
+             const parts = rawDesc.split(' - ');
+             vendorPart = parts[0];
+             notesPart = parts.slice(1).join(' - ');
+          }
+          return {
+            id: r.id,
+            date: r.due_date || '2026-07-15',
+            vendor: vendorPart,
+            notes: notesPart,
+            category: r.category || 'Software & Operations',
+            amount: Number(r.amount || 0),
+            status: r.reconciled ? 'paid' : 'pending',
+          };
+        })
       : [];
 
   return (
@@ -84,7 +100,8 @@ async function ExpensesTable() {
             <thead>
               <tr className="border-b border-zinc-800 text-zinc-400 uppercase text-[10px] font-sans whitespace-nowrap">
                 <th className="py-3 px-3">Due Date</th>
-                <th className="py-3 px-3 w-full">Vendor / Payee</th>
+                <th className="py-3 px-3">Vendor / Payee</th>
+                <th className="py-3 px-3 w-full">Notes / Remarks</th>
                 <th className="py-3 px-3">Category</th>
                 <th className="py-3 px-3 text-right">Amount Owed</th>
                 <th className="py-3 px-3 text-center">Status Action</th>
@@ -99,13 +116,18 @@ async function ExpensesTable() {
                   <td className="py-3 px-3 text-zinc-300 font-bold whitespace-nowrap">
                     {item.date}
                   </td>
-                  <td className="py-3 px-3 font-sans font-semibold text-white group-hover:text-[#f5d77f] transition-colors">
-                    <div className="max-w-[200px] sm:max-w-[300px] truncate">
+                  <td className="py-3 px-3 font-sans font-semibold text-white group-hover:text-[#f5d77f] transition-colors whitespace-nowrap">
+                    <div className="max-w-[150px] sm:max-w-[200px] truncate">
                       {item.vendor}
                     </div>
                   </td>
+                  <td className="py-3 px-3 font-sans text-zinc-400 group-hover:text-zinc-300 transition-colors">
+                    <div className="max-w-[200px] sm:max-w-[300px] truncate">
+                      {item.notes}
+                    </div>
+                  </td>
                   <td className="py-3 px-3 text-zinc-400 font-sans whitespace-nowrap">
-                    <div className="max-w-[150px] sm:max-w-[250px] truncate">
+                    <div className="max-w-[150px] sm:max-w-[200px] truncate">
                       {item.category}
                     </div>
                   </td>

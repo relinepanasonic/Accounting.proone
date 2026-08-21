@@ -88,7 +88,12 @@ async function InvoicesTableServer({ activeTab }: { activeTab: string }) {
         }))
       : [];
 
-  const finalInvoices = (activeTab === 'direct' ? displayIncomeTx : displayInvoices).sort(
+  let combined = [];
+  if (activeTab === 'direct') combined = displayIncomeTx;
+  else if (activeTab === 'all') combined = [...displayInvoices, ...displayIncomeTx];
+  else combined = displayInvoices;
+
+  const finalInvoices = combined.sort(
     (a, b) => new Date(b.rawIssueDate || 0).getTime() - new Date(a.rawIssueDate || 0).getTime()
   );
 
@@ -148,6 +153,16 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
           }`}
         >
           Direct Income
+        </Link>
+        <Link
+          href="?tab=all"
+          className={`px-6 py-2 rounded-lg text-xs font-bold tracking-widest uppercase transition-all ${
+            activeTab === 'all'
+              ? 'bg-gradient-to-r from-[#d4af37]/20 to-[#d4af37]/5 text-[#f5d77f] border border-[#d4af37]/40 shadow-[0_0_15px_rgba(212,175,55,0.15)]'
+              : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
+          }`}
+        >
+          All Revenue
         </Link>
       </div>
 

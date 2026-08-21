@@ -15,7 +15,8 @@ async function InvoicesTableServer({ activeTab }: { activeTab: string }) {
 
   const [
     { data: invoices },
-    { data: incomeTx }
+    { data: incomeTx },
+    { data: paymentJEs }
   ] = await Promise.all([
     supabase
       .from('invoices')
@@ -27,6 +28,13 @@ async function InvoicesTableServer({ activeTab }: { activeTab: string }) {
       .select('id, description, amount, transaction_date, category')
       .eq('workspace_id', activeWorkspaceId)
       .eq('type', 'income')
+      .order('transaction_date', { ascending: false }),
+    supabase
+      .from('journal_entries')
+      .select('id, transaction_date, credit_amount, description, reference_id')
+      .eq('workspace_id', activeWorkspaceId)
+      .gt('credit_amount', 0)
+      .or('reference_type.eq.payment,reference_type.eq.bank_match')
       .order('transaction_date', { ascending: false })
   ]);
 
@@ -88,9 +96,37 @@ async function InvoicesTableServer({ activeTab }: { activeTab: string }) {
         }))
       : [];
 
+  const displayPaymentTx =
+    paymentJEs && paymentJEs.length > 0
+      ? paymentJEs.map((je) => {
+          const inv = invoices?.find(i => i.id === je.reference_id);
+          const clientObj = inv ? (Array.isArray(inv.clients) ? inv.clients[0] : inv.clients) : null;
+          return {
+            id: je.id,
+            invoiceNumber: 'CASH RECEIVED',
+            projectDate: '—',
+            issueDate: formatIndoDate(je.transaction_date),
+            rawIssueDate: je.transaction_date || '',
+            clientName: clientObj?.name || 'Client Payment',
+            clientContact: '',
+            amount: `Rp ${Math.ceil(Number(je.credit_amount || 0)).toLocaleString('id-ID', {maximumFractionDigits: 0})}`,
+            rawAmount: Number(je.credit_amount || 0),
+            paidAmount: Number(je.credit_amount || 0),
+            dueDate: formatIndoDate(je.transaction_date),
+            rawDueDate: je.transaction_date || '',
+            packageName: je.description || 'Invoice Payment',
+            packageQtt: '—',
+            isQuotation: false,
+            status: 'paid',
+            assignedWorkspaceId: activeWorkspaceId,
+            assignedWorkspaceName: activeWorkspaceName,
+          };
+        })
+      : [];
+
   let combined = [];
   if (activeTab === 'direct') combined = displayIncomeTx;
-  else if (activeTab === 'all') combined = [...displayInvoices, ...displayIncomeTx];
+  else if (activeTab === 'all') combined = [...displayIncomeTx, ...displayPaymentTx];
   else combined = displayInvoices;
 
   const finalInvoices = combined.sort(
@@ -162,7 +198,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
               : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
           }`}
         >
-          All Revenue
+          Cash Received
         </Link>
       </div>
 

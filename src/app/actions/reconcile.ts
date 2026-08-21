@@ -40,23 +40,44 @@ export async function reconcileRecord(
       ...(bankAccountId && table === 'invoices' ? { bank_account_id: bankAccountId } : {})
     };
     
-    if (isPartialPayment) {
-      // If partial payment, only update amount_paid and DO NOT mark as fully reconciled
       if (table === 'invoices') {
-        const { data: inv } = await supabase.from('invoices').select('amount_paid').eq('id', recordId).single();
-        updateData.amount_paid = (Number(inv?.amount_paid || 0)) + Number(adjustedAmount || 0);
-      }
-    } else {
-      updateData.reconciled = true;
-      updateData.bank_reference = bankReference || 'BANK-MATCHED';
-      if (adjustedAmount !== undefined) {
-        if (table === 'invoices') {
-          updateData.total_amount = adjustedAmount;
-        } else {
+        const { data: inv } = await supabase.from('invoices').select('workspace_id, invoice_number, total_amount, amount_paid').eq('id', recordId).single();
+        if (inv) {
+          if (isPartialPayment) {
+            updateData.amount_paid = (Number(inv.amount_paid || 0)) + Number(adjustedAmount || 0);
+          } else {
+            updateData.reconciled = true;
+            updateData.bank_reference = bankReference || 'BANK-MATCHED';
+            if (adjustedAmount !== undefined) {
+              updateData.total_amount = adjustedAmount;
+            }
+          }
+          
+          // Create Ledger Double-Entry for the payment
+          const ctx = await getAuthenticatedWorkspaceContext(supabase);
+          const { getWorkspaceMappings } = await import('./mappings');
+          const mappings = await getWorkspaceMappings(ctx.activeWorkspaceId);
+          let bankAccountCode = '1010';
+          if (bankAccountId && bankAccountId !== 'all' && bankAccountId !== 'custom') {
+            const { data: bankRes } = await supabase.from('workspace_bank_accounts').select('coa_account_code').eq('id', bankAccountId).single();
+            if (bankRes?.coa_account_code) bankAccountCode = bankRes.coa_account_code;
+          }
+          const arAccount = mappings.find(m => m.mapping_type === 'AR')?.account_code || '1100';
+          const paymentAmount = isPartialPayment ? Number(adjustedAmount || 0) : (adjustedAmount !== undefined ? adjustedAmount : (Number(inv.total_amount) - Number(inv.amount_paid)));
+          const todayStr = new Date().toISOString().split('T')[0];
+
+          await supabase.from('journal_entries').insert([
+            { workspace_id: inv.workspace_id, account_code: bankAccountCode, transaction_date: todayStr, debit_amount: paymentAmount, credit_amount: 0, description: `Bank Match - Invoice ${inv.invoice_number}`, reference_id: recordId, reference_type: 'bank_match' },
+            { workspace_id: inv.workspace_id, account_code: arAccount, transaction_date: todayStr, debit_amount: 0, credit_amount: paymentAmount, description: `Bank Match - Invoice ${inv.invoice_number}`, reference_id: recordId, reference_type: 'bank_match' }
+          ]);
+        }
+      } else {
+        updateData.reconciled = true;
+        updateData.bank_reference = bankReference || 'BANK-MATCHED';
+        if (adjustedAmount !== undefined) {
           updateData.amount = adjustedAmount;
         }
       }
-    }
 
     const { error } = await supabase
       .from(table)

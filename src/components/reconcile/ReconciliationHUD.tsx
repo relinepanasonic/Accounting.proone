@@ -342,6 +342,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
         } else {
           return rec.type === 'expense' || rec.type === 'payroll';
         }
+      });
       filteredRecords = filteredRecords.sort((a, b) => {
         const aAuto = autoMatchRecord?.id === a.id;
         const bAuto = autoMatchRecord?.id === b.id;

@@ -1,4 +1,5 @@
-import React, { Suspense } from 'react';
+const fs = require('fs');
+const code = \import React, { Suspense } from 'react';
 import { ShieldAlert, BookOpen, CheckCircle2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
@@ -77,7 +78,7 @@ async function ActivityLedgerTimeline() {
       if (!grouped[ref]) {
         grouped[ref] = {
           id: ref,
-          entry_number: `JE-${ref.substring(0, 8).toUpperCase()}`,
+          entry_number: \\\JE-\\\\\\,
           entry_date: line.transaction_date,
           description: line.description || 'System Entry',
           source_module: line.reference_type || 'System',
@@ -198,10 +199,10 @@ export default function LedgerPage() {
         <div>
           <h1 className="text-lg font-extrabold tracking-wider uppercase text-white flex items-center gap-2">
             <BookOpen className="w-5 h-5 text-[#d4af37]" />
-            <span>ACTIVITY LEDGER â€¢ REALTIME DOUBLE-ENTRY MATRIX</span>
+            <span>ACTIVITY LEDGER • REALTIME DOUBLE-ENTRY MATRIX</span>
           </h1>
           <p className="text-xs text-[#d4af37] font-mono mt-1">
-            GLOBAL FINANCIAL TELEMETRY â€¢ IMMUTABLE AUDIT TRAIL
+            GLOBAL FINANCIAL TELEMETRY • IMMUTABLE AUDIT TRAIL
           </p>
         </div>
         <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-400 uppercase tracking-wider bg-zinc-900 px-4 py-2 rounded-full border border-zinc-800">
@@ -222,3 +223,6 @@ export default function LedgerPage() {
     </div>
   );
 }
+\;
+
+fs.writeFileSync('src/app/ledger/page.tsx', code, { encoding: 'utf8' });

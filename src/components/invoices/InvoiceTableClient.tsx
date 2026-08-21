@@ -440,6 +440,13 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
                     <div className="text-sm font-extrabold text-[#f5d77f] drop-shadow-[0_0_10px_rgba(245,215,127,0.35)]">
                       {inv.amount}
                     </div>
+                    {(inv.paidAmount ?? 0) > 0 && (inv.rawAmount ?? 0) > (inv.paidAmount ?? 0) && (
+                      <div className="text-[10px] font-mono text-zinc-400 mt-0.5">
+                        <span className="text-red-400">-{`Rp ${Math.ceil(inv.paidAmount).toLocaleString('id-ID')}`}</span>
+                        <br/>
+                        <span className="text-zinc-300">Remaining: {`Rp ${Math.ceil(inv.rawAmount - inv.paidAmount).toLocaleString('id-ID')}`}</span>
+                      </div>
+                    )}
                   </td>
                   {/* Assignment */}
                   <td className="py-3 px-3 text-zinc-400 font-sans">

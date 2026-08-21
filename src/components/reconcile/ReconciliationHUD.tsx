@@ -247,24 +247,52 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
         const recordAmountAbs = Math.abs(targetRecords.reduce((sum, r) => sum + Math.abs(r.amount), 0));
         
         let shouldClearDiff = false;
+        let isPartialPayment = false;
         if (bankAmountAbs !== recordAmountAbs) {
           if (targetRecords.length > 1) {
             alert(`Amount mismatch!\nBank: ${bankAmountAbs}\nSystem: ${recordAmountAbs}\n\nYou cannot auto-adjust multiple records. Please manually adjust the system records to match the bank statement.`);
             return;
           }
-          const proceed = confirm(`Amount mismatch!\nBank: ${bankAmountAbs}\nSystem: ${recordAmountAbs}\n\nDo you want to adjust the system record to match the bank statement and continue?`);
-          if (!proceed) return;
-          shouldClearDiff = true;
+          if (bankAmountAbs < recordAmountAbs && targetRecords[0].type === 'invoice') {
+            const proceed = confirm(`Partial payment detected!\nBank: ${bankAmountAbs}\nSystem: ${recordAmountAbs}\n\nWould you like to record this as a PARTIAL PAYMENT instead of shrinking the invoice?`);
+            if (proceed) {
+              isPartialPayment = true;
+            } else {
+              const proceedAdjust = confirm(`Do you want to permanently shrink the invoice amount to match the bank statement and continue?`);
+              if (!proceedAdjust) return;
+              shouldClearDiff = true;
+            }
+          } else {
+            const proceed = confirm(`Amount mismatch!\nBank: ${bankAmountAbs}\nSystem: ${recordAmountAbs}\n\nDo you want to adjust the system record to match the bank statement and continue?`);
+            if (!proceed) return;
+            shouldClearDiff = true;
+          }
         }
 
         const uniqueRef = `BANK-REF:${activeBankLine.date}:${activeBankLine.amount}:${activeBankLine.sourceDestination}`;
         
         for (const targetRecord of targetRecords) {
-          await reconcileRecord(targetRecord.id, targetRecord.type, uniqueRef, activeBankId, shouldClearDiff ? activeBankLine.amount : undefined);
+          await reconcileRecord(
+            targetRecord.id, 
+            targetRecord.type, 
+            uniqueRef, 
+            activeBankId, 
+            (shouldClearDiff || isPartialPayment) ? activeBankLine.amount : undefined,
+            isPartialPayment
+          );
         }
 
         setBankLines((prev) => prev.filter((b) => b.id !== activeBankLine.id));
-        setRecordsList((prev) => prev.filter((r) => !activeTargetIds.includes(r.id)));
+        if (isPartialPayment) {
+          setRecordsList((prev) => prev.map((r) => {
+            if (activeTargetIds.includes(r.id)) {
+              return { ...r, amount: r.amount > 0 ? r.amount - bankAmountAbs : r.amount + bankAmountAbs };
+            }
+            return r;
+          }));
+        } else {
+          setRecordsList((prev) => prev.filter((r) => !activeTargetIds.includes(r.id)));
+        }
         setSelectedRecordIds([]);
         setSelectedBankId(null);
       } catch (err) {

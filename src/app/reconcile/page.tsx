@@ -62,7 +62,7 @@ async function ReconciliationCore() {
   ] = await Promise.all([
     supabase
       .from('invoices')
-      .select('id, invoice_number, total_amount, issue_date, clients(name), reconciled, workspace_id, assigned_workspace_id')
+      .select('id, invoice_number, total_amount, amount_paid, issue_date, clients(name), reconciled, workspace_id, assigned_workspace_id')
       .or(`workspace_id.eq.${activeWorkspaceId},assigned_workspace_id.eq.${activeWorkspaceId}`)
       // Removed reconciled filter so user can match already-reconciled items to bank statement
       .order('issue_date', { ascending: false }),
@@ -185,7 +185,7 @@ async function ReconciliationCore() {
         reference: inv.invoice_number || 'INV-REF',
         payeeOrClient: clientObj?.name || 'Client Payee',
         date: inv.issue_date || '2026-07-02',
-        amount: Number(inv.total_amount || 0),
+        amount: Number(inv.total_amount || 0) - Number(inv.amount_paid || 0),
         reconciled: Boolean(inv.reconciled),
         notes: `Invoice ${inv.invoice_number || ''}`,
       };

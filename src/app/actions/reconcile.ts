@@ -10,7 +10,8 @@ export async function reconcileRecord(
   recordType: 'invoice' | 'expense' | 'payroll' | 'income',
   bankReference: string,
   bankAccountId?: string,
-  adjustedAmount?: number
+  adjustedAmount?: number,
+  isPartialPayment?: boolean
 ) {
   const supabase = await createClient();
   
@@ -20,7 +21,7 @@ export async function reconcileRecord(
       payment_date: new Date().toISOString().split('T')[0],
       notes: `PAID VIA RECONCILIATION - ${bankReference}`,
     };
-    if (adjustedAmount !== undefined) {
+    if (adjustedAmount !== undefined && !isPartialPayment) {
       updateData.total_payment = adjustedAmount;
     }
     
@@ -36,15 +37,24 @@ export async function reconcileRecord(
   } else {
     const table = recordType === 'invoice' ? 'invoices' : 'transactions';
     const updateData: any = {
-      reconciled: true,
-      bank_reference: bankReference || 'BANK-MATCHED',
       ...(bankAccountId && table === 'invoices' ? { bank_account_id: bankAccountId } : {})
     };
-    if (adjustedAmount !== undefined) {
+    
+    if (isPartialPayment) {
+      // If partial payment, only update amount_paid and DO NOT mark as fully reconciled
       if (table === 'invoices') {
-        updateData.total_amount = adjustedAmount;
-      } else {
-        updateData.amount = adjustedAmount;
+        const { data: inv } = await supabase.from('invoices').select('amount_paid').eq('id', recordId).single();
+        updateData.amount_paid = (Number(inv?.amount_paid || 0)) + Number(adjustedAmount || 0);
+      }
+    } else {
+      updateData.reconciled = true;
+      updateData.bank_reference = bankReference || 'BANK-MATCHED';
+      if (adjustedAmount !== undefined) {
+        if (table === 'invoices') {
+          updateData.total_amount = adjustedAmount;
+        } else {
+          updateData.amount = adjustedAmount;
+        }
       }
     }
 

@@ -58,7 +58,8 @@ async function ReconciliationCore() {
     coaRes, 
     txRefsRes, 
     invRefsRes, 
-    vendorsRes
+    vendorsRes,
+    jeRefsRes
   ] = await Promise.all([
     supabase
       .from('invoices')
@@ -110,7 +111,12 @@ async function ReconciliationCore() {
       .from('clients')
       .select('id, name')
       .eq('contact_type', 'vendor')
-      .order('name', { ascending: true })
+      .order('name', { ascending: true }),
+    supabase
+      .from('journal_entries')
+      .select('description')
+      .eq('workspace_id', activeWorkspaceId)
+      .eq('reference_type', 'bank_match')
   ]);
 
   const rawInvoices = invoicesRes.data || [];
@@ -121,7 +127,13 @@ async function ReconciliationCore() {
   // Combine all reconciled bank references into a single set for fast lookup
   const reconciledBankRefs = new Set([
     ...(txRefsRes.data || []).map(r => r.bank_reference),
-    ...(invRefsRes.data || []).map(r => r.bank_reference)
+    ...(invRefsRes.data || []).map(r => r.bank_reference),
+    ...(jeRefsRes.data || []).map(r => {
+      if (r.description && r.description.includes(' | BANK-REF:')) {
+        return r.description.split(' | ')[1];
+      }
+      return null;
+    })
   ].filter(Boolean));
 
   let bankAccounts = bankRes.data ? bankRes.data.map(b => ({

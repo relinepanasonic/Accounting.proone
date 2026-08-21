@@ -65,10 +65,11 @@ export async function reconcileRecord(
           const arAccount = mappings.find(m => m.mapping_type === 'AR')?.account_code || '1100';
           const paymentAmount = isPartialPayment ? Number(adjustedAmount || 0) : (adjustedAmount !== undefined ? adjustedAmount : (Number(inv.total_amount) - Number(inv.amount_paid)));
           const todayStr = new Date().toISOString().split('T')[0];
+          const actualBankRef = bankReference || 'BANK-MATCHED';
 
           await supabase.from('journal_entries').insert([
-            { workspace_id: inv.workspace_id, account_code: bankAccountCode, transaction_date: todayStr, debit_amount: paymentAmount, credit_amount: 0, description: `Bank Match - Invoice ${inv.invoice_number}`, reference_id: recordId, reference_type: 'bank_match' },
-            { workspace_id: inv.workspace_id, account_code: arAccount, transaction_date: todayStr, debit_amount: 0, credit_amount: paymentAmount, description: `Bank Match - Invoice ${inv.invoice_number}`, reference_id: recordId, reference_type: 'bank_match' }
+            { workspace_id: inv.workspace_id, account_code: bankAccountCode, transaction_date: todayStr, debit_amount: paymentAmount, credit_amount: 0, description: `Bank Match - Invoice ${inv.invoice_number} | ${actualBankRef}`, reference_id: recordId, reference_type: 'bank_match' },
+            { workspace_id: inv.workspace_id, account_code: arAccount, transaction_date: todayStr, debit_amount: 0, credit_amount: paymentAmount, description: `Bank Match - Invoice ${inv.invoice_number} | ${actualBankRef}`, reference_id: recordId, reference_type: 'bank_match' }
           ]);
         }
       } else {

@@ -82,9 +82,9 @@ async function ExpensesTable() {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs font-mono">
             <thead>
-              <tr className="border-b border-zinc-800 text-zinc-400 uppercase text-[10px] font-sans">
+              <tr className="border-b border-zinc-800 text-zinc-400 uppercase text-[10px] font-sans whitespace-nowrap">
                 <th className="py-3 px-3">Due Date</th>
-                <th className="py-3 px-3">Vendor / Payee</th>
+                <th className="py-3 px-3 w-full">Vendor / Payee</th>
                 <th className="py-3 px-3">Category</th>
                 <th className="py-3 px-3 text-right">Amount Owed</th>
                 <th className="py-3 px-3 text-center">Status Action</th>
@@ -96,21 +96,25 @@ async function ExpensesTable() {
                   key={item.id}
                   className="hover:bg-zinc-800/30 transition-colors group"
                 >
-                  <td className="py-3 px-3 text-zinc-300 font-bold">
+                  <td className="py-3 px-3 text-zinc-300 font-bold whitespace-nowrap">
                     {item.date}
                   </td>
                   <td className="py-3 px-3 font-sans font-semibold text-white group-hover:text-[#f5d77f] transition-colors">
-                    {item.vendor}
+                    <div className="max-w-[200px] sm:max-w-[300px] truncate">
+                      {item.vendor}
+                    </div>
                   </td>
-                  <td className="py-3 px-3 text-zinc-400 font-sans">
-                    {item.category}
+                  <td className="py-3 px-3 text-zinc-400 font-sans whitespace-nowrap">
+                    <div className="max-w-[150px] sm:max-w-[250px] truncate">
+                      {item.category}
+                    </div>
                   </td>
-                  <td className="py-3 px-3 text-right">
+                  <td className="py-3 px-3 text-right whitespace-nowrap">
                     <span className="text-sm font-extrabold text-[#f5d77f] drop-shadow-[0_0_10px_rgba(245,215,127,0.35)]">
                       Rp {item.amount.toLocaleString('en-US')}
                     </span>
                   </td>
-                  <td className="py-3 px-3 text-center">
+                  <td className="py-3 px-3 text-center whitespace-nowrap">
                     <ExpenseRowActions id={item.id} status={item.status} />
                   </td>
                 </tr>

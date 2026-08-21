@@ -417,16 +417,16 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
                     />
                   </td>
                   {/* Tanggal Invoice */}
-                  <td className={`py-3 px-3 font-sans ${inv.isQuotation ? 'text-white' : 'text-zinc-400'}`}>
+                  <td className={`py-3 px-3 font-sans whitespace-nowrap ${inv.isQuotation ? 'text-white' : 'text-zinc-400'}`}>
                     {inv.issueDate}
                   </td>
                   {/* Due Date */}
-                  <td className={`py-3 px-3 font-sans ${inv.isQuotation ? 'text-white' : 'text-zinc-400'}`}>
+                  <td className={`py-3 px-3 font-sans whitespace-nowrap ${inv.isQuotation ? 'text-white' : 'text-zinc-400'}`}>
                     {inv.dueDate}
                   </td>
                   {/* Client */}
                   <td className="py-3 px-3">
-                    <div className="font-sans font-semibold text-white group-hover:text-[#f5d77f] transition-colors">
+                    <div className="font-sans font-semibold text-white group-hover:text-[#f5d77f] transition-colors max-w-[150px] truncate">
                       {inv.clientName}
                     </div>
                   </td>

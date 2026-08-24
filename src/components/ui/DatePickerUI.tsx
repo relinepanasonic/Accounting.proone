@@ -11,7 +11,7 @@ interface DatePickerUIProps {
 
 export function DatePickerUI({ value, onChange, className = '', required = false }: DatePickerUIProps) {
   return (
-    <div className={elative }>
+    <div className={`relative ${className}`}>
       {/* Invisible native input for the popup calendar */}
       <input
         type="date"

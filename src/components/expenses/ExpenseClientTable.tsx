@@ -4,6 +4,7 @@ import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { Plus, Receipt, Search, Filter, Calendar } from 'lucide-react';
 import { ExpenseRowActions } from './ExpenseRowActions';
+import { formatIndoDate } from '@/lib/utils';
 
 export interface ExpenseRecord {
   id: string;
@@ -124,7 +125,7 @@ export function ExpenseClientTable({ initialRecords }: { initialRecords: Expense
               filteredRecords.map((item) => (
                 <tr key={item.id} className="hover:bg-zinc-800/30 transition-colors group">
                   <td className="py-3.5 px-4 text-zinc-400 whitespace-nowrap">
-                    {item.date}
+                    {formatIndoDate(item.date)}
                   </td>
                   <td className="py-3.5 px-4 font-sans font-semibold text-zinc-200 group-hover:text-[#f5d77f] transition-colors whitespace-nowrap">
                     <div className="max-w-[150px] sm:max-w-[220px] truncate" title={item.vendor}>
@@ -161,3 +162,4 @@ export function ExpenseClientTable({ initialRecords }: { initialRecords: Expense
     </div>
   );
 }
+

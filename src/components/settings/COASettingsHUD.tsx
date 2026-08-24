@@ -628,7 +628,7 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [], active
                       return (
                         <tr key={entry.id} className="hover:bg-white/[0.02] transition-colors">
                           <td className="px-6 py-3 text-xs font-mono text-zinc-400">
-                            {new Date(entry.transaction_date).toLocaleDateString()}
+                            {formatIndoDate(entry.transaction_date)}
                           </td>
                           <td className="px-6 py-3 text-sm text-white">
                             {entry.description || '-'}
@@ -670,3 +670,4 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [], active
     </div>
   );
 }
+

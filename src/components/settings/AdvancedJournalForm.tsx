@@ -114,13 +114,7 @@ export function AdvancedJournalForm() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-[10px] font-mono text-zinc-500 uppercase mb-1">Entry Date</label>
-          <input 
-            type="date" 
-            required 
-            value={entryDate}
-            onChange={(e) => setEntryDate(e.target.value)}
-            className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#d4af37]/50 font-mono"
-          />
+          <DatePickerUI required value={entryDate} onChange={setEntryDate} />
         </div>
         <div>
           <label className="block text-[10px] font-mono text-zinc-500 uppercase mb-1">Master Description</label>
@@ -267,3 +261,4 @@ export function AdvancedJournalForm() {
     </form>
   );
 }
+

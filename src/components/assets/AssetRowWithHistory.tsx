@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { AssetRowActions } from './AssetRowActions';
 import { getAssetDepreciationHistory } from '@/app/actions/fixed-assets';
+import { formatIndoDate } from '@/lib/utils';
 
 interface FixedAssetRecord {
   id: string;
@@ -41,7 +42,7 @@ export function AssetRowWithHistory({ item }: { item: FixedAssetRecord }) {
           </span>
         </td>
         <td className="py-3 px-3 text-zinc-400 font-mono text-center">
-          {item.purchase_date || '-'}
+          {formatIndoDate(item.purchase_date)}
         </td>
         <td className="py-3 px-3 text-right text-zinc-300">
           Rp {item.purchase_price.toLocaleString('en-US')}
@@ -99,7 +100,7 @@ export function AssetRowWithHistory({ item }: { item: FixedAssetRecord }) {
                       </div>
                       <div className="text-right">
                         <div className="text-xs font-bold text-red-400">- Rp {Number(log.debit_amount).toLocaleString('en-US')}</div>
-                        <div className="text-[10px] text-zinc-500 font-mono mt-1">{log.transaction_date}</div>
+                        <div className="text-[10px] text-zinc-500 font-mono mt-1">{formatIndoDate(log.transaction_date)}</div>
                       </div>
                     </div>
                   ))}
@@ -119,3 +120,5 @@ export function AssetRowWithHistory({ item }: { item: FixedAssetRecord }) {
     </>
   );
 }
+
+

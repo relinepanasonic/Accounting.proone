@@ -40,7 +40,7 @@ export default async function NewExpensePage({ searchParams }: { searchParams: P
           <div>
             <h1 className="text-lg font-extrabold tracking-wider uppercase text-white flex items-center gap-2">
               <Receipt className="w-5 h-5 text-[#d4af37]" />
-              <span>RECORD VENDOR EXPENSE OUTFLOW • LUXURY GOLD HUD</span>
+              <span>Expense</span>
             </h1>
             <p className="text-xs text-[#d4af37] font-mono">
               INSTANT A/P LOGGING • BRUSHED GOLD ACCENT

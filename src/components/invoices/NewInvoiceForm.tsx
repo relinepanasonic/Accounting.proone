@@ -10,17 +10,7 @@ import { RupiahInput } from '@/components/ui/RupiahInput';
 import { BulletTextarea } from '@/components/ui/BulletTextarea';
 import { ClientSelect } from '@/components/ui/ClientSelect';
 
-// Helper for Indonesian abbreviated months
-const formatIndoDateStr = (dateStr: string) => {
-  if (!dateStr) return '';
-  const date = new Date(dateStr);
-  if (isNaN(date.getTime())) return dateStr;
-  const day = date.getDate().toString().padStart(2, '0');
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-  const month = months[date.getMonth()];
-  const year = date.getFullYear();
-  return `${day} ${month} ${year}`;
-};
+
 
 function FormattedDateInput({ value, onChange }: { value: string, onChange: (val: string) => void }) {
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -38,7 +28,7 @@ function FormattedDateInput({ value, onChange }: { value: string, onChange: (val
     >
       <div className="absolute inset-0 flex items-center justify-between px-4 pointer-events-none">
         <span className="text-sm font-bold text-white font-mono">
-          {formatIndoDateStr(value) || 'Select Date'}
+          {formatIndoDate(value) || 'Select Date'}
         </span>
         <Calendar className="w-4 h-4 text-[#d4af37]" />
       </div>
@@ -881,3 +871,5 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
     </form>
   );
 }
+
+

@@ -446,7 +446,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                 <div key={bank.id} onClick={() => { setSelectedBankId(isSelected ? null : bank.id); setSelectedRecordIds([]); }}
                   className={`cursor-pointer rounded-xl p-4 border transition-all duration-200 ${isSelected ? 'bg-[#d4af37]/15 border-[#f5d77f] shadow-[0_0_20px_rgba(212,175,55,0.25)]' : 'bg-zinc-950/60 border-zinc-800/80 hover:border-zinc-700'}`}>
                   <div className="flex items-center justify-between text-xs font-mono mb-1">
-                    <span className="text-zinc-400">{bank.date}</span>
+                    <span className="text-zinc-400">{formatIndoDate(bank.date)}</span>
                     <div className="flex items-center gap-2">
                       {bm ? (
                         <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${pScore > 0.3 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
@@ -609,7 +609,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Date</label>
-                    <input type="date" value={quickDate} onChange={(e) => setQuickDate(e.target.value)} className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#d4af37] font-mono" />
+                    <DatePickerUI value={quickDate} onChange={setQuickDate} />
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Amount</label>
@@ -663,7 +663,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                   onClick={() => setSelectedRecordIds((prev) => prev.includes(rec.id) ? prev.filter((id) => id !== rec.id) : [...prev, rec.id])}
                   className={`cursor-pointer rounded-xl p-4 border transition-all duration-200 ${isSelected ? 'bg-[#d4af37]/20 border-[#f5d77f] shadow-[0_0_20px_rgba(212,175,55,0.25)]' : isBest ? 'bg-emerald-500/5 border-emerald-500/30 hover:border-emerald-500/50' : 'bg-zinc-950/60 border-zinc-800/80 hover:border-zinc-700'}`}>
                   <div className="flex items-center justify-between text-xs font-mono mb-2">
-                    <span className="text-zinc-400">{rec.date}</span>
+                    <span className="text-zinc-400">{formatIndoDate(rec.date)}</span>
                     <span className={`font-bold ${rec.amount > 0 ? 'text-[#f5d77f]' : 'text-red-400'}`}>
                       {rec.amount > 0 ? `+Rp ${rec.amount.toLocaleString('en-US')}` : `-Rp ${Math.abs(rec.amount).toLocaleString('en-US')}`}
                     </span>
@@ -721,3 +721,6 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
     </div>
   );
 }
+
+
+

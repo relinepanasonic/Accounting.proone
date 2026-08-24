@@ -61,7 +61,7 @@ function InvoiceProjectDateDropdown({
     <div className="relative group inline-flex items-center gap-1 cursor-pointer w-full min-w-[100px] h-full py-1">
       <div className="text-zinc-400 group-hover:text-zinc-200 transition-colors pointer-events-none">
         {visualDate ? (
-           <span className="border-b border-dashed border-zinc-700 pb-0.5">{new Date(visualDate).toLocaleDateString('id-ID', { month: 'short', year: 'numeric', day: 'numeric' })}</span>
+           <span className="border-b border-dashed border-zinc-700 pb-0.5">{formatIndoDate(visualDate)}</span>
         ) : (
            <span className="border-b border-dashed border-zinc-700 pb-0.5 text-zinc-600 italic">Set date...</span>
         )}
@@ -488,3 +488,4 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
     </div>
   );
 }
+

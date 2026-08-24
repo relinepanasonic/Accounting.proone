@@ -50,7 +50,7 @@ export default async function EditExpensePage(props: { params: Promise<{ id: str
           <div>
             <h1 className="text-lg font-extrabold tracking-wider uppercase text-white flex items-center gap-2">
               <Edit3 className="w-5 h-5 text-[#d4af37]" />
-              <span>EDIT VENDOR EXPENSE • LUXURY GOLD HUD</span>
+              <span>Expense</span>
             </h1>
             <p className="text-xs text-[#d4af37] font-mono">
               MODIFY A/P LOGGING • BRUSHED GOLD ACCENT

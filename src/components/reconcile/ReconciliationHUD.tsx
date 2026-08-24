@@ -419,36 +419,6 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
 
         {/* MIDDLE: Connector with MATCH button */}
         <div className="hidden lg:flex flex-col items-center justify-start bg-zinc-950/90 border border-zinc-800/60 border-x-0 h-full px-3 pt-12 gap-5 overflow-y-auto">
-          <div className="text-[9px] text-zinc-600 uppercase tracking-wider text-center">Bank</div>
-          <div className={`text-[11px] font-mono font-bold text-center leading-snug ${bankAmt > 0 ? 'text-[#f5d77f]' : 'text-zinc-700'}`}>
-            {bankAmt > 0 ? `Rp ${bankAmt.toLocaleString('id-ID')}` : '\u2014'}
-          </div>
-          <ArrowRight className="w-5 h-5 text-zinc-700" />
-          <div className={`text-[11px] font-mono font-bold text-center leading-snug ${systemAmt > 0 ? 'text-white' : 'text-zinc-700'}`}>
-            {systemAmt > 0 ? `Rp ${systemAmt.toLocaleString('id-ID')}` : '\u2014'}
-          </div>
-          <div className="text-[9px] text-zinc-600 uppercase tracking-wider text-center">System</div>
-          {canMatch && (
-            <div className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded-full border ${isExactMatch ? 'text-emerald-400 border-emerald-400/30 bg-emerald-400/10' : diff > 0 ? 'text-orange-400 border-orange-400/30 bg-orange-400/10' : 'text-blue-400 border-blue-400/30 bg-blue-400/10'}`}>
-              {isExactMatch ? 'EXACT' : `${diff > 0 ? '+' : ''}Rp ${Math.abs(diff).toLocaleString('id-ID')}`}
-            </div>
-          )}
-          <button
-            type="button"
-            disabled={!canMatch || isPending}
-            onClick={() => handleMatchAndClear()}
-            className={`flex flex-col items-center gap-1.5 px-5 py-4 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all border w-full ${
-              canMatch
-                ? 'bg-gradient-to-b from-[#d4af37] to-[#8a7322] text-black border-[#f5d77f]/40 shadow-[0_0_20px_rgba(212,175,55,0.5)] hover:shadow-[0_0_30px_rgba(212,175,55,0.7)] hover:scale-105 cursor-pointer'
-                : 'bg-zinc-900 text-zinc-600 border-zinc-800 cursor-not-allowed'
-            }`}
-          >
-            <CheckCircle2 className="w-5 h-5" />
-            <span>{isPending ? '...' : 'MATCH'}</span>
-          </button>
-          {!canMatch && <div className="text-[9px] text-zinc-600 text-center font-mono px-2 leading-relaxed mb-6">SELECT<br />ONE EACH<br />SIDE</div>}
-
-          <div className="w-8 h-[1px] bg-zinc-800 my-2"></div>
           
           <button
             type="button"
@@ -462,6 +432,43 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
             <span>NO MATCH?</span>
             <span className="text-[8px] font-mono opacity-60">Log Quick Entry</span>
           </button>
+
+          <div className="w-8 h-[1px] bg-zinc-800 my-1"></div>
+
+          <button
+            type="button"
+            disabled={!canMatch || isPending}
+            onClick={() => handleMatchAndClear()}
+            className={`flex flex-col items-center gap-1.5 px-5 py-4 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all border w-full ${
+              canMatch
+                ? 'bg-gradient-to-b from-[#d4af37] to-[#8a7322] text-black border-[#f5d77f]/40 shadow-[0_0_20px_rgba(212,175,55,0.5)] hover:shadow-[0_0_30px_rgba(212,175,55,0.7)] hover:scale-105 cursor-pointer'
+                : 'bg-zinc-900 text-zinc-600 border-zinc-800 cursor-not-allowed'
+            }`}
+          >
+            <CheckCircle2 className="w-5 h-5" />
+            <span>{isPending ? '...' : 'MATCH'}</span>
+          </button>
+          {!canMatch && <div className="text-[9px] text-zinc-600 text-center font-mono px-2 leading-relaxed mb-2">SELECT<br />ONE EACH<br />SIDE</div>}
+
+          {canMatch && (
+            <div className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded-full border ${isExactMatch ? 'text-emerald-400 border-emerald-400/30 bg-emerald-400/10' : diff > 0 ? 'text-orange-400 border-orange-400/30 bg-orange-400/10' : 'text-blue-400 border-blue-400/30 bg-blue-400/10'}`}>
+              {isExactMatch ? 'EXACT' : `${diff > 0 ? '+' : ''}Rp ${Math.abs(diff).toLocaleString('id-ID')}`}
+            </div>
+          )}
+
+          <div className="flex flex-col gap-2 w-full mt-2 items-center">
+            <div className="text-[9px] text-zinc-600 uppercase tracking-wider text-center">Bank</div>
+            <div className={`text-[11px] font-mono font-bold text-center leading-snug ${bankAmt > 0 ? 'text-[#f5d77f]' : 'text-zinc-700'}`}>
+              {bankAmt > 0 ? `Rp ${bankAmt.toLocaleString('id-ID')}` : '\u2014'}
+            </div>
+            
+            <div className="flex justify-center my-1"><ArrowRight className="w-4 h-4 text-zinc-700 rotate-90" /></div>
+            
+            <div className="text-[9px] text-zinc-600 uppercase tracking-wider text-center">System</div>
+            <div className={`text-[11px] font-mono font-bold text-center leading-snug ${systemAmt > 0 ? 'text-white' : 'text-zinc-700'}`}>
+              {systemAmt > 0 ? `Rp ${systemAmt.toLocaleString('id-ID')}` : '\u2014'}
+            </div>
+          </div>
         </div>
 
         {/* RIGHT: System Records */}
@@ -477,57 +484,8 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
             </div>
           </div>
 
-          {/* Mobile MATCH bar */}
-          <div className="flex lg:hidden items-center justify-between mb-4 p-3 bg-zinc-950/80 rounded-xl border border-zinc-800">
-            <div className="text-xs font-mono">
-              {canMatch ? isExactMatch ? <span className="text-emerald-400 font-bold">EXACT MATCH</span> : <span className="text-yellow-400 font-bold">DIFF: Rp {Math.abs(diff).toLocaleString('id-ID')}</span> : <span className="text-zinc-500">Select bank + system record</span>}
-            </div>
-            <button type="button" disabled={!canMatch || isPending} onClick={() => handleMatchAndClear()} className="gold-btn inline-flex items-center gap-2 px-5 py-2 rounded-full text-[10px] uppercase tracking-wider disabled:opacity-40">
-              <CheckCircle2 className="w-4 h-4" />{isPending ? '...' : 'MATCH'}
-            </button>
-          </div>
-
-          {/* Records list */}
-          <div className="space-y-3 overflow-y-auto flex-1 pr-1">
-            {filteredSystemRecords.length === 0 ? (
-              <div className="p-8 text-center text-zinc-500 font-mono text-xs border border-dashed border-zinc-800 rounded-xl space-y-2">
-                <div className="text-white font-bold">NO SYSTEM RECORDS</div>
-                <div className="text-[10px] text-zinc-400 font-sans">
-                  {activeBankLine ? `No ${activeBankLine.amount > 0 ? 'income/invoices' : 'expenses/payroll'} to match.` : 'All records are cleared.'}
-                </div>
-              </div>
-            ) : filteredSystemRecords.map((rec) => {
-              const isSelected = currentTargetRecordIds.includes(rec.id);
-              const isBest = bestMatchRecord?.id === rec.id;
-              const amountMatch = activeBankLine && Math.abs(rec.amount - Math.abs(activeBankLine.amount)) < 0.01;
-              const pScore = activeBankLine ? payeeSimilarity(activeBankLine.sourceDestination, rec.payeeOrClient || rec.reference) : 0;
-              return (
-                <div key={rec.id}
-                  onClick={() => setSelectedRecordIds((prev) => prev.includes(rec.id) ? prev.filter((id) => id !== rec.id) : [...prev, rec.id])}
-                  className={`cursor-pointer rounded-xl p-4 border transition-all duration-200 ${isSelected ? 'bg-[#d4af37]/20 border-[#f5d77f] shadow-[0_0_20px_rgba(212,175,55,0.25)]' : isBest ? 'bg-emerald-500/5 border-emerald-500/30 hover:border-emerald-500/50' : 'bg-zinc-950/60 border-zinc-800/80 hover:border-zinc-700'}`}>
-                  <div className="flex items-center justify-between text-xs font-mono mb-2">
-                    <span className="text-zinc-400">{rec.date}</span>
-                    <span className={`font-bold ${rec.amount > 0 ? 'text-[#f5d77f]' : 'text-red-400'}`}>
-                      {rec.amount > 0 ? `+Rp ${rec.amount.toLocaleString('en-US')}` : `-Rp ${Math.abs(rec.amount).toLocaleString('en-US')}`}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-sans text-white font-medium truncate">{rec.payeeOrClient || rec.reference}</span>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-900 text-[#d4af37] uppercase border border-[#d4af37]/20 shrink-0">{rec.type}</span>
-                  </div>
-                  {rec.notes && <div className="text-[10px] text-zinc-500 font-mono mt-1 truncate">{rec.notes}</div>}
-                  <div className="mt-2 flex items-center gap-2 flex-wrap">
-                    {rec.reconciled && <span className="text-emerald-500 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded text-[9px]">ALREADY CLEARED</span>}
-                    {isBest && amountMatch && pScore > 0.3 && <span className="text-[#f5d77f] font-bold bg-[#d4af37]/10 px-1.5 py-0.5 rounded text-[9px]">\u2605 BEST MATCH</span>}
-                    {isBest && amountMatch && pScore <= 0.3 && <span className="text-yellow-400 font-bold bg-yellow-400/10 px-1.5 py-0.5 rounded text-[9px]">SAME AMOUNT</span>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
           {/* Quick Log - collapsible */}
-          <div className="mt-4 pt-4 border-t border-zinc-800">
+          <div className="mb-4 pb-4 border-b border-zinc-800">
             <button type="button" onClick={() => setShowQuickForm((v) => !v)}
               className="flex items-center justify-between w-full text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-white transition-colors">
               <span className="flex items-center gap-2"><Sparkles className="w-3.5 h-3.5 text-[#d4af37]" />Quick Log — no matching record?</span>
@@ -612,6 +570,56 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
               </div>
             )}
           </div>
+
+          {/* Mobile MATCH bar */}
+          <div className="flex lg:hidden items-center justify-between mb-4 p-3 bg-zinc-950/80 rounded-xl border border-zinc-800">
+            <div className="text-xs font-mono">
+              {canMatch ? isExactMatch ? <span className="text-emerald-400 font-bold">EXACT MATCH</span> : <span className="text-yellow-400 font-bold">DIFF: Rp {Math.abs(diff).toLocaleString('id-ID')}</span> : <span className="text-zinc-500">Select bank + system record</span>}
+            </div>
+            <button type="button" disabled={!canMatch || isPending} onClick={() => handleMatchAndClear()} className="gold-btn inline-flex items-center gap-2 px-5 py-2 rounded-full text-[10px] uppercase tracking-wider disabled:opacity-40">
+              <CheckCircle2 className="w-4 h-4" />{isPending ? '...' : 'MATCH'}
+            </button>
+          </div>
+
+          {/* Records list */}
+          <div className="space-y-3 overflow-y-auto flex-1 pr-1">
+            {filteredSystemRecords.length === 0 ? (
+              <div className="p-8 text-center text-zinc-500 font-mono text-xs border border-dashed border-zinc-800 rounded-xl space-y-2">
+                <div className="text-white font-bold">NO SYSTEM RECORDS</div>
+                <div className="text-[10px] text-zinc-400 font-sans">
+                  {activeBankLine ? `No ${activeBankLine.amount > 0 ? 'income/invoices' : 'expenses/payroll'} to match.` : 'All records are cleared.'}
+                </div>
+              </div>
+            ) : filteredSystemRecords.map((rec) => {
+              const isSelected = currentTargetRecordIds.includes(rec.id);
+              const isBest = bestMatchRecord?.id === rec.id;
+              const amountMatch = activeBankLine && Math.abs(rec.amount - Math.abs(activeBankLine.amount)) < 0.01;
+              const pScore = activeBankLine ? payeeSimilarity(activeBankLine.sourceDestination, rec.payeeOrClient || rec.reference) : 0;
+              return (
+                <div key={rec.id}
+                  onClick={() => setSelectedRecordIds((prev) => prev.includes(rec.id) ? prev.filter((id) => id !== rec.id) : [...prev, rec.id])}
+                  className={`cursor-pointer rounded-xl p-4 border transition-all duration-200 ${isSelected ? 'bg-[#d4af37]/20 border-[#f5d77f] shadow-[0_0_20px_rgba(212,175,55,0.25)]' : isBest ? 'bg-emerald-500/5 border-emerald-500/30 hover:border-emerald-500/50' : 'bg-zinc-950/60 border-zinc-800/80 hover:border-zinc-700'}`}>
+                  <div className="flex items-center justify-between text-xs font-mono mb-2">
+                    <span className="text-zinc-400">{rec.date}</span>
+                    <span className={`font-bold ${rec.amount > 0 ? 'text-[#f5d77f]' : 'text-red-400'}`}>
+                      {rec.amount > 0 ? `+Rp ${rec.amount.toLocaleString('en-US')}` : `-Rp ${Math.abs(rec.amount).toLocaleString('en-US')}`}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-sans text-white font-medium truncate">{rec.payeeOrClient || rec.reference}</span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-900 text-[#d4af37] uppercase border border-[#d4af37]/20 shrink-0">{rec.type}</span>
+                  </div>
+                  {rec.notes && <div className="text-[10px] text-zinc-500 font-mono mt-1 truncate">{rec.notes}</div>}
+                  <div className="mt-2 flex items-center gap-2 flex-wrap">
+                    {rec.reconciled && <span className="text-emerald-500 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded text-[9px]">ALREADY CLEARED</span>}
+                    {isBest && amountMatch && pScore > 0.3 && <span className="text-[#f5d77f] font-bold bg-[#d4af37]/10 px-1.5 py-0.5 rounded text-[9px]">\u2605 BEST MATCH</span>}
+                    {isBest && amountMatch && pScore <= 0.3 && <span className="text-yellow-400 font-bold bg-yellow-400/10 px-1.5 py-0.5 rounded text-[9px]">SAME AMOUNT</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
         </div>
       </div>
     </div>

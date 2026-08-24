@@ -427,7 +427,11 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
               setSelectedRecordIds([]);
               setShowQuickForm(true);
             }}
-            className="flex flex-col items-center gap-1 px-3 py-3 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all border border-zinc-800 bg-zinc-950 text-zinc-400 hover:text-white hover:bg-zinc-900 hover:border-zinc-700 w-full disabled:opacity-40 disabled:cursor-not-allowed text-center"
+            className={`flex flex-col items-center gap-1 px-3 py-3 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all border w-full disabled:opacity-40 disabled:cursor-not-allowed text-center ${
+              activeBankLine && !canMatch
+                ? 'border-[#d4af37]/40 bg-[#d4af37]/10 text-[#f5d77f] hover:bg-[#d4af37]/20 shadow-[0_0_15px_rgba(212,175,55,0.15)] cursor-pointer'
+                : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:text-white hover:bg-zinc-900 hover:border-zinc-700'
+            }`}
           >
             <span>NO MATCH?</span>
             <span className="text-[8px] font-mono opacity-60">Log Quick Entry</span>
@@ -558,11 +562,11 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                   <textarea rows={2} value={quickNotes} onChange={(e) => setQuickNotes(e.target.value)} className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#d4af37]" />
                 </div>
                 <div className="flex gap-2">
-                  <button type="button" disabled={isPending || !activeBankLine} onClick={() => handleQuickResolve('expense')}
+                  <button type="button" disabled={isPending || !activeBankLine || activeBankLine.amount > 0} onClick={() => handleQuickResolve('expense')}
                     className="flex-1 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider border border-red-400/30 text-red-400 bg-red-400/10 hover:bg-red-400/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
                     {isPending ? '...' : '\u2212 EXPENSE'}
                   </button>
-                  <button type="button" disabled={isPending || !activeBankLine} onClick={() => handleQuickResolve('income')}
+                  <button type="button" disabled={isPending || !activeBankLine || activeBankLine.amount < 0} onClick={() => handleQuickResolve('income')}
                     className="flex-1 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider border border-emerald-400/30 text-emerald-400 bg-emerald-400/10 hover:bg-emerald-400/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
                     {isPending ? '...' : '+ INCOME'}
                   </button>

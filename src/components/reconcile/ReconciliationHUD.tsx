@@ -418,7 +418,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
         </div>
 
         {/* MIDDLE: Connector with MATCH button */}
-        <div className="hidden lg:flex flex-col items-center justify-center bg-zinc-950/90 border border-zinc-800/60 border-x-0 h-full px-3 py-8 gap-5">
+        <div className="hidden lg:flex flex-col items-center justify-start bg-zinc-950/90 border border-zinc-800/60 border-x-0 h-full px-3 pt-12 gap-5 overflow-y-auto">
           <div className="text-[9px] text-zinc-600 uppercase tracking-wider text-center">Bank</div>
           <div className={`text-[11px] font-mono font-bold text-center leading-snug ${bankAmt > 0 ? 'text-[#f5d77f]' : 'text-zinc-700'}`}>
             {bankAmt > 0 ? `Rp ${bankAmt.toLocaleString('id-ID')}` : '\u2014'}
@@ -437,7 +437,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
             type="button"
             disabled={!canMatch || isPending}
             onClick={() => handleMatchAndClear()}
-            className={`flex flex-col items-center gap-1.5 px-5 py-4 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all border ${
+            className={`flex flex-col items-center gap-1.5 px-5 py-4 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all border w-full ${
               canMatch
                 ? 'bg-gradient-to-b from-[#d4af37] to-[#8a7322] text-black border-[#f5d77f]/40 shadow-[0_0_20px_rgba(212,175,55,0.5)] hover:shadow-[0_0_30px_rgba(212,175,55,0.7)] hover:scale-105 cursor-pointer'
                 : 'bg-zinc-900 text-zinc-600 border-zinc-800 cursor-not-allowed'
@@ -446,7 +446,22 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
             <CheckCircle2 className="w-5 h-5" />
             <span>{isPending ? '...' : 'MATCH'}</span>
           </button>
-          {!canMatch && <div className="text-[9px] text-zinc-600 text-center font-mono px-2 leading-relaxed">SELECT<br />ONE EACH<br />SIDE</div>}
+          {!canMatch && <div className="text-[9px] text-zinc-600 text-center font-mono px-2 leading-relaxed mb-6">SELECT<br />ONE EACH<br />SIDE</div>}
+
+          <div className="w-8 h-[1px] bg-zinc-800 my-2"></div>
+          
+          <button
+            type="button"
+            disabled={!activeBankLine}
+            onClick={() => {
+              setSelectedRecordIds([]);
+              setShowQuickForm(true);
+            }}
+            className="flex flex-col items-center gap-1 px-3 py-3 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all border border-zinc-800 bg-zinc-950 text-zinc-400 hover:text-white hover:bg-zinc-900 hover:border-zinc-700 w-full disabled:opacity-40 disabled:cursor-not-allowed text-center"
+          >
+            <span>NO MATCH?</span>
+            <span className="text-[8px] font-mono opacity-60">Log Quick Entry</span>
+          </button>
         </div>
 
         {/* RIGHT: System Records */}

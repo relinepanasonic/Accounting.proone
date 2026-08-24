@@ -2,7 +2,7 @@
 
 import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, AlertCircle } from 'lucide-react';
+import { Check, AlertCircle, ChevronDown, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { createExpense, updateExpense } from '@/app/actions/expenses';
 import { createClientRecord } from '@/app/actions/settings';
@@ -56,6 +56,13 @@ export function NewExpenseForm({ contacts, isHistorical, coaAccounts = [], initi
   const [amount, setAmount] = useState<number | ''>(initialData?.amount || 1200);
   const [notes, setNotes] = useState(initNotes);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Combobox States
+  const [vendorDropdownOpen, setVendorDropdownOpen] = useState(false);
+  const [searchVendor, setSearchVendor] = useState(existingVendor ? (existingVendor.company_name || existingVendor.name) : '');
+  const [coaDropdownOpen, setCoaDropdownOpen] = useState(false);
+  const [searchCategory, setSearchCategory] = useState(initialData?.category || '');
+  const [expandedCoaGroups, setExpandedCoaGroups] = useState<Record<string, boolean>>({});
 
   const handleQuickAddVendor = async () => {
     if (!quickAddName.trim()) return;
@@ -178,44 +185,156 @@ export function NewExpenseForm({ contacts, isHistorical, coaAccounts = [], initi
               </div>
             )}
 
-            <select
-              required
-              value={vendorId}
-              onChange={(e) => setVendorId(e.target.value)}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#d4af37]"
-            >
-              <option value="">-- Select Vendor --</option>
-              {vendors.map(v => (
-                <option key={v.id} value={v.id}>
-                  {v.name} {v.company_name && v.company_name !== v.name ? `(${v.company_name})` : ''}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <input
+                type="text"
+                required
+                placeholder="Search vendor..."
+                value={searchVendor}
+                onChange={(e) => {
+                  setSearchVendor(e.target.value);
+                  setVendorId('');
+                  setVendorDropdownOpen(true);
+                }}
+                onFocus={() => setVendorDropdownOpen(true)}
+                onBlur={() => setTimeout(() => setVendorDropdownOpen(false), 200)}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#d4af37]"
+              />
+              <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+              {vendorDropdownOpen && (
+                <div className="absolute z-50 w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-xl shadow-[0_0_20px_rgba(0,0,0,0.8)] max-h-48 overflow-y-auto">
+                  {vendors
+                    .filter(v => (v.name + ' ' + (v.company_name || '')).toLowerCase().includes(searchVendor.toLowerCase()))
+                    .map(v => (
+                      <div
+                        key={v.id}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setSearchVendor(v.company_name || v.name);
+                          setVendorId(v.id);
+                          setVendorDropdownOpen(false);
+                        }}
+                        className="px-4 py-2.5 text-xs text-zinc-300 hover:bg-[#d4af37]/20 hover:text-white cursor-pointer border-b border-zinc-800/50 last:border-0"
+                      >
+                        {v.name} {v.company_name && v.company_name !== v.name ? `(${v.company_name})` : ''}
+                      </div>
+                  ))}
+                  {vendors.filter(v => (v.name + ' ' + (v.company_name || '')).toLowerCase().includes(searchVendor.toLowerCase())).length === 0 && (
+                    <div className="px-4 py-3 text-xs text-zinc-500 italic">No vendors found. Try Quick Add above.</div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-2">
               Expense Category
             </label>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#d4af37] font-sans"
-            >
-              {coaAccounts.length > 0 ? (
-                coaAccounts.map((coa) => (
-                  <option key={coa.account_code} value={coa.account_name}>
-                    {coa.account_code} - {coa.account_name}
-                  </option>
-                ))
-              ) : (
-                CATEGORY_OPTIONS.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))
+            <div className="relative">
+              <input
+                type="text"
+                required
+                placeholder="Search category..."
+                value={searchCategory || category}
+                onChange={(e) => {
+                  setSearchCategory(e.target.value);
+                  setCategory('');
+                  setCoaDropdownOpen(true);
+                }}
+                onFocus={() => {
+                  setCoaDropdownOpen(true);
+                  if (!searchCategory) setSearchCategory(category);
+                }}
+                onBlur={() => {
+                  setTimeout(() => setCoaDropdownOpen(false), 200);
+                  if (!category && searchCategory) {
+                    // Revert if they didn't select anything valid
+                    // Handled loosely here
+                  }
+                }}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#d4af37] font-sans pr-10"
+              />
+              <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+              
+              {coaDropdownOpen && (
+                <div className="absolute z-50 w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.8)] max-h-[300px] overflow-y-auto">
+                  {coaAccounts.length > 0 ? (
+                    Object.entries(
+                      coaAccounts.reduce((acc, curr) => {
+                        if (!acc[curr.account_type]) acc[curr.account_type] = [];
+                        acc[curr.account_type].push(curr);
+                        return acc;
+                      }, {} as Record<string, COAAccountMinimal[]>)
+                    ).map(([type, accounts]) => {
+                      const filtered = accounts.filter(a => 
+                        (a.account_code + ' - ' + a.account_name).toLowerCase().includes(searchCategory.toLowerCase())
+                      );
+                      if (filtered.length === 0) return null;
+                      
+                      const isExpanded = expandedCoaGroups[type] !== undefined 
+                        ? expandedCoaGroups[type] 
+                        : (searchCategory.length > 0 ? true : false); // auto-expand if searching, else collapsed
+
+                      return (
+                        <div key={type}>
+                          <div 
+                            className="px-3 py-2 bg-zinc-900 border-y border-zinc-800 text-[10px] font-bold text-zinc-400 uppercase tracking-wider sticky top-0 cursor-pointer flex items-center gap-1.5 hover:text-white transition-colors z-10"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setExpandedCoaGroups(prev => ({
+                                ...prev,
+                                [type]: !isExpanded
+                              }));
+                            }}
+                          >
+                            {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                            {type}
+                          </div>
+                          {isExpanded && filtered.map(coa => (
+                            <div 
+                              key={coa.account_code}
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                const val = `${coa.account_code} - ${coa.account_name}`;
+                                setCategory(val);
+                                setSearchCategory(val);
+                                setCoaDropdownOpen(false);
+                              }}
+                              className="px-4 py-2.5 text-xs text-zinc-300 hover:bg-[#d4af37]/20 hover:text-white cursor-pointer flex items-center gap-2 border-b border-zinc-800/30 last:border-0"
+                            >
+                              <span className="font-mono text-[#f5d77f] font-bold">{coa.account_code}</span>
+                              <span className="truncate">{coa.account_name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })
+                  ) : (
+                    // Fallback to CATEGORY_OPTIONS if no COA
+                    CATEGORY_OPTIONS.filter(cat => cat.toLowerCase().includes(searchCategory.toLowerCase())).map((cat) => (
+                      <div 
+                        key={cat}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setCategory(cat);
+                          setSearchCategory(cat);
+                          setCoaDropdownOpen(false);
+                        }}
+                        className="px-4 py-2.5 text-xs text-zinc-300 hover:bg-[#d4af37]/20 hover:text-white cursor-pointer border-b border-zinc-800/30 last:border-0"
+                      >
+                        {cat}
+                      </div>
+                    ))
+                  )}
+                  
+                  {/* Empty State */}
+                  {coaAccounts.length > 0 && Object.values(coaAccounts).filter(a => (a.account_code + ' - ' + a.account_name).toLowerCase().includes(searchCategory.toLowerCase())).length === 0 && (
+                    <div className="px-4 py-3 text-xs text-zinc-500 italic">No categories match your search.</div>
+                  )}
+                </div>
               )}
-            </select>
+            </div>
           </div>
         </div>
 
@@ -280,3 +399,4 @@ export function NewExpenseForm({ contacts, isHistorical, coaAccounts = [], initi
     </form>
   );
 }
+

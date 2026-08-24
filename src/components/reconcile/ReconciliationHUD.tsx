@@ -361,10 +361,10 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
       </div>
 
       {/* 3-Column Layout: Bank | Connector | System Records */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_160px_1fr] items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_160px_1fr] items-start h-[700px]">
 
         {/* LEFT: Bank Statement Feed */}
-        <div className="gold-glass-panel rounded-2xl lg:rounded-r-none lg:border-r-0 p-6 flex flex-col min-h-[620px]">
+        <div className="gold-glass-panel rounded-2xl lg:rounded-r-none lg:border-r-0 p-6 flex flex-col h-full min-w-0">
           <div className="flex items-center justify-between pb-3 mb-4 border-b border-zinc-800">
             <h3 className="text-xs font-bold uppercase tracking-wider text-[#d4af37]">BANK STATEMENT FEED</h3>
             <div className="flex items-center gap-2">
@@ -402,9 +402,9 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                       </span>
                     </div>
                   </div>
-                  <div className="text-sm font-sans text-white font-bold mt-2 truncate">{bank.sourceDestination}</div>
-                  {(bank.notes || bank.transactionDetails) && <div className="text-xs text-zinc-500 mt-0.5 truncate">{bank.notes || bank.transactionDetails}</div>}
-                  {bank.rekFrom && <div className="text-[10px] text-zinc-600 font-mono mt-0.5">{bank.rekFrom}</div>}
+                  <div className="text-sm font-sans text-white font-bold mt-2 break-words whitespace-normal">{bank.sourceDestination}</div>
+                  {(bank.notes || bank.transactionDetails) && <div className="text-xs text-zinc-500 mt-0.5 break-words whitespace-normal">{bank.notes || bank.transactionDetails}</div>}
+                  {bank.rekFrom && <div className="text-[10px] text-zinc-600 font-mono mt-0.5 break-all">{bank.rekFrom}</div>}
                   {bm && (
                     <div className="mt-2 pt-2 border-t border-zinc-800/80 flex items-center gap-1.5 text-[10px] font-mono text-[#f5d77f]">
                       <Sparkles className="w-3.5 h-3.5 animate-pulse" />
@@ -418,7 +418,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
         </div>
 
         {/* MIDDLE: Connector with MATCH button */}
-        <div className="hidden lg:flex flex-col items-center justify-center bg-zinc-950/90 border border-zinc-800/60 border-x-0 min-h-[620px] px-3 py-8 gap-5">
+        <div className="hidden lg:flex flex-col items-center justify-center bg-zinc-950/90 border border-zinc-800/60 border-x-0 h-full px-3 py-8 gap-5">
           <div className="text-[9px] text-zinc-600 uppercase tracking-wider text-center">Bank</div>
           <div className={`text-[11px] font-mono font-bold text-center leading-snug ${bankAmt > 0 ? 'text-[#f5d77f]' : 'text-zinc-700'}`}>
             {bankAmt > 0 ? `Rp ${bankAmt.toLocaleString('id-ID')}` : '\u2014'}
@@ -450,7 +450,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
         </div>
 
         {/* RIGHT: System Records */}
-        <div className="gold-glass-panel rounded-2xl lg:rounded-l-none lg:border-l-0 p-6 flex flex-col min-h-[620px]">
+        <div className="gold-glass-panel rounded-2xl lg:rounded-l-none lg:border-l-0 p-6 flex flex-col h-full min-w-0">
           <div className="flex items-center justify-between pb-3 mb-4 border-b border-zinc-800">
             <h3 className="text-xs font-bold uppercase tracking-wider text-[#d4af37]">SYSTEM RECORDS</h3>
             <div className="flex items-center gap-2">

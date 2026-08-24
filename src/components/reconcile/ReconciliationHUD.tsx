@@ -96,20 +96,19 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   const [filterYear, setFilterYear] = useState<number>(currentYear);
   const [activeFilterTab, setActiveFilterTab] = useState<'all' | 'matched' | 'unmatched'>('all');
   const [showReconciled, setShowReconciled] = useState(false);
-  const [confirmDialog, setConfirmDialog] = useState<{
+  const [optionsDialog, setOptionsDialog] = useState<{
     title: string;
     message: React.ReactNode;
-    okText: string;
-    cancelText: string;
-    onConfirm: (val: boolean) => void;
+    buttons: { text: string; value: string; isPrimary?: boolean; isDanger?: boolean }[];
+    onSelect: (val: string | null) => void;
   } | null>(null);
 
-  const askConfirm = (title: string, message: React.ReactNode, okText = 'OK', cancelText = 'Cancel'): Promise<boolean> => {
+  const askOptions = (title: string, message: React.ReactNode, buttons: { text: string; value: string; isPrimary?: boolean; isDanger?: boolean }[]): Promise<string | null> => {
     return new Promise((resolve) => {
-      setConfirmDialog({
-        title, message, okText, cancelText,
-        onConfirm: (val) => {
-          setConfirmDialog(null);
+      setOptionsDialog({
+        title, message, buttons,
+        onSelect: (val) => {
+          setOptionsDialog(null);
           resolve(val);
         }
       });
@@ -261,32 +260,40 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
     const recordAmountAbs = Math.abs(targetRecords.reduce((sum, r) => sum + Math.abs(r.amount), 0));
     let shouldClearDiff = false;
     let isPartialPayment = false;
+    let isTaxWriteoff = false;
     
     if (bankAmountAbs !== recordAmountAbs) {
       if (targetRecords.length > 1) { 
-        await askConfirm('Error', 'Amount mismatch with multiple records. Adjust manually.', 'OK', 'Close'); 
+        await askOptions('Error', 'Amount mismatch with multiple records. Adjust manually.', [{ text: 'Close', value: 'close', isPrimary: true }]); 
         return; 
       }
+      const diffAbs = recordAmountAbs - bankAmountAbs;
+      
       if (bankAmountAbs < recordAmountAbs && targetRecords[0].type === 'invoice') {
-        const proceed = await askConfirm(
-          'Partial Payment?',
-          <div className="space-y-1 text-sm"><p>Bank: <span className="text-[#f5d77f]">Rp {bankAmountAbs.toLocaleString('id-ID')}</span></p><p>Invoice: <span className="text-white">Rp {recordAmountAbs.toLocaleString('id-ID')}</span></p><p className="mt-3 font-bold text-white">Record as PARTIAL PAYMENT?</p></div>,
-          'Record as Partial', 'Cancel'
+        const choice = await askOptions(
+          'Invoice Amount Mismatch',
+          <div className="space-y-1 text-sm"><p>Bank: <span className="text-[#f5d77f]">Rp {bankAmountAbs.toLocaleString('id-ID')}</span></p><p>Invoice: <span className="text-white">Rp {recordAmountAbs.toLocaleString('id-ID')}</span></p><p className="mt-3 text-zinc-400">Difference: Rp {diffAbs.toLocaleString('id-ID')}</p></div>,
+          [
+            { text: 'Add Tax / Fee Write-off', value: 'writeoff', isPrimary: true },
+            { text: 'Record as Partial Payment', value: 'partial' },
+            { text: 'Shrink Invoice Total', value: 'shrink' },
+            { text: 'Cancel', value: 'cancel', isDanger: true }
+          ]
         );
-        if (proceed) { 
-          isPartialPayment = true; 
-        } else { 
-          const shrink = await askConfirm('Adjust Invoice?', 'Shrink invoice to match bank amount?', 'Shrink Invoice', 'Cancel');
-          if (!shrink) return; 
-          shouldClearDiff = true; 
-        }
+        if (choice === 'cancel' || choice === null) return;
+        if (choice === 'partial') isPartialPayment = true;
+        if (choice === 'shrink') shouldClearDiff = true;
+        if (choice === 'writeoff') isTaxWriteoff = true;
       } else {
-        const proceed = await askConfirm(
+        const proceed = await askOptions(
           'Amount Mismatch',
           <div className="space-y-1 text-sm"><p>Bank: <span className="text-[#f5d77f]">Rp {bankAmountAbs.toLocaleString('id-ID')}</span></p><p>System: <span className="text-white">Rp {recordAmountAbs.toLocaleString('id-ID')}</span></p><p className="mt-3 font-bold text-white">Adjust system to bank amount?</p></div>,
-          'Adjust System Amount', 'Cancel'
+          [
+            { text: 'Adjust System Amount', value: 'adjust', isPrimary: true },
+            { text: 'Cancel', value: 'cancel', isDanger: true }
+          ]
         );
-        if (!proceed) return;
+        if (proceed !== 'adjust') return;
         shouldClearDiff = true;
       }
     }
@@ -294,8 +301,18 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
     startTransition(async () => {
       try {
         const uniqueRef = `BANK-REF:${activeBankLine.date}:${activeBankLine.amount}:${activeBankLine.sourceDestination}`;
+        const taxWriteoffAmount = isTaxWriteoff ? recordAmountAbs - bankAmountAbs : undefined;
+        
         for (const targetRecord of targetRecords) {
-          await reconcileRecord(targetRecord.id, targetRecord.type, uniqueRef, activeBankId, (shouldClearDiff || isPartialPayment) ? activeBankLine.amount : undefined, isPartialPayment);
+          await reconcileRecord(
+            targetRecord.id, 
+            targetRecord.type, 
+            uniqueRef, 
+            activeBankId, 
+            (shouldClearDiff || isPartialPayment || isTaxWriteoff) ? activeBankLine.amount : undefined, 
+            isPartialPayment,
+            taxWriteoffAmount
+          );
         }
         setBankLines((prev) => prev.filter((b) => b.id !== activeBankLine.id));
         if (isPartialPayment) {

@@ -505,7 +505,11 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                     className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#d4af37]" />
                   {vendorDropdownOpen && (
                     <div className="absolute z-50 w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-xl shadow-xl max-h-48 overflow-y-auto top-[100%]">
-                      {localVendors.filter((v) => v.name.toLowerCase().includes(quickVendorName.toLowerCase())).map((v) => (
+                      {Array.from(new Map(
+                        localVendors
+                          .filter((v) => v.name.toLowerCase().includes(quickVendorName.toLowerCase()))
+                          .map((v) => [v.name.trim().toLowerCase(), v])
+                      ).values()).map((v) => (
                         <div key={v.id} onClick={() => { setQuickVendorName(v.name); setQuickVendorId(v.id); setVendorDropdownOpen(false); }} className="px-4 py-2.5 text-xs text-white hover:bg-[#d4af37]/20 cursor-pointer">{v.name}</div>
                       ))}
                       {quickVendorName.trim() && !localVendors.some((v) => v.name.toLowerCase() === quickVendorName.toLowerCase()) && (

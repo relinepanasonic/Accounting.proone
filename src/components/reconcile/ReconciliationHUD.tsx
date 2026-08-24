@@ -687,30 +687,33 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
         </div>
       </div>
       
-      {/* Luxurious Confirm Modal */}
-      {confirmDialog && (
+      {/* Luxurious Options Modal */}
+      {optionsDialog && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="gold-glass-panel rounded-2xl w-full max-w-md p-6 border border-[#d4af37]/30 shadow-[0_0_50px_rgba(212,175,55,0.15)] animate-in fade-in zoom-in-95 duration-200">
             <h3 className="text-[#f5d77f] font-bold text-lg mb-4 flex items-center gap-2">
               <Sparkles className="w-5 h-5" />
-              {confirmDialog.title}
+              {optionsDialog.title}
             </h3>
             <div className="text-zinc-300 font-sans mb-8">
-              {confirmDialog.message}
+              {optionsDialog.message}
             </div>
-            <div className="flex items-center gap-3 justify-end mt-4">
-              <button 
-                onClick={() => confirmDialog.onConfirm(false)}
-                className="px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider text-zinc-400 hover:text-white bg-zinc-900/50 hover:bg-zinc-800 border border-zinc-700/50 transition-all"
-              >
-                {confirmDialog.cancelText}
-              </button>
-              <button 
-                onClick={() => confirmDialog.onConfirm(true)}
-                className="gold-btn px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider text-black shadow-[0_0_20px_rgba(212,175,55,0.4)] hover:shadow-[0_0_30px_rgba(212,175,55,0.6)]"
-              >
-                {confirmDialog.okText}
-              </button>
+            <div className="flex flex-col gap-2 mt-4">
+              {optionsDialog.buttons.map((btn) => (
+                <button 
+                  key={btn.value}
+                  onClick={() => optionsDialog.onSelect(btn.value)}
+                  className={`w-full py-3 px-4 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${
+                    btn.isPrimary 
+                      ? 'gold-btn text-black shadow-[0_0_20px_rgba(212,175,55,0.4)] hover:shadow-[0_0_30px_rgba(212,175,55,0.6)]' 
+                      : btn.isDanger
+                      ? 'border border-red-500/30 text-red-400 bg-red-500/10 hover:bg-red-500/20'
+                      : 'border border-zinc-700/50 text-zinc-300 bg-zinc-900/50 hover:bg-zinc-800'
+                  }`}
+                >
+                  {btn.text}
+                </button>
+              ))}
             </div>
           </div>
         </div>

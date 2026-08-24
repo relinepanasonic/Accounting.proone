@@ -96,6 +96,25 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   const [filterYear, setFilterYear] = useState<number>(currentYear);
   const [activeFilterTab, setActiveFilterTab] = useState<'all' | 'matched' | 'unmatched'>('all');
   const [showReconciled, setShowReconciled] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string;
+    message: React.ReactNode;
+    okText: string;
+    cancelText: string;
+    onConfirm: (val: boolean) => void;
+  } | null>(null);
+
+  const askConfirm = (title: string, message: React.ReactNode, okText = 'OK', cancelText = 'Cancel'): Promise<boolean> => {
+    return new Promise((resolve) => {
+      setConfirmDialog({
+        title, message, okText, cancelText,
+        onConfirm: (val) => {
+          setConfirmDialog(null);
+          resolve(val);
+        }
+      });
+    });
+  };
 
   const activeBankLine = bankLines.find((b) => b.id === selectedBankId);
 
@@ -232,28 +251,48 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
     }
   };
 
-  const handleMatchAndClear = (overrideTargetId?: string) => {
+  const handleMatchAndClear = async (overrideTargetId?: string) => {
     const activeTargetIds = typeof overrideTargetId === 'string' ? [overrideTargetId] : currentTargetRecordIds;
     if (!activeBankLine || activeTargetIds.length === 0) return;
     const targetRecords = recordsList.filter((r) => activeTargetIds.includes(r.id));
     if (targetRecords.length === 0) return;
+    
+    const bankAmountAbs = Math.abs(activeBankLine.amount);
+    const recordAmountAbs = Math.abs(targetRecords.reduce((sum, r) => sum + Math.abs(r.amount), 0));
+    let shouldClearDiff = false;
+    let isPartialPayment = false;
+    
+    if (bankAmountAbs !== recordAmountAbs) {
+      if (targetRecords.length > 1) { 
+        await askConfirm('Error', 'Amount mismatch with multiple records. Adjust manually.', 'OK', 'Close'); 
+        return; 
+      }
+      if (bankAmountAbs < recordAmountAbs && targetRecords[0].type === 'invoice') {
+        const proceed = await askConfirm(
+          'Partial Payment?',
+          <div className="space-y-1 text-sm"><p>Bank: <span className="text-[#f5d77f]">Rp {bankAmountAbs.toLocaleString('id-ID')}</span></p><p>Invoice: <span className="text-white">Rp {recordAmountAbs.toLocaleString('id-ID')}</span></p><p className="mt-3 font-bold text-white">Record as PARTIAL PAYMENT?</p></div>,
+          'Record as Partial', 'Cancel'
+        );
+        if (proceed) { 
+          isPartialPayment = true; 
+        } else { 
+          const shrink = await askConfirm('Adjust Invoice?', 'Shrink invoice to match bank amount?', 'Shrink Invoice', 'Cancel');
+          if (!shrink) return; 
+          shouldClearDiff = true; 
+        }
+      } else {
+        const proceed = await askConfirm(
+          'Amount Mismatch',
+          <div className="space-y-1 text-sm"><p>Bank: <span className="text-[#f5d77f]">Rp {bankAmountAbs.toLocaleString('id-ID')}</span></p><p>System: <span className="text-white">Rp {recordAmountAbs.toLocaleString('id-ID')}</span></p><p className="mt-3 font-bold text-white">Adjust system to bank amount?</p></div>,
+          'Adjust System Amount', 'Cancel'
+        );
+        if (!proceed) return;
+        shouldClearDiff = true;
+      }
+    }
+
     startTransition(async () => {
       try {
-        const bankAmountAbs = Math.abs(activeBankLine.amount);
-        const recordAmountAbs = Math.abs(targetRecords.reduce((sum, r) => sum + Math.abs(r.amount), 0));
-        let shouldClearDiff = false;
-        let isPartialPayment = false;
-        if (bankAmountAbs !== recordAmountAbs) {
-          if (targetRecords.length > 1) { alert('Amount mismatch with multiple records. Adjust manually.'); return; }
-          if (bankAmountAbs < recordAmountAbs && targetRecords[0].type === 'invoice') {
-            const proceed = confirm(`Partial payment?\nBank: Rp ${bankAmountAbs.toLocaleString('id-ID')}\nInvoice: Rp ${recordAmountAbs.toLocaleString('id-ID')}\n\nRecord as PARTIAL PAYMENT?`);
-            if (proceed) { isPartialPayment = true; }
-            else { if (!confirm('Shrink invoice to match bank?')) return; shouldClearDiff = true; }
-          } else {
-            if (!confirm(`Amount mismatch!\nBank: Rp ${bankAmountAbs.toLocaleString('id-ID')}\nSystem: Rp ${recordAmountAbs.toLocaleString('id-ID')}\n\nAdjust system to bank amount?`)) return;
-            shouldClearDiff = true;
-          }
-        }
         const uniqueRef = `BANK-REF:${activeBankLine.date}:${activeBankLine.amount}:${activeBankLine.sourceDestination}`;
         for (const targetRecord of targetRecords) {
           await reconcileRecord(targetRecord.id, targetRecord.type, uniqueRef, activeBankId, (shouldClearDiff || isPartialPayment) ? activeBankLine.amount : undefined, isPartialPayment);
@@ -630,6 +669,36 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
 
         </div>
       </div>
+      
+      {/* Luxurious Confirm Modal */}
+      {confirmDialog && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="gold-glass-panel rounded-2xl w-full max-w-md p-6 border border-[#d4af37]/30 shadow-[0_0_50px_rgba(212,175,55,0.15)] animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-[#f5d77f] font-bold text-lg mb-4 flex items-center gap-2">
+              <Sparkles className="w-5 h-5" />
+              {confirmDialog.title}
+            </h3>
+            <div className="text-zinc-300 font-sans mb-8">
+              {confirmDialog.message}
+            </div>
+            <div className="flex items-center gap-3 justify-end mt-4">
+              <button 
+                onClick={() => confirmDialog.onConfirm(false)}
+                className="px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider text-zinc-400 hover:text-white bg-zinc-900/50 hover:bg-zinc-800 border border-zinc-700/50 transition-all"
+              >
+                {confirmDialog.cancelText}
+              </button>
+              <button 
+                onClick={() => confirmDialog.onConfirm(true)}
+                className="gold-btn px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider text-black shadow-[0_0_20px_rgba(212,175,55,0.4)] hover:shadow-[0_0_30px_rgba(212,175,55,0.6)]"
+              >
+                {confirmDialog.okText}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

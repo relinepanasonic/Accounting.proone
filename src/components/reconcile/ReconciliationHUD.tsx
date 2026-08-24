@@ -159,9 +159,13 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
         try {
           const res = await fetch('/api/v1/reconcile/parse-pdf', { method: 'POST', body: formData });
           const result = await res.json();
-          if (result.transactions && Array.isArray(result.transactions)) {
+          if (!result.success) {
+            alert('Failed to parse PDF:\n\n' + (result.error || 'Unknown error'));
+            return;
+          }
+          if (result.data && Array.isArray(result.data)) {
             const reconciledSet = new Set(reconciledBankRefs);
-            const parsed: BankLine[] = result.transactions
+            const parsed: BankLine[] = result.data
               .filter((t: any) => !reconciledSet.has(`BANK-REF:${t.date}:${t.amount}:${t.sourceDestination}`))
               .map((t: any, i: number) => ({
                 id: `pdf-${i}-${t.date}-${t.amount}`,

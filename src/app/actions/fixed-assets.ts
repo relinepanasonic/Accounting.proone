@@ -108,14 +108,15 @@ export async function runMonthlyDepreciation() {
       if (annualDepr <= 0) continue;
 
       const monthlyDepr = annualDepr / 12;
-      const refId = `depr-${asset.id}-${currentMonth}`;
 
-      // Check if already posted this month
+      // Check if already posted this month using the transaction_date and asset.id
       const { data: existingEntry } = await supabase
         .from('journal_entries')
         .select('id')
         .eq('workspace_id', activeWorkspaceId)
-        .eq('reference_id', refId)
+        .eq('reference_id', asset.id)
+        .eq('reference_type', 'depreciation')
+        .like('transaction_date', `${currentMonth}-%`)
         .limit(1);
 
       if (existingEntry && existingEntry.length > 0) {
@@ -129,10 +130,15 @@ export async function runMonthlyDepreciation() {
       // Post Journal Entry
       const description = `Monthly Depreciation - ${asset.asset_name} (${currentMonth})`;
 
-      await supabase.from('journal_entries').insert([
-        { workspace_id: activeWorkspaceId, account_code: deprExpenseAccount, transaction_date: todayStr, debit_amount: monthlyDepr, credit_amount: 0, description, reference_id: refId, reference_type: 'depreciation' },
-        { workspace_id: activeWorkspaceId, account_code: accDeprAccount, transaction_date: todayStr, debit_amount: 0, credit_amount: monthlyDepr, description, reference_id: refId, reference_type: 'depreciation' }
+      const { error: insertError } = await supabase.from('journal_entries').insert([
+        { workspace_id: activeWorkspaceId, account_code: deprExpenseAccount, transaction_date: todayStr, debit_amount: monthlyDepr, credit_amount: 0, description, reference_id: asset.id, reference_type: 'depreciation' },
+        { workspace_id: activeWorkspaceId, account_code: accDeprAccount, transaction_date: todayStr, debit_amount: 0, credit_amount: monthlyDepr, description, reference_id: asset.id, reference_type: 'depreciation' }
       ]);
+      
+      if (insertError) {
+        console.error('Failed to insert depreciation for asset', asset.id, insertError);
+        continue;
+      }
 
       processedCount++;
     }
@@ -158,13 +164,13 @@ export async function getAssetDepreciationHistory(assetId: string) {
   const supabase = await createClient();
   const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
-  // The reference_id written by runMonthlyDepreciation is: 'depr-ASSET_ID-YYYY-MM'
-  // We use ilike for safety and search both the reference_id pattern
+  // We look for journal entries related to this asset's depreciation
   const { data, error } = await supabase
     .from('journal_entries')
     .select('id, transaction_date, debit_amount, credit_amount, description, reference_id, reference_type')
     .eq('workspace_id', activeWorkspaceId)
-    .ilike('reference_id', `depr-${assetId}-%`)
+    .eq('reference_id', assetId)
+    .eq('reference_type', 'depreciation')
     .order('transaction_date', { ascending: false });
 
   if (error) {
@@ -173,7 +179,6 @@ export async function getAssetDepreciationHistory(assetId: string) {
   }
 
   // Return only debit entries (the expense side) to avoid showing duplicates
-  // If no debit entries, return all (fallback)
   const debitEntries = (data || []).filter(e => Number(e.debit_amount) > 0);
   return debitEntries.length > 0 ? debitEntries : (data || []);
 }

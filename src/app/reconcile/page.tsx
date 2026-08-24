@@ -52,7 +52,6 @@ async function ReconciliationCore() {
   const [
     invoicesRes, 
     transactionsRes, 
-    payrollRes, 
     bankRes, 
     workspaceRes, 
     coaRes, 
@@ -73,12 +72,6 @@ async function ReconciliationCore() {
       .eq('workspace_id', activeWorkspaceId)
       // Removed reconciled filter so user can match already-reconciled items to bank statement
       .order('due_date', { ascending: false }),
-    supabase
-      .from('payroll')
-      .select('id, employee_name, total_payment, pay_period_end, status, workspace_id')
-      .eq('workspace_id', activeWorkspaceId)
-      .eq('status', 'draft')
-      .order('pay_period_end', { ascending: false }),
     supabase
       .from('workspace_bank_accounts')
       .select('id, bank_name, account_number, account_name')
@@ -121,7 +114,6 @@ async function ReconciliationCore() {
 
   const rawInvoices = invoicesRes.data || [];
   const rawTransactions = transactionsRes.data || [];
-  const rawPayroll = payrollRes.data || [];
   const vendors = vendorsRes.data || [];
   
   // Combine all reconciled bank references into a single set for fast lookup
@@ -211,16 +203,6 @@ async function ReconciliationCore() {
       amount: Number(tx.amount || 0),
       reconciled: Boolean(tx.reconciled),
       notes: tx.description || '',
-    })),
-    ...rawPayroll.map((pr) => ({
-      id: pr.id,
-      type: 'payroll' as const,
-      reference: 'PAYROLL',
-      payeeOrClient: pr.employee_name || 'Employee',
-      date: pr.pay_period_end || '2026-07-15',
-      amount: Number(pr.total_payment || 0),
-      reconciled: Boolean(pr.status === 'paid'),
-      notes: `Payroll for ${pr.employee_name || ''}`,
     })),
   ];
 

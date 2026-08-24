@@ -79,12 +79,12 @@ export async function runMonthlyDepreciation() {
     const supabase = await createClient();
     const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
-    // Get all active fixed assets
+    // Get all active fixed assets (case-insensitive to handle 'Active' or 'active')
     const { data: assets, error: fetchError } = await supabase
       .from('fixed_assets')
       .select('*')
       .eq('workspace_id', activeWorkspaceId)
-      .eq('status', 'active');
+      .ilike('status', 'active');
 
     if (fetchError) throw new Error(fetchError.message);
     if (!assets || assets.length === 0) return { success: true, processedCount: 0 };
@@ -158,16 +158,13 @@ export async function getAssetDepreciationHistory(assetId: string) {
   const supabase = await createClient();
   const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
-  // We look for journal entries related to this asset's depreciation
-  // The reference_id is like 'depr-ASSET_ID-YYYY-MM'
+  // The reference_id written by runMonthlyDepreciation is: 'depr-ASSET_ID-YYYY-MM'
+  // We use ilike for safety and search both the reference_id pattern
   const { data, error } = await supabase
     .from('journal_entries')
-    .select('id, transaction_date, debit_amount, description, reference_id')
+    .select('id, transaction_date, debit_amount, credit_amount, description, reference_id, reference_type')
     .eq('workspace_id', activeWorkspaceId)
-    .eq('reference_type', 'depreciation')
-    .like('reference_id', `depr-${assetId}-%`)
-    // Only fetch debit entries to avoid duplicate rows for the same transaction (which has a credit and a debit)
-    .gt('debit_amount', 0)
+    .ilike('reference_id', `depr-${assetId}-%`)
     .order('transaction_date', { ascending: false });
 
   if (error) {
@@ -175,5 +172,8 @@ export async function getAssetDepreciationHistory(assetId: string) {
     return [];
   }
 
-  return data;
+  // Return only debit entries (the expense side) to avoid showing duplicates
+  // If no debit entries, return all (fallback)
+  const debitEntries = (data || []).filter(e => Number(e.debit_amount) > 0);
+  return debitEntries.length > 0 ? debitEntries : (data || []);
 }

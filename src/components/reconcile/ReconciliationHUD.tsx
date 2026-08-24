@@ -147,6 +147,10 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    
+    // Clear the input so the same file can be selected again
+    e.target.value = '';
+
     if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
       startTransition(async () => {
         const formData = new FormData();
@@ -165,9 +169,22 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                 transactionDetails: t.transactionDetails || '', notes: t.notes || '',
                 rekFrom: t.rekFrom || '', amount: Number(t.amount),
               }));
+            
+            if (parsed.length === 0) {
+              alert('All items in this statement have already been reconciled and filtered out!');
+              return;
+            }
+
             const sorted = [...parsed].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
             setBankLines(sorted);
-            if (sorted.length > 0) setSelectedBankId(sorted[0].id);
+            if (sorted.length > 0) {
+              setSelectedBankId(sorted[0].id);
+              const firstDate = new Date(sorted[0].date);
+              if (!isNaN(firstDate.getTime())) {
+                setFilterMonth(firstDate.getMonth() + 1);
+                setFilterYear(firstDate.getFullYear());
+              }
+            }
           }
         } catch (err) { console.error(err); alert('Failed to parse PDF.'); }
       });
@@ -190,9 +207,22 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
           if (reconciledSet.has(`BANK-REF:${date}:${amount}:${sourceDestination}`)) continue;
           parsed.push({ id: `csv-${i}-${date}-${amount}`, date, sourceDestination, transactionDetails: cols[3]?.trim() || '', notes: cols[4]?.trim() || '', rekFrom: cols[5]?.trim() || '', amount });
         }
+        
+        if (parsed.length === 0) {
+          alert('All items in this statement have already been reconciled and filtered out!');
+          return;
+        }
+
         const sorted = [...parsed].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         setBankLines(sorted);
-        if (sorted.length > 0) setSelectedBankId(sorted[0].id);
+        if (sorted.length > 0) {
+          setSelectedBankId(sorted[0].id);
+          const firstDate = new Date(sorted[0].date);
+          if (!isNaN(firstDate.getTime())) {
+            setFilterMonth(firstDate.getMonth() + 1);
+            setFilterYear(firstDate.getFullYear());
+          }
+        }
       };
       reader.readAsText(file);
     }

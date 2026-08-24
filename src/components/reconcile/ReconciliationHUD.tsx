@@ -566,10 +566,10 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                           .filter((v) => v.name.toLowerCase().includes(quickVendorName.toLowerCase()))
                           .map((v) => [v.name.trim().toLowerCase(), v])
                       ).values()).map((v) => (
-                        <div key={v.id} onClick={() => { setQuickVendorName(v.name); setQuickVendorId(v.id); setVendorDropdownOpen(false); }} className="px-4 py-2.5 text-xs text-white hover:bg-[#d4af37]/20 cursor-pointer">{v.name}</div>
+                        <div key={v.id} onMouseDown={(e) => { e.preventDefault(); setQuickVendorName(v.name); setQuickVendorId(v.id); setVendorDropdownOpen(false); }} className="px-4 py-2.5 text-xs text-white hover:bg-[#d4af37]/20 cursor-pointer">{v.name}</div>
                       ))}
                       {quickVendorName.trim() && !localVendors.some((v) => v.name.toLowerCase() === quickVendorName.toLowerCase()) && (
-                        <div onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleQuickAddVendor(); }} className="px-4 py-3 text-xs text-[#f5d77f] font-bold border-t border-zinc-800 hover:bg-[#d4af37]/20 cursor-pointer flex items-center gap-2">
+                        <div onMouseDown={(e) => { e.preventDefault(); handleQuickAddVendor(); }} className="px-4 py-3 text-xs text-[#f5d77f] font-bold border-t border-zinc-800 hover:bg-[#d4af37]/20 cursor-pointer flex items-center gap-2">
                           {isQuickAddingVendor ? <span className="animate-pulse">ADDING...</span> : <span>+ QUICK ADD: &ldquo;{quickVendorName}&rdquo;</span>}
                         </div>
                       )}
@@ -591,12 +591,11 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                         return (
                           <div key={type}>
                             <div className="px-3 py-1.5 bg-zinc-900 text-[10px] font-bold text-zinc-500 uppercase tracking-wider sticky top-0 cursor-pointer flex items-center gap-1 hover:text-white"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => setExpandedCoaGroups((prev) => ({ ...prev, [type]: !(prev[type] !== undefined ? prev[type] : quickCategory.length > 0) }))}>
+                              onMouseDown={(e) => { e.preventDefault(); setExpandedCoaGroups((prev) => ({ ...prev, [type]: !(prev[type] !== undefined ? prev[type] : quickCategory.length > 0) })); }}>
                               {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}{type}
                             </div>
                             {isExpanded && filtered.map((coa) => (
-                              <div key={coa.account_code} onClick={() => { setQuickCategory(coa.account_code + ' - ' + coa.account_name); setCoaDropdownOpen(false); }}
+                              <div key={coa.account_code} onMouseDown={(e) => { e.preventDefault(); setQuickCategory(coa.account_code + ' - ' + coa.account_name); setCoaDropdownOpen(false); }}
                                 className="px-4 py-2 text-xs text-zinc-300 hover:bg-[#d4af37]/20 hover:text-white cursor-pointer flex items-center gap-2">
                                 <span className="font-mono text-[#f5d77f]">{coa.account_code}</span><span>{coa.account_name}</span>
                               </div>

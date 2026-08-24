@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { RunDepreciationButton } from '@/components/assets/RunDepreciationButton';
 
 import { AssetRowActions } from '@/components/assets/AssetRowActions';
+import { AssetRowWithHistory } from '@/components/assets/AssetRowWithHistory';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,6 +14,7 @@ interface FixedAssetRecord {
   asset_name: string;
   category: string;
   purchase_price: number;
+  purchase_date?: string;
   useful_life_months: number;
   current_book_value: number;
   salvage_value: number;
@@ -53,6 +55,7 @@ async function FixedAssetsRegistry() {
             asset_name: r.asset_name,
             category: r.category || 'Equipment',
             purchase_price: initialValue,
+            purchase_date: r.purchase_date,
             useful_life_months: (r.useful_life_years || 1) * 12,
             current_book_value: currentBookValue,
             salvage_value: Number(r.salvage_value || 0),
@@ -94,6 +97,7 @@ async function FixedAssetsRegistry() {
               <tr className="border-b border-zinc-800 text-zinc-400 uppercase text-[10px] font-sans">
                 <th className="py-3 px-3">Fixed Asset Name</th>
                 <th className="py-3 px-3">Category</th>
+                <th className="py-3 px-3 text-center">Purchase Date</th>
                 <th className="py-3 px-3 text-right">Purchase Cost</th>
                 <th className="py-3 px-3 text-center">Useful Life</th>
                 <th className="py-3 px-3 text-right">Current Book Value</th>
@@ -103,40 +107,7 @@ async function FixedAssetsRegistry() {
             </thead>
             <tbody className="divide-y divide-zinc-800/60">
               {displayRecords.map((item) => (
-                <tr
-                  key={item.id}
-                  className="hover:bg-zinc-800/30 transition-colors group"
-                >
-                  <td className="py-3 px-3 font-sans font-semibold text-white group-hover:text-[#f5d77f] transition-colors">
-                    {item.asset_name}
-                  </td>
-                  <td className="py-3 px-3">
-                    <span className="text-[10px] px-2.5 py-0.5 rounded bg-zinc-900 text-[#d4af37] border border-[#d4af37]/20">
-                      {item.category}
-                    </span>
-                  </td>
-                  <td className="py-3 px-3 text-right text-zinc-300">
-                    Rp {item.purchase_price.toLocaleString('en-US')}
-                  </td>
-                  <td className="py-3 px-3 text-center text-zinc-400">
-                    {item.useful_life_months} months
-                  </td>
-                  {/* Critical Current Value highlighted in Glowing Rich Gold */}
-                  <td className="py-3 px-3 text-right">
-                    <span className="text-sm font-black text-[#f5d77f] drop-shadow-[0_0_10px_rgba(245,215,127,0.45)]">
-                      Rp {item.current_book_value.toLocaleString('en-US')}
-                    </span>
-                  </td>
-                  <td className="py-3 px-3 text-center">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-mono uppercase bg-[#d4af37]/15 text-[#f5d77f] border border-[#d4af37]/40">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#f5d77f] animate-pulse"></span>
-                      <span>{item.status}</span>
-                    </span>
-                  </td>
-                  <td className="py-3 px-3 text-right">
-                    <AssetRowActions id={item.id} />
-                  </td>
-                </tr>
+                <AssetRowWithHistory key={item.id} item={item as any} />
               ))}
             </tbody>
           </table>

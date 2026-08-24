@@ -153,3 +153,27 @@ export async function runMonthlyDepreciation() {
     return { success: false, error: err?.message || 'Error running depreciation' };
   }
 }
+
+export async function getAssetDepreciationHistory(assetId: string) {
+  const supabase = await createClient();
+  const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+
+  // We look for journal entries related to this asset's depreciation
+  // The reference_id is like 'depr-ASSET_ID-YYYY-MM'
+  const { data, error } = await supabase
+    .from('journal_entries')
+    .select('id, transaction_date, debit_amount, description, reference_id')
+    .eq('workspace_id', activeWorkspaceId)
+    .eq('reference_type', 'depreciation')
+    .like('reference_id', `depr-${assetId}-%`)
+    // Only fetch debit entries to avoid duplicate rows for the same transaction (which has a credit and a debit)
+    .gt('debit_amount', 0)
+    .order('transaction_date', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching depreciation history:', error);
+    return [];
+  }
+
+  return data;
+}

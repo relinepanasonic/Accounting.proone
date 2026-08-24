@@ -22,12 +22,13 @@ const ColumnSkeleton = () => (
 );
 
 interface PageProps {
-  searchParams: { month?: string };
+  searchParams: Promise<{ month?: string }>;
 }
 
 export default async function CyberneticAccountingDashboardRSC({ searchParams }: PageProps) {
+  const params = await searchParams;
+  const monthFilter = params?.month ? parseInt(params.month, 10) : null;
   const wsContext = await getAuthenticatedWorkspaceContext();
-  const monthFilter = searchParams.month ? parseInt(searchParams.month, 10) : null;
   const telemetry = await getDashboardTelemetry({ monthFilter });
   const userName = wsContext.userName || 'Executive';
   const activeWorkspaceName = wsContext.activeWorkspaceName || 'Professor Toko Online HQ';

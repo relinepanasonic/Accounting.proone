@@ -240,9 +240,14 @@ async function PayrollPersonnelGrid({ month, year, isNewWave, activeWorkspaceId 
   );
 }
 
-export default async function PayrollPage({ searchParams }: { searchParams: { month?: string, year?: string } }) {
+export default async function PayrollPage({ searchParams }: { searchParams: Promise<{ month?: string, year?: string }> }) {
   const supabase = await createClient();
   const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+
+  // Note: we can use dynamic searchParams here to change month
+  const params = await searchParams;
+  const targetMonth = params?.month || '01';
+  const targetYear = params?.year || '2026';
 
   // Check if New Wave
   const { data: workspace } = await supabase
@@ -251,10 +256,6 @@ export default async function PayrollPage({ searchParams }: { searchParams: { mo
     .eq('id', activeWorkspaceId)
     .single();
   const isNewWave = !!workspace?.name?.toLowerCase().includes('new wave');
-
-  // Default to January 2026 for demonstration if not provided
-  const targetMonth = searchParams.month || '01';
-  const targetYear = searchParams.year || '2026';
 
   const syncAction = syncNewWavePayroll.bind(null, targetMonth, targetYear);
 

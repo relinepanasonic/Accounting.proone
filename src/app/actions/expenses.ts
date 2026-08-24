@@ -32,6 +32,7 @@ export async function createExpense(payload: CreateExpensePayload) {
     due_date: payload.dueDate,
     reconciled: false,
     is_upcoming_bill: true,
+    type: 'expense',
   }).select('id').single();
 
   if (error || !txData) {

@@ -7,7 +7,8 @@ import { NewExpenseForm } from '@/components/expenses/NewExpenseForm';
 
 export const dynamic = 'force-dynamic';
 
-export default async function NewExpensePage({ searchParams }: { searchParams: { historical?: string } }) {
+export default async function NewExpensePage({ searchParams }: { searchParams: Promise<{ historical?: string }> }) {
+  const params = await searchParams;
   const supabase = await createClient();
   const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
@@ -23,7 +24,7 @@ export default async function NewExpensePage({ searchParams }: { searchParams: {
     .eq('workspace_id', activeWorkspaceId)
     .order('account_code', { ascending: true });
 
-  const isHistorical = searchParams?.historical === 'true';
+  const isHistorical = params?.historical === 'true';
 
   return (
     <div className="max-w-[1200px] mx-auto px-6 py-8 space-y-6">
@@ -48,7 +49,7 @@ export default async function NewExpensePage({ searchParams }: { searchParams: {
         </div>
       </div>
 
-      {searchParams.historical === 'true' && (
+      {params.historical === 'true' && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center shrink-0">
             <AlertTriangle className="w-4 h-4 text-red-400" />

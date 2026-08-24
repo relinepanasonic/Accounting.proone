@@ -1,5 +1,5 @@
-import { formatIndoDate } from '@/lib/utils';
 'use client';
+import { formatIndoDate } from '@/lib/utils';
 
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
@@ -489,5 +489,6 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
     </div>
   );
 }
+
 
 

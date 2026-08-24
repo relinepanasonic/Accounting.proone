@@ -8,6 +8,8 @@ import {
   Sparkles,
   ChevronDown,
   ChevronRight,
+  ArrowRight,
+  ChevronUp,
 } from 'lucide-react';
 import { reconcileRecord, quickResolveAndReconcile } from '@/app/actions/reconcile';
 import { createClientRecord } from '@/app/actions/settings';
@@ -34,12 +36,6 @@ interface BankLine {
   amount: number;
 }
 
-const SAMPLE_BANK_STATEMENT: BankLine[] = [
-  { id: 'bank-001', date: '2026-07-02', sourceDestination: 'TRANSFER INVOICE INV-2026-001 PROF TOKO ONLINE', transactionDetails: '', notes: '', rekFrom: '', amount: 149870000 },
-  { id: 'bank-002', date: '2026-07-07', sourceDestination: 'ACH DEBIT CLOUD SERVER HOSTING A/P', transactionDetails: '', notes: '', rekFrom: '', amount: -18000000 },
-  { id: 'bank-003', date: '2026-07-10', sourceDestination: 'WIRE OUTWARD STUDIO RENT POWER UTILITIES', transactionDetails: '', notes: '', rekFrom: '', amount: -64500000 },
-];
-
 interface BankAccount {
   id: string;
   bank_name: string;
@@ -51,6 +47,16 @@ interface COAAccountMinimal {
   account_code: string;
   account_name: string;
   account_type: string;
+}
+
+function payeeSimilarity(a: string, b: string): number {
+  if (!a || !b) return 0;
+  const aL = a.toLowerCase();
+  const bL = b.toLowerCase();
+  if (aL === bL) return 1;
+  const wordsB = bL.split(/\s+/).filter((w) => w.length > 3);
+  const matches = wordsB.filter((w) => aL.includes(w));
+  return matches.length / Math.max(wordsB.length, 1);
 }
 
 interface ReconciliationHUDProps {
@@ -68,24 +74,22 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
   const [isPending, startTransition] = useTransition();
 
-  // Resolution Widget State
-  const [resolutionTab, setResolutionTab] = useState<'expense' | 'income' | 'manual'>('expense');
   const [quickCategory, setQuickCategory] = useState<string>('');
   const [quickVendorName, setQuickVendorName] = useState('');
   const [quickVendorId, setQuickVendorId] = useState<string | undefined>(undefined);
   const [vendorDropdownOpen, setVendorDropdownOpen] = useState(false);
   const [isQuickAddingVendor, setIsQuickAddingVendor] = useState(false);
   const [localVendors, setLocalVendors] = useState(vendors);
-  
   const [quickDate, setQuickDate] = useState('');
   const [quickAmount, setQuickAmount] = useState<number | ''>('');
   const [quickNotes, setQuickNotes] = useState('');
   const [coaDropdownOpen, setCoaDropdownOpen] = useState(false);
   const [expandedCoaGroups, setExpandedCoaGroups] = useState<Record<string, boolean>>({});
-  
+  const [showQuickForm, setShowQuickForm] = useState(false);
+
   const [activeBankId, setActiveBankId] = useState<string>(bankAccounts.length > 0 ? bankAccounts[0].id : '');
   const [bankFormat, setBankFormat] = useState<string>('jago');
-  
+
   const currentMonth = new Date().getMonth() + 1;
   const currentYear = new Date().getFullYear();
   const [filterMonth, setFilterMonth] = useState<number>(currentMonth);
@@ -94,243 +98,155 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   const [showReconciled, setShowReconciled] = useState(false);
 
   const activeBankLine = bankLines.find((b) => b.id === selectedBankId);
-  const autoMatchRecord = activeBankLine ? findAutoMatch(activeBankLine) : null;
-  const currentTargetRecordIds = selectedRecordIds.length > 0 ? selectedRecordIds : (autoMatchRecord ? [autoMatchRecord.id] : []);
+
+  function findBestMatch(bankLine: BankLine): UnreconciledSystemRecord | null {
+    const candidates = recordsList.filter(
+      (r) =>
+        !r.reconciled &&
+        ((bankLine.amount > 0 && (r.type === 'invoice' || r.type === 'income')) ||
+          (bankLine.amount < 0 && (r.type === 'expense' || r.type === 'payroll')))
+    );
+    let best: UnreconciledSystemRecord | null = null;
+    let bestScore = -1;
+    for (const r of candidates) {
+      const amountMatch = Math.abs(r.amount - Math.abs(bankLine.amount)) < 0.01;
+      if (!amountMatch) continue;
+      const pScore = payeeSimilarity(bankLine.sourceDestination, r.payeeOrClient || r.reference);
+      const score = 0.5 + pScore * 0.5;
+      if (score > bestScore) { bestScore = score; best = r; }
+    }
+    return best;
+  }
+
+  const bestMatchRecord = activeBankLine ? findBestMatch(activeBankLine) : null;
+  const currentTargetRecordIds = selectedRecordIds.length > 0 ? selectedRecordIds : (bestMatchRecord ? [bestMatchRecord.id] : []);
 
   React.useEffect(() => {
     if (activeBankLine) {
       setQuickVendorName(activeBankLine.sourceDestination || '');
-      setQuickVendorId(undefined); // Reset ID so it acts as free text unless explicitly matched/selected
+      setQuickVendorId(undefined);
       setQuickDate(activeBankLine.date || '');
       setQuickAmount(Math.abs(activeBankLine.amount || 0));
       setQuickNotes([activeBankLine.notes, activeBankLine.transactionDetails].filter(Boolean).join(' | '));
-      
-      // Default to manual match so user sees system records
-      setResolutionTab('manual');
     }
   }, [activeBankLine]);
-
-  function findAutoMatch(bankLine: BankLine) {
-    return recordsList.find(
-      (r) =>
-        !r.reconciled &&
-        Math.abs(r.amount - Math.abs(bankLine.amount)) < 0.01 &&
-        ((bankLine.amount > 0 && (r.type === 'invoice' || r.type === 'income')) ||
-          (bankLine.amount < 0 && (r.type === 'expense' || r.type === 'payroll')))
-    );
-  }
 
   const filteredBankLines = React.useMemo(() => {
     return bankLines.filter((b) => {
       const d = new Date(b.date);
-      const matchesMonth = (d.getMonth() + 1) === filterMonth && d.getFullYear() === filterYear;
+      const matchesMonth = d.getMonth() + 1 === filterMonth && d.getFullYear() === filterYear;
       if (!matchesMonth) return false;
-      
-      const autoMatch = findAutoMatch(b);
-      if (activeFilterTab === 'matched') return !!autoMatch;
-      if (activeFilterTab === 'unmatched') return !autoMatch;
+      const bm = findBestMatch(b);
+      if (activeFilterTab === 'matched') return !!bm;
+      if (activeFilterTab === 'unmatched') return !bm;
       return true;
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bankLines, filterMonth, filterYear, activeFilterTab, recordsList]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
       startTransition(async () => {
         const formData = new FormData();
         formData.append('file', file);
         formData.append('bankFormat', bankFormat);
         try {
-          const res = await fetch('/api/v1/reconcile/parse-pdf', {
-            method: 'POST',
-            body: formData,
-          });
+          const res = await fetch('/api/v1/reconcile/parse-pdf', { method: 'POST', body: formData });
           const result = await res.json();
-          if (result.success && result.data && result.data.length > 0) {
-            // Filter out items already reconciled
-            let filteredData = result.data.filter((line: BankLine) => {
-              const uniqueRef = `BANK-REF:${line.date}:${line.amount}:${line.sourceDestination}`;
-              const fallbackRef = `BANK-REF: ${line.sourceDestination}`;
-              return !reconciledBankRefs.includes(uniqueRef) && !reconciledBankRefs.includes(fallbackRef);
-            });
-
-            if (filteredData.length === 0) {
-              alert('All items in this statement have already been reconciled and filtered out!');
-              return;
-            }
-
-            const sortedData = filteredData.sort((a: BankLine, b: BankLine) => new Date(a.date).getTime() - new Date(b.date).getTime());
-            
-            if (sortedData.length > 0) {
-              const firstDate = new Date(sortedData[0].date);
-              setFilterMonth(firstDate.getMonth() + 1);
-              setFilterYear(firstDate.getFullYear());
-            }
-            
-            setBankLines(sortedData);
-            setSelectedBankId(sortedData[0].id);
-          } else {
-            alert(result.error || 'No transactions found in this PDF. Please ensure it is a valid Bank Jago statement.');
-            console.error('PDF Parse Error Details:', result);
+          if (result.transactions && Array.isArray(result.transactions)) {
+            const reconciledSet = new Set(reconciledBankRefs);
+            const parsed: BankLine[] = result.transactions
+              .filter((t: any) => !reconciledSet.has(`BANK-REF:${t.date}:${t.amount}:${t.sourceDestination}`))
+              .map((t: any, i: number) => ({
+                id: `pdf-${i}-${t.date}-${t.amount}`,
+                date: t.date, sourceDestination: t.sourceDestination || '',
+                transactionDetails: t.transactionDetails || '', notes: t.notes || '',
+                rekFrom: t.rekFrom || '', amount: Number(t.amount),
+              }));
+            const sorted = [...parsed].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            setBankLines(sorted);
+            if (sorted.length > 0) setSelectedBankId(sorted[0].id);
           }
-        } catch (err: any) {
-          alert('Network or Server Error: ' + err.message);
-          console.error('PDF Parse Error:', err);
-        }
+        } catch (err) { console.error(err); alert('Failed to parse PDF.'); }
       });
     } else {
       const reader = new FileReader();
-      reader.onload = (event) => {
-        const text = event.target?.result as string;
-        const lines = text.split('\n').filter((l) => l.trim().length > 0);
+      reader.onload = (ev) => {
+        const text = ev.target?.result as string;
+        if (!text) return;
+        const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+        const reconciledSet = new Set(reconciledBankRefs);
         const parsed: BankLine[] = [];
-
-        lines.slice(1).forEach((line, idx) => {
-          const cols = line.split(',');
-          if (cols.length >= 3) {
-            const amt = parseFloat(cols[2].trim());
-            if (!isNaN(amt)) {
-              parsed.push({
-                id: `csv-${idx}`,
-                date: cols[0].trim(),
-                sourceDestination: cols[1].trim(),
-                transactionDetails: '',
-                notes: '',
-                rekFrom: '',
-                amount: amt,
-              });
-            }
-          }
-        });
-
-        if (parsed.length > 0) {
-          let filteredParsed = parsed.filter((line) => {
-            const uniqueRef = `BANK-REF:${line.date}:${line.amount}:${line.sourceDestination}`;
-            const fallbackRef = `BANK-REF: ${line.sourceDestination}`;
-            return !reconciledBankRefs.includes(uniqueRef) && !reconciledBankRefs.includes(fallbackRef);
-          });
-
-          if (filteredParsed.length === 0) {
-            alert('All items in this statement have already been reconciled and filtered out!');
-            return;
-          }
-
-          if (filteredParsed.length > 0) {
-            const firstDate = new Date(filteredParsed[0].date);
-            if (!isNaN(firstDate.getTime())) {
-              setFilterMonth(firstDate.getMonth() + 1);
-              setFilterYear(firstDate.getFullYear());
-            }
-          }
-
-          const sortedParsed = filteredParsed.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-          setBankLines(sortedParsed);
-          setSelectedBankId(sortedParsed[0].id);
+        for (let i = 1; i < lines.length; i++) {
+          const cols = lines[i].split(',');
+          if (cols.length < 3) continue;
+          const date = cols[0]?.trim();
+          const sourceDestination = cols[1]?.trim() || '';
+          const rawAmt = cols[2]?.trim().replace(/[^0-9.-]/g, '');
+          const amount = parseFloat(rawAmt);
+          if (!date || isNaN(amount)) continue;
+          if (reconciledSet.has(`BANK-REF:${date}:${amount}:${sourceDestination}`)) continue;
+          parsed.push({ id: `csv-${i}-${date}-${amount}`, date, sourceDestination, transactionDetails: cols[3]?.trim() || '', notes: cols[4]?.trim() || '', rekFrom: cols[5]?.trim() || '', amount });
         }
+        const sorted = [...parsed].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        setBankLines(sorted);
+        if (sorted.length > 0) setSelectedBankId(sorted[0].id);
       };
       reader.readAsText(file);
     }
   };
-
 
   const handleMatchAndClear = (overrideTargetId?: string) => {
     const activeTargetIds = typeof overrideTargetId === 'string' ? [overrideTargetId] : currentTargetRecordIds;
     if (!activeBankLine || activeTargetIds.length === 0) return;
     const targetRecords = recordsList.filter((r) => activeTargetIds.includes(r.id));
     if (targetRecords.length === 0) return;
-
     startTransition(async () => {
       try {
         const bankAmountAbs = Math.abs(activeBankLine.amount);
         const recordAmountAbs = Math.abs(targetRecords.reduce((sum, r) => sum + Math.abs(r.amount), 0));
-        
         let shouldClearDiff = false;
         let isPartialPayment = false;
         if (bankAmountAbs !== recordAmountAbs) {
-          if (targetRecords.length > 1) {
-            alert(`Amount mismatch!\nBank: ${bankAmountAbs}\nSystem: ${recordAmountAbs}\n\nYou cannot auto-adjust multiple records. Please manually adjust the system records to match the bank statement.`);
-            return;
-          }
+          if (targetRecords.length > 1) { alert('Amount mismatch with multiple records. Adjust manually.'); return; }
           if (bankAmountAbs < recordAmountAbs && targetRecords[0].type === 'invoice') {
-            const proceed = confirm(`Partial payment detected!\nBank: ${bankAmountAbs}\nSystem: ${recordAmountAbs}\n\nWould you like to record this as a PARTIAL PAYMENT instead of shrinking the invoice?`);
-            if (proceed) {
-              isPartialPayment = true;
-            } else {
-              const proceedAdjust = confirm(`Do you want to permanently shrink the invoice amount to match the bank statement and continue?`);
-              if (!proceedAdjust) return;
-              shouldClearDiff = true;
-            }
+            const proceed = confirm(`Partial payment?\nBank: Rp ${bankAmountAbs.toLocaleString('id-ID')}\nInvoice: Rp ${recordAmountAbs.toLocaleString('id-ID')}\n\nRecord as PARTIAL PAYMENT?`);
+            if (proceed) { isPartialPayment = true; }
+            else { if (!confirm('Shrink invoice to match bank?')) return; shouldClearDiff = true; }
           } else {
-            const proceed = confirm(`Amount mismatch!\nBank: ${bankAmountAbs}\nSystem: ${recordAmountAbs}\n\nDo you want to adjust the system record to match the bank statement and continue?`);
-            if (!proceed) return;
+            if (!confirm(`Amount mismatch!\nBank: Rp ${bankAmountAbs.toLocaleString('id-ID')}\nSystem: Rp ${recordAmountAbs.toLocaleString('id-ID')}\n\nAdjust system to bank amount?`)) return;
             shouldClearDiff = true;
           }
         }
-
         const uniqueRef = `BANK-REF:${activeBankLine.date}:${activeBankLine.amount}:${activeBankLine.sourceDestination}`;
-        
         for (const targetRecord of targetRecords) {
-          await reconcileRecord(
-            targetRecord.id, 
-            targetRecord.type, 
-            uniqueRef, 
-            activeBankId, 
-            (shouldClearDiff || isPartialPayment) ? activeBankLine.amount : undefined,
-            isPartialPayment
-          );
+          await reconcileRecord(targetRecord.id, targetRecord.type, uniqueRef, activeBankId, (shouldClearDiff || isPartialPayment) ? activeBankLine.amount : undefined, isPartialPayment);
         }
-
         setBankLines((prev) => prev.filter((b) => b.id !== activeBankLine.id));
         if (isPartialPayment) {
-          setRecordsList((prev) => prev.map((r) => {
-            if (activeTargetIds.includes(r.id)) {
-              return { ...r, amount: r.amount > 0 ? r.amount - bankAmountAbs : r.amount + bankAmountAbs };
-            }
-            return r;
-          }));
+          setRecordsList((prev) => prev.map((r) => activeTargetIds.includes(r.id) ? { ...r, amount: r.amount > 0 ? r.amount - bankAmountAbs : r.amount + bankAmountAbs } : r));
         } else {
           setRecordsList((prev) => prev.filter((r) => !activeTargetIds.includes(r.id)));
         }
         setSelectedRecordIds([]);
         setSelectedBankId(null);
-      } catch (err) {
-        console.error(err);
-      }
+      } catch (err) { console.error(err); }
     });
   };
 
-  const handleQuickResolve = () => {
+  const handleQuickResolve = (type: 'expense' | 'income') => {
     if (!activeBankLine) return;
     startTransition(async () => {
       try {
         const uniqueBankRef = `BANK-REF:${activeBankLine.date}:${activeBankLine.amount}:${activeBankLine.sourceDestination}`;
-        // Combine vendor + notes for description since DB doesn't have notes column
         const finalDescription = (quickVendorName ? quickVendorName + ' | ' : '') + quickNotes;
-
-        await quickResolveAndReconcile(
-          resolutionTab === 'expense' ? 'expense' : 'income',
-          quickCategory,
-          Number(quickAmount) || Math.abs(activeBankLine.amount),
-          quickDate || activeBankLine.date,
-          finalDescription || 'Quick Resolve',
-          uniqueBankRef,
-          activeBankId,
-          quickVendorId
-        );
+        await quickResolveAndReconcile(type, quickCategory, Number(quickAmount) || Math.abs(activeBankLine.amount), quickDate || activeBankLine.date, finalDescription || 'Quick Resolve', uniqueBankRef, activeBankId, quickVendorId);
         setBankLines((prev) => prev.filter((b) => b.id !== activeBankLine.id));
         setSelectedBankId(null);
-        
-        // Reset quick form fields so they don't stick for the next item
-        setQuickCategory('');
-        setQuickVendorName('');
-        setQuickVendorId(undefined);
-        setQuickNotes('');
-      } catch (err) {
-        console.error(err);
-        alert('Failed to save quick record. Please try again.');
-      }
+        setQuickCategory(''); setQuickVendorName(''); setQuickVendorId(undefined); setQuickNotes(''); setShowQuickForm(false);
+      } catch (err) { console.error(err); alert('Failed to save. Please try again.'); }
     });
   };
 
@@ -338,143 +254,45 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
     if (!quickVendorName.trim()) return;
     setIsQuickAddingVendor(true);
     try {
-      const res = await createClientRecord({
-        name: quickVendorName,
-        contactType: 'vendor'
-      });
-      if (res.success && res.client) {
-        setLocalVendors(prev => [...prev, res.client!]);
-        setQuickVendorId(res.client.id);
-        setVendorDropdownOpen(false);
-      } else {
-        alert(res.error || 'Failed to create vendor');
-      }
-    } catch (err: any) {
-      alert(err?.message || 'Error creating vendor');
-    } finally {
-      setIsQuickAddingVendor(false);
-    }
+      const res = await createClientRecord({ name: quickVendorName, contactType: 'vendor' });
+      if (res.success && res.client) { setLocalVendors((prev) => [...prev, res.client!]); setQuickVendorId(res.client.id); setVendorDropdownOpen(false); }
+      else alert(res.error || 'Failed to create vendor');
+    } catch (err: any) { alert(err?.message || 'Error'); }
+    finally { setIsQuickAddingVendor(false); }
   };
 
-  const renderSystemRecordsList = () => {
-    let filteredRecords = recordsList.filter((r) => {
+  const filteredSystemRecords = React.useMemo(() => {
+    let list = recordsList.filter((r) => {
       if (!showReconciled && r.reconciled) return false;
-      
-      // Bypass month filter if user is actively trying to match a selected bank line
-      if (activeBankLine) return true;
-      
+      if (activeBankLine) {
+        if (activeBankLine.amount > 0) return r.type === 'invoice' || r.type === 'income';
+        else return r.type === 'expense' || r.type === 'payroll';
+      }
       const d = new Date(r.date);
-      return (d.getMonth() + 1) === filterMonth && d.getFullYear() === filterYear;
+      return d.getMonth() + 1 === filterMonth && d.getFullYear() === filterYear;
     });
-    
     if (activeBankLine) {
-      filteredRecords = filteredRecords.filter((rec) => {
-        if (activeBankLine.amount > 0) {
-          return rec.type === 'invoice' || rec.type === 'income';
-        } else {
-          return rec.type === 'expense' || rec.type === 'payroll';
-        }
-      });
-      filteredRecords = filteredRecords.sort((a, b) => {
-        const aAuto = autoMatchRecord?.id === a.id;
-        const bAuto = autoMatchRecord?.id === b.id;
-        if (aAuto && !bAuto) return -1;
-        if (!aAuto && bAuto) return 1;
-        return new Date(b.date).getTime() - new Date(a.date).getTime();
+      list = list.sort((a, b) => {
+        const aScore = (Math.abs(a.amount - Math.abs(activeBankLine.amount)) < 0.01 ? 1 : 0) + payeeSimilarity(activeBankLine.sourceDestination, a.payeeOrClient || a.reference);
+        const bScore = (Math.abs(b.amount - Math.abs(activeBankLine.amount)) < 0.01 ? 1 : 0) + payeeSimilarity(activeBankLine.sourceDestination, b.payeeOrClient || b.reference);
+        return bScore - aScore;
       });
     } else {
-      filteredRecords = filteredRecords.sort((a, b) => {
-        return new Date(b.date).getTime() - new Date(a.date).getTime();
-      });
+      list = list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }
+    return list;
+  }, [recordsList, showReconciled, activeBankLine, filterMonth, filterYear]);
 
-    const items = [
-      <div key="toggle" className="flex items-center gap-2 mb-2 px-1">
-        <input 
-          type="checkbox" 
-          id="showReconciledToggle" 
-          checked={showReconciled}
-          onChange={(e) => setShowReconciled(e.target.checked)}
-          className="accent-[#d4af37]"
-        />
-        <label htmlFor="showReconciledToggle" className="text-xs font-bold text-zinc-400 cursor-pointer hover:text-white transition-colors">
-          Show already-reconciled records (e.g. manually cleared)
-        </label>
-      </div>
-    ];
-
-    if (filteredRecords.length === 0) {
-      items.push(
-        <div key="empty" className="p-8 text-center text-zinc-500 font-mono text-xs border border-dashed border-zinc-800 rounded-xl space-y-2">
-          <div className="text-white font-bold">NO UNRECONCILED SYSTEM RECORDS</div>
-          <div className="text-[10px] text-zinc-400 font-sans">
-            {activeBankLine ? `No ${activeBankLine.amount > 0 ? 'income/invoices' : 'expense/payroll'} available to match.` : 'All invoices and expenses are cleared or none have been issued yet.'}
-          </div>
-        </div>
-      );
-      return items;
-    }
-
-    items.push(...filteredRecords.map((rec) => {
-      const isHighlighted = currentTargetRecordIds.includes(rec.id);
-      const isAuto = autoMatchRecord?.id === rec.id;
-
-      return (
-        <div
-          key={rec.id}
-          onClick={() => setSelectedRecordIds(prev => prev.includes(rec.id) ? prev.filter(id => id !== rec.id) : [...prev, rec.id])}
-          className={`cursor-pointer rounded-xl p-4 border transition-all duration-200 ${
-            isHighlighted
-              ? 'bg-[#d4af37]/20 border-[#f5d77f] shadow-[0_0_20px_rgba(212,175,55,0.25)]'
-              : 'bg-zinc-950/60 border-zinc-800/80 hover:border-zinc-700'
-          }`}
-        >
-          <div className="flex items-center justify-between text-xs font-mono mb-2">
-            <span className="text-zinc-400">{rec.date}</span>
-            <span className={`font-bold ${rec.amount > 0 ? 'text-[#f5d77f]' : 'text-red-400'}`}>
-              {rec.amount > 0 ? `+Rp ${rec.amount.toLocaleString('en-US')}` : `-Rp ${Math.abs(rec.amount).toLocaleString('en-US')}`}
-            </span>
-          </div>
-          <div className="text-xs font-sans text-white font-medium flex items-center justify-between">
-            <span>{rec.payeeOrClient || rec.reference}</span>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-900 text-[#d4af37] uppercase border border-[#d4af37]/20">
-              {rec.type}
-            </span>
-          </div>
-          <div className="text-[10px] text-zinc-500 font-mono font-normal tracking-wider mt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <span className="truncate pr-2">{rec.notes || 'NO NOTES'}</span>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              {rec.reconciled && (
-                 <span className="text-emerald-500 font-bold bg-emerald-500/10 px-1 rounded">ALREADY RECONCILED</span>
-              )}
-              {isAuto && (
-                 <span className="text-[#f5d77f] font-bold bg-[#d4af37]/10 px-1 rounded">RECOMMENDED MATCH</span>
-              )}
-              {activeBankLine && !rec.reconciled && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedRecordIds([rec.id]);
-                    handleMatchAndClear(rec.id);
-                  }}
-                  className="bg-[#d4af37] hover:bg-[#b5952f] text-black font-extrabold px-3 py-1.5 rounded transition-colors text-[10px]"
-                >
-                  {isPending ? '...' : 'MATCH'}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      );
-    }));
-
-    return items;
-  };
+  const bankAmt = activeBankLine ? Math.abs(activeBankLine.amount) : 0;
+  const selectedRecords = recordsList.filter((r) => currentTargetRecordIds.includes(r.id));
+  const systemAmt = selectedRecords.reduce((s, r) => s + Math.abs(r.amount), 0);
+  const diff = systemAmt - bankAmt;
+  const isExactMatch = bankAmt > 0 && Math.abs(diff) < 0.01;
+  const canMatch = !!activeBankLine && currentTargetRecordIds.length > 0;
 
   return (
     <div className="space-y-6">
-      {/* Upload & Demo Strip */}
+      {/* Controls Strip */}
       <div className="flex flex-col md:flex-row gap-6 items-start md:items-center justify-between mb-8 p-6 gold-glass-panel rounded-2xl border border-[#d4af37]/20">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#d4af37] to-[#8a7322] p-0.5 shadow-[0_0_20px_rgba(212,175,55,0.4)]">
@@ -482,463 +300,269 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
               <FileSpreadsheet className="w-6 h-6 text-[#d4af37]" />
             </div>
           </div>
-          <div>
-            <h2 className="text-sm font-extrabold text-white uppercase tracking-wider mb-1">
-              BANK RECONCILIATION
-            </h2>
-          </div>
+          <h2 className="text-sm font-extrabold text-white uppercase tracking-wider">BANK RECONCILIATION</h2>
         </div>
-
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <select
-            value={activeBankId}
-            onChange={(e) => setActiveBankId(e.target.value)}
-            className="bg-black/60 border border-[#d4af37]/30 text-[#f5d77f] text-xs font-bold rounded-lg px-3 py-2.5 outline-none focus:border-[#d4af37] transition-all font-mono min-w-[200px]"
-          >
-            {bankAccounts.length === 0 ? (
-              <option value="">Select Bank (None Registered)</option>
-            ) : (
-              bankAccounts.map((b) => {
-                const label = `${b.bank_name} | ${b.account_number}${b.account_holder ? ` | ${b.account_holder}` : ''}`;
-                return (
-                  <option key={b.id} value={b.id}>
-                    {label}
-                  </option>
-                );
-              })
-            )}
+        <div className="flex flex-wrap items-center gap-3">
+          <select value={activeBankId} onChange={(e) => setActiveBankId(e.target.value)} className="bg-black/60 border border-[#d4af37]/30 text-[#f5d77f] text-xs font-bold rounded-lg px-3 py-2.5 outline-none focus:border-[#d4af37] font-mono min-w-[200px]">
+            {bankAccounts.length === 0 ? <option value="">Select Bank (None Registered)</option> : bankAccounts.map((b) => <option key={b.id} value={b.id}>{b.bank_name} | {b.account_number}{b.account_holder ? ` | ${b.account_holder}` : ''}</option>)}
           </select>
-
-          <select
-            value={bankFormat}
-            onChange={(e) => setBankFormat(e.target.value)}
-            className="bg-black/60 border border-[#d4af37]/30 text-white text-xs font-bold rounded-lg px-3 py-2.5 outline-none focus:border-[#d4af37] transition-all min-w-[160px]"
-          >
+          <select value={bankFormat} onChange={(e) => setBankFormat(e.target.value)} className="bg-black/60 border border-[#d4af37]/30 text-white text-xs font-bold rounded-lg px-3 py-2.5 outline-none focus:border-[#d4af37] min-w-[160px]">
             <option value="jago">Bank Jago</option>
             <option value="bca_business">BCA Business (Giro)</option>
             <option value="bca_individual" disabled>BCA Individual (Soon)</option>
           </select>
-
           <div className="flex items-center gap-2 border border-zinc-700/50 rounded-lg p-1 bg-black/40">
-            <select
-              value={filterMonth}
-              onChange={(e) => setFilterMonth(Number(e.target.value))}
-              className="bg-transparent text-white text-xs font-bold rounded px-2 py-1.5 outline-none hover:bg-zinc-800/50 cursor-pointer"
-            >
-              {Array.from({ length: 12 }).map((_, i) => (
-                <option key={i} value={i + 1}>
-                  {new Date(2000, i, 1).toLocaleString('default', { month: 'short' }).toUpperCase()}
-                </option>
-              ))}
+            <select value={filterMonth} onChange={(e) => setFilterMonth(Number(e.target.value))} className="bg-transparent text-white text-xs font-bold rounded px-2 py-1.5 outline-none hover:bg-zinc-800/50 cursor-pointer">
+              {Array.from({ length: 12 }).map((_, i) => <option key={i} value={i + 1}>{new Date(2000, i, 1).toLocaleString('default', { month: 'short' }).toUpperCase()}</option>)}
             </select>
-            <input
-              type="number"
-              value={filterYear}
-              onChange={(e) => setFilterYear(Number(e.target.value))}
-              className="bg-transparent text-white text-xs font-bold font-mono rounded px-2 py-1.5 outline-none w-16 hover:bg-zinc-800/50 focus:bg-zinc-800/80"
-              min="2000"
-              max="2100"
-            />
+            <input type="number" value={filterYear} onChange={(e) => setFilterYear(Number(e.target.value))} className="bg-transparent text-white text-xs font-bold font-mono rounded px-2 py-1.5 outline-none w-16 hover:bg-zinc-800/50" min="2000" max="2100" />
           </div>
-
-          <label className="group relative flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-transparent via-[#d4af37]/10 to-transparent border border-[#d4af37]/40 rounded-full text-[#f5d77f] text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-[#d4af37]/20 hover:border-[#d4af37] transition-all w-full md:w-auto justify-center">
+          <label className="relative flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-transparent via-[#d4af37]/10 to-transparent border border-[#d4af37]/40 rounded-full text-[#f5d77f] text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-[#d4af37]/20 hover:border-[#d4af37] transition-all">
             <UploadCloud className="w-4 h-4" />
             <span>Upload Bank Statement</span>
-            <input
-              type="file"
-              accept=".csv,.pdf"
-              className="hidden"
-              onChange={handleFileUpload}
-              disabled={isPending}
-            />
-            {isPending && (
-              <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center">
-                <div className="w-4 h-4 border-2 border-[#f5d77f] border-t-transparent rounded-full animate-spin"></div>
-              </div>
-            )}
+            <input type="file" accept=".csv,.pdf" className="hidden" onChange={handleFileUpload} disabled={isPending} />
+            {isPending && <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center"><div className="w-4 h-4 border-2 border-[#f5d77f] border-t-transparent rounded-full animate-spin" /></div>}
           </label>
         </div>
       </div>
 
-      {/* Split-Panel Reconciliation HUD */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="gold-glass-panel rounded-2xl p-6 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between pb-3 mb-4 border-b border-zinc-800">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-[#d4af37]">
-                BANK STATEMENT FEED
-              </h3>
+      {/* 3-Column Layout: Bank | Connector | System Records */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_160px_1fr] items-start">
+
+        {/* LEFT: Bank Statement Feed */}
+        <div className="gold-glass-panel rounded-2xl lg:rounded-r-none lg:border-r-0 p-6 flex flex-col min-h-[620px]">
+          <div className="flex items-center justify-between pb-3 mb-4 border-b border-zinc-800">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[#d4af37]">BANK STATEMENT FEED</h3>
+            <div className="flex items-center gap-2">
               <div className="flex bg-zinc-950 rounded-lg p-1 border border-zinc-800">
                 <button onClick={() => setActiveFilterTab('all')} className={`px-2 py-1 text-[10px] rounded font-bold transition-all ${activeFilterTab === 'all' ? 'bg-[#d4af37]/20 text-[#f5d77f]' : 'text-zinc-500 hover:text-zinc-400'}`}>ALL</button>
                 <button onClick={() => setActiveFilterTab('matched')} className={`px-2 py-1 text-[10px] rounded font-bold transition-all ${activeFilterTab === 'matched' ? 'bg-emerald-500/20 text-emerald-400' : 'text-zinc-500 hover:text-zinc-400'}`}>MATCHED</button>
                 <button onClick={() => setActiveFilterTab('unmatched')} className={`px-2 py-1 text-[10px] rounded font-bold transition-all ${activeFilterTab === 'unmatched' ? 'bg-red-500/20 text-red-400' : 'text-zinc-500 hover:text-zinc-400'}`}>NOT FOUND</button>
               </div>
-              <span className="text-[10px] font-mono text-zinc-400">
-                {filteredBankLines.length} ITEMS
-              </span>
+              <span className="text-[10px] font-mono text-zinc-400">{filteredBankLines.length} ITEMS</span>
             </div>
-
-            <div className="space-y-3">
-              {filteredBankLines.length === 0 ? (
-                <div className="p-8 text-center text-zinc-500 font-mono text-xs border border-dashed border-zinc-800 rounded-xl space-y-2">
-                  <div className="text-white font-bold">NO BANK FEED TRANSACTIONS FOUND</div>
-                  <div className="text-[10px] text-zinc-400 font-sans">For {new Date(filterYear, filterMonth - 1, 1).toLocaleString('default', { month: 'long', year: 'numeric' })}</div>
-                </div>
-              ) : (
-                filteredBankLines.map((bank) => {
-                  const isSelected = bank.id === selectedBankId;
-                  const autoMatch = findAutoMatch(bank);
-
-                  return (
-                    <div
-                      key={bank.id}
-                      onClick={() => {
-                        setSelectedBankId(bank.id);
-                        setSelectedRecordId(null);
-                        // Auto-switch tabs based on amount type if entering resolution mode
-                        setResolutionTab(bank.amount < 0 ? 'expense' : 'income');
-                      }}
-                      className={`cursor-pointer rounded-xl p-4 border transition-all duration-200 ${
-                        isSelected
-                          ? 'bg-[#d4af37]/15 border-[#f5d77f] shadow-[0_0_20px_rgba(212,175,55,0.25)]'
-                          : 'bg-zinc-950/60 border-zinc-800/80 hover:border-zinc-700'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between text-xs font-mono mb-1">
-                        <span className="text-zinc-400">{bank.date}</span>
-                        <div className="flex items-center gap-2">
-                          {autoMatch ? (
-                            <span className="bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded text-[10px] font-bold">MATCHED</span>
-                          ) : (
-                            <span className="bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded text-[10px] font-bold">NOT FOUND</span>
-                          )}
-                          <span className={`font-bold ${bank.amount >= 0 ? 'text-[#f5d77f]' : 'text-red-400'}`}>
-                            {bank.amount >= 0
-                              ? `+Rp ${bank.amount.toLocaleString('en-US')}`
-                              : `-Rp ${Math.abs(bank.amount).toLocaleString('en-US')}`}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="text-sm font-sans text-white font-bold tracking-wide flex flex-col gap-1 mt-2">
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                          <span>{bank.sourceDestination}</span>
-                          {bank.notes && <span className="text-zinc-500 font-normal border-l border-zinc-700 pl-2">{bank.notes}</span>}
-                          {bank.transactionDetails && <span className="text-zinc-500 font-normal border-l border-zinc-700 pl-2">{bank.transactionDetails}</span>}
-                        </div>
-                        {bank.rekFrom && (
-                          <div className="text-[10px] text-zinc-500 font-mono font-normal tracking-wider">
-                            {bank.rekFrom}
-                          </div>
-                        )}
-                      </div>
-
-                      {autoMatch && (
-                        <div className="mt-2.5 pt-2 border-t border-zinc-800/80 flex items-center justify-between text-[10px] font-mono text-[#f5d77f]">
-                          <span className="inline-flex items-center gap-1.5">
-                            <Sparkles className="w-3.5 h-3.5 text-[#f5d77f] animate-pulse" />
-                            <span>GOLD AUTO-MATCH: {autoMatch.reference}</span>
-                          </span>
-                        </div>
-                      )}
+          </div>
+          <div className="space-y-3 overflow-y-auto flex-1 pr-1">
+            {filteredBankLines.length === 0 ? (
+              <div className="p-8 text-center text-zinc-500 font-mono text-xs border border-dashed border-zinc-800 rounded-xl space-y-2">
+                <div className="text-white font-bold">NO BANK FEED TRANSACTIONS</div>
+                <div className="text-[10px] text-zinc-400 font-sans">Upload a statement for {new Date(filterYear, filterMonth - 1, 1).toLocaleString('default', { month: 'long', year: 'numeric' })}</div>
+              </div>
+            ) : filteredBankLines.map((bank) => {
+              const isSelected = bank.id === selectedBankId;
+              const bm = findBestMatch(bank);
+              const pScore = bm ? payeeSimilarity(bank.sourceDestination, bm.payeeOrClient || bm.reference) : 0;
+              return (
+                <div key={bank.id} onClick={() => { setSelectedBankId(isSelected ? null : bank.id); setSelectedRecordIds([]); }}
+                  className={`cursor-pointer rounded-xl p-4 border transition-all duration-200 ${isSelected ? 'bg-[#d4af37]/15 border-[#f5d77f] shadow-[0_0_20px_rgba(212,175,55,0.25)]' : 'bg-zinc-950/60 border-zinc-800/80 hover:border-zinc-700'}`}>
+                  <div className="flex items-center justify-between text-xs font-mono mb-1">
+                    <span className="text-zinc-400">{bank.date}</span>
+                    <div className="flex items-center gap-2">
+                      {bm ? (
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${pScore > 0.3 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+                          {pScore > 0.3 ? '\u2605 BEST MATCH' : 'SUGGESTED'}
+                        </span>
+                      ) : <span className="bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded text-[10px] font-bold">NOT FOUND</span>}
+                      <span className={`font-bold ${bank.amount >= 0 ? 'text-[#f5d77f]' : 'text-red-400'}`}>
+                        {bank.amount >= 0 ? `+Rp ${bank.amount.toLocaleString('en-US')}` : `-Rp ${Math.abs(bank.amount).toLocaleString('en-US')}`}
+                      </span>
                     </div>
-                  );
-                })
-              )}
-            </div>
+                  </div>
+                  <div className="text-sm font-sans text-white font-bold mt-2 truncate">{bank.sourceDestination}</div>
+                  {(bank.notes || bank.transactionDetails) && <div className="text-xs text-zinc-500 mt-0.5 truncate">{bank.notes || bank.transactionDetails}</div>}
+                  {bank.rekFrom && <div className="text-[10px] text-zinc-600 font-mono mt-0.5">{bank.rekFrom}</div>}
+                  {bm && (
+                    <div className="mt-2 pt-2 border-t border-zinc-800/80 flex items-center gap-1.5 text-[10px] font-mono text-[#f5d77f]">
+                      <Sparkles className="w-3.5 h-3.5 animate-pulse" />
+                      <span className="truncate">\u2192 {bm.payeeOrClient || bm.reference}</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        {/* RIGHT PANEL: SYSTEM RECORDS / RESOLUTION WIDGET */}
-        <div className="gold-glass-panel rounded-2xl p-6 flex flex-col justify-between">
-          {activeBankLine && !autoMatchRecord ? (
-            // ================= INLINE RESOLUTION WIDGET =================
-            <div className="h-full flex flex-col">
-              <div className="flex items-center justify-between pb-3 mb-4 border-b border-zinc-800">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#d4af37]">
-                  UNMATCHED ITEM • RESOLUTION WIDGET
-                </h3>
-                {resolutionTab === 'manual' ? (
-                  <button
-                    type="button"
-                    disabled={currentTargetRecordIds.length === 0 || isPending}
-                    onClick={() => handleMatchAndClear()}
-                    className="gold-btn inline-flex items-center gap-2 px-6 py-2 rounded-full text-[10px] uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>
-                      {isPending 
-                        ? 'RECONCILING...' 
-                        : (activeBankLine && currentTargetRecordIds.length > 0 && Math.abs(recordsList.filter(r => currentTargetRecordIds.includes(r.id)).reduce((sum, r) => sum + r.amount, 0)) !== Math.abs(activeBankLine.amount))
-                          ? 'ADJUST RECORD & RECONCILE' 
-                          : `FORCE MATCH & CLEAR ${currentTargetRecordIds.length > 1 ? `(${currentTargetRecordIds.length})` : ''}`}
-                    </span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={isPending}
-                    onClick={handleQuickResolve}
-                    className="gold-btn inline-flex items-center gap-2 px-6 py-2 rounded-full text-[10px] uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    <span>{isPending ? 'PROCESSING...' : 'SAVE & RECONCILE'}</span>
-                  </button>
-                )}
-              </div>
-              
-              {/* Tab Selector */}
-              <div className="flex bg-zinc-950 p-1 rounded-lg border border-zinc-800/80 mb-6">
-                <button 
-                  onClick={() => setResolutionTab('expense')}
-                  className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${resolutionTab === 'expense' ? 'bg-[#d4af37]/20 text-[#f5d77f]' : 'text-zinc-500 hover:text-zinc-400'}`}
-                >
-                  QUICK EXPENSE
-                </button>
-                <button 
-                  onClick={() => setResolutionTab('income')}
-                  className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${resolutionTab === 'income' ? 'bg-[#d4af37]/20 text-[#f5d77f]' : 'text-zinc-500 hover:text-zinc-400'}`}
-                >
-                  QUICK INCOME
-                </button>
-                <button 
-                  onClick={() => setResolutionTab('manual')}
-                  className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${resolutionTab === 'manual' ? 'bg-[#d4af37]/20 text-[#f5d77f]' : 'text-zinc-500 hover:text-zinc-400'}`}
-                >
-                  MANUAL MATCH
-                </button>
-              </div>
-
-              {resolutionTab === 'manual' ? (
-                // MANUAL MATCH TAB
-                <div className="flex-1 flex flex-col justify-between">
-                  <div className="space-y-3 flex-1 overflow-y-auto max-h-[400px] pr-2">
-                    {renderSystemRecordsList()}
-                  </div>
-                </div>
-              ) : (
-                // QUICK EXPENSE / INCOME TAB
-                <div className="flex-1 flex flex-col justify-between">
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="relative">
-                        <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1">
-                          Vendor / Payee Name <span className="text-red-500">*</span>
-                        </label>
-                        <input 
-                          type="text"
-                          required
-                          placeholder="Search vendor or enter custom text..."
-                          value={quickVendorName}
-                          onChange={(e) => {
-                            setQuickVendorName(e.target.value);
-                            setQuickVendorId(undefined); // Unset ID if they type manually
-                            setVendorDropdownOpen(true);
-                          }}
-                          onFocus={() => setVendorDropdownOpen(true)}
-                          onBlur={() => setTimeout(() => setVendorDropdownOpen(false), 200)}
-                          className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#d4af37]"
-                        />
-                        {vendorDropdownOpen && (
-                          <div className="absolute z-50 w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-xl shadow-xl max-h-56 overflow-y-auto top-[100%]">
-                            {localVendors
-                              .filter(v => v.name.toLowerCase().includes(quickVendorName.toLowerCase()))
-                              .map(v => (
-                                <div 
-                                  key={v.id}
-                                  onClick={() => {
-                                    setQuickVendorName(v.name);
-                                    setQuickVendorId(v.id);
-                                    setVendorDropdownOpen(false);
-                                  }}
-                                  className="px-4 py-2.5 text-xs text-white hover:bg-[#d4af37]/20 cursor-pointer transition-colors"
-                                >
-                                  {v.name}
-                                </div>
-                              ))}
-                            
-                            {/* Quick Add Button */}
-                            {quickVendorName.trim() && !localVendors.some(v => v.name.toLowerCase() === quickVendorName.toLowerCase()) && (
-                              <div 
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  handleQuickAddVendor();
-                                }}
-                                className="px-4 py-3 text-xs text-[#f5d77f] font-bold border-t border-zinc-800 hover:bg-[#d4af37]/20 cursor-pointer flex items-center gap-2 transition-colors"
-                              >
-                                {isQuickAddingVendor ? (
-                                  <span className="animate-pulse">ADDING...</span>
-                                ) : (
-                                  <><span>+ QUICK ADD VENDOR:</span> <span className="text-white">"{quickVendorName}"</span></>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      <div className="space-y-1 relative">
-                        <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500">Category</label>
-                        <input
-                          type="text"
-                          placeholder="Type to search or enter custom..."
-                          value={quickCategory}
-                          onChange={(e) => {
-                            setQuickCategory(e.target.value);
-                            setCoaDropdownOpen(true);
-                          }}
-                          onFocus={() => setCoaDropdownOpen(true)}
-                          onBlur={() => setTimeout(() => setCoaDropdownOpen(false), 200)}
-                          className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#d4af37]"
-                        />
-                        {coaDropdownOpen && (
-                          <div className="absolute z-50 w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-xl shadow-xl max-h-56 overflow-y-auto top-[100%]">
-                            {Object.entries(
-                              coaAccounts.reduce((acc, curr) => {
-                                if (!acc[curr.account_type]) acc[curr.account_type] = [];
-                                acc[curr.account_type].push(curr);
-                                return acc;
-                              }, {} as Record<string, COAAccountMinimal[]>)
-                            ).map(([type, accounts]) => {
-                              const searchLower = quickCategory.toLowerCase();
-                              const filtered = searchLower === 'uncategorized' ? accounts : accounts.filter(a => 
-                                (a.account_code + ' - ' + a.account_name).toLowerCase().includes(searchLower)
-                              );
-                              if (filtered.length === 0) return null;
-                              // Expanded if they are searching for something, otherwise default to collapsed
-                              const hasSearchTerm = searchLower.length > 0;
-                              const isExpanded = expandedCoaGroups[type] !== undefined 
-                                ? expandedCoaGroups[type] 
-                                : hasSearchTerm;
-
-                              return (
-                                <div key={type}>
-                                  <div 
-                                    className="px-3 py-1.5 bg-zinc-900 text-[10px] font-bold text-zinc-500 uppercase tracking-wider sticky top-0 cursor-pointer flex items-center gap-1 hover:text-white transition-colors"
-                                    onMouseDown={(e) => e.preventDefault()}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setExpandedCoaGroups(prev => {
-                                        const current = prev[type] !== undefined ? prev[type] : (searchLower.length > 0);
-                                        return { ...prev, [type]: !current };
-                                      });
-                                    }}
-                                  >
-                                    {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                                    {type}
-                                  </div>
-                                  {isExpanded && filtered.map(coa => (
-                                    <div 
-                                      key={coa.account_code}
-                                      onClick={() => {
-                                        setQuickCategory(coa.account_code + ' - ' + coa.account_name);
-                                        setCoaDropdownOpen(false);
-                                      }}
-                                      className="px-4 py-2 text-xs text-zinc-300 hover:bg-[#d4af37]/20 hover:text-white cursor-pointer transition-colors flex items-center gap-2"
-                                    >
-                                      <span className="font-mono text-[#f5d77f]">{coa.account_code}</span>
-                                      <span>{coa.account_name}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1">
-                          Payment Date *
-                        </label>
-                        <input
-                          type="date"
-                          required
-                          value={quickDate}
-                          onChange={(e) => setQuickDate(e.target.value)}
-                          className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#d4af37] font-mono"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1">
-                          Amount (IDR / Rp) *
-                        </label>
-                        <RupiahInput
-                          required
-                          placeholder="Rp 0"
-                          value={quickAmount}
-                          onChange={(e) => setQuickAmount(e.target.value === '' ? '' : Number(e.target.value))}
-                          className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm font-mono font-bold text-[#f5d77f] focus:outline-none focus:border-[#d4af37]"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1">
-                        Memo / Reference Notes
-                      </label>
-                      <textarea
-                        rows={2}
-                        value={quickNotes}
-                        onChange={(e) => setQuickNotes(e.target.value)}
-                        className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#d4af37] font-sans"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            // ================= NORMAL SYSTEM RECORDS VIEW =================
-            <div className="h-full flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between pb-3 mb-4 border-b border-zinc-800">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-[#d4af37]">SYSTEM RECORDS</h3>
-                  <span className="text-[10px] font-mono text-zinc-400">
-                    {recordsList.length} QUEUED ENTRIES
-                  </span>
-                </div>
-                <div className="space-y-3 overflow-y-auto max-h-[500px] pr-2">
-                  {renderSystemRecordsList()}
-                </div>
-              </div>
-              
-              {/* ACTION BUTTON HUD */}
-              <div className="mt-6 pt-4 border-t border-zinc-800 flex items-center justify-between">
-                <div className="text-xs font-mono text-zinc-400">
-                  {(() => {
-                    if (!activeBankLine || currentTargetRecordIds.length === 0) return <span>SELECT BANK & SYSTEM RECORD</span>;
-                    const recAmounts = recordsList.filter(r => currentTargetRecordIds.includes(r.id)).reduce((sum, r) => sum + Math.abs(r.amount), 0);
-                    if (recAmounts !== Math.abs(activeBankLine.amount)) {
-                      const diff = recAmounts - Math.abs(activeBankLine.amount);
-                      return (
-                        <span className="text-yellow-400 font-bold">
-                          NEEDS ADJUSTMENT (DIFF: {diff > 0 ? '+' : ''}Rp {diff.toLocaleString('en-US')})
-                        </span>
-                      );
-                    }
-                    return <span className="text-[#f5d77f] font-bold">READY TO CLEAR (EXACT MATCH)</span>;
-                  })()}
-                </div>
-                <button
-                  type="button"
-                  disabled={!activeBankLine || currentTargetRecordIds.length === 0 || isPending}
-                  onClick={() => handleMatchAndClear()}
-                  className="gold-btn inline-flex items-center gap-2 px-7 py-3 rounded-full text-xs uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>
-                    {isPending 
-                      ? 'RECONCILING...' 
-                      : (activeBankLine && currentTargetRecordIds.length > 0 && Math.abs(recordsList.filter(r => currentTargetRecordIds.includes(r.id)).reduce((sum, r) => sum + r.amount, 0)) !== Math.abs(activeBankLine.amount))
-                        ? 'ADJUST RECORD & RECONCILE' 
-                        : `MATCH & CLEAR ${currentTargetRecordIds.length > 1 ? currentTargetRecordIds.length + ' RECORDS' : 'RECORD'}`}
-                  </span>
-                </button>
-              </div>
+        {/* MIDDLE: Connector with MATCH button */}
+        <div className="hidden lg:flex flex-col items-center justify-center bg-zinc-950/90 border border-zinc-800/60 border-x-0 min-h-[620px] px-3 py-8 gap-5">
+          <div className="text-[9px] text-zinc-600 uppercase tracking-wider text-center">Bank</div>
+          <div className={`text-[11px] font-mono font-bold text-center leading-snug ${bankAmt > 0 ? 'text-[#f5d77f]' : 'text-zinc-700'}`}>
+            {bankAmt > 0 ? `Rp ${bankAmt.toLocaleString('id-ID')}` : '\u2014'}
+          </div>
+          <ArrowRight className="w-5 h-5 text-zinc-700" />
+          <div className={`text-[11px] font-mono font-bold text-center leading-snug ${systemAmt > 0 ? 'text-white' : 'text-zinc-700'}`}>
+            {systemAmt > 0 ? `Rp ${systemAmt.toLocaleString('id-ID')}` : '\u2014'}
+          </div>
+          <div className="text-[9px] text-zinc-600 uppercase tracking-wider text-center">System</div>
+          {canMatch && (
+            <div className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded-full border ${isExactMatch ? 'text-emerald-400 border-emerald-400/30 bg-emerald-400/10' : diff > 0 ? 'text-orange-400 border-orange-400/30 bg-orange-400/10' : 'text-blue-400 border-blue-400/30 bg-blue-400/10'}`}>
+              {isExactMatch ? 'EXACT' : `${diff > 0 ? '+' : ''}Rp ${Math.abs(diff).toLocaleString('id-ID')}`}
             </div>
           )}
+          <button
+            type="button"
+            disabled={!canMatch || isPending}
+            onClick={() => handleMatchAndClear()}
+            className={`flex flex-col items-center gap-1.5 px-5 py-4 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all border ${
+              canMatch
+                ? 'bg-gradient-to-b from-[#d4af37] to-[#8a7322] text-black border-[#f5d77f]/40 shadow-[0_0_20px_rgba(212,175,55,0.5)] hover:shadow-[0_0_30px_rgba(212,175,55,0.7)] hover:scale-105 cursor-pointer'
+                : 'bg-zinc-900 text-zinc-600 border-zinc-800 cursor-not-allowed'
+            }`}
+          >
+            <CheckCircle2 className="w-5 h-5" />
+            <span>{isPending ? '...' : 'MATCH'}</span>
+          </button>
+          {!canMatch && <div className="text-[9px] text-zinc-600 text-center font-mono px-2 leading-relaxed">SELECT<br />ONE EACH<br />SIDE</div>}
+        </div>
+
+        {/* RIGHT: System Records */}
+        <div className="gold-glass-panel rounded-2xl lg:rounded-l-none lg:border-l-0 p-6 flex flex-col min-h-[620px]">
+          <div className="flex items-center justify-between pb-3 mb-4 border-b border-zinc-800">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[#d4af37]">SYSTEM RECORDS</h3>
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-1.5 text-[10px] text-zinc-400 cursor-pointer">
+                <input type="checkbox" checked={showReconciled} onChange={(e) => setShowReconciled(e.target.checked)} className="accent-[#d4af37]" />
+                Show cleared
+              </label>
+              <span className="text-[10px] font-mono text-zinc-400">{recordsList.length} QUEUED</span>
+            </div>
+          </div>
+
+          {/* Mobile MATCH bar */}
+          <div className="flex lg:hidden items-center justify-between mb-4 p-3 bg-zinc-950/80 rounded-xl border border-zinc-800">
+            <div className="text-xs font-mono">
+              {canMatch ? isExactMatch ? <span className="text-emerald-400 font-bold">EXACT MATCH</span> : <span className="text-yellow-400 font-bold">DIFF: Rp {Math.abs(diff).toLocaleString('id-ID')}</span> : <span className="text-zinc-500">Select bank + system record</span>}
+            </div>
+            <button type="button" disabled={!canMatch || isPending} onClick={() => handleMatchAndClear()} className="gold-btn inline-flex items-center gap-2 px-5 py-2 rounded-full text-[10px] uppercase tracking-wider disabled:opacity-40">
+              <CheckCircle2 className="w-4 h-4" />{isPending ? '...' : 'MATCH'}
+            </button>
+          </div>
+
+          {/* Records list */}
+          <div className="space-y-3 overflow-y-auto flex-1 pr-1">
+            {filteredSystemRecords.length === 0 ? (
+              <div className="p-8 text-center text-zinc-500 font-mono text-xs border border-dashed border-zinc-800 rounded-xl space-y-2">
+                <div className="text-white font-bold">NO SYSTEM RECORDS</div>
+                <div className="text-[10px] text-zinc-400 font-sans">
+                  {activeBankLine ? `No ${activeBankLine.amount > 0 ? 'income/invoices' : 'expenses/payroll'} to match.` : 'All records are cleared.'}
+                </div>
+              </div>
+            ) : filteredSystemRecords.map((rec) => {
+              const isSelected = currentTargetRecordIds.includes(rec.id);
+              const isBest = bestMatchRecord?.id === rec.id;
+              const amountMatch = activeBankLine && Math.abs(rec.amount - Math.abs(activeBankLine.amount)) < 0.01;
+              const pScore = activeBankLine ? payeeSimilarity(activeBankLine.sourceDestination, rec.payeeOrClient || rec.reference) : 0;
+              return (
+                <div key={rec.id}
+                  onClick={() => setSelectedRecordIds((prev) => prev.includes(rec.id) ? prev.filter((id) => id !== rec.id) : [...prev, rec.id])}
+                  className={`cursor-pointer rounded-xl p-4 border transition-all duration-200 ${isSelected ? 'bg-[#d4af37]/20 border-[#f5d77f] shadow-[0_0_20px_rgba(212,175,55,0.25)]' : isBest ? 'bg-emerald-500/5 border-emerald-500/30 hover:border-emerald-500/50' : 'bg-zinc-950/60 border-zinc-800/80 hover:border-zinc-700'}`}>
+                  <div className="flex items-center justify-between text-xs font-mono mb-2">
+                    <span className="text-zinc-400">{rec.date}</span>
+                    <span className={`font-bold ${rec.amount > 0 ? 'text-[#f5d77f]' : 'text-red-400'}`}>
+                      {rec.amount > 0 ? `+Rp ${rec.amount.toLocaleString('en-US')}` : `-Rp ${Math.abs(rec.amount).toLocaleString('en-US')}`}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-sans text-white font-medium truncate">{rec.payeeOrClient || rec.reference}</span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-900 text-[#d4af37] uppercase border border-[#d4af37]/20 shrink-0">{rec.type}</span>
+                  </div>
+                  {rec.notes && <div className="text-[10px] text-zinc-500 font-mono mt-1 truncate">{rec.notes}</div>}
+                  <div className="mt-2 flex items-center gap-2 flex-wrap">
+                    {rec.reconciled && <span className="text-emerald-500 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded text-[9px]">ALREADY CLEARED</span>}
+                    {isBest && amountMatch && pScore > 0.3 && <span className="text-[#f5d77f] font-bold bg-[#d4af37]/10 px-1.5 py-0.5 rounded text-[9px]">\u2605 BEST MATCH</span>}
+                    {isBest && amountMatch && pScore <= 0.3 && <span className="text-yellow-400 font-bold bg-yellow-400/10 px-1.5 py-0.5 rounded text-[9px]">SAME AMOUNT</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Quick Log - collapsible */}
+          <div className="mt-4 pt-4 border-t border-zinc-800">
+            <button type="button" onClick={() => setShowQuickForm((v) => !v)}
+              className="flex items-center justify-between w-full text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-white transition-colors">
+              <span className="flex items-center gap-2"><Sparkles className="w-3.5 h-3.5 text-[#d4af37]" />Quick Log — no matching record?</span>
+              {showQuickForm ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+            {showQuickForm && (
+              <div className="mt-4 space-y-3">
+                <div className="relative">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Vendor / Payee</label>
+                  <input type="text" placeholder="Search or enter name..." value={quickVendorName}
+                    onChange={(e) => { setQuickVendorName(e.target.value); setQuickVendorId(undefined); setVendorDropdownOpen(true); }}
+                    onFocus={() => setVendorDropdownOpen(true)} onBlur={() => setTimeout(() => setVendorDropdownOpen(false), 200)}
+                    className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#d4af37]" />
+                  {vendorDropdownOpen && (
+                    <div className="absolute z-50 w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-xl shadow-xl max-h-48 overflow-y-auto top-[100%]">
+                      {localVendors.filter((v) => v.name.toLowerCase().includes(quickVendorName.toLowerCase())).map((v) => (
+                        <div key={v.id} onClick={() => { setQuickVendorName(v.name); setQuickVendorId(v.id); setVendorDropdownOpen(false); }} className="px-4 py-2.5 text-xs text-white hover:bg-[#d4af37]/20 cursor-pointer">{v.name}</div>
+                      ))}
+                      {quickVendorName.trim() && !localVendors.some((v) => v.name.toLowerCase() === quickVendorName.toLowerCase()) && (
+                        <div onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleQuickAddVendor(); }} className="px-4 py-3 text-xs text-[#f5d77f] font-bold border-t border-zinc-800 hover:bg-[#d4af37]/20 cursor-pointer flex items-center gap-2">
+                          {isQuickAddingVendor ? <span className="animate-pulse">ADDING...</span> : <span>+ QUICK ADD: &ldquo;{quickVendorName}&rdquo;</span>}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className="relative">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Category</label>
+                  <input type="text" placeholder="Search category..." value={quickCategory}
+                    onChange={(e) => { setQuickCategory(e.target.value); setCoaDropdownOpen(true); }}
+                    onFocus={() => setCoaDropdownOpen(true)} onBlur={() => setTimeout(() => setCoaDropdownOpen(false), 200)}
+                    className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#d4af37]" />
+                  {coaDropdownOpen && (
+                    <div className="absolute z-50 w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-xl shadow-xl max-h-48 overflow-y-auto top-[100%]">
+                      {Object.entries(coaAccounts.reduce((acc, curr) => { if (!acc[curr.account_type]) acc[curr.account_type] = []; acc[curr.account_type].push(curr); return acc; }, {} as Record<string, COAAccountMinimal[]>)).map(([type, accounts]) => {
+                        const filtered = accounts.filter((a) => (a.account_code + ' - ' + a.account_name).toLowerCase().includes(quickCategory.toLowerCase()));
+                        if (filtered.length === 0) return null;
+                        const isExpanded = expandedCoaGroups[type] !== undefined ? expandedCoaGroups[type] : quickCategory.length > 0;
+                        return (
+                          <div key={type}>
+                            <div className="px-3 py-1.5 bg-zinc-900 text-[10px] font-bold text-zinc-500 uppercase tracking-wider sticky top-0 cursor-pointer flex items-center gap-1 hover:text-white"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => setExpandedCoaGroups((prev) => ({ ...prev, [type]: !(prev[type] !== undefined ? prev[type] : quickCategory.length > 0) }))}>
+                              {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}{type}
+                            </div>
+                            {isExpanded && filtered.map((coa) => (
+                              <div key={coa.account_code} onClick={() => { setQuickCategory(coa.account_code + ' - ' + coa.account_name); setCoaDropdownOpen(false); }}
+                                className="px-4 py-2 text-xs text-zinc-300 hover:bg-[#d4af37]/20 hover:text-white cursor-pointer flex items-center gap-2">
+                                <span className="font-mono text-[#f5d77f]">{coa.account_code}</span><span>{coa.account_name}</span>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Date</label>
+                    <input type="date" value={quickDate} onChange={(e) => setQuickDate(e.target.value)} className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#d4af37] font-mono" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Amount</label>
+                    <RupiahInput placeholder="Rp 0" value={quickAmount} onChange={(e) => setQuickAmount(e.target.value === '' ? '' : Number(e.target.value))} className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm font-mono font-bold text-[#f5d77f] focus:outline-none focus:border-[#d4af37]" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Notes</label>
+                  <textarea rows={2} value={quickNotes} onChange={(e) => setQuickNotes(e.target.value)} className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#d4af37]" />
+                </div>
+                <div className="flex gap-2">
+                  <button type="button" disabled={isPending || !activeBankLine} onClick={() => handleQuickResolve('expense')}
+                    className="flex-1 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider border border-red-400/30 text-red-400 bg-red-400/10 hover:bg-red-400/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                    {isPending ? '...' : '\u2212 EXPENSE'}
+                  </button>
+                  <button type="button" disabled={isPending || !activeBankLine} onClick={() => handleQuickResolve('income')}
+                    className="flex-1 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider border border-emerald-400/30 text-emerald-400 bg-emerald-400/10 hover:bg-emerald-400/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                    {isPending ? '...' : '+ INCOME'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

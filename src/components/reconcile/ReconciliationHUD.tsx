@@ -90,8 +90,9 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   const [showQuickForm, setShowQuickForm] = useState(false);
 
   const [activeBankId, setActiveBankId] = useState<string>(bankAccounts.length > 0 ? bankAccounts[0].id : '');
-  const [bankFormat, setBankFormat] = useState<string>('jago');
-
+  const activeBank = bankAccounts.find(b => b.id === activeBankId);
+  const bankFormat = activeBank?.bank_name?.toLowerCase().includes('bca') ? 'bca_business' : 'jago';
+  
   const currentMonth = new Date().getMonth() + 1;
   const currentYear = new Date().getFullYear();
   const [filterMonth, setFilterMonth] = useState<number>(currentMonth);
@@ -398,11 +399,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
           <select value={activeBankId} onChange={(e) => setActiveBankId(e.target.value)} className="bg-black/60 border border-[#d4af37]/30 text-[#f5d77f] text-xs font-bold rounded-lg px-3 py-2.5 outline-none focus:border-[#d4af37] font-mono min-w-[200px]">
             {bankAccounts.length === 0 ? <option value="">Select Bank (None Registered)</option> : bankAccounts.map((b) => <option key={b.id} value={b.id}>{b.bank_name} | {b.account_number}{b.account_holder ? ` | ${b.account_holder}` : ''}</option>)}
           </select>
-          <select value={bankFormat} onChange={(e) => setBankFormat(e.target.value)} className="bg-black/60 border border-[#d4af37]/30 text-white text-xs font-bold rounded-lg px-3 py-2.5 outline-none focus:border-[#d4af37] min-w-[160px]">
-            <option value="jago">Bank Jago</option>
-            <option value="bca_business">BCA Business (Giro)</option>
-            <option value="bca_individual" disabled>BCA Individual (Soon)</option>
-          </select>
+          
           <div className="flex items-center gap-2 border border-zinc-700/50 rounded-lg p-1 bg-black/40">
             <select value={filterMonth} onChange={(e) => setFilterMonth(Number(e.target.value))} className="bg-transparent text-white text-xs font-bold rounded px-2 py-1.5 outline-none hover:bg-zinc-800/50 cursor-pointer">
               {Array.from({ length: 12 }).map((_, i) => <option key={i} value={i + 1}>{new Date(2000, i, 1).toLocaleString('default', { month: 'short' }).toUpperCase()}</option>)}
@@ -723,6 +720,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
     </div>
   );
 }
+
 
 
 

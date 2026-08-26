@@ -19,7 +19,6 @@ export interface ExpenseRecord {
 export function ExpenseClientTable({ initialRecords }: { initialRecords: ExpenseRecord[] }) {
   const [searchPayee, setSearchPayee] = useState('');
   const [searchNotes, setSearchNotes] = useState('');
-  const [searchNotes, setSearchNotes] = useState('');
   const [filterMonth, setFilterMonth] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
 
@@ -173,5 +172,6 @@ export function ExpenseClientTable({ initialRecords }: { initialRecords: Expense
     </div>
   );
 }
+
 
 

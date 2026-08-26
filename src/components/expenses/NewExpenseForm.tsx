@@ -68,7 +68,7 @@ export function NewExpenseForm({ contacts, isHistorical, coaAccounts = [], initi
   const [isQuickAdding, setIsQuickAdding] = useState(false);
 
   const [category, setCategory] = useState(initialData?.category || CATEGORY_OPTIONS[0]);
-  const [dueDate, setDueDate] = useState(() => initialData?.due_date ? initialData.due_date : new Date().toISOString().split('T')[0]);
+  const [dueDate, setDueDate] = useState(() => (initialData?.due_date || initialData?.transaction_date) ? (initialData.due_date || initialData.transaction_date) : new Date().toISOString().split('T')[0]);
   const [amount, setAmount] = useState<number | ''>(initialData?.amount || 1200);
   const [notes, setNotes] = useState(initNotes);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -409,5 +409,6 @@ export function NewExpenseForm({ contacts, isHistorical, coaAccounts = [], initi
     </form>
   );
 }
+
 
 

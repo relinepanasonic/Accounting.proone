@@ -13,7 +13,7 @@ async function ExpensesTable() {
 
   const { data: records, error } = await supabase
     .from('transactions')
-    .select('id, due_date, description, category, amount, reconciled')
+    .select('id, due_date, transaction_date, description, category, amount, reconciled')
     .eq('workspace_id', activeWorkspaceId)
     .eq('type', 'expense')
     // Exclude Fixed Asset purchases: any category whose COA code starts with '1' (Asset range: 10xx, 12xx, 15xx etc.)
@@ -42,7 +42,7 @@ async function ExpensesTable() {
           }
           return {
             id: r.id,
-            date: r.due_date || '2026-07-15',
+            date: r.due_date || r.transaction_date,
             vendor: vendorPart,
             notes: notesPart,
             category: r.category || 'Software & Operations',
@@ -107,3 +107,4 @@ export default function ExpensesPage() {
     </div>
   );
 }
+

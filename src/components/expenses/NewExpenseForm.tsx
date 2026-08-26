@@ -40,12 +40,27 @@ export function NewExpenseForm({ contacts, isHistorical, coaAccounts = [], initi
   
   // Extract vendor and notes from description (format: "Vendor Name - Notes" or "Vendor Name")
   const initialDesc = initialData?.description || '';
-  const parts = initialDesc.split(' - ');
-  const initVendorName = parts[0] || '';
-  const initNotes = parts.slice(1).join(' - ') || '';
+  let initVendorName = '';
+  let initNotes = '';
+  if (initialDesc.includes(' | ')) {
+    const parts = initialDesc.split(' | ');
+    initVendorName = parts[0] || '';
+    initNotes = parts.slice(1).join(' | ') || '';
+  } else {
+    const parts = initialDesc.split(' - ');
+    initVendorName = parts[0] || '';
+    initNotes = parts.slice(1).join(' - ') || '';
+  }
   
   const existingVendor = initVendorName ? vendors.find(v => (v.company_name || v.name) === initVendorName) : null;
-  const [vendorId, setVendorId] = useState(existingVendor?.id || '');
+  let defaultSearchVendor = initVendorName;
+  if (initialData?.client_id) {
+     const v = vendors.find(x => x.id === initialData.client_id);
+     if (v) defaultSearchVendor = v.company_name || v.name;
+  } else if (existingVendor) {
+     defaultSearchVendor = existingVendor.company_name || existingVendor.name;
+  }
+  const [vendorId, setVendorId] = useState(initialData?.client_id || existingVendor?.id || '');
   
   // Quick Add Vendor State
   const [showQuickAdd, setShowQuickAdd] = useState(false);
@@ -60,7 +75,7 @@ export function NewExpenseForm({ contacts, isHistorical, coaAccounts = [], initi
 
   // Combobox States
   const [vendorDropdownOpen, setVendorDropdownOpen] = useState(false);
-  const [searchVendor, setSearchVendor] = useState(existingVendor ? (existingVendor.company_name || existingVendor.name) : '');
+  const [searchVendor, setSearchVendor] = useState(defaultSearchVendor);
   const [coaDropdownOpen, setCoaDropdownOpen] = useState(false);
   const [searchCategory, setSearchCategory] = useState(initialData?.category || '');
   const [expandedCoaGroups, setExpandedCoaGroups] = useState<Record<string, boolean>>({});
@@ -90,8 +105,8 @@ export function NewExpenseForm({ contacts, isHistorical, coaAccounts = [], initi
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!vendorId) {
-      setErrorMsg('Please select a vendor or payee name.');
+    if (!searchVendor.trim()) {
+      setErrorMsg('Please enter a vendor or payee name.');
       return;
     }
     if (!amount || Number(amount) <= 0) {
@@ -103,7 +118,7 @@ export function NewExpenseForm({ contacts, isHistorical, coaAccounts = [], initi
     startTransition(async () => {
       try {
         const selectedVendor = localContacts.find(v => v.id === vendorId);
-        const finalVendorName = selectedVendor ? (selectedVendor.company_name || selectedVendor.name) : 'Unknown Vendor';
+        const finalVendorName = selectedVendor ? (selectedVendor.company_name || selectedVendor.name) : searchVendor.trim();
         
         const finalNotes = isHistorical ? `[HISTORICAL_OPENING_BALANCE] ${notes}` : notes;
         const payload = {

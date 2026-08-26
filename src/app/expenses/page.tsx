@@ -57,15 +57,11 @@ async function ExpensesTable() {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-200">
-            UPCOMING PAYABLES & VENDOR BILLS
+            Expenses List
           </h2>
-          <p className="text-[10px] text-zinc-400 font-mono mt-0.5">
-            BRUSHED GOLD ACCENTS • ALL AGENCY ROLES AUTHORIZED
-          </p>
+          
         </div>
-        <span className="text-[10px] font-mono text-[#f5d77f] bg-[#d4af37]/15 px-3 py-1 rounded-full border border-[#d4af37]/40">
-          MONEY OUT TELEMETRY
-        </span>
+        
       </div>
 
       <ExpenseClientTable initialRecords={displayRecords} />
@@ -81,11 +77,9 @@ export default function ExpensesPage() {
         <div>
           <h1 className="text-lg font-extrabold tracking-wider uppercase text-white flex items-center gap-2">
             <Receipt className="w-5 h-5 text-[#d4af37]" />
-            <span>EXPENSES • VENDOR PAYABLES & A/P OUTFLOW HUD</span>
+            <span>Expenses</span>
           </h1>
-          <p className="text-xs text-[#d4af37] font-mono">
-            ACTION-ORIENTED BILL MANAGEMENT • BRUSHED GOLD PANELS
-          </p>
+          
         </div>
 
         <Link
@@ -107,4 +101,5 @@ export default function ExpensesPage() {
     </div>
   );
 }
+
 

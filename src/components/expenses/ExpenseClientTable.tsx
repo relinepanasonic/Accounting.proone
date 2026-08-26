@@ -18,6 +18,8 @@ export interface ExpenseRecord {
 
 export function ExpenseClientTable({ initialRecords }: { initialRecords: ExpenseRecord[] }) {
   const [searchPayee, setSearchPayee] = useState('');
+  const [searchNotes, setSearchNotes] = useState('');
+  const [searchNotes, setSearchNotes] = useState('');
   const [filterMonth, setFilterMonth] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
 
@@ -30,7 +32,8 @@ export function ExpenseClientTable({ initialRecords }: { initialRecords: Expense
 
   const filteredRecords = useMemo(() => {
     return initialRecords.filter((r) => {
-      if (searchPayee && !r.vendor.toLowerCase().includes(searchPayee.toLowerCase()) && !r.notes.toLowerCase().includes(searchPayee.toLowerCase())) return false;
+            if (searchPayee && !r.vendor.toLowerCase().includes(searchPayee.toLowerCase())) return false;
+      if (searchNotes && !r.notes.toLowerCase().includes(searchNotes.toLowerCase())) return false;
       if (filterMonth && !r.date.startsWith(filterMonth)) return false;
       if (filterCategory && r.category !== filterCategory) return false;
       return true;
@@ -60,44 +63,52 @@ export function ExpenseClientTable({ initialRecords }: { initialRecords: Expense
   return (
     <div className="space-y-4">
       {/* Filters Bar */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="relative">
+          <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+          <select 
+            value={filterMonth}
+            onChange={(e) => setFilterMonth(e.target.value)}
+            className="w-full bg-zinc-950/60 border border-zinc-800 rounded-xl pl-9 pr-8 py-2.5 text-xs text-zinc-300 focus:outline-none focus:border-[#d4af37] appearance-none"
+          >
+            <option value="">All Months</option>
+            {months.map(m => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+        </div>
+        <div className="relative">
+          <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+          <select 
+            value={filterCategory}
+            onChange={(e) => setFilterCategory(e.target.value)}
+            className="w-full bg-zinc-950/60 border border-zinc-800 rounded-xl pl-9 pr-8 py-2.5 text-xs text-zinc-300 focus:outline-none focus:border-[#d4af37] appearance-none truncate"
+          >
+            <option value="">All Categories</option>
+            {categories.map(c => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
+        <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
           <input 
             type="text" 
-            placeholder="Search Payee or Notes..." 
+            placeholder="Search Payee..." 
             value={searchPayee}
             onChange={(e) => setSearchPayee(e.target.value)}
-            className="w-full bg-zinc-950/60 border border-zinc-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#d4af37]"
+            className="w-full bg-zinc-950/60 border border-zinc-800 rounded-xl pl-9 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#d4af37]"
           />
         </div>
-        <div className="flex gap-3">
-          <div className="relative w-40">
-            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-            <select 
-              value={filterMonth}
-              onChange={(e) => setFilterMonth(e.target.value)}
-              className="w-full bg-zinc-950/60 border border-zinc-800 rounded-xl pl-9 pr-8 py-2.5 text-xs text-zinc-300 focus:outline-none focus:border-[#d4af37] appearance-none"
-            >
-              <option value="">All Months</option>
-              {months.map(m => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
-          </div>
-          <div className="relative w-48">
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-            <select 
-              value={filterCategory}
-              onChange={(e) => setFilterCategory(e.target.value)}
-              className="w-full bg-zinc-950/60 border border-zinc-800 rounded-xl pl-9 pr-8 py-2.5 text-xs text-zinc-300 focus:outline-none focus:border-[#d4af37] appearance-none truncate"
-            >
-              <option value="">All Categories</option>
-              {categories.map(c => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </div>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+          <input 
+            type="text" 
+            placeholder="Search Notes..." 
+            value={searchNotes}
+            onChange={(e) => setSearchNotes(e.target.value)}
+            className="w-full bg-zinc-950/60 border border-zinc-800 rounded-xl pl-9 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#d4af37]"
+          />
         </div>
       </div>
 
@@ -162,4 +173,5 @@ export function ExpenseClientTable({ initialRecords }: { initialRecords: Expense
     </div>
   );
 }
+
 

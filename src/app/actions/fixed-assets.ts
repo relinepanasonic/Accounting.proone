@@ -89,9 +89,6 @@ export async function runMonthlyDepreciation() {
     if (fetchError) throw new Error(fetchError.message);
     if (!assets || assets.length === 0) return { success: true, processedCount: 0 };
 
-    const today = new Date();
-    const currentMonth = today.toISOString().slice(0, 7); // e.g., '2026-08'
-    const todayStr = today.toISOString().split('T')[0];
 
     // Get mappings to find Depreciation Expense Account (6100) and Acc Depr (120x)
     // For simplicity, usually depreciation goes to 6100 (Depreciation Expense) and credit to Accum Depr
@@ -102,6 +99,7 @@ export async function runMonthlyDepreciation() {
     const accDeprAccount = mappings?.find((m: any) => m.mapping_type === 'ACCUMULATED_DEPRECIATION')?.account_code || '1202';
 
     let processedCount = 0;
+    const today = new Date();
 
     for (const asset of assets) {
       const annualDepr = Number(asset.annual_depreciation) || 0;
@@ -109,38 +107,63 @@ export async function runMonthlyDepreciation() {
 
       const monthlyDepr = annualDepr / 12;
 
-      // Check if already posted this month using the transaction_date and asset.id
-      const { data: existingEntry } = await supabase
+      // Fetch all existing depreciation journal entries for this asset
+      const { data: existingEntries, error: fetchEntryErr } = await supabase
         .from('journal_entries')
-        .select('id')
+        .select('transaction_date')
         .eq('workspace_id', activeWorkspaceId)
         .eq('reference_id', asset.id)
-        .eq('reference_type', 'depreciation')
-        .like('transaction_date', `${currentMonth}-%`)
-        .limit(1);
+        .eq('reference_type', 'depreciation');
 
-      if (existingEntry && existingEntry.length > 0) {
-        continue; // Already processed this asset for this month
-      }
-
-      // Check if fully depreciated (book value <= salvage value)
-      // This is a simplified check. A full check would sum accumulated depreciation.
-      // We will post it and let accountants adjust if it over-depreciates for now.
-
-      // Post Journal Entry
-      const description = `Monthly Depreciation - ${asset.asset_name} (${currentMonth})`;
-
-      const { error: insertError } = await supabase.from('journal_entries').insert([
-        { workspace_id: activeWorkspaceId, account_code: deprExpenseAccount, transaction_date: todayStr, debit_amount: monthlyDepr, credit_amount: 0, description, reference_id: asset.id, reference_type: 'depreciation' },
-        { workspace_id: activeWorkspaceId, account_code: accDeprAccount, transaction_date: todayStr, debit_amount: 0, credit_amount: monthlyDepr, description, reference_id: asset.id, reference_type: 'depreciation' }
-      ]);
-      
-      if (insertError) {
-        console.error('Failed to insert depreciation for asset', asset.id, insertError);
+      if (fetchEntryErr) {
+        console.error('Failed to fetch existing entries for asset', asset.id, fetchEntryErr);
         continue;
       }
 
-      processedCount++;
+      // Keep track of which months have already been depreciated
+      const loggedMonths = new Set((existingEntries || []).map(e => e.transaction_date.substring(0, 7)));
+
+      // Determine the start month (from purchase_date) and end month (current month)
+      let purchaseDate = new Date(asset.purchase_date || asset.created_at);
+      if (isNaN(purchaseDate.getTime())) purchaseDate = new Date();
+
+      const startDate = new Date(purchaseDate.getFullYear(), purchaseDate.getMonth(), 1);
+      const endDate = new Date(today.getFullYear(), today.getMonth(), 1);
+
+      let currentDate = new Date(startDate);
+      
+      // Loop month by month to retroactively fill any missed depreciation
+      while (currentDate <= endDate) {
+        const yyyy = currentDate.getFullYear();
+        const mm = String(currentDate.getMonth() + 1).padStart(2, '0');
+        const monthKey = `${yyyy}-${mm}`; // e.g., '2026-08'
+
+        if (!loggedMonths.has(monthKey)) {
+          // Log depreciation for this missing month
+          
+          // Check if fully depreciated (book value <= salvage value)
+          // For now, we will post it and let accountants adjust if it over-depreciates.
+          
+          // Use the last day of the month for the journal entry date
+          const lastDayOfMonth = new Date(yyyy, currentDate.getMonth() + 1, 0).getDate();
+          const txDateStr = `${monthKey}-${String(lastDayOfMonth).padStart(2, '0')}`;
+          
+          const description = `Monthly Depreciation - ${asset.asset_name} (${monthKey})`;
+
+          const { error: insertError } = await supabase.from('journal_entries').insert([
+            { workspace_id: activeWorkspaceId, account_code: deprExpenseAccount, transaction_date: txDateStr, debit_amount: monthlyDepr, credit_amount: 0, description, reference_id: asset.id, reference_type: 'depreciation' },
+            { workspace_id: activeWorkspaceId, account_code: accDeprAccount, transaction_date: txDateStr, debit_amount: 0, credit_amount: monthlyDepr, description, reference_id: asset.id, reference_type: 'depreciation' }
+          ]);
+          
+          if (insertError) {
+            console.error('Failed to insert depreciation for asset', asset.id, monthKey, insertError);
+          } else {
+            processedCount++;
+          }
+        }
+        
+        currentDate.setMonth(currentDate.getMonth() + 1);
+      }
     }
 
     // Save the last run time
@@ -182,3 +205,4 @@ export async function getAssetDepreciationHistory(assetId: string) {
   const debitEntries = (data || []).filter(e => Number(e.debit_amount) > 0);
   return debitEntries.length > 0 ? debitEntries : (data || []);
 }
+

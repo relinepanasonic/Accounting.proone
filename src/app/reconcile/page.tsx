@@ -106,10 +106,7 @@ async function ReconciliationCore() {
       .eq('contact_type', 'vendor')
       .order('name', { ascending: true }),
     supabase
-      .from('journal_entries')
-      .select('description')
-      .eq('workspace_id', activeWorkspaceId)
-      .eq('reference_type', 'bank_match')
+      .from('journal_entries').select('description').eq('reference_type', 'bank_match').ilike('description', '%BANK-REF%')
   ]);
 
   const rawInvoices = invoicesRes.data || [];
@@ -250,5 +247,7 @@ export default function BankReconciliationPage() {
     </div>
   );
 }
+
+
 
 

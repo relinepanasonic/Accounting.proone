@@ -45,7 +45,7 @@ async function ExpensesTable() {
             date: r.due_date || r.transaction_date,
             vendor: vendorPart,
             notes: notesPart,
-            category: r.category || 'Software & Operations',
+            category: r.category || '6000 - Operating Expenses',
             amount: Number(r.amount || 0),
             status: r.reconciled ? 'paid' : 'pending',
           };
@@ -101,5 +101,6 @@ export default function ExpensesPage() {
     </div>
   );
 }
+
 
 

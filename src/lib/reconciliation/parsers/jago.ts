@@ -3,13 +3,13 @@ import { parseBankDate, parseIndonesianNumber } from './utils';
 
 export function parseJago(rawLines: string[]): ParseResult {
   const transactions: BankTransaction[] = [];
-  const dateRegex = /^(\d{2}\s[A-Za-z]{3}\s\d{4})/;
+  const dateRegex = /(?:^|\s)(\d{2}\s+[A-Za-z]{3}\s+\d{4})/
   
   const parsedBlocks: any[] = [];
   let currentTx: any = null;
 
   for (let i = 0; i < rawLines.length; i++) {
-    const line = rawLines[i];
+    const line = rawLines[i].trim();
     const dateMatch = line.match(dateRegex);
     
     // Skip header lines that look like date ranges, e.g. "01 Jan 2026 - 31 Jan 2026"
@@ -23,7 +23,8 @@ export function parseJago(rawLines: string[]): ParseResult {
         dateStr: dateMatch[1],
         rawLines: []
       };
-      const rest = line.substring(dateMatch[0].length).trim();
+      const matchIdx = line.indexOf(dateMatch[1]);
+      const rest = line.substring(matchIdx + dateMatch[1].length).trim();
       if (rest) currentTx.rawLines.push(rest);
     } else if (currentTx) {
       currentTx.rawLines.push(line);
@@ -66,3 +67,6 @@ export function parseJago(rawLines: string[]): ParseResult {
 
   return { success: true, data: transactions };
 }
+
+
+

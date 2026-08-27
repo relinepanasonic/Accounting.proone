@@ -62,13 +62,13 @@ async function ReconciliationCore() {
   ] = await Promise.all([
     supabase
       .from('invoices')
-      .select('id, invoice_number, total_amount, amount_paid, issue_date, clients(name), reconciled, workspace_id, assigned_workspace_id')
+      .select('id, invoice_number, total_amount, amount_paid, issue_date, project_date, clients(name), reconciled, workspace_id, assigned_workspace_id')
       .or(`workspace_id.eq.${activeWorkspaceId},assigned_workspace_id.eq.${activeWorkspaceId}`)
       // Removed reconciled filter so user can match already-reconciled items to bank statement
       .order('issue_date', { ascending: false }),
     supabase
       .from('transactions')
-      .select('id, description, amount, due_date, category, reconciled, workspace_id, type')
+      .select('id, description, amount, due_date, transaction_date, category, reconciled, workspace_id, type')
       .eq('workspace_id', activeWorkspaceId)
       // Removed reconciled filter so user can match already-reconciled items to bank statement
       .order('due_date', { ascending: false }),
@@ -188,7 +188,7 @@ async function ReconciliationCore() {
         type: 'invoice' as const,
         reference: inv.invoice_number || 'INV-REF',
         payeeOrClient: clientObj?.name || 'Client Payee',
-        date: inv.issue_date || '2026-07-02',
+        date: inv.issue_date || inv.project_date,
         amount: Number(inv.total_amount || 0) - Number(inv.amount_paid || 0),
         reconciled: Boolean(inv.reconciled),
         notes: `Invoice ${inv.invoice_number || ''}`,
@@ -199,7 +199,7 @@ async function ReconciliationCore() {
       type: tx.type === 'income' ? ('income' as const) : ('expense' as const),
       reference: tx.category || 'CATEGORY-REF',
       payeeOrClient: tx.description || 'System Record',
-      date: tx.due_date || '2026-07-07',
+      date: tx.due_date || tx.transaction_date,
       amount: Number(tx.amount || 0),
       reconciled: Boolean(tx.reconciled),
       notes: tx.description || '',
@@ -250,3 +250,5 @@ export default function BankReconciliationPage() {
     </div>
   );
 }
+
+

@@ -34,7 +34,9 @@ export function parseJago(rawLines: string[]): ParseResult {
 
   for (let i = 0; i < parsedBlocks.length; i++) {
     const tx = parsedBlocks[i];
-    const flatLine = tx.rawLines.join(' ');
+    let flatLine = tx.rawLines.join(' ');
+      const footerIdx = flatLine.indexOf('PT Bank Jago Tbk');
+      if (footerIdx !== -1) flatLine = flatLine.substring(0, footerIdx).trim();
     
     // Match numbers formatted like 1.000.000,00 or -500.000
     const numRegex = /([-+]?\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?)/g;
@@ -67,6 +69,7 @@ export function parseJago(rawLines: string[]): ParseResult {
 
   return { success: true, data: transactions };
 }
+
 
 
 

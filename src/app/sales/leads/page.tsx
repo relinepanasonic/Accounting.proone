@@ -72,7 +72,7 @@ export default async function SalesLeadsPage() {
                   <td className="px-6 py-4 text-center">
                     <form action={async () => {
                       'use server';
-                      await updateDealStage(lead.id, 'Contact');
+                      await updateDealStage(lead.id, 'Contacted');
                     }}>
                       <button 
                         type="submit"

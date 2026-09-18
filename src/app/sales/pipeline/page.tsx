@@ -4,10 +4,17 @@ import { PipelineKanban } from '@/components/sales/PipelineKanban';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 
-export default async function SalesPipelinePage() {
-  const deals = await getPipelineDeals();
+export default async function SalesPipelinePage({
+  searchParams
+}: {
+  searchParams: { month?: string }
+}) {
+  const currentMonth = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
+  const month = searchParams.month || currentMonth;
+
+  // Pass month to fetch deals for that month
+  const deals = await getPipelineDeals(month);
   
-  // We need to fetch clients for the New Deal modal
   const supabase = await createClient();
   const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
   
@@ -18,8 +25,8 @@ export default async function SalesPipelinePage() {
     .order('name');
 
   return (
-    <div className="animate-in fade-in zoom-in-95 duration-300 h-full">
-      <PipelineKanban initialDeals={deals} clients={clients || []} />
+    <div className="animate-in fade-in zoom-in-95 duration-300 h-full flex flex-col">
+      <PipelineKanban initialDeals={deals} clients={clients || []} currentMonth={month} />
     </div>
   );
 }

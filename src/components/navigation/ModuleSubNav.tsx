@@ -21,11 +21,13 @@ const MODULES = {
     match: ['/sales'],
     items: [
       { name: 'Dashboard', href: '/sales' },
+      { name: 'Absensi', href: '/sales/absensi' },
       { name: 'To-Do', href: '/sales/todo' },
       { name: 'Leads Database', href: '/sales/leads' },
       { name: 'Pipeline', href: '/sales/pipeline' },
       { name: 'Client', href: '/sales/clients' },
       { name: 'A/R', href: '/sales/ar' },
+      { name: 'Reimbursement', href: '/sales/reimbursement' },
     ]
   },
   productivity: {
@@ -70,8 +72,6 @@ export function ModuleSubNav() {
   return (
     <div className="w-full bg-[#0e0f14]/90 backdrop-blur-md border-b border-[#d4af37]/20 px-6 py-3 flex items-center gap-6 overflow-x-auto scrollbar-hide sticky top-0 z-30">
       {activeModule.items.map(item => {
-        // Fix for active state:
-        // Dashboard (/sales) should only match exact '/sales'
         let isActive = false;
         if (item.href === '/' || item.href === '/sales') {
           isActive = pathname === item.href;

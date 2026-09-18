@@ -1,3 +1,5 @@
+'use client';
+
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -18,8 +20,11 @@ const MODULES = {
   sales: {
     match: ['/sales'],
     items: [
-      { name: 'Customers & Leads', href: '/sales/customers' },
-      { name: 'CRM Pipeline', href: '/sales/pipeline' },
+      { name: 'Dashboard', href: '/sales' },
+      { name: 'Leads Database', href: '/sales/leads' },
+      { name: 'Pipeline', href: '/sales/pipeline' },
+      { name: 'Client', href: '/sales/clients' },
+      { name: 'A/R', href: '/sales/ar' },
     ]
   },
   productivity: {
@@ -64,7 +69,7 @@ export function ModuleSubNav() {
   return (
     <div className="w-full bg-[#0e0f14]/90 backdrop-blur-md border-b border-[#d4af37]/20 px-6 py-3 flex items-center gap-6 overflow-x-auto scrollbar-hide sticky top-0 z-30">
       {activeModule.items.map(item => {
-        const isActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
+        const isActive = item.href === '/' ? pathname === '/' : pathname === item.href || pathname.startsWith(item.href + '/');
         return (
           <Link
             key={item.href}

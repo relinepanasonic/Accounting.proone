@@ -21,6 +21,7 @@ const MODULES = {
     match: ['/sales'],
     items: [
       { name: 'Dashboard', href: '/sales' },
+      { name: 'To-Do', href: '/sales/todo' },
       { name: 'Leads Database', href: '/sales/leads' },
       { name: 'Pipeline', href: '/sales/pipeline' },
       { name: 'Client', href: '/sales/clients' },
@@ -69,7 +70,15 @@ export function ModuleSubNav() {
   return (
     <div className="w-full bg-[#0e0f14]/90 backdrop-blur-md border-b border-[#d4af37]/20 px-6 py-3 flex items-center gap-6 overflow-x-auto scrollbar-hide sticky top-0 z-30">
       {activeModule.items.map(item => {
-        const isActive = item.href === '/' ? pathname === '/' : pathname === item.href || pathname.startsWith(item.href + '/');
+        // Fix for active state:
+        // Dashboard (/sales) should only match exact '/sales'
+        let isActive = false;
+        if (item.href === '/' || item.href === '/sales') {
+          isActive = pathname === item.href;
+        } else {
+          isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+        }
+        
         return (
           <Link
             key={item.href}

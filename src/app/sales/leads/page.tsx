@@ -4,6 +4,7 @@ import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { formatCurrency } from '@/lib/utils/currency';
 import { updateDealStage } from '@/app/actions/sales';
 import { User, DollarSign, Calendar, ArrowRight } from 'lucide-react';
+import { NewLeadModal } from '@/components/sales/NewLeadModal';
 
 export default async function SalesLeadsPage() {
   const supabase = await createClient();
@@ -16,6 +17,13 @@ export default async function SalesLeadsPage() {
     .eq('workspace_id', activeWorkspaceId)
     .eq('stage', 'Lead')
     .order('created_at', { ascending: false });
+    
+  // Fetch clients for the NewLeadModal
+  const { data: clients } = await supabase
+    .from('clients')
+    .select('id, name')
+    .eq('workspace_id', activeWorkspaceId)
+    .order('name');
 
   return (
     <div className="p-4 lg:p-8 space-y-6 animate-in fade-in zoom-in-95 duration-300">
@@ -24,6 +32,7 @@ export default async function SalesLeadsPage() {
           <h1 className="text-2xl font-extrabold text-zinc-100 font-serif">Leads Database</h1>
           <p className="text-sm text-zinc-400 mt-1">New leads that need to be qualified. Convert them to warm leads to move them to the pipeline.</p>
         </div>
+        <NewLeadModal clients={clients || []} />
       </div>
 
       <div className="bg-[#0e0f14] border border-[#d4af37]/20 rounded-xl overflow-hidden shadow-xl">

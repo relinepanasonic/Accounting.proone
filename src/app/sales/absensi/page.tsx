@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, CheckCircle, Clock } from 'lucide-react';
+import { Camera, CheckCircle } from 'lucide-react';
 import { compressImage } from '@/lib/utils/image';
 import { getMonthlyAbsensi, submitCheckIn, submitCheckOut } from '@/app/actions/sales-ext';
 
@@ -33,19 +33,24 @@ export default function SalesAbsensiPage() {
     
     try {
       const file = e.target.files[0];
-      const base64 = await compressImage(file, 600); // compress for fast upload
+      const base64 = await compressImage(file, 600);
       
+      let res;
       if (actionType === 'checkin') {
-        await submitCheckIn(base64);
+        res = await submitCheckIn(base64);
       } else {
-        await submitCheckOut(base64);
+        res = await submitCheckOut(base64);
       }
       
-      // Refresh
-      const newLogs = await getMonthlyAbsensi(month);
-      setLogs(newLogs);
+      if (res && res.error) {
+        alert("System Error: " + res.error + "\n\nDid you run the SQL script in Supabase?");
+      } else {
+        // Refresh
+        const newLogs = await getMonthlyAbsensi(month);
+        setLogs(newLogs);
+      }
     } catch (err: any) {
-      alert("Failed to submit attendance: " + err.message);
+      alert("Application Error: " + err.message);
     } finally {
       setSubmitting(false);
       setActionType(null);
@@ -78,6 +83,7 @@ export default function SalesAbsensiPage() {
         </div>
       </div>
 
+      {/* Force front camera using capture="user" */}
       <input 
         type="file" 
         accept="image/*" 
@@ -99,7 +105,7 @@ export default function SalesAbsensiPage() {
           ) : (
             <Camera className="w-12 h-12 mb-3" />
           )}
-          <span className="font-bold text-lg">{todayLog?.check_in_time ? 'Checked In' : 'Check In'}</span>
+          <span className="font-bold text-lg">{submitting && actionType === 'checkin' ? 'Saving...' : todayLog?.check_in_time ? 'Checked In' : 'Check In'}</span>
           <span className="text-xs mt-1 opacity-70">
             {todayLog?.check_in_time ? new Date(todayLog.check_in_time).toLocaleTimeString() : 'Requires Camera'}
           </span>
@@ -116,7 +122,7 @@ export default function SalesAbsensiPage() {
           ) : (
             <Camera className="w-12 h-12 mb-3" />
           )}
-          <span className="font-bold text-lg">{todayLog?.check_out_time ? 'Checked Out' : 'Check Out'}</span>
+          <span className="font-bold text-lg">{submitting && actionType === 'checkout' ? 'Saving...' : todayLog?.check_out_time ? 'Checked Out' : 'Check Out'}</span>
           <span className="text-xs mt-1 opacity-70">
             {todayLog?.check_out_time ? new Date(todayLog.check_out_time).toLocaleTimeString() : 'Requires Camera'}
           </span>

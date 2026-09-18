@@ -32,7 +32,7 @@ export default async function SalesLeadsPage() {
           <h1 className="text-2xl font-extrabold text-zinc-100 font-serif">Leads Database</h1>
           <p className="text-sm text-zinc-400 mt-1">New leads that need to be qualified. Convert them to warm leads to move them to the pipeline.</p>
         </div>
-        <NewLeadModal clients={clients || []} />
+        <NewLeadModal />
       </div>
 
       <div className="bg-[#0e0f14] border border-[#d4af37]/20 rounded-xl overflow-hidden shadow-xl">
@@ -43,7 +43,7 @@ export default async function SalesLeadsPage() {
             <thead className="bg-zinc-900/50 text-xs uppercase text-zinc-400 border-b border-[#d4af37]/10">
               <tr>
                 <th className="px-6 py-4 font-bold tracking-wider">Lead Info</th>
-                <th className="px-6 py-4 font-bold tracking-wider">Client</th>
+                <th className="px-6 py-4 font-bold tracking-wider">Lead Name</th>
                 <th className="px-6 py-4 font-bold tracking-wider text-right">Value (Rp)</th>
                 <th className="px-6 py-4 font-bold tracking-wider text-center">Action</th>
               </tr>
@@ -61,7 +61,7 @@ export default async function SalesLeadsPage() {
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2 text-zinc-300">
                       <User className="w-4 h-4 text-[#d4af37]/70" />
-                      {lead.clients?.name}
+                      {lead.clients?.name || lead.lead_name}
                     </div>
                   </td>
                   <td className="px-6 py-4 text-right">

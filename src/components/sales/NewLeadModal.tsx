@@ -4,14 +4,13 @@ import React, { useState, useTransition } from 'react';
 import { createDeal } from '@/app/actions/sales';
 import { Plus, X } from 'lucide-react';
 
-export function NewLeadModal({ clients }: { clients: any[] }) {
+export function NewLeadModal() {
   const [isOpen, setIsOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    // Force the stage to be Lead for new entries in this database
     formData.set('stage', 'Lead');
     
     startTransition(() => {
@@ -45,7 +44,18 @@ export function NewLeadModal({ clients }: { clients: any[] }) {
             
             <form onSubmit={handleSubmit} className="p-4 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">Lead / Deal Title</label>
+                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">New Lead Name</label>
+                <input 
+                  type="text" 
+                  name="lead_name" 
+                  required 
+                  placeholder="e.g. PT Maju Bersama or John Doe"
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-[#d4af37]/50"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">Deal / Project Title</label>
                 <input 
                   type="text" 
                   name="title" 
@@ -53,20 +63,6 @@ export function NewLeadModal({ clients }: { clients: any[] }) {
                   placeholder="e.g. Website Redesign"
                   className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-[#d4af37]/50"
                 />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">Client</label>
-                <select 
-                  name="client_id" 
-                  required
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-[#d4af37]/50"
-                >
-                  <option value="">Select a client...</option>
-                  {clients.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
               </div>
 
               <div>

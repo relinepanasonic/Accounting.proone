@@ -10,7 +10,7 @@ export async function getSalesDashboardStats() {
 
   const { data: deals, error } = await supabase
     .from('crm_deals')
-    .select('id, client_id, value, stage, salesman_name, clients(name)')
+    .select('id, client_id, lead_name, value, stage, salesman_name, clients(name)')
     .eq('workspace_id', activeWorkspaceId);
 
   if (error) throw new Error(error.message);
@@ -24,23 +24,25 @@ export async function getSalesDashboardStats() {
 
   (deals || []).forEach(deal => {
     const val = Number(deal.value || 0);
-    const cname = deal.clients?.name || 'Unknown Client';
+    const cname = deal.clients?.name || deal.lead_name || 'Unknown Client';
     const sname = deal.salesman_name || 'Unassigned';
+    
+    const statKey = deal.client_id || deal.lead_name || 'unknown';
 
-    if (!clientStats[deal.client_id]) clientStats[deal.client_id] = { name: cname, pipeline: 0, won: 0 };
+    if (!clientStats[statKey]) clientStats[statKey] = { name: cname, pipeline: 0, won: 0 };
     if (!salesmanStats[sname]) salesmanStats[sname] = { pipeline: 0, wonCount: 0, wonValue: 0, lostCount: 0 };
 
     if (deal.stage === 'Deal' || deal.stage === 'Won') {
       wonDealsCount++;
       totalWonValue += val;
-      clientStats[deal.client_id].won += val;
+      clientStats[statKey].won += val;
       salesmanStats[sname].wonCount++;
       salesmanStats[sname].wonValue += val;
     } else if (deal.stage === 'Lost') {
       salesmanStats[sname].lostCount++;
     } else {
       totalPipelineValue += val;
-      clientStats[deal.client_id].pipeline += val;
+      clientStats[statKey].pipeline += val;
       salesmanStats[sname].pipeline += val;
     }
   });
@@ -58,20 +60,17 @@ export async function getPipelineDeals(month?: string) {
   const supabase = await createClient();
   const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
-  // If no month is provided, fallback to current month
   const targetMonth = month || new Date().toISOString().slice(0, 7);
 
-  // Fetch deals for the target month
   const { data: deals, error } = await supabase
     .from('crm_deals')
     .select('*, clients(name)')
     .eq('workspace_id', activeWorkspaceId)
     .eq('pipeline_month', targetMonth)
-    .neq('stage', 'Lead') // don't show raw leads in pipeline
+    .neq('stage', 'Lead')
     .order('created_at', { ascending: false });
 
   if (error) {
-    // If column doesn't exist yet, fallback to fetching all active deals (ignores month filtering temporarily)
     if (error.message.includes('pipeline_month')) {
       const { data: fallbackDeals } = await supabase
         .from('crm_deals')
@@ -84,8 +83,6 @@ export async function getPipelineDeals(month?: string) {
     throw new Error(error.message);
   }
 
-  // Monthly Roll-over Logic:
-  // If no deals exist for the target month, check if there are deals from the previous month
   if (deals && deals.length === 0) {
     const [yearStr, monthStr] = targetMonth.split('-');
     const dateObj = new Date(parseInt(yearStr), parseInt(monthStr) - 1, 1);
@@ -97,11 +94,10 @@ export async function getPipelineDeals(month?: string) {
       .select('*')
       .eq('workspace_id', activeWorkspaceId)
       .eq('pipeline_month', prevMonth)
-      .neq('stage', 'Deal') // Don't roll over Won deals
-      .neq('stage', 'Lost'); // Don't roll over Lost deals
+      .neq('stage', 'Deal')
+      .neq('stage', 'Lost');
 
     if (prevDeals && prevDeals.length > 0) {
-      // Duplicate them for the new month
       const newDeals = prevDeals.map(d => {
         const { id, created_at, updated_at, ...rest } = d;
         return {
@@ -112,7 +108,6 @@ export async function getPipelineDeals(month?: string) {
 
       await supabase.from('crm_deals').insert(newDeals);
 
-      // Fetch again to get the new IDs and client names joined
       const { data: freshDeals } = await supabase
         .from('crm_deals')
         .select('*, clients(name)')
@@ -130,6 +125,36 @@ export async function getPipelineDeals(month?: string) {
 
 export async function updateDealStage(dealId: string, newStage: string) {
   const supabase = await createClient();
+  const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+
+  // Check if we are moving to Invoice or Deal and it's a new lead (no client_id)
+  if (newStage === 'Invoice' || newStage === 'Deal') {
+    const { data: deal } = await supabase.from('crm_deals').select('client_id, lead_name').eq('id', dealId).single();
+    
+    if (deal && !deal.client_id && deal.lead_name) {
+      // Create new client automatically for Accounting
+      const { data: newClient } = await supabase
+        .from('clients')
+        .insert({ name: deal.lead_name, workspace_id: activeWorkspaceId })
+        .select('id')
+        .single();
+        
+      if (newClient) {
+        const { error } = await supabase
+          .from('crm_deals')
+          .update({ stage: newStage, client_id: newClient.id })
+          .eq('id', dealId);
+        if (error) throw new Error(error.message);
+        
+        revalidatePath('/sales/pipeline');
+        revalidatePath('/sales/leads');
+        revalidatePath('/sales');
+        return;
+      }
+    }
+  }
+
+  // Standard update
   const { error } = await supabase
     .from('crm_deals')
     .update({ stage: newStage })
@@ -146,6 +171,7 @@ export async function createDeal(formData: FormData) {
   const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
   const clientId = formData.get('client_id') as string;
+  const leadName = formData.get('lead_name') as string;
   const title = formData.get('title') as string;
   const value = formData.get('value') as string;
   const salesman = formData.get('salesman_name') as string;
@@ -155,9 +181,8 @@ export async function createDeal(formData: FormData) {
   
   const currentMonth = new Date().toISOString().slice(0, 7);
 
-  const { error } = await supabase.from('crm_deals').insert({
+  const payload: any = {
     workspace_id: activeWorkspaceId,
-    client_id: clientId,
     title,
     value: value ? parseFloat(value.replace(/,/g, '')) : 0,
     salesman_name: salesman || null,
@@ -165,21 +190,18 @@ export async function createDeal(formData: FormData) {
     notes: notes || null,
     stage,
     pipeline_month: currentMonth
-  });
+  };
+
+  if (clientId) payload.client_id = clientId;
+  if (leadName) payload.lead_name = leadName;
+
+  const { error } = await supabase.from('crm_deals').insert(payload);
 
   if (error) {
     if (error.message.includes('pipeline_month')) {
-      // Fallback if migration hasn't run
-      await supabase.from('crm_deals').insert({
-        workspace_id: activeWorkspaceId,
-        client_id: clientId,
-        title,
-        value: value ? parseFloat(value.replace(/,/g, '')) : 0,
-        salesman_name: salesman || null,
-        expected_close_date: expectedDate || null,
-        notes: notes || null,
-        stage
-      });
+      // Fallback
+      delete payload.pipeline_month;
+      await supabase.from('crm_deals').insert(payload);
     } else {
       throw new Error(error.message);
     }

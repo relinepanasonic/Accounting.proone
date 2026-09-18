@@ -95,7 +95,7 @@ function DraggableDealCard({ deal, handleMove }: { deal: any, handleMove: any })
       <div className="flex items-center justify-between mb-3 mt-1">
         <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-[#d4af37]/10 text-[#f5d77f]">
           <User className="w-3 h-3 mr-1 opacity-70" />
-          <span className="truncate max-w-[120px]">{deal.clients?.name}</span>
+          <span className="truncate max-w-[120px]">{deal.clients?.name || deal.lead_name}</span>
         </span>
         <button className="text-zinc-600 hover:text-zinc-300 transition-colors opacity-0 group-hover:opacity-100">
           <MoreHorizontal className="w-4 h-4" />

@@ -11,7 +11,10 @@ export default function SalesAbsensiPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [actionType, setActionType] = useState<'checkin' | 'checkout' | null>(null);
+  
+  // Use ref for actionType to ensure it is immediately available across closures
+  const actionTypeRef = useRef<'checkin' | 'checkout' | null>(null);
+  const [uiActionType, setUiActionType] = useState<'checkin' | 'checkout' | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -28,7 +31,14 @@ export default function SalesAbsensiPage() {
   const todayLog = logs.find(l => l.date === today);
 
   const handleCameraCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0 || !actionType) return;
+    const action = actionTypeRef.current;
+    if (!e.target.files || e.target.files.length === 0 || !action) {
+      // User cancelled camera or action not set
+      actionTypeRef.current = null;
+      setUiActionType(null);
+      return;
+    }
+    
     setSubmitting(true);
     
     try {
@@ -36,16 +46,16 @@ export default function SalesAbsensiPage() {
       const base64 = await compressImage(file, 600);
       
       let res;
-      if (actionType === 'checkin') {
+      if (action === 'checkin') {
         res = await submitCheckIn(base64);
       } else {
         res = await submitCheckOut(base64);
       }
       
       if (res && res.error) {
-        alert("System Error: " + res.error + "\n\nDid you run the SQL script in Supabase?");
+        alert("System Error: " + res.error + "\n\n(Did you run the SQL script in Supabase?)");
       } else {
-        // Refresh
+        // Refresh logs immediately
         const newLogs = await getMonthlyAbsensi(month);
         setLogs(newLogs);
       }
@@ -53,13 +63,15 @@ export default function SalesAbsensiPage() {
       alert("Application Error: " + err.message);
     } finally {
       setSubmitting(false);
-      setActionType(null);
+      actionTypeRef.current = null;
+      setUiActionType(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
   const triggerCamera = (type: 'checkin' | 'checkout') => {
-    setActionType(type);
+    actionTypeRef.current = type;
+    setUiActionType(type);
     if (fileInputRef.current) {
       fileInputRef.current.click();
     }
@@ -83,7 +95,6 @@ export default function SalesAbsensiPage() {
         </div>
       </div>
 
-      {/* Force front camera using capture="user" */}
       <input 
         type="file" 
         accept="image/*" 
@@ -96,7 +107,7 @@ export default function SalesAbsensiPage() {
       <div className="bg-[#0e0f14] border border-[#d4af37]/20 rounded-2xl p-6 mb-8 shadow-xl flex flex-col md:flex-row items-center justify-center gap-6">
         <button 
           onClick={() => triggerCamera('checkin')}
-          disabled={submitting || todayLog?.check_in_time}
+          disabled={submitting || !!todayLog?.check_in_time}
           className="flex-1 w-full flex flex-col items-center justify-center p-8 rounded-xl border-2 border-dashed transition-all disabled:opacity-50 disabled:cursor-not-allowed
             border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/10 text-emerald-400"
         >
@@ -105,7 +116,7 @@ export default function SalesAbsensiPage() {
           ) : (
             <Camera className="w-12 h-12 mb-3" />
           )}
-          <span className="font-bold text-lg">{submitting && actionType === 'checkin' ? 'Saving...' : todayLog?.check_in_time ? 'Checked In' : 'Check In'}</span>
+          <span className="font-bold text-lg">{submitting && uiActionType === 'checkin' ? 'Saving...' : todayLog?.check_in_time ? 'Checked In' : 'Check In'}</span>
           <span className="text-xs mt-1 opacity-70">
             {todayLog?.check_in_time ? new Date(todayLog.check_in_time).toLocaleTimeString() : 'Requires Camera'}
           </span>
@@ -113,7 +124,7 @@ export default function SalesAbsensiPage() {
 
         <button 
           onClick={() => triggerCamera('checkout')}
-          disabled={submitting || !todayLog?.check_in_time || todayLog?.check_out_time}
+          disabled={submitting || !todayLog?.check_in_time || !!todayLog?.check_out_time}
           className="flex-1 w-full flex flex-col items-center justify-center p-8 rounded-xl border-2 border-dashed transition-all disabled:opacity-50 disabled:cursor-not-allowed
             border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10 text-amber-400"
         >
@@ -122,7 +133,7 @@ export default function SalesAbsensiPage() {
           ) : (
             <Camera className="w-12 h-12 mb-3" />
           )}
-          <span className="font-bold text-lg">{submitting && actionType === 'checkout' ? 'Saving...' : todayLog?.check_out_time ? 'Checked Out' : 'Check Out'}</span>
+          <span className="font-bold text-lg">{submitting && uiActionType === 'checkout' ? 'Saving...' : todayLog?.check_out_time ? 'Checked Out' : 'Check Out'}</span>
           <span className="text-xs mt-1 opacity-70">
             {todayLog?.check_out_time ? new Date(todayLog.check_out_time).toLocaleTimeString() : 'Requires Camera'}
           </span>

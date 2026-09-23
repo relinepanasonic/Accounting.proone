@@ -33,8 +33,10 @@ const MODULES = {
   productivity: {
     match: ['/productivity'],
     items: [
-      { name: 'Task Board', href: '/productivity/tasks' },
-      { name: 'Docs & Wiki', href: '/productivity/docs' },
+      { name: 'Dashboard', href: '/productivity' },
+      { name: 'Admin', href: '/productivity/admin' },
+      { name: 'Advertiser', href: '/productivity/advertiser' },
+      { name: 'Pabrik Sosmed', href: '/productivity/pabrik-sosmed' },
     ]
   },
   hrd: {

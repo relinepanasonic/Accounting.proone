@@ -19,8 +19,7 @@ export async function fetchAdvertiserLogs() {
       data_inkubasi,
       created_at,
       user_id,
-      clients ( name ),
-      users ( email )
+      clients ( name )
     `)
     .eq('workspace_id', activeWorkspaceId)
     .order('report_date', { ascending: false })

@@ -300,6 +300,18 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
     }
   };
 
+  const handleDeleteGroup = () => {
+    if (confirm(`Are you sure you want to delete ${activeGroupName}?`)) {
+      setGroupData(prev => prev.filter(r => !(r.groupCategory === activeGroupCategory && r.groupName === activeGroupName)));
+      const remainingNames = existingGroupNames.filter(name => name !== activeGroupName);
+      if (remainingNames.length > 0) {
+        setTimeout(() => setActiveGroupName(remainingNames[0] as string), 0);
+      } else {
+        setTimeout(() => setActiveGroupName(`Group ${activeGroupCategory} 1`), 0);
+      }
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Header */}
@@ -326,24 +338,8 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
             value={sessionNote}
             onChange={(e) => setSessionNote(e.target.value)}
             placeholder="General session note (will appear in Advertiser Log)..."
-            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-300 focus:outline-none focus:border-blue-500 transition-colors"
+            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-300 focus:outline-none focus:border-[#d4af37] transition-colors"
           />
-        </div>
-        <div className="flex items-center gap-3 shrink-0">
-          <button 
-            onClick={clearData}
-            className="flex items-center justify-center gap-2 px-4 py-3 bg-red-500/10 text-red-400 hover:bg-red-500/20 text-sm font-bold rounded-xl transition-colors border border-red-500/20"
-          >
-            <Trash2 className="w-4 h-4" /> Clear Current
-          </button>
-          <button 
-            onClick={handleSave}
-            disabled={isSaving}
-            className="flex items-center justify-center gap-2 px-6 py-3 bg-[#d4af37]/10 text-[#d4af37] hover:bg-[#d4af37]/20 text-sm font-bold rounded-xl transition-colors border border-[#d4af37]/40 shadow-[0_0_15px_rgba(212,175,55,0.15)] disabled:opacity-50"
-          >
-            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} 
-            SAVE RECORD
-          </button>
         </div>
       </div>
 
@@ -422,6 +418,9 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
               />
               <button onClick={handleAddNewGroup} className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 p-2 rounded-lg transition-colors border border-zinc-700">
                 <Plus className="w-4 h-4" />
+              </button>
+              <button onClick={handleDeleteGroup} className="bg-red-500/10 hover:bg-red-500/20 text-red-400 p-2 rounded-lg transition-colors border border-red-500/20 ml-2">
+                <Trash2 className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -587,13 +586,30 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
             </tbody>
           </table>
           {activeData.length > 0 && (
-            <div className="p-3 border-t border-zinc-800">
+            <div className="p-4 border-t border-zinc-800 flex justify-between items-center bg-zinc-900/20">
               <button 
                 onClick={addEmptyRow}
                 className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold rounded-lg transition-colors border border-zinc-600 inline-flex items-center gap-2"
               >
                 + Add Row
               </button>
+              
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={clearData}
+                  className="flex items-center justify-center gap-2 px-4 py-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 text-xs font-bold rounded-xl transition-colors border border-red-500/20"
+                >
+                  <Trash2 className="w-4 h-4" /> Clear Current
+                </button>
+                <button 
+                  onClick={handleSave}
+                  disabled={isSaving}
+                  className="flex items-center justify-center gap-2 px-6 py-2 bg-[#d4af37]/10 text-[#d4af37] hover:bg-[#d4af37]/20 text-xs font-bold rounded-xl transition-colors border border-[#d4af37]/40 shadow-[0_0_15px_rgba(212,175,55,0.15)] disabled:opacity-50"
+                >
+                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} 
+                  SAVE RECORD
+                </button>
+              </div>
             </div>
           )}
         </div>

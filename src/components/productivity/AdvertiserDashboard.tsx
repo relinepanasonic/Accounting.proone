@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { ClipboardPaste, Save, Trash2, AlertCircle, TrendingUp, Users, Target } from 'lucide-react';
+import { ClientSelect } from '@/components/ui/ClientSelect';
 
 interface Client {
   id: string;
@@ -97,21 +98,12 @@ export function AdvertiserDashboard({ clients }: AdvertiserDashboardProps) {
     <div className="space-y-6">
       {/* Top Controls */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#0e0f14] p-4 rounded-xl border border-[#d4af37]/20">
-        <div className="flex items-center gap-3">
-          <label className="text-sm font-bold text-zinc-400 uppercase tracking-widest">Client:</label>
-          <select 
-            value={selectedClient} 
-            onChange={(e) => setSelectedClient(e.target.value)}
-            className="bg-zinc-900 border border-zinc-700 text-zinc-100 text-sm rounded-lg focus:ring-[#d4af37] focus:border-[#d4af37] block w-64 p-2.5"
-          >
-            {clients.length === 0 ? (
-              <option value="">No clients available</option>
-            ) : (
-              clients.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))
-            )}
-          </select>
+        <div className="flex items-center gap-3 w-full md:w-96">
+          <ClientSelect
+            value={selectedClient}
+            onChange={setSelectedClient}
+            options={clients.map(c => ({ id: c.id, name: c.name }))}
+          />
         </div>
 
         <div className="flex items-center gap-3">

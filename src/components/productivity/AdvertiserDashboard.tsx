@@ -24,9 +24,31 @@ export function AdvertiserDashboard({ clients }: AdvertiserDashboardProps) {
   const [groupData, setGroupData] = useState<any[]>([]);
   const [mandiriData, setMandiriData] = useState<any[]>([]);
 
-  // Function to handle pasting data from Excel/Google Sheets
+  const [screenshot, setScreenshot] = useState<string | null>(null);
+
+  // Function to handle pasting data from Excel/Google Sheets OR Screenshots
   const handlePaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
+
+    // Check for image
+    const items = e.clipboardData.items;
+    let imageItem = null;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        imageItem = items[i];
+        break;
+      }
+    }
+
+    if (imageItem) {
+      const blob = imageItem.getAsFile();
+      if (blob) {
+        const url = URL.createObjectURL(blob);
+        setScreenshot(url);
+      }
+      return;
+    }
+
     const clipboardData = e.clipboardData.getData('Text');
     if (!clipboardData) return;
 
@@ -64,19 +86,29 @@ export function AdvertiserDashboard({ clients }: AdvertiserDashboardProps) {
     }
   };
 
-  const handleRecommendationChange = (index: number, val: string) => {
+  const handleUpdateRow = (index: number, field: string, val: string) => {
     if (activeTab === 'inkubasi') {
       const newData = [...inkubasiData];
-      newData[index].recommendation = val;
+      newData[index][field] = val;
       setInkubasiData(newData);
     } else if (activeTab === 'group') {
       const newData = [...groupData];
-      newData[index].recommendation = val;
+      newData[index][field] = val;
       setGroupData(newData);
     } else if (activeTab === 'mandiri') {
       const newData = [...mandiriData];
-      newData[index].recommendation = val;
+      newData[index][field] = val;
       setMandiriData(newData);
+    }
+  };
+
+  const addEmptyRow = () => {
+    if (activeTab === 'inkubasi') {
+      setInkubasiData(prev => [...prev, { iklanProduk: '', biayaIklan: '', penjualan: '', konversi: '', produkTerjual: '', roas: '', recommendation: '' }]);
+    } else if (activeTab === 'group') {
+      setGroupData(prev => [...prev, { iklanProduk: '', biayaIklan: '', penjualan: '', konversi: '', produkTerjual: '', roas: '', recommendation: '' }]);
+    } else if (activeTab === 'mandiri') {
+      setMandiriData(prev => [...prev, { infoIklan: '', modalHarian: '', targetRoas: '', diagnosis: '', biayaIklan: '', penjualan: '', roas: '', recommendation: '' }]);
     }
   };
 
@@ -84,6 +116,7 @@ export function AdvertiserDashboard({ clients }: AdvertiserDashboardProps) {
     if (activeTab === 'inkubasi') setInkubasiData([]);
     else if (activeTab === 'group') setGroupData([]);
     else if (activeTab === 'mandiri') setMandiriData([]);
+    setScreenshot(null);
   };
 
   const getActiveData = () => {
@@ -111,7 +144,7 @@ export function AdvertiserDashboard({ clients }: AdvertiserDashboardProps) {
             onClick={clearData}
             className="flex items-center gap-2 px-4 py-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 text-sm font-bold rounded-lg transition-colors border border-red-500/20"
           >
-            <Trash2 className="w-4 h-4" /> Clear Table
+            <Trash2 className="w-4 h-4" /> Clear All
           </button>
           <button 
             className="flex items-center gap-2 px-4 py-2 bg-[#d4af37]/10 text-[#d4af37] hover:bg-[#d4af37]/20 text-sm font-bold rounded-lg transition-colors border border-[#d4af37]/40 shadow-[0_0_15px_rgba(212,175,55,0.15)]"
@@ -160,18 +193,29 @@ export function AdvertiserDashboard({ clients }: AdvertiserDashboardProps) {
               <ClipboardPaste className="w-6 h-6" />
             </div>
             <div className="flex-1">
-              <h3 className="text-zinc-100 font-bold mb-1">Paste Spreadsheet Data Here</h3>
+              <h3 className="text-zinc-100 font-bold mb-1">Paste Screenshot (SS) or Spreadsheet Here</h3>
               <p className="text-zinc-400 text-xs mb-3">
-                Select the cells in Google Sheets or Excel (up to the ROAS column), copy them (Ctrl+C), click into the box below, and paste (Ctrl+V).
+                Click into the box below and press Ctrl+V to paste your image screenshot OR text data from Excel.
               </p>
               <textarea 
                 onPaste={handlePaste}
-                placeholder="Click here and press Ctrl+V to paste your table data..."
+                placeholder="Click here and press Ctrl+V to paste your screenshot or table data..."
                 className="w-full h-16 bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-sm text-zinc-300 focus:outline-none focus:border-[#d4af37]/50 focus:ring-1 focus:ring-[#d4af37]/50 resize-none"
               />
             </div>
           </div>
         </div>
+
+        {/* Display Screenshot if any */}
+        {screenshot && (
+          <div className="p-4 border-b border-zinc-800 bg-black/40 flex flex-col items-center">
+            <div className="flex w-full justify-between items-center mb-3">
+              <h3 className="text-sm font-bold text-[#d4af37] uppercase tracking-wider">Pasted Screenshot (SS)</h3>
+              <button onClick={() => setScreenshot(null)} className="text-xs text-red-400 hover:text-red-300">Remove Image</button>
+            </div>
+            <img src={screenshot} alt="Pasted screenshot" className="max-w-full h-auto rounded-lg border border-zinc-700 shadow-lg object-contain max-h-[400px]" />
+          </div>
+        )}
 
         {/* Data Table */}
         <div className="overflow-x-auto">
@@ -205,10 +249,16 @@ export function AdvertiserDashboard({ clients }: AdvertiserDashboardProps) {
               {activeData.length === 0 ? (
                 <tr>
                   <td colSpan={activeTab === 'mandiri' ? 8 : 7} className="px-4 py-12 text-center">
-                    <div className="flex flex-col items-center justify-center text-zinc-500">
+                    <div className="flex flex-col items-center justify-center text-zinc-500 mb-4">
                       <AlertCircle className="w-8 h-8 mb-2 opacity-50" />
-                      <p>No data yet. Paste from spreadsheet to populate this table.</p>
+                      <p>No data yet. Paste from spreadsheet, paste a screenshot above, or add a row manually.</p>
                     </div>
+                    <button 
+                      onClick={addEmptyRow}
+                      className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold rounded-lg transition-colors border border-zinc-600 inline-flex items-center gap-2"
+                    >
+                      + Add Manual Row
+                    </button>
                   </td>
                 </tr>
               ) : (
@@ -216,33 +266,55 @@ export function AdvertiserDashboard({ clients }: AdvertiserDashboardProps) {
                   <tr key={idx} className="hover:bg-zinc-900/40 transition-colors">
                     {activeTab === 'mandiri' ? (
                       <>
-                        <td className="px-4 py-3 text-zinc-200">
-                          <div className="w-48 truncate" title={row.infoIklan}>{row.infoIklan}</div>
+                        <td className="px-2 py-2">
+                          <input type="text" value={row.infoIklan} onChange={(e) => handleUpdateRow(idx, 'infoIklan', e.target.value)} className="w-32 bg-transparent border-b border-transparent focus:border-[#d4af37] text-zinc-200 p-1 focus:outline-none text-sm" />
                         </td>
-                        <td className="px-4 py-3 text-zinc-400">{row.modalHarian}</td>
-                        <td className="px-4 py-3 text-zinc-400">{row.targetRoas}</td>
-                        <td className="px-4 py-3 text-zinc-400">{row.diagnosis}</td>
-                        <td className="px-4 py-3 text-red-400">{row.biayaIklan}</td>
-                        <td className="px-4 py-3 text-emerald-400">{row.penjualan}</td>
-                        <td className="px-4 py-3 text-zinc-300 font-bold">{row.roas}</td>
+                        <td className="px-2 py-2">
+                          <input type="text" value={row.modalHarian} onChange={(e) => handleUpdateRow(idx, 'modalHarian', e.target.value)} className="w-24 bg-transparent border-b border-transparent focus:border-[#d4af37] text-zinc-400 p-1 focus:outline-none text-sm" />
+                        </td>
+                        <td className="px-2 py-2">
+                          <input type="text" value={row.targetRoas} onChange={(e) => handleUpdateRow(idx, 'targetRoas', e.target.value)} className="w-24 bg-transparent border-b border-transparent focus:border-[#d4af37] text-zinc-400 p-1 focus:outline-none text-sm" />
+                        </td>
+                        <td className="px-2 py-2">
+                          <input type="text" value={row.diagnosis} onChange={(e) => handleUpdateRow(idx, 'diagnosis', e.target.value)} className="w-24 bg-transparent border-b border-transparent focus:border-[#d4af37] text-zinc-400 p-1 focus:outline-none text-sm" />
+                        </td>
+                        <td className="px-2 py-2">
+                          <input type="text" value={row.biayaIklan} onChange={(e) => handleUpdateRow(idx, 'biayaIklan', e.target.value)} className="w-24 bg-transparent border-b border-transparent focus:border-[#d4af37] text-red-400 p-1 focus:outline-none text-sm" />
+                        </td>
+                        <td className="px-2 py-2">
+                          <input type="text" value={row.penjualan} onChange={(e) => handleUpdateRow(idx, 'penjualan', e.target.value)} className="w-24 bg-transparent border-b border-transparent focus:border-[#d4af37] text-emerald-400 p-1 focus:outline-none text-sm" />
+                        </td>
+                        <td className="px-2 py-2">
+                          <input type="text" value={row.roas} onChange={(e) => handleUpdateRow(idx, 'roas', e.target.value)} className="w-20 bg-transparent border-b border-transparent focus:border-[#d4af37] text-zinc-300 font-bold p-1 focus:outline-none text-sm" />
+                        </td>
                       </>
                     ) : (
                       <>
-                        <td className="px-4 py-3 text-zinc-200">
-                          <div className="w-48 truncate" title={row.iklanProduk}>{row.iklanProduk}</div>
+                        <td className="px-2 py-2">
+                          <input type="text" value={row.iklanProduk} onChange={(e) => handleUpdateRow(idx, 'iklanProduk', e.target.value)} className="w-32 bg-transparent border-b border-transparent focus:border-[#d4af37] text-zinc-200 p-1 focus:outline-none text-sm" />
                         </td>
-                        <td className="px-4 py-3 text-red-400">{row.biayaIklan}</td>
-                        <td className="px-4 py-3 text-emerald-400">{row.penjualan}</td>
-                        <td className="px-4 py-3 text-zinc-400">{row.konversi}</td>
-                        <td className="px-4 py-3 text-zinc-400">{row.produkTerjual}</td>
-                        <td className="px-4 py-3 text-zinc-300 font-bold">{row.roas}</td>
+                        <td className="px-2 py-2">
+                          <input type="text" value={row.biayaIklan} onChange={(e) => handleUpdateRow(idx, 'biayaIklan', e.target.value)} className="w-24 bg-transparent border-b border-transparent focus:border-[#d4af37] text-red-400 p-1 focus:outline-none text-sm" />
+                        </td>
+                        <td className="px-2 py-2">
+                          <input type="text" value={row.penjualan} onChange={(e) => handleUpdateRow(idx, 'penjualan', e.target.value)} className="w-24 bg-transparent border-b border-transparent focus:border-[#d4af37] text-emerald-400 p-1 focus:outline-none text-sm" />
+                        </td>
+                        <td className="px-2 py-2">
+                          <input type="text" value={row.konversi} onChange={(e) => handleUpdateRow(idx, 'konversi', e.target.value)} className="w-20 bg-transparent border-b border-transparent focus:border-[#d4af37] text-zinc-400 p-1 focus:outline-none text-sm" />
+                        </td>
+                        <td className="px-2 py-2">
+                          <input type="text" value={row.produkTerjual} onChange={(e) => handleUpdateRow(idx, 'produkTerjual', e.target.value)} className="w-20 bg-transparent border-b border-transparent focus:border-[#d4af37] text-zinc-400 p-1 focus:outline-none text-sm" />
+                        </td>
+                        <td className="px-2 py-2">
+                          <input type="text" value={row.roas} onChange={(e) => handleUpdateRow(idx, 'roas', e.target.value)} className="w-20 bg-transparent border-b border-transparent focus:border-[#d4af37] text-zinc-300 font-bold p-1 focus:outline-none text-sm" />
+                        </td>
                       </>
                     )}
                     <td className="px-4 py-2 bg-[#d4af37]/5 min-w-[250px]">
                       <input 
                         type="text" 
                         value={row.recommendation}
-                        onChange={(e) => handleRecommendationChange(idx, e.target.value)}
+                        onChange={(e) => handleUpdateRow(idx, 'recommendation', e.target.value)}
                         placeholder="Type recommendation..."
                         className="w-full bg-zinc-950 border border-zinc-700/50 rounded p-1.5 text-sm text-zinc-200 focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] focus:outline-none placeholder-zinc-600"
                       />
@@ -252,6 +324,16 @@ export function AdvertiserDashboard({ clients }: AdvertiserDashboardProps) {
               )}
             </tbody>
           </table>
+          {activeData.length > 0 && (
+            <div className="p-3 border-t border-zinc-800">
+              <button 
+                onClick={addEmptyRow}
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold rounded-lg transition-colors border border-zinc-600 inline-flex items-center gap-2"
+              >
+                + Add Row
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

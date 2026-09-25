@@ -159,7 +159,7 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
         const biaya = cols[3] || '';
         const penj = cols[4] || '';
         return {
-          iklanProduk: cols[0] || '',
+          iklanProduk: 'Iklan Produk Otomatis',
           modalHarian: modal,
           targetRoas: cols[2] || '',
           biayaIklan: biaya,
@@ -528,7 +528,11 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
                     ) : (
                       <>
                         <td className="px-1 py-1">
-                          <input type="text" value={row.iklanProduk || ''} onChange={(e) => handleUpdateRow(idx, 'iklanProduk', e.target.value)} className="w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-zinc-200 p-1.5 focus:outline-none transition-colors" />
+                          {activeTab === 'inkubasi' ? (
+                            <input type="text" value="Iklan Produk Otomatis" readOnly className="w-full bg-transparent border-b border-transparent text-zinc-500 p-1.5 focus:outline-none cursor-not-allowed" />
+                          ) : (
+                            <input type="text" value={row.iklanProduk || ''} onChange={(e) => handleUpdateRow(idx, 'iklanProduk', e.target.value)} className="w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-zinc-200 p-1.5 focus:outline-none transition-colors" />
+                          )}
                         </td>
                         <td className="px-1 py-1">
                           <input type="text" value={row.modalHarian || ''} onChange={(e) => handleUpdateRow(idx, 'modalHarian', e.target.value)} className="w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-zinc-400 p-1.5 focus:outline-none transition-colors" />

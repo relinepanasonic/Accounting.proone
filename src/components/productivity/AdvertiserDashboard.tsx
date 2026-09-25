@@ -14,7 +14,7 @@ interface AdvertiserDashboardProps {
   clients: Client[];
 }
 
-type TabType = 'inkubasi' | 'group' | 'mandiri';
+type TabType = 'inkubasi' | 'group_hero' | 'group_reguler' | 'group_low' | 'mandiri';
 
 export function AdvertiserDashboard({ clients }: AdvertiserDashboardProps) {
   const [selectedClient, setSelectedClient] = useState<string>(clients[0]?.id || '');
@@ -29,12 +29,36 @@ export function AdvertiserDashboard({ clients }: AdvertiserDashboardProps) {
 
   // Data state per tab
   const [inkubasiData, setInkubasiData] = useState<any[]>([]);
-  const [groupData, setGroupData] = useState<any[]>([]);
+  const [groupHeroData, setGroupHeroData] = useState<any[]>([]);
+  const [groupRegulerData, setGroupRegulerData] = useState<any[]>([]);
+  const [groupLowData, setGroupLowData] = useState<any[]>([]);
   const [mandiriData, setMandiriData] = useState<any[]>([]);
   const [screenshot, setScreenshot] = useState<string | null>(null);
 
-  const getEmptyRowInkubasi = () => ({ iklanProduk: '', biayaIklan: '', penjualan: '', konversi: '', produkTerjual: '', roas: '', note: '', recommendation: '' });
-  const getEmptyRowMandiri = () => ({ infoIklan: '', modalHarian: '', targetRoas: '', diagnosis: '', biayaIklan: '', penjualan: '', roas: '', note: '', recommendation: '' });
+  const getEmptyRowInkubasiGroup = () => ({
+    iklanProduk: '',
+    modalHarian: '',
+    targetRoas: '',
+    biayaIklan: '',
+    penjualan: '',
+    konversi: '',
+    produkTerjual: '',
+    roas: '',
+    note: '',
+    recommendation: ''
+  });
+
+  const getEmptyRowMandiri = () => ({
+    infoIklan: '',
+    modalHarian: '',
+    targetRoas: '',
+    diagnosis: '',
+    biayaIklan: '',
+    penjualan: '',
+    roas: '',
+    note: '',
+    recommendation: ''
+  });
 
   // Fetch data when client, date, or session changes
   useEffect(() => {
@@ -46,14 +70,22 @@ export function AdvertiserDashboard({ clients }: AdvertiserDashboardProps) {
       
       if (res.data) {
         setInkubasiData(res.data.data_inkubasi || []);
-        setGroupData(res.data.data_group || []);
+        
+        const rawGroup = res.data.data_group || [];
+        const groupIsArray = Array.isArray(rawGroup);
+        setGroupHeroData(groupIsArray ? rawGroup : (rawGroup.hero || []));
+        setGroupRegulerData(groupIsArray ? [] : (rawGroup.reguler || []));
+        setGroupLowData(groupIsArray ? [] : (rawGroup.low || []));
+
         setMandiriData(res.data.data_mandiri || []);
         setScreenshot(res.data.screenshot_url || null);
         setIsHistorical(res.isHistorical);
       } else {
-        // First time ever for this client: initialize with 5 empty rows
-        setInkubasiData(Array(5).fill(null).map(getEmptyRowInkubasi));
-        setGroupData(Array(5).fill(null).map(getEmptyRowInkubasi));
+        // First time ever for this client: initialize with empty rows
+        setInkubasiData(Array(5).fill(null).map(getEmptyRowInkubasiGroup));
+        setGroupHeroData(Array(5).fill(null).map(getEmptyRowInkubasiGroup));
+        setGroupRegulerData(Array(5).fill(null).map(getEmptyRowInkubasiGroup));
+        setGroupLowData(Array(5).fill(null).map(getEmptyRowInkubasiGroup));
         setMandiriData(Array(5).fill(null).map(getEmptyRowMandiri));
         setScreenshot(null);
         setIsHistorical(false);
@@ -71,7 +103,11 @@ export function AdvertiserDashboard({ clients }: AdvertiserDashboardProps) {
       reportDate, 
       session, 
       inkubasiData, 
-      groupData, 
+      {
+        hero: groupHeroData,
+        reguler: groupRegulerData,
+        low: groupLowData
+      }, 
       mandiriData, 
       screenshot
     );
@@ -87,6 +123,16 @@ export function AdvertiserDashboard({ clients }: AdvertiserDashboardProps) {
       return (p / b).toFixed(2);
     }
     return '';
+  };
+
+  const generateRecommendationInkubasi = (modalHarian: string, biayaIklan: string) => {
+    const modal = parseFloat(modalHarian?.replace(/,/g, '') || '0');
+    const biaya = parseFloat(biayaIklan?.replace(/,/g, '') || '0');
+    
+    if (modal > 0 && biaya > (0.8 * modal)) {
+      return "Check Detail Produk, Pindahkan Iklan yang boros ke Ikan Group";
+    }
+    return "";
   };
 
   const handlePaste = (e: React.ClipboardEvent) => {
@@ -119,42 +165,61 @@ export function AdvertiserDashboard({ clients }: AdvertiserDashboardProps) {
     const rows = clipboardData.split(/\r?\n/).filter(row => row.trim() !== '');
     const parsedData = rows.map(row => row.split('\t'));
 
-    if (activeTab === 'inkubasi' || activeTab === 'group') {
+    if (activeTab !== 'mandiri') {
       const formatted = parsedData.map(cols => {
-        const biaya = cols[1] || '';
-        const penj = cols[2] || '';
+        // Assume pasted data matches the new column structure: 
+        // 0: Iklan Produk, 1: Modal, 2: Target ROAS, 3: Biaya, 4: Penjualan, 5: Konversi, 6: Terjual, 7: ROAS, 8: Note
+        const modal = cols[1] || '';
+        const biaya = cols[3] || '';
+        const penj = cols[4] || '';
+        
+        let rec = '';
+        if (activeTab === 'inkubasi') {
+          rec = generateRecommendationInkubasi(modal, biaya);
+        }
+
         return {
           iklanProduk: cols[0] || '',
+          modalHarian: modal,
+          targetRoas: cols[2] || '',
           biayaIklan: biaya,
           penjualan: penj,
-          konversi: cols[3] || '',
-          produkTerjual: cols[4] || '',
-          roas: calculateRoas(penj, biaya) || cols[5] || '',
-          note: cols[6] || '',
-          recommendation: '',
+          konversi: cols[5] || '',
+          produkTerjual: cols[6] || '',
+          roas: calculateRoas(penj, biaya) || cols[7] || '',
+          note: cols[8] || '',
+          recommendation: rec,
         };
       });
+
       if (activeTab === 'inkubasi') {
         const currentData = [...inkubasiData].filter(r => r.iklanProduk !== '' || r.note !== '');
         setInkubasiData([...currentData, ...formatted]);
-      } else {
-        const currentData = [...groupData].filter(r => r.iklanProduk !== '' || r.note !== '');
-        setGroupData([...currentData, ...formatted]);
+      } else if (activeTab === 'group_hero') {
+        const currentData = [...groupHeroData].filter(r => r.iklanProduk !== '' || r.note !== '');
+        setGroupHeroData([...currentData, ...formatted]);
+      } else if (activeTab === 'group_reguler') {
+        const currentData = [...groupRegulerData].filter(r => r.iklanProduk !== '' || r.note !== '');
+        setGroupRegulerData([...currentData, ...formatted]);
+      } else if (activeTab === 'group_low') {
+        const currentData = [...groupLowData].filter(r => r.iklanProduk !== '' || r.note !== '');
+        setGroupLowData([...currentData, ...formatted]);
       }
-    } else if (activeTab === 'mandiri') {
+    } else {
       const formatted = parsedData.map(cols => {
+        const modal = cols[1] || '';
         const biaya = cols[4] || '';
         const penj = cols[5] || '';
         return {
           infoIklan: cols[0] || '',
-          modalHarian: cols[1] || '',
+          modalHarian: modal,
           targetRoas: cols[2] || '',
           diagnosis: cols[3] || '',
           biayaIklan: biaya,
           penjualan: penj,
           roas: calculateRoas(penj, biaya) || cols[6] || '',
           note: cols[7] || '',
-          recommendation: '',
+          recommendation: '', // Mandiri algo pending
         };
       });
       const currentData = [...mandiriData].filter(r => r.infoIklan !== '' || r.note !== '');
@@ -165,7 +230,9 @@ export function AdvertiserDashboard({ clients }: AdvertiserDashboardProps) {
   const handleUpdateRow = (index: number, field: string, val: string) => {
     let newData: any[];
     if (activeTab === 'inkubasi') newData = [...inkubasiData];
-    else if (activeTab === 'group') newData = [...groupData];
+    else if (activeTab === 'group_hero') newData = [...groupHeroData];
+    else if (activeTab === 'group_reguler') newData = [...groupRegulerData];
+    else if (activeTab === 'group_low') newData = [...groupLowData];
     else newData = [...mandiriData];
 
     newData[index] = { ...newData[index], [field]: val };
@@ -175,31 +242,40 @@ export function AdvertiserDashboard({ clients }: AdvertiserDashboardProps) {
       newData[index].roas = calculateRoas(newData[index].penjualan, newData[index].biayaIklan);
     }
 
+    // Auto-calculate Recommendations
+    if (activeTab === 'inkubasi' && (field === 'modalHarian' || field === 'biayaIklan')) {
+      newData[index].recommendation = generateRecommendationInkubasi(newData[index].modalHarian, newData[index].biayaIklan);
+    }
+
     if (activeTab === 'inkubasi') setInkubasiData(newData);
-    else if (activeTab === 'group') setGroupData(newData);
+    else if (activeTab === 'group_hero') setGroupHeroData(newData);
+    else if (activeTab === 'group_reguler') setGroupRegulerData(newData);
+    else if (activeTab === 'group_low') setGroupLowData(newData);
     else setMandiriData(newData);
   };
 
   const addEmptyRow = () => {
-    if (activeTab === 'inkubasi') {
-      setInkubasiData(prev => [...prev, getEmptyRowInkubasi()]);
-    } else if (activeTab === 'group') {
-      setGroupData(prev => [...prev, getEmptyRowInkubasi()]);
-    } else if (activeTab === 'mandiri') {
-      setMandiriData(prev => [...prev, getEmptyRowMandiri()]);
-    }
+    if (activeTab === 'inkubasi') setInkubasiData(prev => [...prev, getEmptyRowInkubasiGroup()]);
+    else if (activeTab === 'group_hero') setGroupHeroData(prev => [...prev, getEmptyRowInkubasiGroup()]);
+    else if (activeTab === 'group_reguler') setGroupRegulerData(prev => [...prev, getEmptyRowInkubasiGroup()]);
+    else if (activeTab === 'group_low') setGroupLowData(prev => [...prev, getEmptyRowInkubasiGroup()]);
+    else if (activeTab === 'mandiri') setMandiriData(prev => [...prev, getEmptyRowMandiri()]);
   };
 
   const clearData = () => {
     if (activeTab === 'inkubasi') setInkubasiData([]);
-    else if (activeTab === 'group') setGroupData([]);
+    else if (activeTab === 'group_hero') setGroupHeroData([]);
+    else if (activeTab === 'group_reguler') setGroupRegulerData([]);
+    else if (activeTab === 'group_low') setGroupLowData([]);
     else if (activeTab === 'mandiri') setMandiriData([]);
     setScreenshot(null);
   };
 
   const getActiveData = () => {
     if (activeTab === 'inkubasi') return inkubasiData;
-    if (activeTab === 'group') return groupData;
+    if (activeTab === 'group_hero') return groupHeroData;
+    if (activeTab === 'group_reguler') return groupRegulerData;
+    if (activeTab === 'group_low') return groupLowData;
     return mandiriData;
   };
 
@@ -274,30 +350,46 @@ export function AdvertiserDashboard({ clients }: AdvertiserDashboardProps) {
       )}
 
       {/* Tabs */}
-      <div className="flex space-x-1 bg-zinc-900/50 p-1 rounded-xl border border-zinc-800">
+      <div className="flex flex-wrap lg:flex-nowrap gap-1 bg-zinc-900/50 p-1 rounded-xl border border-zinc-800">
         <button
           onClick={() => setActiveTab('inkubasi')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold rounded-lg transition-all ${
+          className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 py-2.5 text-xs font-bold rounded-lg transition-all ${
             activeTab === 'inkubasi' ? 'bg-[#0e0f14] text-[#d4af37] shadow-md border border-[#d4af37]/30' : 'text-zinc-500 hover:text-zinc-300'
           }`}
         >
-          <TrendingUp className="w-4 h-4" /> Iklan Inkubasi
+          <TrendingUp className="w-4 h-4" /> Inkubasi
         </button>
         <button
-          onClick={() => setActiveTab('group')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold rounded-lg transition-all ${
-            activeTab === 'group' ? 'bg-[#0e0f14] text-[#d4af37] shadow-md border border-[#d4af37]/30' : 'text-zinc-500 hover:text-zinc-300'
+          onClick={() => setActiveTab('group_hero')}
+          className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 py-2.5 text-xs font-bold rounded-lg transition-all ${
+            activeTab === 'group_hero' ? 'bg-[#0e0f14] text-[#d4af37] shadow-md border border-[#d4af37]/30' : 'text-zinc-500 hover:text-zinc-300'
           }`}
         >
-          <Users className="w-4 h-4" /> Iklan Group
+          <Users className="w-4 h-4" /> Group Hero
+        </button>
+        <button
+          onClick={() => setActiveTab('group_reguler')}
+          className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 py-2.5 text-xs font-bold rounded-lg transition-all ${
+            activeTab === 'group_reguler' ? 'bg-[#0e0f14] text-[#d4af37] shadow-md border border-[#d4af37]/30' : 'text-zinc-500 hover:text-zinc-300'
+          }`}
+        >
+          <Users className="w-4 h-4" /> Group Reguler
+        </button>
+        <button
+          onClick={() => setActiveTab('group_low')}
+          className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 py-2.5 text-xs font-bold rounded-lg transition-all ${
+            activeTab === 'group_low' ? 'bg-[#0e0f14] text-[#d4af37] shadow-md border border-[#d4af37]/30' : 'text-zinc-500 hover:text-zinc-300'
+          }`}
+        >
+          <Users className="w-4 h-4" /> Group Low Konversi
         </button>
         <button
           onClick={() => setActiveTab('mandiri')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold rounded-lg transition-all ${
+          className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 py-2.5 text-xs font-bold rounded-lg transition-all ${
             activeTab === 'mandiri' ? 'bg-[#0e0f14] text-[#d4af37] shadow-md border border-[#d4af37]/30' : 'text-zinc-500 hover:text-zinc-300'
           }`}
         >
-          <Target className="w-4 h-4" /> Iklan Mandiri
+          <Target className="w-4 h-4" /> Mandiri
         </button>
       </div>
 
@@ -347,7 +439,7 @@ export function AdvertiserDashboard({ clients }: AdvertiserDashboardProps) {
                 {activeTab === 'mandiri' ? (
                   <>
                     <th className="px-2 py-3 font-medium w-32">Info Iklan</th>
-                    <th className="px-2 py-3 font-medium w-24">Modal</th>
+                    <th className="px-2 py-3 font-medium w-20">Modal Harian</th>
                     <th className="px-2 py-3 font-medium w-20">Target ROAS</th>
                     <th className="px-2 py-3 font-medium w-24">Diagnosis</th>
                     <th className="px-2 py-3 font-medium w-24">Biaya Iklan</th>
@@ -356,7 +448,9 @@ export function AdvertiserDashboard({ clients }: AdvertiserDashboardProps) {
                   </>
                 ) : (
                   <>
-                    <th className="px-2 py-3 font-medium w-36">Iklan Produk</th>
+                    <th className="px-2 py-3 font-medium w-32">Iklan Produk</th>
+                    <th className="px-2 py-3 font-medium w-20">Modal Harian</th>
+                    <th className="px-2 py-3 font-medium w-20">Target ROAS</th>
                     <th className="px-2 py-3 font-medium w-24">Biaya Iklan</th>
                     <th className="px-2 py-3 font-medium w-24">Penjualan</th>
                     <th className="px-2 py-3 font-medium w-16">Konversi</th>
@@ -364,14 +458,14 @@ export function AdvertiserDashboard({ clients }: AdvertiserDashboardProps) {
                     <th className="px-2 py-3 font-medium w-16">ROAS</th>
                   </>
                 )}
-                <th className="px-2 py-3 font-medium w-40 text-blue-300 bg-blue-500/5">Note (Manual)</th>
+                <th className="px-2 py-3 font-medium w-32 text-blue-300 bg-blue-500/5">Note (Manual)</th>
                 <th className="px-2 py-3 font-medium w-48 text-[#d4af37] bg-[#d4af37]/5 flex items-center gap-1"><Sparkles className="w-3 h-3" /> Recommendation</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/50">
               {activeData.length === 0 ? (
                 <tr>
-                  <td colSpan={activeTab === 'mandiri' ? 9 : 8} className="px-4 py-12 text-center">
+                  <td colSpan={activeTab === 'mandiri' ? 9 : 10} className="px-4 py-12 text-center">
                     <div className="flex flex-col items-center justify-center text-zinc-500 mb-4">
                       <AlertCircle className="w-8 h-8 mb-2 opacity-50" />
                       <p>No data yet. Paste from spreadsheet, paste a screenshot above, or add a row manually.</p>
@@ -417,6 +511,12 @@ export function AdvertiserDashboard({ clients }: AdvertiserDashboardProps) {
                           <input type="text" value={row.iklanProduk || ''} onChange={(e) => handleUpdateRow(idx, 'iklanProduk', e.target.value)} className="w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-zinc-200 p-1.5 focus:outline-none transition-colors" />
                         </td>
                         <td className="px-1 py-1">
+                          <input type="text" value={row.modalHarian || ''} onChange={(e) => handleUpdateRow(idx, 'modalHarian', e.target.value)} className="w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-zinc-400 p-1.5 focus:outline-none transition-colors" />
+                        </td>
+                        <td className="px-1 py-1">
+                          <input type="text" value={row.targetRoas || ''} onChange={(e) => handleUpdateRow(idx, 'targetRoas', e.target.value)} className="w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-zinc-400 p-1.5 focus:outline-none transition-colors" />
+                        </td>
+                        <td className="px-1 py-1">
                           <input type="text" value={row.biayaIklan || ''} onChange={(e) => handleUpdateRow(idx, 'biayaIklan', e.target.value)} className="w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-red-400 p-1.5 focus:outline-none transition-colors font-mono" />
                         </td>
                         <td className="px-1 py-1">
@@ -448,7 +548,7 @@ export function AdvertiserDashboard({ clients }: AdvertiserDashboardProps) {
                         value={row.recommendation || ''}
                         readOnly
                         placeholder="Auto-generated later..."
-                        className="w-full bg-black/60 border border-zinc-800/50 rounded p-1.5 text-zinc-500 focus:outline-none placeholder-zinc-700/50 cursor-not-allowed italic"
+                        className={`w-full bg-black/60 border border-zinc-800/50 rounded p-1.5 text-zinc-500 focus:outline-none placeholder-zinc-700/50 cursor-not-allowed ${row.recommendation ? 'text-[#d4af37] border-[#d4af37]/40 font-bold' : 'italic'}`}
                       />
                     </td>
                   </tr>

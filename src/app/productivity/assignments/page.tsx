@@ -31,6 +31,7 @@ export default async function AssignmentsPage() {
     .from('clients')
     .select('id, name')
     .eq('workspace_id', activeWorkspaceId)
+    .or('contact_type.eq.client,contact_type.is.null')
     .order('name');
 
   // Fetch staff for current workspace (Advertiser/Admin)

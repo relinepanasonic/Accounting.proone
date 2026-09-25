@@ -12,6 +12,7 @@ export default async function AdvertiserDivisionPage() {
     .from('clients')
     .select('id, name')
     .eq('workspace_id', activeWorkspaceId)
+    .or('contact_type.eq.client,contact_type.is.null')
     .order('name');
 
   const { data: userData } = await supabase.auth.getUser();

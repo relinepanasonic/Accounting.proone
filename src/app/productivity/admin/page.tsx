@@ -14,6 +14,7 @@ export default async function AdminDivisionPage() {
     .from('clients')
     .select('id, name, email, phone, invoices(status, total, amount_paid)')
     .eq('workspace_id', activeWorkspaceId)
+    .or('contact_type.eq.client,contact_type.is.null')
     .order('name');
 
   const { data: userData } = await supabase.auth.getUser();

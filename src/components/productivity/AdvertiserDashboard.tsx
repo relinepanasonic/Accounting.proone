@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ClipboardPaste, Save, Trash2, AlertCircle, TrendingUp, Users, Target, Calendar, Clock, Loader2 } from 'lucide-react';
+import { ClipboardPaste, Save, Trash2, AlertCircle, TrendingUp, Users, Target, Calendar, Clock, Loader2, Sparkles } from 'lucide-react';
 import { ClientSelect } from '@/components/ui/ClientSelect';
 import { fetchAdvertiserReport, saveAdvertiserReport } from '@/app/actions/advertiser';
 
@@ -33,6 +33,9 @@ export function AdvertiserDashboard({ clients }: AdvertiserDashboardProps) {
   const [mandiriData, setMandiriData] = useState<any[]>([]);
   const [screenshot, setScreenshot] = useState<string | null>(null);
 
+  const getEmptyRowInkubasi = () => ({ iklanProduk: '', biayaIklan: '', penjualan: '', konversi: '', produkTerjual: '', roas: '', note: '', recommendation: '' });
+  const getEmptyRowMandiri = () => ({ infoIklan: '', modalHarian: '', targetRoas: '', diagnosis: '', biayaIklan: '', penjualan: '', roas: '', note: '', recommendation: '' });
+
   // Fetch data when client, date, or session changes
   useEffect(() => {
     if (!selectedClient) return;
@@ -49,9 +52,9 @@ export function AdvertiserDashboard({ clients }: AdvertiserDashboardProps) {
         setIsHistorical(res.isHistorical);
       } else {
         // First time ever for this client: initialize with 5 empty rows
-        setInkubasiData(Array(5).fill({ iklanProduk: '', biayaIklan: '', penjualan: '', konversi: '', produkTerjual: '', roas: '', recommendation: '' }));
-        setGroupData(Array(5).fill({ iklanProduk: '', biayaIklan: '', penjualan: '', konversi: '', produkTerjual: '', roas: '', recommendation: '' }));
-        setMandiriData(Array(5).fill({ infoIklan: '', modalHarian: '', targetRoas: '', diagnosis: '', biayaIklan: '', penjualan: '', roas: '', recommendation: '' }));
+        setInkubasiData(Array(5).fill(null).map(getEmptyRowInkubasi));
+        setGroupData(Array(5).fill(null).map(getEmptyRowInkubasi));
+        setMandiriData(Array(5).fill(null).map(getEmptyRowMandiri));
         setScreenshot(null);
         setIsHistorical(false);
       }
@@ -73,11 +76,19 @@ export function AdvertiserDashboard({ clients }: AdvertiserDashboardProps) {
       screenshot
     );
     setIsSaving(false);
-    setIsHistorical(false); // Once saved, it's the current exact record
+    setIsHistorical(false);
     alert('Adjustments saved successfully!');
   };
 
-  // Function to handle pasting data from Excel/Google Sheets OR Screenshots
+  const calculateRoas = (penjualan: string, biayaIklan: string) => {
+    const p = parseFloat(penjualan?.replace(/,/g, '') || '0');
+    const b = parseFloat(biayaIklan?.replace(/,/g, '') || '0');
+    if (b > 0) {
+      return (p / b).toFixed(2);
+    }
+    return '';
+  };
+
   const handlePaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
 
@@ -93,7 +104,6 @@ export function AdvertiserDashboard({ clients }: AdvertiserDashboardProps) {
     if (imageItem) {
       const blob = imageItem.getAsFile();
       if (blob) {
-        // Read image as base64 string to save in DB
         const reader = new FileReader();
         reader.onload = (event) => {
           setScreenshot(event.target?.result as string);
@@ -110,62 +120,73 @@ export function AdvertiserDashboard({ clients }: AdvertiserDashboardProps) {
     const parsedData = rows.map(row => row.split('\t'));
 
     if (activeTab === 'inkubasi' || activeTab === 'group') {
-      const formatted = parsedData.map(cols => ({
-        iklanProduk: cols[0] || '',
-        biayaIklan: cols[1] || '',
-        penjualan: cols[2] || '',
-        konversi: cols[3] || '',
-        produkTerjual: cols[4] || '',
-        roas: cols[5] || '',
-        recommendation: '',
-      }));
+      const formatted = parsedData.map(cols => {
+        const biaya = cols[1] || '';
+        const penj = cols[2] || '';
+        return {
+          iklanProduk: cols[0] || '',
+          biayaIklan: biaya,
+          penjualan: penj,
+          konversi: cols[3] || '',
+          produkTerjual: cols[4] || '',
+          roas: calculateRoas(penj, biaya) || cols[5] || '',
+          note: cols[6] || '',
+          recommendation: '',
+        };
+      });
       if (activeTab === 'inkubasi') {
-        // Replace empty rows with pasted data
-        const currentData = [...inkubasiData].filter(r => r.iklanProduk !== '' || r.recommendation !== '');
+        const currentData = [...inkubasiData].filter(r => r.iklanProduk !== '' || r.note !== '');
         setInkubasiData([...currentData, ...formatted]);
       } else {
-        const currentData = [...groupData].filter(r => r.iklanProduk !== '' || r.recommendation !== '');
+        const currentData = [...groupData].filter(r => r.iklanProduk !== '' || r.note !== '');
         setGroupData([...currentData, ...formatted]);
       }
     } else if (activeTab === 'mandiri') {
-      const formatted = parsedData.map(cols => ({
-        infoIklan: cols[0] || '',
-        modalHarian: cols[1] || '',
-        targetRoas: cols[2] || '',
-        diagnosis: cols[3] || '',
-        biayaIklan: cols[4] || '',
-        penjualan: cols[5] || '',
-        roas: cols[6] || '',
-        recommendation: '',
-      }));
-      const currentData = [...mandiriData].filter(r => r.infoIklan !== '' || r.recommendation !== '');
+      const formatted = parsedData.map(cols => {
+        const biaya = cols[4] || '';
+        const penj = cols[5] || '';
+        return {
+          infoIklan: cols[0] || '',
+          modalHarian: cols[1] || '',
+          targetRoas: cols[2] || '',
+          diagnosis: cols[3] || '',
+          biayaIklan: biaya,
+          penjualan: penj,
+          roas: calculateRoas(penj, biaya) || cols[6] || '',
+          note: cols[7] || '',
+          recommendation: '',
+        };
+      });
+      const currentData = [...mandiriData].filter(r => r.infoIklan !== '' || r.note !== '');
       setMandiriData([...currentData, ...formatted]);
     }
   };
 
   const handleUpdateRow = (index: number, field: string, val: string) => {
-    if (activeTab === 'inkubasi') {
-      const newData = [...inkubasiData];
-      newData[index] = { ...newData[index], [field]: val };
-      setInkubasiData(newData);
-    } else if (activeTab === 'group') {
-      const newData = [...groupData];
-      newData[index] = { ...newData[index], [field]: val };
-      setGroupData(newData);
-    } else if (activeTab === 'mandiri') {
-      const newData = [...mandiriData];
-      newData[index] = { ...newData[index], [field]: val };
-      setMandiriData(newData);
+    let newData: any[];
+    if (activeTab === 'inkubasi') newData = [...inkubasiData];
+    else if (activeTab === 'group') newData = [...groupData];
+    else newData = [...mandiriData];
+
+    newData[index] = { ...newData[index], [field]: val };
+
+    // Auto-calculate ROAS
+    if (field === 'penjualan' || field === 'biayaIklan') {
+      newData[index].roas = calculateRoas(newData[index].penjualan, newData[index].biayaIklan);
     }
+
+    if (activeTab === 'inkubasi') setInkubasiData(newData);
+    else if (activeTab === 'group') setGroupData(newData);
+    else setMandiriData(newData);
   };
 
   const addEmptyRow = () => {
     if (activeTab === 'inkubasi') {
-      setInkubasiData(prev => [...prev, { iklanProduk: '', biayaIklan: '', penjualan: '', konversi: '', produkTerjual: '', roas: '', recommendation: '' }]);
+      setInkubasiData(prev => [...prev, getEmptyRowInkubasi()]);
     } else if (activeTab === 'group') {
-      setGroupData(prev => [...prev, { iklanProduk: '', biayaIklan: '', penjualan: '', konversi: '', produkTerjual: '', roas: '', recommendation: '' }]);
+      setGroupData(prev => [...prev, getEmptyRowInkubasi()]);
     } else if (activeTab === 'mandiri') {
-      setMandiriData(prev => [...prev, { infoIklan: '', modalHarian: '', targetRoas: '', diagnosis: '', biayaIklan: '', penjualan: '', roas: '', recommendation: '' }]);
+      setMandiriData(prev => [...prev, getEmptyRowMandiri()]);
     }
   };
 
@@ -314,42 +335,43 @@ export function AdvertiserDashboard({ clients }: AdvertiserDashboardProps) {
         )}
 
         {/* Data Table */}
-        <div className="overflow-x-auto relative">
+        <div className="overflow-x-auto relative scrollbar-thin scrollbar-thumb-[#d4af37]/30 scrollbar-track-transparent">
           {isLoading && (
             <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
               <Loader2 className="w-8 h-8 text-[#d4af37] animate-spin" />
             </div>
           )}
-          <table className="w-full text-sm text-left whitespace-nowrap">
-            <thead className="bg-zinc-950/50 text-xs uppercase text-zinc-400 border-b border-zinc-800">
+          <table className="w-full text-xs text-left whitespace-nowrap table-fixed">
+            <thead className="bg-zinc-950/50 uppercase text-zinc-400 border-b border-zinc-800">
               <tr>
                 {activeTab === 'mandiri' ? (
                   <>
-                    <th className="px-4 py-3 font-medium">Info Iklan</th>
-                    <th className="px-4 py-3 font-medium">Modal Harian</th>
-                    <th className="px-4 py-3 font-medium">Target ROAS</th>
-                    <th className="px-4 py-3 font-medium">Diagnosis</th>
-                    <th className="px-4 py-3 font-medium">Biaya Iklan</th>
-                    <th className="px-4 py-3 font-medium">Penjualan</th>
-                    <th className="px-4 py-3 font-medium">ROAS</th>
+                    <th className="px-2 py-3 font-medium w-32">Info Iklan</th>
+                    <th className="px-2 py-3 font-medium w-24">Modal</th>
+                    <th className="px-2 py-3 font-medium w-20">Target ROAS</th>
+                    <th className="px-2 py-3 font-medium w-24">Diagnosis</th>
+                    <th className="px-2 py-3 font-medium w-24">Biaya Iklan</th>
+                    <th className="px-2 py-3 font-medium w-24">Penjualan</th>
+                    <th className="px-2 py-3 font-medium w-16">ROAS</th>
                   </>
                 ) : (
                   <>
-                    <th className="px-4 py-3 font-medium">Iklan Produk</th>
-                    <th className="px-4 py-3 font-medium">Biaya Iklan</th>
-                    <th className="px-4 py-3 font-medium">Penjualan</th>
-                    <th className="px-4 py-3 font-medium">Konversi</th>
-                    <th className="px-4 py-3 font-medium">Produk Terjual</th>
-                    <th className="px-4 py-3 font-medium">ROAS</th>
+                    <th className="px-2 py-3 font-medium w-36">Iklan Produk</th>
+                    <th className="px-2 py-3 font-medium w-24">Biaya Iklan</th>
+                    <th className="px-2 py-3 font-medium w-24">Penjualan</th>
+                    <th className="px-2 py-3 font-medium w-16">Konversi</th>
+                    <th className="px-2 py-3 font-medium w-16">Terjual</th>
+                    <th className="px-2 py-3 font-medium w-16">ROAS</th>
                   </>
                 )}
-                <th className="px-4 py-3 font-medium text-[#d4af37] bg-[#d4af37]/5">Recommendation</th>
+                <th className="px-2 py-3 font-medium w-40 text-blue-300 bg-blue-500/5">Note (Manual)</th>
+                <th className="px-2 py-3 font-medium w-48 text-[#d4af37] bg-[#d4af37]/5 flex items-center gap-1"><Sparkles className="w-3 h-3" /> Recommendation</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/50">
               {activeData.length === 0 ? (
                 <tr>
-                  <td colSpan={activeTab === 'mandiri' ? 8 : 7} className="px-4 py-12 text-center">
+                  <td colSpan={activeTab === 'mandiri' ? 9 : 8} className="px-4 py-12 text-center">
                     <div className="flex flex-col items-center justify-center text-zinc-500 mb-4">
                       <AlertCircle className="w-8 h-8 mb-2 opacity-50" />
                       <p>No data yet. Paste from spreadsheet, paste a screenshot above, or add a row manually.</p>
@@ -367,57 +389,66 @@ export function AdvertiserDashboard({ clients }: AdvertiserDashboardProps) {
                   <tr key={idx} className="hover:bg-zinc-900/40 transition-colors">
                     {activeTab === 'mandiri' ? (
                       <>
-                        <td className="px-2 py-2">
-                          <input type="text" value={row.infoIklan || ''} onChange={(e) => handleUpdateRow(idx, 'infoIklan', e.target.value)} className="w-32 bg-transparent border-b border-transparent focus:border-[#d4af37] text-zinc-200 p-1 focus:outline-none text-sm" />
+                        <td className="px-1 py-1">
+                          <input type="text" value={row.infoIklan || ''} onChange={(e) => handleUpdateRow(idx, 'infoIklan', e.target.value)} className="w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-zinc-200 p-1.5 focus:outline-none transition-colors" />
                         </td>
-                        <td className="px-2 py-2">
-                          <input type="text" value={row.modalHarian || ''} onChange={(e) => handleUpdateRow(idx, 'modalHarian', e.target.value)} className="w-24 bg-transparent border-b border-transparent focus:border-[#d4af37] text-zinc-400 p-1 focus:outline-none text-sm" />
+                        <td className="px-1 py-1">
+                          <input type="text" value={row.modalHarian || ''} onChange={(e) => handleUpdateRow(idx, 'modalHarian', e.target.value)} className="w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-zinc-400 p-1.5 focus:outline-none transition-colors" />
                         </td>
-                        <td className="px-2 py-2">
-                          <input type="text" value={row.targetRoas || ''} onChange={(e) => handleUpdateRow(idx, 'targetRoas', e.target.value)} className="w-24 bg-transparent border-b border-transparent focus:border-[#d4af37] text-zinc-400 p-1 focus:outline-none text-sm" />
+                        <td className="px-1 py-1">
+                          <input type="text" value={row.targetRoas || ''} onChange={(e) => handleUpdateRow(idx, 'targetRoas', e.target.value)} className="w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-zinc-400 p-1.5 focus:outline-none transition-colors" />
                         </td>
-                        <td className="px-2 py-2">
-                          <input type="text" value={row.diagnosis || ''} onChange={(e) => handleUpdateRow(idx, 'diagnosis', e.target.value)} className="w-24 bg-transparent border-b border-transparent focus:border-[#d4af37] text-zinc-400 p-1 focus:outline-none text-sm" />
+                        <td className="px-1 py-1">
+                          <input type="text" value={row.diagnosis || ''} onChange={(e) => handleUpdateRow(idx, 'diagnosis', e.target.value)} className="w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-zinc-400 p-1.5 focus:outline-none transition-colors" />
                         </td>
-                        <td className="px-2 py-2">
-                          <input type="text" value={row.biayaIklan || ''} onChange={(e) => handleUpdateRow(idx, 'biayaIklan', e.target.value)} className="w-24 bg-transparent border-b border-transparent focus:border-[#d4af37] text-red-400 p-1 focus:outline-none text-sm" />
+                        <td className="px-1 py-1">
+                          <input type="text" value={row.biayaIklan || ''} onChange={(e) => handleUpdateRow(idx, 'biayaIklan', e.target.value)} className="w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-red-400 p-1.5 focus:outline-none transition-colors font-mono" />
                         </td>
-                        <td className="px-2 py-2">
-                          <input type="text" value={row.penjualan || ''} onChange={(e) => handleUpdateRow(idx, 'penjualan', e.target.value)} className="w-24 bg-transparent border-b border-transparent focus:border-[#d4af37] text-emerald-400 p-1 focus:outline-none text-sm" />
+                        <td className="px-1 py-1">
+                          <input type="text" value={row.penjualan || ''} onChange={(e) => handleUpdateRow(idx, 'penjualan', e.target.value)} className="w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-emerald-400 p-1.5 focus:outline-none transition-colors font-mono" />
                         </td>
-                        <td className="px-2 py-2">
-                          <input type="text" value={row.roas || ''} onChange={(e) => handleUpdateRow(idx, 'roas', e.target.value)} className="w-20 bg-transparent border-b border-transparent focus:border-[#d4af37] text-zinc-300 font-bold p-1 focus:outline-none text-sm" />
+                        <td className="px-1 py-1">
+                          <input type="text" value={row.roas || ''} readOnly className="w-full bg-zinc-900/50 border-b border-transparent text-[#d4af37] font-bold p-1.5 focus:outline-none cursor-default text-center font-mono rounded" />
                         </td>
                       </>
                     ) : (
                       <>
-                        <td className="px-2 py-2">
-                          <input type="text" value={row.iklanProduk || ''} onChange={(e) => handleUpdateRow(idx, 'iklanProduk', e.target.value)} className="w-32 bg-transparent border-b border-transparent focus:border-[#d4af37] text-zinc-200 p-1 focus:outline-none text-sm" />
+                        <td className="px-1 py-1">
+                          <input type="text" value={row.iklanProduk || ''} onChange={(e) => handleUpdateRow(idx, 'iklanProduk', e.target.value)} className="w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-zinc-200 p-1.5 focus:outline-none transition-colors" />
                         </td>
-                        <td className="px-2 py-2">
-                          <input type="text" value={row.biayaIklan || ''} onChange={(e) => handleUpdateRow(idx, 'biayaIklan', e.target.value)} className="w-24 bg-transparent border-b border-transparent focus:border-[#d4af37] text-red-400 p-1 focus:outline-none text-sm" />
+                        <td className="px-1 py-1">
+                          <input type="text" value={row.biayaIklan || ''} onChange={(e) => handleUpdateRow(idx, 'biayaIklan', e.target.value)} className="w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-red-400 p-1.5 focus:outline-none transition-colors font-mono" />
                         </td>
-                        <td className="px-2 py-2">
-                          <input type="text" value={row.penjualan || ''} onChange={(e) => handleUpdateRow(idx, 'penjualan', e.target.value)} className="w-24 bg-transparent border-b border-transparent focus:border-[#d4af37] text-emerald-400 p-1 focus:outline-none text-sm" />
+                        <td className="px-1 py-1">
+                          <input type="text" value={row.penjualan || ''} onChange={(e) => handleUpdateRow(idx, 'penjualan', e.target.value)} className="w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-emerald-400 p-1.5 focus:outline-none transition-colors font-mono" />
                         </td>
-                        <td className="px-2 py-2">
-                          <input type="text" value={row.konversi || ''} onChange={(e) => handleUpdateRow(idx, 'konversi', e.target.value)} className="w-20 bg-transparent border-b border-transparent focus:border-[#d4af37] text-zinc-400 p-1 focus:outline-none text-sm" />
+                        <td className="px-1 py-1">
+                          <input type="text" value={row.konversi || ''} onChange={(e) => handleUpdateRow(idx, 'konversi', e.target.value)} className="w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-zinc-400 p-1.5 focus:outline-none transition-colors font-mono text-center" />
                         </td>
-                        <td className="px-2 py-2">
-                          <input type="text" value={row.produkTerjual || ''} onChange={(e) => handleUpdateRow(idx, 'produkTerjual', e.target.value)} className="w-20 bg-transparent border-b border-transparent focus:border-[#d4af37] text-zinc-400 p-1 focus:outline-none text-sm" />
+                        <td className="px-1 py-1">
+                          <input type="text" value={row.produkTerjual || ''} onChange={(e) => handleUpdateRow(idx, 'produkTerjual', e.target.value)} className="w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-zinc-400 p-1.5 focus:outline-none transition-colors font-mono text-center" />
                         </td>
-                        <td className="px-2 py-2">
-                          <input type="text" value={row.roas || ''} onChange={(e) => handleUpdateRow(idx, 'roas', e.target.value)} className="w-20 bg-transparent border-b border-transparent focus:border-[#d4af37] text-zinc-300 font-bold p-1 focus:outline-none text-sm" />
+                        <td className="px-1 py-1">
+                          <input type="text" value={row.roas || ''} readOnly className="w-full bg-zinc-900/50 border-b border-transparent text-[#d4af37] font-bold p-1.5 focus:outline-none cursor-default text-center font-mono rounded" />
                         </td>
                       </>
                     )}
-                    <td className="px-4 py-2 bg-[#d4af37]/5 min-w-[250px]">
+                    <td className="px-2 py-1 bg-blue-500/5">
+                      <input 
+                        type="text" 
+                        value={row.note || ''}
+                        onChange={(e) => handleUpdateRow(idx, 'note', e.target.value)}
+                        placeholder="Write a note..."
+                        className="w-full bg-zinc-950/80 border border-zinc-800/80 rounded p-1.5 text-zinc-300 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 focus:outline-none placeholder-zinc-700 transition-all"
+                      />
+                    </td>
+                    <td className="px-2 py-1 bg-[#d4af37]/5">
                       <input 
                         type="text" 
                         value={row.recommendation || ''}
-                        onChange={(e) => handleUpdateRow(idx, 'recommendation', e.target.value)}
-                        placeholder="Type recommendation..."
-                        className="w-full bg-zinc-950 border border-zinc-700/50 rounded p-1.5 text-sm text-zinc-200 focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] focus:outline-none placeholder-zinc-600"
+                        readOnly
+                        placeholder="Auto-generated later..."
+                        className="w-full bg-black/60 border border-zinc-800/50 rounded p-1.5 text-zinc-500 focus:outline-none placeholder-zinc-700/50 cursor-not-allowed italic"
                       />
                     </td>
                   </tr>

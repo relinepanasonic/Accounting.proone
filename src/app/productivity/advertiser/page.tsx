@@ -45,10 +45,6 @@ export default async function AdvertiserDivisionPage() {
         </div>
       </div>
 
-      <div className="text-sm text-zinc-400 max-w-3xl mb-8">
-        Manage Shopee/Tiktok Ads performance per client. Select a client, choose the ad group category, and paste your data directly from your Spreadsheet to analyze and provide recommendations.
-      </div>
-
       <AdvertiserDashboard clients={clients || []} />
     </div>
   );

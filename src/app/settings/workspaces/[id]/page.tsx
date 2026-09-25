@@ -19,12 +19,16 @@ export default async function WorkspaceDetailPage({ params }: WorkspaceDetailPag
   const supabase = await createClient();
   const wsContext = await getAuthenticatedWorkspaceContext();
   const activeId = wsContext.activeWorkspaceId;
+  const { data: userData } = await supabase.auth.getUser();
 
-  // Concurrently fetch exact workspace entity, bank accounts, and products by target ID
-  const [wsRes, accountsRes, productsRes] = await Promise.all([
+  // Concurrently fetch exact workspace entity, bank accounts, products, clients, staff, and assignments
+  const [wsRes, accountsRes, productsRes, clientsRes, staffRes, assignmentsRes] = await Promise.all([
     supabase.from('workspaces').select('*').eq('id', targetId).single(),
     supabase.from('workspace_bank_accounts').select('*').eq('workspace_id', targetId).order('is_default', { ascending: false }),
     supabase.from('products').select('*').eq('workspace_id', targetId).order('created_at', { ascending: false }),
+    supabase.from('clients').select('id, name').eq('workspace_id', targetId).or('contact_type.eq.client,contact_type.is.null').order('name'),
+    supabase.from('workspace_members').select('user_id, role, profiles(full_name, email)').eq('workspace_id', targetId),
+    supabase.from('client_assignments').select('client_id, user_id').eq('workspace_id', targetId)
   ]);
 
   const { data: ws, error: wsErr } = wsRes;
@@ -102,6 +106,11 @@ export default async function WorkspaceDetailPage({ params }: WorkspaceDetailPag
       bankAccounts={bankAccounts}
       products={productList}
       isCurrentActive={isCurrentActive}
+      clients={clientsRes.data || []}
+      staff={staffRes.data || []}
+      assignments={assignmentsRes.data || []}
+      currentUserRole={wsContext.role}
+      currentUserId={userData.user?.id}
     />
   );
 }

@@ -35,6 +35,9 @@ import {
 } from '@/app/actions/settings';
 import type { CatalogProduct } from '@/components/settings/CatalogManager';
 import { OpeningBalancesTab } from '@/components/settings/OpeningBalancesTab';
+import { AssignmentManager } from '@/components/productivity/AssignmentManager';
+import { TeamManager } from '@/components/settings/TeamManager';
+import { Users } from 'lucide-react';
 
 interface WorkspaceDetailTabsProps {
   targetWorkspaceId: string;
@@ -49,6 +52,11 @@ interface WorkspaceDetailTabsProps {
   bankAccounts: BankAccountItem[];
   products: CatalogProduct[];
   isCurrentActive: boolean;
+  clients: { id: string; name: string }[];
+  staff: { user_id: string; role: string; profiles: any }[];
+  assignments: { client_id: string; user_id: string }[];
+  currentUserRole: string;
+  currentUserId?: string;
 }
 
 export function WorkspaceDetailTabs({
@@ -64,11 +72,16 @@ export function WorkspaceDetailTabs({
   bankAccounts: initialBankAccounts,
   products: initialProducts,
   isCurrentActive,
+  clients,
+  staff,
+  assignments,
+  currentUserRole,
+  currentUserId,
 }: WorkspaceDetailTabsProps) {
   const router = useRouter();
 
   // Navigation State (ordered: Product List -> Bank Account -> Tax)
-  const [activeTab, setActiveTab] = useState<'catalog' | 'banking' | 'identity' | 'opening-balances'>('catalog');
+  const [activeTab, setActiveTab] = useState<'catalog' | 'banking' | 'identity' | 'opening-balances' | 'users'>('catalog');
 
   // Tab 1: Identity & Brand State
   const [name, setName] = useState(initialName);
@@ -493,6 +506,18 @@ export function WorkspaceDetailTabs({
         >
           <BookOpen className={`w-4 h-4 ${activeTab === 'opening-balances' ? 'text-black' : 'text-[#d4af37]'}`} />
           <span>Opening Balances</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('users')}
+          className={`flex-1 min-w-[150px] py-3 px-5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2.5 transition-all duration-300 ${
+            activeTab === 'users'
+              ? 'bg-gradient-to-r from-[#d4af37] to-[#f5d77f] text-black shadow-[0_0_20px_rgba(212,175,55,0.4)] font-extrabold'
+              : 'text-zinc-400 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <Users className={`w-4 h-4 ${activeTab === 'users' ? 'text-black' : 'text-[#d4af37]'}`} />
+          <span>Users & Assignment</span>
         </button>
       </div>
 
@@ -1353,6 +1378,39 @@ export function WorkspaceDetailTabs({
       {/* ========================================================================= */}
       {activeTab === 'opening-balances' && (
         <OpeningBalancesTab bankAccounts={accounts} />
+      )}
+      {/* ========================================================================= */}
+      {/* TAB 5: USERS & ASSIGNMENTS */}
+      {/* ========================================================================= */}
+      {activeTab === 'users' && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          <TeamManager 
+            initialMembers={staff.map(s => ({
+              id: s.user_id,
+              email: s.profiles?.email || 'Unknown',
+              name: s.profiles?.full_name || '',
+              role: s.role as any,
+              isCurrentUser: s.user_id === currentUserId
+            }))}
+            currentUserRole={currentUserRole}
+          />
+          
+          <div className="bg-white/5 backdrop-blur-md border border-yellow-600/30 rounded-3xl p-6 sm:p-8 space-y-6 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+            <div className="border-b border-yellow-600/20 pb-4">
+              <h2 className="text-sm font-extrabold uppercase tracking-wider text-white font-serif">
+                STAFF ASSIGNMENTS & USERS
+              </h2>
+              <p className="text-xs text-zinc-400 font-sans mt-1">
+                Assign specific clients to your team members.
+              </p>
+            </div>
+            <AssignmentManager 
+              clients={clients} 
+              staff={staff.filter(s => s.role === 'admin' || s.role === 'advertiser')} 
+              assignments={assignments} 
+            />
+          </div>
+        </div>
       )}
     </div>
   );

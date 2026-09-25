@@ -219,7 +219,8 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
               className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-[#f5d77f] font-mono focus:outline-none focus:border-[#d4af37]"
             >
               <option value="accounting">ACCOUNTING (Full Ledger & Invoice Rights)</option>
-              <option value="admin">ADMIN (Operations & Payroll Overview)</option>
+              <option value="advertiser">ADVERTISER (Ads Data Input Only)</option>
+              <option value="admin">ADMIN (Operations & Client Reporting)</option>
               <option value="superadmin">SUPERADMIN (Full Ownership & Settings)</option>
             </select>
           </div>
@@ -280,6 +281,7 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
                       >
                         <option value="superadmin">SUPERADMIN</option>
                         <option value="accounting">ACCOUNTING</option>
+                        <option value="advertiser">ADVERTISER</option>
                         <option value="admin">ADMIN</option>
                       </select>
                     ) : (

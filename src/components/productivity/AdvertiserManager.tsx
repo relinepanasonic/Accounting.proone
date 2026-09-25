@@ -156,6 +156,7 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
                 <th className="px-6 py-4 font-bold text-center">Sesi 2</th>
                 <th className="px-6 py-4 font-bold text-center">Sesi 3</th>
                 <th className="px-6 py-4 font-bold">Note</th>
+                <th className="px-6 py-4 font-bold text-[#d4af37]">Recommendation</th>
                 <th className="px-6 py-4 font-bold">Date/Time Stamp</th>
                 <th className="px-6 py-4 font-bold text-right">Action</th>
               </tr>
@@ -163,7 +164,7 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
             <tbody className="divide-y divide-zinc-800/50 text-zinc-300">
               {logs.length === 0 && !isLoadingLogs ? (
                 <tr>
-                  <td colSpan={9} className="px-6 py-12 text-center text-zinc-500">
+                  <td colSpan={10} className="px-6 py-12 text-center text-zinc-500">
                     No records found. Click "Start Record" to create one.
                   </td>
                 </tr>
@@ -190,6 +191,15 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
                       <div className="max-w-[200px] truncate text-xs text-zinc-400">
                         {log.note || '-'}
                       </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      {log.recommendation ? (
+                        <span className="inline-block px-2 py-1 bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/30 rounded text-xs font-bold max-w-[250px] whitespace-normal">
+                          {log.recommendation}
+                        </span>
+                      ) : (
+                        <span className="text-zinc-600">-</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-xs font-mono text-zinc-500">
                       <div>{new Date(log.created_at).toLocaleDateString()}</div>

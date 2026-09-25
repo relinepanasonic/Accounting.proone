@@ -16,6 +16,7 @@ export async function fetchAdvertiserLogs() {
       report_date,
       session,
       note,
+      data_inkubasi,
       created_at,
       user_id,
       clients ( name ),
@@ -60,11 +61,13 @@ export async function fetchAdvertiserLogs() {
         report_date: row.report_date,
         advertiser_name: profiles[row.user_id] || 'Unknown',
         note: row.note || '',
+        recommendation: '',
         created_at: row.created_at,
         sessions: { 1: false, 2: false, 3: false }
       };
     }
     grouped[key].sessions[row.session as 1|2|3] = true;
+    
     // Prefer earliest creation date for the Date Stamp
     if (new Date(row.created_at) < new Date(grouped[key].created_at)) {
       grouped[key].created_at = row.created_at;
@@ -72,6 +75,18 @@ export async function fetchAdvertiserLogs() {
     // Prefer most recent note
     if (row.note && !grouped[key].note) {
       grouped[key].note = row.note;
+    }
+
+    // Evaluate Recommendation based on Inkubasi
+    if (row.data_inkubasi && Array.isArray(row.data_inkubasi)) {
+      const needsAction = row.data_inkubasi.some((r: any) => {
+        const modal = parseFloat(r.modalHarian?.replace(/,/g, '') || '0');
+        const biaya = parseFloat(r.biayaIklan?.replace(/,/g, '') || '0');
+        return modal > 0 && biaya > (0.8 * modal);
+      });
+      if (needsAction) {
+        grouped[key].recommendation = "Check Detail Produk, Pindahkan Iklan yang boros ke Ikan Group";
+      }
     }
   });
 

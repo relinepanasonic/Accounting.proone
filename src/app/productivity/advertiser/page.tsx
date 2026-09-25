@@ -35,15 +35,7 @@ export default async function AdvertiserDivisionPage() {
 
   return (
     <div className="p-4 lg:p-8 space-y-8 animate-in fade-in zoom-in-95 duration-300">
-      <div className="flex items-center gap-4">
-        <div className="p-3 bg-blue-500/10 rounded-xl text-blue-400">
-          <Megaphone className="w-8 h-8" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-extrabold text-zinc-100 font-serif">Advertiser Division</h1>
-          <p className="text-sm text-zinc-400 mt-1">Workspace: {activeWorkspaceName}</p>
-        </div>
-      </div>
+
 
       <AdvertiserDashboard clients={clients || []} />
     </div>

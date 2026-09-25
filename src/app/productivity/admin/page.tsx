@@ -8,14 +8,30 @@ import { Shield, ExternalLink, Mail, Phone, Clock, CheckCircle } from 'lucide-re
 
 export default async function AdminDivisionPage() {
   const supabase = await createClient();
-  const { activeWorkspaceId, activeWorkspaceName } = await getAuthenticatedWorkspaceContext(supabase);
+  const { activeWorkspaceId, activeWorkspaceName, role } = await getAuthenticatedWorkspaceContext(supabase);
 
-  // Fetch clients for the current workspace (so New Wave only sees New Wave, Prof sees Prof, etc)
-  const { data: clients } = await supabase
+  let { data: clients } = await supabase
     .from('clients')
     .select('id, name, email, phone, invoices(status, total, amount_paid)')
     .eq('workspace_id', activeWorkspaceId)
     .order('name');
+
+  const { data: userData } = await supabase.auth.getUser();
+
+  if (role !== 'superadmin' && role !== 'founder' && clients) {
+    const { data: assignments } = await supabase
+      .from('client_assignments')
+      .select('client_id')
+      .eq('workspace_id', activeWorkspaceId)
+      .eq('user_id', userData.user?.id);
+
+    if (assignments) {
+      const assignedIds = new Set(assignments.map(a => a.client_id));
+      clients = clients.filter(c => assignedIds.has(c.id));
+    } else {
+      clients = [];
+    }
+  }
 
   const clientsWithStats = (clients || []).map(c => {
     let totalPaid = 0;

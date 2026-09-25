@@ -37,6 +37,7 @@ const MODULES = {
       { name: 'Admin', href: '/productivity/admin' },
       { name: 'Advertiser', href: '/productivity/advertiser' },
       { name: 'Pabrik Sosmed', href: '/productivity/pabrik-sosmed' },
+      { name: 'Assignments', href: '/productivity/assignments' },
     ]
   },
   hrd: {

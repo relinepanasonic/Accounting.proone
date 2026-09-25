@@ -114,9 +114,16 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
     alert('Adjustments saved successfully!');
   };
 
+  const formatCurrency = (val: string) => {
+    if (!val) return '';
+    const numStr = val.toString().replace(/\D/g, '');
+    if (!numStr) return '';
+    return `Rp ${parseInt(numStr, 10).toLocaleString('en-US')}`;
+  };
+
   const calculateRoas = (penjualan: string, biayaIklan: string) => {
-    const p = parseFloat(penjualan?.replace(/,/g, '') || '0');
-    const b = parseFloat(biayaIklan?.replace(/,/g, '') || '0');
+    const p = parseFloat(penjualan?.replace(/\D/g, '') || '0');
+    const b = parseFloat(biayaIklan?.replace(/\D/g, '') || '0');
     if (b > 0) {
       return (p / b).toFixed(2);
     }
@@ -160,10 +167,10 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
         const penj = cols[4] || '';
         return {
           iklanProduk: 'Iklan Produk Otomatis',
-          modalHarian: modal,
-          targetRoas: cols[2] || '',
-          biayaIklan: biaya,
-          penjualan: penj,
+          modalHarian: formatCurrency(modal),
+          targetRoas: 'Auto',
+          biayaIklan: formatCurrency(biaya),
+          penjualan: formatCurrency(penj),
           konversi: cols[5] || '',
           produkTerjual: cols[6] || '',
           roas: calculateRoas(penj, biaya) || cols[7] || '',
@@ -181,10 +188,10 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
           groupCategory: activeGroupCategory,
           groupName: activeGroupName,
           iklanProduk: cols[0] || '',
-          modalHarian: modal,
+          modalHarian: formatCurrency(modal),
           targetRoas: cols[2] || '',
-          biayaIklan: biaya,
-          penjualan: penj,
+          biayaIklan: formatCurrency(biaya),
+          penjualan: formatCurrency(penj),
           konversi: cols[5] || '',
           produkTerjual: cols[6] || '',
           roas: calculateRoas(penj, biaya) || cols[7] || '',
@@ -201,11 +208,11 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
         const penj = cols[5] || '';
         return {
           infoIklan: cols[0] || '',
-          modalHarian: modal,
+          modalHarian: formatCurrency(modal),
           targetRoas: cols[2] || '',
           diagnosis: cols[3] || '',
-          biayaIklan: biaya,
-          penjualan: penj,
+          biayaIklan: formatCurrency(biaya),
+          penjualan: formatCurrency(penj),
           roas: calculateRoas(penj, biaya) || cols[6] || '',
           note: cols[7] || '',
         };
@@ -216,22 +223,26 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
   };
 
   const handleUpdateRow = (index: number, field: string, val: string) => {
+    let formattedVal = val;
+    if (field === 'modalHarian' || field === 'biayaIklan' || field === 'penjualan') {
+      formattedVal = formatCurrency(val);
+    }
+
     if (activeTab === 'inkubasi') {
       const newData = [...inkubasiData];
-      newData[index] = { ...newData[index], [field]: val };
+      newData[index] = { ...newData[index], [field]: formattedVal };
       if (field === 'penjualan' || field === 'biayaIklan') {
         newData[index].roas = calculateRoas(newData[index].penjualan, newData[index].biayaIklan);
       }
       setInkubasiData(newData);
     } else if (activeTab === 'group') {
-      // Index is relative to the active group, we need to update the absolute groupData
       const activeGroupSubset = groupData.filter(r => r.groupCategory === activeGroupCategory && r.groupName === activeGroupName);
       const rowToUpdate = activeGroupSubset[index];
       const absoluteIndex = groupData.indexOf(rowToUpdate);
       
       if (absoluteIndex !== -1) {
         const newData = [...groupData];
-        newData[absoluteIndex] = { ...newData[absoluteIndex], [field]: val };
+        newData[absoluteIndex] = { ...newData[absoluteIndex], [field]: formattedVal };
         if (field === 'penjualan' || field === 'biayaIklan') {
           newData[absoluteIndex].roas = calculateRoas(newData[absoluteIndex].penjualan, newData[absoluteIndex].biayaIklan);
         }
@@ -239,7 +250,7 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
       }
     } else if (activeTab === 'mandiri') {
       const newData = [...mandiriData];
-      newData[index] = { ...newData[index], [field]: val };
+      newData[index] = { ...newData[index], [field]: formattedVal };
       if (field === 'penjualan' || field === 'biayaIklan') {
         newData[index].roas = calculateRoas(newData[index].penjualan, newData[index].biayaIklan);
       }
@@ -538,7 +549,11 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
                           <input type="text" value={row.modalHarian || ''} onChange={(e) => handleUpdateRow(idx, 'modalHarian', e.target.value)} className="w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-zinc-400 p-1.5 focus:outline-none transition-colors" />
                         </td>
                         <td className="px-1 py-1">
-                          <input type="text" value={row.targetRoas || ''} onChange={(e) => handleUpdateRow(idx, 'targetRoas', e.target.value)} className="w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-zinc-400 p-1.5 focus:outline-none transition-colors" />
+                          {activeTab === 'inkubasi' ? (
+                            <input type="text" value="Auto" readOnly className="w-full bg-transparent border-b border-transparent text-zinc-500 p-1.5 focus:outline-none cursor-not-allowed text-center font-mono" />
+                          ) : (
+                            <input type="text" value={row.targetRoas || ''} onChange={(e) => handleUpdateRow(idx, 'targetRoas', e.target.value)} className="w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-zinc-400 p-1.5 focus:outline-none transition-colors" />
+                          )}
                         </td>
                         <td className="px-1 py-1">
                           <input type="text" value={row.biayaIklan || ''} onChange={(e) => handleUpdateRow(idx, 'biayaIklan', e.target.value)} className="w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-red-400 p-1.5 focus:outline-none transition-colors font-mono" />

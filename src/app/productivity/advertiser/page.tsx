@@ -1,7 +1,7 @@
 import React from 'react';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
-import { AdvertiserDashboard } from '@/components/productivity/AdvertiserDashboard';
+import { AdvertiserManager } from '@/components/productivity/AdvertiserManager';
 import { Megaphone } from 'lucide-react';
 
 export default async function AdvertiserDivisionPage() {
@@ -35,9 +35,7 @@ export default async function AdvertiserDivisionPage() {
 
   return (
     <div className="p-4 lg:p-8 space-y-8 animate-in fade-in zoom-in-95 duration-300">
-
-
-      <AdvertiserDashboard clients={clients || []} />
+      <AdvertiserManager clients={clients || []} />
     </div>
   );
 }

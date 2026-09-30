@@ -317,7 +317,7 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
                     ) : (
                       <>
                         <span className="text-[10px] font-mono text-emerald-400">ACTIVE SESSION</span>
-                        {(currentUserRole === 'superadmin' || currentUserRole === 'founder') && m.role !== 'founder' && !m.isCurrentUser && (
+                        {(currentUserRole === 'founder' || (currentUserRole === 'superadmin' && m.role !== 'superadmin')) && m.role !== 'founder' && !m.isCurrentUser && (
                           <>
                             <button
                               onClick={() => {

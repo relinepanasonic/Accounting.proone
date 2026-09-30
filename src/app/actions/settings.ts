@@ -821,10 +821,10 @@ export async function inviteTeamMember(payload: {
     const supabase = await createClient();
     const { workspaceId, role } = await resolveWorkspaceContext(supabase);
 
-    if (role !== 'superadmin') {
+    if (role !== 'superadmin' && role !== 'founder') {
       return {
         success: false,
-        error: 'RBAC Security Clearance Denied: Only Superadmins can invite team members.',
+        error: 'RBAC Security Clearance Denied: Only the Founder or a Superadmin can invite team members.',
       };
     }
 
@@ -910,7 +910,16 @@ export async function updateTeamMemberRole(payload: { memberId: string; role: 's
     const { workspaceId, role: currentRole } = await resolveWorkspaceContext(supabase);
 
     if (currentRole !== 'superadmin' && currentRole !== 'founder') {
-      return { success: false, error: 'Only Superadmins can modify team roles.' };
+      return { success: false, error: 'Only the Founder or a Superadmin can modify team roles.' };
+    }
+
+    // Only the Founder can change a Superadmin's role.
+    if (currentRole !== 'founder') {
+      const { data: target } = await supabase
+        .from('workspace_members').select('role').eq('id', payload.memberId).eq('workspace_id', workspaceId).single();
+      if (target?.role === 'superadmin') {
+        return { success: false, error: 'Only the Founder can change Superadmin roles.' };
+      }
     }
 
     // Founders are defined by email (see lib/auth/founders.ts), never by a membership row.
@@ -941,22 +950,31 @@ export async function updateTeamMemberRole(payload: { memberId: string; role: 's
 export async function deleteTeamMember(payload: { memberId: string }) {
   try {
     const supabase = await createClient();
-    const { workspaceId, role: currentRole } = await resolveWorkspaceContext(supabase);
+    const { userId, workspaceId, role: currentRole } = await resolveWorkspaceContext(supabase);
 
-    if (currentRole !== 'superadmin') {
-      return { success: false, error: 'Only Superadmins can remove team members.' };
+    if (currentRole !== 'superadmin' && currentRole !== 'founder') {
+      return { success: false, error: 'Only the Founder or a Superadmin can remove team members.' };
     }
 
     // Attempt to delete the member from the workspace
     const { data: member, error: fetchError } = await supabase
       .from('workspace_members')
-      .select('user_id')
+      .select('user_id, role')
       .eq('id', payload.memberId)
       .eq('workspace_id', workspaceId)
       .single();
 
     if (fetchError || !member) {
       return { success: false, error: 'Member not found.' };
+    }
+
+    if (member.user_id && member.user_id === userId) {
+      return { success: false, error: 'You cannot remove your own access.' };
+    }
+
+    // Only the Founder can remove a Superadmin.
+    if (member.role === 'superadmin' && currentRole !== 'founder') {
+      return { success: false, error: 'Only the Founder can remove a Superadmin.' };
     }
 
     const { error: deleteError } = await supabase

@@ -14,10 +14,10 @@ export default async function AccountsReceivablePage() {
     .from('invoices')
     .select('*, clients(name)')
     .eq('workspace_id', activeWorkspaceId)
-    .in('status', ['SENT', 'PARTIAL', 'OVERDUE'])
+    .in('status', ['sent', 'invoiced', 'partial_paid', 'overdue'])
     .order('due_date', { ascending: true });
 
-  const totalAR = (invoices || []).reduce((sum, inv) => sum + (Number(inv.total) - Number(inv.amount_paid || 0)), 0);
+  const totalAR = (invoices || []).reduce((sum, inv) => sum + (Number(inv.total_amount) - Number(inv.amount_paid || 0)), 0);
 
   return (
     <div className="p-4 lg:p-8 space-y-6 animate-in fade-in zoom-in-95 duration-300">
@@ -51,8 +51,8 @@ export default async function AccountsReceivablePage() {
             </thead>
             <tbody className="divide-y divide-zinc-800/50">
               {invoices.map(inv => {
-                const balance = Number(inv.total) - Number(inv.amount_paid || 0);
-                const isOverdue = inv.status === 'OVERDUE' || (inv.due_date && new Date(inv.due_date) < new Date());
+                const balance = Number(inv.total_amount) - Number(inv.amount_paid || 0);
+                const isOverdue = inv.status === 'overdue' || (inv.due_date && new Date(inv.due_date) < new Date());
 
                 return (
                   <tr key={inv.id} className="hover:bg-zinc-900/30 transition-colors">
@@ -68,7 +68,7 @@ export default async function AccountsReceivablePage() {
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold tracking-wider uppercase border ${
                         isOverdue 
                           ? 'bg-red-500/10 text-red-400 border-red-500/20' 
-                          : inv.status === 'PARTIAL'
+                          : inv.status === 'partial_paid'
                           ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
                           : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                       }`}>
@@ -80,7 +80,7 @@ export default async function AccountsReceivablePage() {
                       {inv.due_date ? new Date(inv.due_date).toLocaleDateString() : 'N/A'}
                     </td>
                     <td className="px-6 py-4 text-right text-zinc-400">
-                      {formatCurrency(Number(inv.total))}
+                      {formatCurrency(Number(inv.total_amount))}
                     </td>
                     <td className="px-6 py-4 text-right">
                       <span className={`font-mono font-semibold ${isOverdue ? 'text-red-400' : 'text-amber-400'}`}>

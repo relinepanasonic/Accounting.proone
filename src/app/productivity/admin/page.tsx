@@ -14,7 +14,7 @@ export default async function AdminDivisionPage() {
 
   let { data: clients } = await supabase
     .from('clients')
-    .select('id, name, email, phone, invoices(status, total, amount_paid)')
+    .select('id, name, email, phone, invoices(status, total_amount, amount_paid)')
     .eq('workspace_id', activeWorkspaceId)
     .or('contact_type.eq.client,contact_type.is.null')
     .order('name');
@@ -41,10 +41,10 @@ export default async function AdminDivisionPage() {
     let unpaidBalance = 0;
 
     (c.invoices || []).forEach((inv: any) => {
-      const invTotal = Number(inv.total || 0);
+      const invTotal = Number(inv.total_amount || 0);
       const invPaid = Number(inv.amount_paid || 0);
       totalPaid += invPaid;
-      if (inv.status !== 'DRAFT') {
+      if (String(inv.status).toLowerCase() !== 'draft') {
         unpaidBalance += (invTotal - invPaid);
       }
     });

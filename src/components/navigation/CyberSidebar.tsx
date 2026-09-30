@@ -63,7 +63,7 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
               />
               <div className="flex flex-col">
                 <span className="text-sm font-extrabold tracking-wide text-white font-serif">
-                  Accounting
+                  Commerce Center
                 </span>
                 <span className="text-[9px] font-mono text-[#d4af37] tracking-wider uppercase">
                   PROFESSOR TOKO

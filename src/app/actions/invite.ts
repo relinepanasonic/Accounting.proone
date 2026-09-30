@@ -16,6 +16,10 @@ export async function generateInviteLink(formData: {
     return { error: 'Unauthorized: only superadmins can invite users.' };
   }
 
+  if (!['superadmin', 'accounting', 'admin', 'advertiser', 'client'].includes(formData.role)) {
+    return { error: 'Invalid role.' };
+  }
+
   if (!formData.email || !formData.username || !formData.fullName) {
     return { error: 'Email, username and name are all required.' };
   }

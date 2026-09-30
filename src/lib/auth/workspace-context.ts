@@ -2,11 +2,20 @@ import { cache } from 'react';
 import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
+import { withSharedCookieOptions } from '@/lib/supabase/cookie-options';
+import { isFounderEmail } from '@/lib/auth/founders';
+
+// 'none' = signed in but not a member of any workspace: no access to anything.
+export type WorkspaceRole = 'founder' | 'superadmin' | 'accounting' | 'admin' | 'advertiser' | 'client' | 'none';
+
+/** Roles that may open finance modules. advertiser / client are limited to Pabrik Sosmed. */
+export const FINANCE_ROLES: WorkspaceRole[] = ['founder', 'superadmin', 'accounting', 'admin'];
+
 
 export interface WorkspaceTenantInfo {
   id: string;
   name: string;
-  role: 'superadmin' | 'accounting' | 'admin';
+  role: WorkspaceRole;
   logoUrl?: string;
 }
 
@@ -16,27 +25,16 @@ export interface WorkspaceContextInfo {
   userEmail?: string;
   activeWorkspaceId: string;
   activeWorkspaceName: string;
-  role: 'superadmin' | 'accounting' | 'admin' | 'founder';
+  role: WorkspaceRole;
   availableWorkspaces: WorkspaceTenantInfo[];
 }
 
-const SEED_WORKSPACES: WorkspaceTenantInfo[] = [
-  {
-    id: '11111111-1111-1111-1111-111111111111',
-    name: 'Professor Toko Online HQ',
-    role: 'superadmin',
-  },
-  {
-    id: '11111111-1111-1111-1111-111111111112',
-    name: 'Nüman Kitchenware Enterprise',
-    role: 'accounting',
-  },
-  {
-    id: '11111111-1111-1111-1111-111111111113',
-    name: 'Bochtmon Studio Venture',
-    role: 'superadmin',
-  },
-];
+const NO_ACCESS: Omit<WorkspaceContextInfo, 'userId' | 'userName' | 'userEmail'> = {
+  activeWorkspaceId: '',
+  activeWorkspaceName: '',
+  role: 'none',
+  availableWorkspaces: [],
+};
 
 /**
  * Multi-Tenant Active Workspace Engine
@@ -76,7 +74,7 @@ export const getAuthenticatedWorkspaceContext = cache(async (
       }
     }
 
-    const isFounder = resolvedEmail.toLowerCase() === 'nicojapar@gmail.com' || resolvedEmail.toLowerCase() === 'relinepanasonic@gmail.com';
+    const isFounder = isFounderEmail(user.email);
 
     let memberRows: any[] | null = null;
     
@@ -137,11 +135,9 @@ export const getAuthenticatedWorkspaceContext = cache(async (
       // If missing or invalid cookie, try setting it to first allowed workspace
       if (!matched) {
         try {
-          cookieStore.set('active_workspace_id', active.id, {
-            path: '/',
+          cookieStore.set('active_workspace_id', active.id, withSharedCookieOptions({
             maxAge: 60 * 60 * 24 * 365,
-            sameSite: 'lax',
-          });
+          }));
         } catch {
           // Can be ignored if called during render pass
         }
@@ -158,55 +154,10 @@ export const getAuthenticatedWorkspaceContext = cache(async (
       };
     }
 
-    // If user is logged in but has no membership rows yet, query all real workspaces from the database
-    // so they never see fake seed/dummy workspaces like "Professor Toko Online HQ"!
-    const { data: realWorkspaces } = await supabaseClient
-      .from('workspaces')
-      .select('id, name')
-      .order('created_at', { ascending: true });
-
-    if (realWorkspaces && realWorkspaces.length > 0) {
-      const allowedRealWorkspaces: WorkspaceTenantInfo[] = realWorkspaces.map((w: any) => ({
-        id: w.id,
-        name: w.name || 'Enterprise Tenant',
-        role: 'accounting', // Default staff role
-      }));
-
-      const matched = allowedRealWorkspaces.find((w) => w.id === cookieWorkspaceId);
-      const active = matched || allowedRealWorkspaces[0];
-
-      if (!matched) {
-        try {
-          cookieStore.set('active_workspace_id', active.id, {
-            path: '/',
-            maxAge: 60 * 60 * 24 * 365,
-            sameSite: 'lax',
-          });
-        } catch {}
-      }
-
-      return {
-        userId: user.id,
-        userName: resolvedName,
-        userEmail: resolvedEmail,
-        activeWorkspaceId: active.id,
-        activeWorkspaceName: active.name,
-        role: active.role,
-        availableWorkspaces: allowedRealWorkspaces,
-      };
-    }
+    // Signed in but not a member of any workspace: no access (never fall back to a staff role).
+    return { userId: user.id, userName: resolvedName, userEmail: resolvedEmail, ...NO_ACCESS };
   }
 
-  // 2. Fallback Seed / Preview Flow (Only used when no user is logged in and no real database workspaces exist)
-  const matchedSeed = SEED_WORKSPACES.find((w) => w.id === cookieWorkspaceId) || SEED_WORKSPACES[0];
-
-  return {
-    userId: user ? user.id : null,
-    userName: resolvedName,
-    userEmail: resolvedEmail,
-    activeWorkspaceId: matchedSeed.id,
-    activeWorkspaceName: matchedSeed.name,
-    role: matchedSeed.role,
-    availableWorkspaces: SEED_WORKSPACES,
-  };
+  // Not signed in: no access, no seed/preview workspace.
+  return { userId: null, userName: resolvedName, userEmail: resolvedEmail, ...NO_ACCESS };
 });

@@ -35,7 +35,12 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
 
   const activeId = workspaceContext?.activeWorkspaceId || '11111111-1111-1111-1111-111111111111';
   const activeName = workspaceContext?.activeWorkspaceName || 'Professor Toko Online HQ';
-  const activeRole = workspaceContext?.role || 'superadmin';
+  const activeRole = workspaceContext?.role || 'none';
+  // advertiser / client see Pabrik Sosmed only, never the finance navigation.
+  const limited = activeRole === 'advertiser' || activeRole === 'client';
+  const modules = limited
+    ? [{ name: 'Pabrik Sosmed', href: '/productivity/pabrik-sosmed', icon: <CheckSquare className="w-4 h-4" /> }]
+    : MAIN_MODULES;
   const availableWorkspaces = workspaceContext?.availableWorkspaces || [];
 
   return (
@@ -100,7 +105,7 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
         />
 
         {/* Add Workspace Button in Sidebar */}
-        {!isCollapsed && (
+        {!isCollapsed && !limited && (
           <div className="px-3 pt-2">
             <Link
               href="/settings/general"
@@ -113,7 +118,7 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
 
         {/* Navigation Menu Links */}
         <nav className="p-3 space-y-2 mt-2">
-          {MAIN_MODULES.map((item) => {
+          {modules.map((item) => {
             let isActive = false;
             if (item.name === 'Accounting') {
               isActive = ['/', '/invoices', '/expenses', '/assets', '/ledger', '/reconcile'].some(p => pathname === p || pathname.startsWith(p + '/'));

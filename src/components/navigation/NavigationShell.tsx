@@ -8,9 +8,10 @@ interface NavigationShellProps {
   sidebar: React.ReactNode;
   bottomNav: React.ReactNode;
   children: React.ReactNode;
+  limited?: boolean;
 }
 
-export function NavigationShell({ sidebar, bottomNav, children }: NavigationShellProps) {
+export function NavigationShell({ sidebar, bottomNav, children, limited }: NavigationShellProps) {
   const pathname = usePathname();
   const isAuthPage = pathname === '/login' || pathname === '/register';
 
@@ -18,7 +19,7 @@ export function NavigationShell({ sidebar, bottomNav, children }: NavigationShel
     <>
       {!isAuthPage && sidebar}
       <main className={`flex-1 overflow-x-hidden overflow-y-auto ${!isAuthPage ? 'pb-20 lg:pb-0' : ''} flex flex-col`}>
-        {!isAuthPage && <ModuleSubNav />}
+        {!isAuthPage && !limited && <ModuleSubNav />}
         <div className="flex-1">
           {children}
         </div>

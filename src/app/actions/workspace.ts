@@ -3,6 +3,7 @@
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { withSharedCookieOptions } from '@/lib/supabase/cookie-options';
 
 export async function switchWorkspace(newWorkspaceId: string) {
   try {
@@ -35,11 +36,9 @@ export async function switchWorkspace(newWorkspaceId: string) {
     }
 
     // Set secure cookie
-    cookieStore.set('active_workspace_id', newWorkspaceId, {
-      path: '/',
+    cookieStore.set('active_workspace_id', newWorkspaceId, withSharedCookieOptions({
       maxAge: 60 * 60 * 24 * 365,
-      sameSite: 'lax',
-    });
+    }));
 
     revalidatePath('/', 'layout');
     return { success: true, newWorkspaceId };
@@ -149,11 +148,9 @@ export async function createWorkspace(workspaceName: string) {
     await supabase.from('global_chart_of_accounts').insert(defaultCOA);
 
     // Step 4: Set the active_workspace_id cookie so user is instantly switched to the new company
-    cookieStore.set('active_workspace_id', newWs.id, {
-      path: '/',
+    cookieStore.set('active_workspace_id', newWs.id, withSharedCookieOptions({
       maxAge: 60 * 60 * 24 * 365,
-      sameSite: 'lax',
-    });
+    }));
 
     // Step 5: Force layout re-render
     revalidatePath('/', 'layout');

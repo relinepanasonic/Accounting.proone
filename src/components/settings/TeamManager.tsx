@@ -10,7 +10,7 @@ export interface TeamMemberRecord {
   id: string;
   email: string;
   name?: string;
-  role: 'superadmin' | 'accounting' | 'admin' | 'founder';
+  role: 'superadmin' | 'accounting' | 'admin' | 'advertiser' | 'client' | 'founder';
   isCurrentUser?: boolean;
 }
 
@@ -24,13 +24,13 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [name, setName] = useState('');
-  const [role, setRole] = useState<'superadmin' | 'accounting' | 'admin'>('accounting');
+  const [role, setRole] = useState<'superadmin' | 'accounting' | 'admin' | 'advertiser' | 'client'>('accounting');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editRole, setEditRole] = useState<'superadmin' | 'accounting' | 'admin' | 'founder'>('accounting');
+  const [editRole, setEditRole] = useState<'superadmin' | 'accounting' | 'admin' | 'advertiser' | 'client' | 'founder'>('accounting');
   const [isPending, startTransition] = useTransition();
 
   const handleDelete = (id: string) => {
@@ -219,7 +219,8 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
               className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-[#f5d77f] font-mono focus:outline-none focus:border-[#d4af37]"
             >
               <option value="accounting">ACCOUNTING (Full Ledger & Invoice Rights)</option>
-              <option value="advertiser">ADVERTISER (Ads Data Input Only)</option>
+              <option value="advertiser">ADVERTISER (Ads Data Input, Assigned Clients Only)</option>
+              <option value="client">CLIENT (Read-Only Ads Reports, Assigned Clients Only)</option>
               <option value="admin">ADMIN (Operations & Client Reporting)</option>
               <option value="superadmin">SUPERADMIN (Full Ownership & Settings)</option>
             </select>
@@ -282,6 +283,7 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
                         <option value="superadmin">SUPERADMIN</option>
                         <option value="accounting">ACCOUNTING</option>
                         <option value="advertiser">ADVERTISER</option>
+                        <option value="client">CLIENT</option>
                         <option value="admin">ADMIN</option>
                       </select>
                     ) : (

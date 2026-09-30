@@ -40,13 +40,16 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const wsContext = await getAuthenticatedWorkspaceContext();
+  // advertiser / client see Pabrik Sosmed only, never the finance navigation.
+  const limited = wsContext.role === 'advertiser' || wsContext.role === 'client';
 
   return (
     <html lang="en" className="dark">
       <body className="bg-[#0b0c10] text-zinc-100 antialiased selection:bg-[#d4af37] selection:text-black flex min-h-screen">
         <NavigationShell
           sidebar={<CyberSidebar workspaceContext={wsContext} />}
-          bottomNav={<BottomMobileNav />}
+          bottomNav={<BottomMobileNav limited={limited} />}
+          limited={limited}
         >
           {children}
         </NavigationShell>

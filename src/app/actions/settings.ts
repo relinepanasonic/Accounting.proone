@@ -44,11 +44,11 @@ async function resolveWorkspaceContext(supabase: any) {
     }
   }
 
-  // Fallback for seed workspace context
+  // No session / no membership: no access (never default to a workspace or a role).
   return {
     userId: null,
-    workspaceId: '11111111-1111-1111-1111-111111111111',
-    role: 'superadmin',
+    workspaceId: '',
+    role: 'none',
   };
 }
 
@@ -815,7 +815,7 @@ export async function deleteClientRecord(clientId: string) {
 export async function inviteTeamMember(payload: {
   email: string;
   name: string;
-  role: 'superadmin' | 'accounting' | 'admin';
+  role: 'superadmin' | 'accounting' | 'admin' | 'advertiser' | 'client';
 }) {
   try {
     const supabase = await createClient();
@@ -904,13 +904,18 @@ export async function inviteTeamMember(payload: {
 /**
  * Server Action: Update a team member's role
  */
-export async function updateTeamMemberRole(payload: { memberId: string; role: 'superadmin' | 'accounting' | 'admin' | 'founder' }) {
+export async function updateTeamMemberRole(payload: { memberId: string; role: 'superadmin' | 'accounting' | 'admin' | 'advertiser' | 'client' | 'founder' }) {
   try {
     const supabase = await createClient();
     const { workspaceId, role: currentRole } = await resolveWorkspaceContext(supabase);
 
-    if (currentRole !== 'superadmin') {
+    if (currentRole !== 'superadmin' && currentRole !== 'founder') {
       return { success: false, error: 'Only Superadmins can modify team roles.' };
+    }
+
+    // Founders are defined by email (see lib/auth/founders.ts), never by a membership row.
+    if (!['superadmin', 'accounting', 'admin', 'advertiser', 'client'].includes(payload.role)) {
+      return { success: false, error: 'Invalid role.' };
     }
 
     const { error } = await supabase

@@ -43,7 +43,7 @@ export default async function AssignmentsPage() {
       profiles (full_name, email)
     `)
     .eq('workspace_id', activeWorkspaceId)
-    .in('role', ['admin', 'advertiser', 'accounting', 'superadmin']) // Show assignable roles
+    .in('role', ['admin', 'advertiser', 'client', 'accounting', 'superadmin']) // Show assignable roles
     .not('user_id', 'is', null);
 
   // Fetch all assignments for current workspace

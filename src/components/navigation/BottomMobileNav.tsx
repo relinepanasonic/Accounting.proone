@@ -19,12 +19,15 @@ const MOBILE_NAV_ITEMS = [
   { name: 'System', href: '/settings', icon: <Settings className="w-5 h-5" /> },
 ];
 
-export function BottomMobileNav() {
+export function BottomMobileNav({ limited = false }: { limited?: boolean }) {
   const pathname = usePathname();
+  const navItems = limited
+    ? [{ name: 'Pabrik Sosmed', href: '/productivity/pabrik-sosmed/dashboard', icon: <CheckSquare className="w-5 h-5" /> }]
+    : MOBILE_NAV_ITEMS;
 
   return (
     <nav className="print:hidden lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0e0f14]/95 backdrop-blur-2xl border-t border-[#d4af37]/25 px-2 py-1.5 flex items-center justify-around shadow-[0_-10px_30px_rgba(0,0,0,0.85)]">
-      {MOBILE_NAV_ITEMS.map((item) => {
+      {navItems.map((item) => {
         let isActive = false;
         if (item.name === 'Accounting') {
           isActive = ['/', '/invoices', '/expenses', '/assets', '/ledger', '/reconcile'].some(p => pathname === p || pathname.startsWith(p + '/'));

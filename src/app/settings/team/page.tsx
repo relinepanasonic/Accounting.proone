@@ -2,6 +2,7 @@ import React from 'react';
 import { ShieldAlert } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
+import { isFounderEmail } from '@/lib/auth/founders';
 import { TeamManager, type TeamMemberRecord } from '@/components/settings/TeamManager';
 
 export const dynamic = 'force-dynamic';
@@ -73,7 +74,7 @@ export default async function TeamSettingsPage() {
     .map((m: any, idx: number) => {
       const profile = profiles?.find((p) => p.id === m.user_id);
       const email = profile?.email || `staff-${idx + 1}@professortokoonline.com`;
-      const isFounderUser = email.toLowerCase() === 'nicojapar@gmail.com' || email.toLowerCase() === 'relinepanasonic@gmail.com';
+      const isFounderUser = isFounderEmail(email);
       
       return {
         id: m.id,

@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { getShopeeReports } from '@/app/actions/productivity';
 import { ShopeeReportTracker } from '@/components/productivity/ShopeeReportTracker';
+import { AdminUploadLog } from '@/components/productivity/AdminUploadLog';
+import { getDashboardUploadLog } from '@/lib/integrations/dashboard-uploads';
 import { formatCurrency } from '@/lib/utils/currency';
 import { Shield, ExternalLink, Mail, Phone, Clock, CheckCircle } from 'lucide-react';
 
@@ -51,6 +53,7 @@ export default async function AdminDivisionPage() {
   });
 
   const reports = await getShopeeReports(7);
+  const uploadLog = await getDashboardUploadLog(7);
 
   return (
     <div className="p-4 lg:p-8 space-y-8 animate-in fade-in zoom-in-95 duration-300">
@@ -64,8 +67,10 @@ export default async function AdminDivisionPage() {
         </div>
       </div>
 
+      <AdminUploadLog log={uploadLog} />
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
+
         {/* Left Column: Shopee Report Tracker & External App Link */}
         <div className="space-y-6 lg:col-span-1">
           {/* External App Link */}

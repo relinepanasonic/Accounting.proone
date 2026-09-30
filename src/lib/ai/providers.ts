@@ -81,42 +81,70 @@ export async function askBoss<T>(opts: {
   return { data, model: res.model, tokensIn: res.usage.input_tokens, tokensOut: res.usage.output_tokens };
 }
 
-/** Worker call: plain text answer from the agent's own provider, or Claude Haiku when its key is not set. */
+const CHEAP_DEFAULT_MODEL: Record<'groq' | 'gemini', string> = {
+  groq: 'openai/gpt-oss-20b',
+  gemini: 'gemini-3.8-flash',
+};
+
+async function callOpenAiCompatible(provider: 'groq' | 'gemini', model: string, system: string, prompt: string): Promise<{ text: string } & ModelUsage> {
+  const cfg = OPENAI_COMPATIBLE[provider];
+  const res = await fetch(`${cfg.baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${process.env[cfg.keyEnv]}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: prompt },
+      ],
+    }),
+    signal: AbortSignal.timeout(60000),
+  });
+  if (!res.ok) {
+    const detail = (await res.text()).replace(/\s+/g, ' ').slice(0, 160);
+    throw new Error(`${provider} answered ${res.status}: ${detail}`);
+  }
+  const json = await res.json();
+  const text: string = json?.choices?.[0]?.message?.content ?? '';
+  if (!text.trim()) throw new Error(`${provider} returned an empty answer.`);
+  return {
+    text,
+    model: `${provider}/${model}`,
+    tokensIn: Number(json?.usage?.prompt_tokens || 0),
+    tokensOut: Number(json?.usage?.completion_tokens || 0),
+  };
+}
+
+/**
+ * Worker call: plain text answer. Tries the agent's own provider first; if that provider has no key or is
+ * down (busy, rate limited, timed out), tries the other cheap provider, then Claude Haiku. `note` says
+ * which stand-in answered, so the activity log shows it.
+ */
 export async function askWorker(opts: {
   provider: Provider;
   model: string;
   system: string;
   prompt: string;
 }): Promise<{ text: string } & ModelUsage> {
+  const problems: string[] = [];
+
   if (opts.provider !== 'anthropic') {
-    const cfg = OPENAI_COMPATIBLE[opts.provider];
-    const apiKey = process.env[cfg.keyEnv];
-    if (apiKey) {
-      const res = await fetch(`${cfg.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: opts.model,
-          messages: [
-            { role: 'system', content: opts.system },
-            { role: 'user', content: opts.prompt },
-          ],
-        }),
-        signal: AbortSignal.timeout(60000),
-      });
-      if (!res.ok) {
-        const detail = (await res.text()).slice(0, 200);
-        throw new Error(`${opts.provider} answered ${res.status}: ${detail}`);
+    const other = opts.provider === 'groq' ? 'gemini' : 'groq';
+    const chain: { provider: 'groq' | 'gemini'; model: string }[] = [
+      { provider: opts.provider, model: opts.model },
+      { provider: other, model: CHEAP_DEFAULT_MODEL[other] },
+    ];
+    for (const step of chain) {
+      if (!process.env[OPENAI_COMPATIBLE[step.provider].keyEnv]) {
+        problems.push(`no ${step.provider} key`);
+        continue;
       }
-      const json = await res.json();
-      const text: string = json?.choices?.[0]?.message?.content ?? '';
-      if (!text.trim()) throw new Error(`${opts.provider} returned an empty answer.`);
-      return {
-        text,
-        model: `${opts.provider}/${opts.model}`,
-        tokensIn: Number(json?.usage?.prompt_tokens || 0),
-        tokensOut: Number(json?.usage?.completion_tokens || 0),
-      };
+      try {
+        const out = await callOpenAiCompatible(step.provider, step.model, opts.system, opts.prompt);
+        return problems.length ? { ...out, note: `Used ${step.provider} instead (${problems.join('; ')}).` } : out;
+      } catch (err) {
+        problems.push(err instanceof Error ? (err.name === 'TimeoutError' ? `${step.provider} timed out` : err.message.slice(0, 60)) : `${step.provider} failed`);
+      }
     }
   }
 
@@ -138,7 +166,7 @@ export async function askWorker(opts: {
     model: res.model,
     tokensIn: res.usage.input_tokens,
     tokensOut: res.usage.output_tokens,
-    note: opts.provider === 'anthropic' ? undefined : `No ${opts.provider} key set, used Claude Haiku instead.`,
+    note: problems.length ? `Used Claude Haiku instead (${problems.join('; ')}).` : undefined,
   };
 }
 

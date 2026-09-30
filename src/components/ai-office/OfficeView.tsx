@@ -153,6 +153,7 @@ export function OfficeView() {
   const [teamId, setTeamId] = useState<string | null>(null);
   const [activating, setActivating] = useState(false);
   const [teamError, setTeamError] = useState<string | null>(null);
+  const [retryError, setRetryError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [openGoalId, setOpenGoalId] = useState<string | null>(null);
@@ -203,6 +204,23 @@ export function OfficeView() {
       setTeamError(err?.message || 'Could not activate the team.');
     } finally {
       setActivating(false);
+    }
+  };
+
+  const retryFailed = async (goalId: string) => {
+    setRetryError(null);
+    try {
+      const res = await fetch('/api/ai-office/retry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ goalId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Could not retry.');
+      await refresh();
+      runLoop();
+    } catch (err: any) {
+      setRetryError(err?.message || 'Could not retry.');
     }
   };
 
@@ -465,6 +483,10 @@ export function OfficeView() {
               <input type="checkbox" checked={deepThink} onChange={(e) => setDeepThink(e.target.checked)} className="accent-[#d4af37]" />
               <Brain className="w-3.5 h-3.5 text-[#d4af37]" /> Deep think (boss uses Opus instead of Sonnet; slower, costs more)
             </label>
+            <p className="text-[11px] text-zinc-500">
+              Goes to: <span className="font-bold text-[#f5d77f]">{activeTeam ? activeTeam.name : 'General Office'}</span>
+              {!activeTeam && creatorActive && ' · to design a new AI team, switch to the AI Team Creator tab above.'}
+            </p>
             {formError && <p className="text-xs text-red-400">{formError}</p>}
             <button
               type="submit"
@@ -513,6 +535,21 @@ export function OfficeView() {
               {open && (
                 <div className="border-t border-zinc-800 p-4 space-y-4">
                   {g.error && <p className="text-xs text-red-400">Error: {g.error}</p>}
+                  {['done', 'failed'].includes(g.status) && (g.status === 'failed' || g.subtasks.some((st) => st.status === 'failed')) && (
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => retryFailed(g.id)}
+                        className="px-3 py-1.5 rounded-lg text-[11px] font-extrabold uppercase tracking-wider text-[#111] bg-gradient-to-r from-[#d4af37] to-[#f5d77f]"
+                      >
+                        Retry failed parts
+                      </button>
+                      <span className="text-[11px] text-zinc-500">
+                        {g.subtasks.filter((st) => st.status === 'failed').length || 'The'} part(s) failed. Only those run again, then the boss rewrites the report.
+                      </span>
+                      {retryError && <span className="text-[11px] text-red-400">{retryError}</span>}
+                    </div>
+                  )}
                   {g.result && (
                     <div>
                       <div className="text-[10px] font-bold uppercase tracking-wider text-[#d4af37] mb-1">Report from the boss</div>

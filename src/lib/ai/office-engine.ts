@@ -333,6 +333,26 @@ export async function submitGoal(db: Db, workspaceId: string, userId: string | n
   return data.id as string;
 }
 
+/** Puts the failed subtasks of a finished brief back in the queue, so the office runs them again. */
+export async function retryGoal(db: Db, workspaceId: string, goalId: string) {
+  const { data: goal } = await db.from('ai_tasks').select('id, status, kind').eq('id', goalId).eq('workspace_id', workspaceId).maybeSingle();
+  if (!goal || goal.kind !== 'goal') throw new Error('Brief not found.');
+  if (!['done', 'failed'].includes(goal.status)) throw new Error('This brief is still running.');
+
+  const { data: failed } = await db.from('ai_tasks').select('id').eq('parent_id', goalId).eq('status', 'failed');
+  const { count: total } = await db.from('ai_tasks').select('id', { count: 'exact', head: true }).eq('parent_id', goalId);
+
+  if (!total) {
+    // Planning itself failed: start the brief again.
+    await setTask(db, goalId, { status: 'queued', error: null, result: null });
+  } else {
+    if (!failed || failed.length === 0) throw new Error('Nothing failed on this brief.');
+    for (const t of failed) await setTask(db, t.id, { status: 'queued', attempts: 0, error: null });
+    await setTask(db, goalId, { status: 'running', error: null, result: null });
+  }
+  await logEvent(db, workspaceId, goalId, null, total ? `Retrying ${failed.length} failed subtask(s).` : 'Retrying the brief from planning.');
+}
+
 /** Steps cut off by a function timeout are put back in the queue (or failed after too many tries). */
 async function recoverStale(db: Db, workspaceId: string) {
   const cutoff = new Date(Date.now() - STALE_MS).toISOString();
@@ -531,7 +551,9 @@ async function reviewGoal(db: Db, workspaceId: string, goal: OfficeTask, subtask
         `${OFFICE_CONTEXT}\n\nYou are the Inspector. Check each subtask result against its instructions and the owner's brief. ` +
         'Fail a result only for a real problem (wrong, incomplete, invented facts, off-task, claims with no source when a source was required), and say exactly what to fix. ' +
         'Then write the final report for the owner from the work that passed. State plainly anything that could not be done and why ' +
-        '(for example, company data the agents cannot access yet). Do not claim work that was not done.' +
+        '(for example, company data the agents cannot access yet). Do not claim work that was not done. ' +
+        'You cannot start or schedule any further work: never write that something "will be rerun", "will be corrected" or "will be delivered". ' +
+        'If parts failed, give the best answer you can from what passed, say in one line which parts are missing, and tell the owner to press "Retry failed parts" on this brief.' +
         (profile ? `\n\n${profile.reportGuide}` : ''),
       prompt: `Owner's brief:\n\n${goal.instructions}\n\nWork from the floors:\n\n${work}`,
       schema: QC_SCHEMA,

@@ -87,9 +87,9 @@ export const TEAM_PROFILES: Record<string, TeamProfile> = {
     slug: 'team-creator',
     name: 'AI Team Creator',
     mission: 'Design new, specialized AI teams: research what is possible, pick the best model for each job, and equip every agent with the right skills.',
-    deepByDefault: true,
+    deepByDefault: false,
     roster: [
-      { name: 'Mentor', title: 'Research Director (boss)', floor: 3, kind: 'planner', provider: 'anthropic', model: 'claude-opus-5-5' },
+      { name: 'Mentor', title: 'Research Director (boss)', floor: 3, kind: 'planner', provider: 'anthropic', model: 'claude-sonnet-5-5' },
       { name: 'Scout', title: 'Skill & Model Researcher', floor: 2, kind: 'researcher', provider: 'anthropic', model: 'claude-sonnet-5-5' },
       { name: 'Forge', title: 'Skill Installer', floor: 1, kind: 'installer', provider: 'groq', model: 'openai/gpt-oss-20b' },
     ],

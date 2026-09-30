@@ -441,7 +441,7 @@ export function OfficeView() {
               className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-[#d4af37] disabled:opacity-50"
             />
             <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
-              <input type="checkbox" checked={deepThink || activeTeam?.slug === 'team-creator'} disabled={activeTeam?.slug === 'team-creator'} onChange={(e) => setDeepThink(e.target.checked)} className="accent-[#d4af37]" />
+              <input type="checkbox" checked={deepThink} onChange={(e) => setDeepThink(e.target.checked)} className="accent-[#d4af37]" />
               <Brain className="w-3.5 h-3.5 text-[#d4af37]" /> Deep think (boss uses Opus instead of Sonnet; slower, costs more)
             </label>
             {formError && <p className="text-xs text-red-400">{formError}</p>}

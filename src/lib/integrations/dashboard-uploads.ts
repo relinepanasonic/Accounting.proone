@@ -50,8 +50,13 @@ export async function getDashboardUploadLog(days = 7): Promise<DashboardUploadLo
     const res = await fetch(`${base}/api/erp/upload-log?from=${from}&to=${to}`, {
       headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
       cache: 'no-store',
+      redirect: 'manual',
       signal: AbortSignal.timeout(10000),
     });
+    // A redirect means the dashboard's login middleware caught the request (endpoint missing or not exempted).
+    if (res.status >= 300 && res.status < 400) {
+      return { ok: false, error: 'Dashboard API redirected to its login page: /api/erp/* must skip the login middleware.' };
+    }
     if (!res.ok) return { ok: false, error: `Dashboard API answered ${res.status}.` };
 
     const json = await res.json();

@@ -133,7 +133,11 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
       const amountMatch = Math.abs(r.amount - Math.abs(bankLine.amount)) < 0.01;
       if (!amountMatch) continue;
       const pScore = payeeSimilarity(bankLine.sourceDestination, r.payeeOrClient || r.reference);
-      const score = 0.5 + pScore * 0.5;
+      // Payer name on the statement often differs from the client name, so date proximity
+      // is what separates same-amount candidates.
+      const dayGap = Math.abs(new Date(bankLine.date).getTime() - new Date(r.date).getTime()) / 86400000;
+      const dateScore = Number.isNaN(dayGap) ? 0 : dayGap <= 7 ? 1 : dayGap <= 31 ? 0.5 : 0;
+      const score = 0.5 + pScore * 0.25 + dateScore * 0.25;
       if (score > bestScore) { bestScore = score; best = r; }
     }
     return best;

@@ -1,25 +1,30 @@
 import React from 'react';
-import { Bot } from 'lucide-react';
+import { ShieldAlert } from 'lucide-react';
+import { getOfficeAccess } from '@/lib/ai/office-auth';
+import { OfficeView } from '@/components/ai-office/OfficeView';
 
-export default function AIOfficePage() {
+export const dynamic = 'force-dynamic';
+
+export default async function AIOfficePage() {
+  const access = await getOfficeAccess();
+
   return (
-    <div className="p-4 lg:p-8 space-y-8 animate-in fade-in zoom-in-95 duration-300">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-extrabold text-zinc-100 font-serif">AI Office</h1>
-          <p className="text-sm text-zinc-400 mt-1">Manage AI agents, automations, and intelligent workflows.</p>
-        </div>
-      </div>
-
-      <div className="flex flex-col items-center justify-center h-[50vh] border border-dashed border-zinc-800 rounded-xl bg-zinc-900/20">
-        <div className="p-6 bg-purple-500/10 rounded-full text-purple-400 mb-6">
-          <Bot className="w-12 h-12" />
-        </div>
-        <h2 className="text-2xl font-bold text-zinc-100 mb-2">AI Office Automation</h2>
-        <p className="text-sm text-zinc-400 max-w-md text-center">
-          This module is currently under development. Soon you will be able to manage your AI workforce directly from this command center.
+    <div className="p-4 lg:p-8 space-y-6 animate-in fade-in zoom-in-95 duration-300">
+      <div>
+        <h1 className="text-2xl font-extrabold text-zinc-100 font-serif">AI Office</h1>
+        <p className="text-sm text-zinc-400 mt-1">
+          Brief the boss. It plans the work, the floors below do it, and quality control checks it before you get the report.
         </p>
       </div>
+
+      {access ? (
+        <OfficeView />
+      ) : (
+        <div className="gold-glass-panel border-red-500/40 rounded-2xl p-10 text-center max-w-xl mx-auto">
+          <ShieldAlert className="w-8 h-8 text-red-400 mx-auto mb-3" />
+          <p className="text-xs text-zinc-300 font-mono">The AI Office is restricted to the Founder and Superadmins.</p>
+        </div>
+      )}
     </div>
   );
 }

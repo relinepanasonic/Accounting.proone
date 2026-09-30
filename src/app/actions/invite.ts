@@ -33,7 +33,8 @@ export async function generateInviteLink(formData: {
   const headersList = await headers();
   const host = headersList.get('host') || 'localhost:3000';
   const proto = headersList.get('x-forwarded-proto') || 'http';
-  const siteUrl = `${proto}://${host}`;
+  // SITE_URL (e.g. https://accounting.profesoronline.id) wins so links generated anywhere point at the real domain.
+  const siteUrl = (process.env.SITE_URL || `${proto}://${host}`).replace(/\/$/, '');
   const redirectTo = `${siteUrl}/auth/confirm`;
 
   // 1. Generate an invite link via Supabase Admin API
@@ -84,9 +85,15 @@ export async function generateInviteLink(formData: {
     return { error: memberError.message };
   }
 
-  // Return the action link to display to the superadmin
+  // Build the link on OUR domain instead of returning Supabase's action_link (…supabase.co/auth/v1/verify).
+  // /auth/confirm verifies the token server-side, so no Supabase redirect allow-list is involved either.
+  const tokenHash = data.properties?.hashed_token;
+  if (!tokenHash) {
+    return { error: 'Failed to generate invite link.' };
+  }
+
   return {
     success: true,
-    link: data.properties?.action_link || '',
+    link: `${siteUrl}/auth/confirm?token_hash=${encodeURIComponent(tokenHash)}&type=invite`,
   };
 }

@@ -180,9 +180,11 @@ async function ReconciliationCore() {
   // A "Paid" click books a payment transaction (linked by invoice_id) and zeroes the invoice balance.
   // That payment transaction is what gets reconciled against the bank, so the invoice row is hidden.
   const invoiceClientName = new Map<string, string>();
+  const invoiceIssueDate = new Map<string, string>();
   rawInvoices.forEach((inv) => {
     const clientObj = Array.isArray(inv.clients) ? inv.clients[0] : inv.clients;
     invoiceClientName.set(inv.id, clientObj?.name || 'Client Payee');
+    if (inv.issue_date) invoiceIssueDate.set(inv.id, inv.issue_date);
   });
   const invoicesWithPayment = new Set(
     rawTransactions.filter((tx) => tx.invoice_id && tx.type === 'income').map((tx) => tx.invoice_id as string)
@@ -215,7 +217,9 @@ async function ReconciliationCore() {
         type: tx.type === 'income' ? ('income' as const) : ('expense' as const),
         reference: isInvoicePayment ? tx.description || 'Invoice payment' : tx.category || 'CATEGORY-REF',
         payeeOrClient: (isInvoicePayment && invoiceClientName.get(tx.invoice_id as string)) || tx.description || 'System Record',
-        date: tx.due_date || tx.transaction_date,
+        // The transaction date of an invoice payment is the day "Paid" was clicked (often a later back-fill),
+        // so list it under the invoice's own date. Reconciling then sets the real bank date.
+        date: (isInvoicePayment && invoiceIssueDate.get(tx.invoice_id as string)) || tx.due_date || tx.transaction_date,
         amount: Number(tx.amount || 0),
         reconciled: Boolean(tx.reconciled),
         notes: tx.description || '',

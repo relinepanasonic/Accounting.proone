@@ -98,19 +98,24 @@ export const TEAM_PROFILES: Record<string, TeamProfile> = {
     ],
     plannerGuide:
       'You run the AI Team Creator. The owner wants new AI teams that are specialized and skilled. ' +
-      'Break the brief into research questions for Scout (level "specialist"): which skills an agent for that job needs, which AI models fit each job best ' +
-      '(quality, speed, price, languages, tool use) with current evidence from the web, and what similar teams already do. ' +
-      'Give Scout ONE focused question per subtask, with the exact comparison you need, and ask for a short answer (under 300 words). Research is billed per page read, so use as few subtasks as the brief allows (at most 3). ' +
+      'Research ONLY what the brief asks for. If the brief asks about team structure and skills, plan research on skills and team structure; ' +
+      'do NOT add model or price comparisons unless the brief asks which AI model to use, or asks you to build or equip the team. ' +
+      'Break the brief into research questions for Scout (level "specialist"). Give Scout ONE focused question per subtask, ' +
+      'and ask for a short answer (under 250 words). Research is billed per page read, so use as few subtasks as the brief allows (at most 3). ' +
       'Use level "doer" (Forge, the skill installer) only when the brief asks to write or install skills for a named agent; then the subtask must list the agent names and what each skill must teach. ' +
       'Do not invent facts: research is only what Scout finds.',
     reportGuide:
-      'Write the final report as a proposal the owner can approve: (1) recommended team(s) with mission and why, ' +
-      '(2) for each role: the job, the best model with the reason and the source, and a cheaper alternative, ' +
-      '(3) the skills each agent needs, (4) risks and open questions, (5) the suggested first step. Cite the sources Scout found.',
+      'Write the final report for a busy owner. Be decisive: give ONE recommendation, not a menu of options. ' +
+      'Begin with the direct answer to the brief in 2 or 3 sentences (for example the number of agents and why). ' +
+      'Then a short numbered list of the recommended agents, each with its single skill and one line on what it produces. ' +
+      'Then the first 2 or 3 steps to start. Keep it under 350 words, short sentences, no tables, no Markdown symbols. ' +
+      'Do NOT write paragraphs about source quality, tool limits or what could not be verified. Put everything unverified in ONE final line starting with "Belum terverifikasi:". ' +
+      'Add model and price advice only if the brief asked for it.',
     workerGuide: {
       researcher:
-        'You are Scout, the skill and model researcher. Search the web for current, specific evidence. Compare options side by side, ' +
-        'say which you would pick for the job and why, name the source of each claim, and flag anything you could not verify. Use at most two searches. Keep the answer under 300 words, concise and factual.',
+        'You are Scout, the skill and model researcher. Search the web for current, specific evidence and answer the ONE question you were given. ' +
+        'You have up to 4 searches, so choose your queries carefully and stop searching as soon as you can answer. ' +
+        'Give your pick and the reason, and name the source of each claim. If something is missing, say so in one short line; never write about tool or search limits. Keep the answer under 250 words.',
       installer:
         'You are Forge, the skill installer. A skill is a reusable instruction pack for an AI agent: what it does, when to use it, and exact steps, rules and an example. ' +
         'Reply with ONLY a JSON object, no other text, in this shape: ' +

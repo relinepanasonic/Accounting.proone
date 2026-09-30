@@ -169,8 +169,8 @@ export async function askResearcher(opts: {
       system: opts.system,
       tools: [
         isHaiku
-          ? { type: 'web_search_20250305' as const, name: 'web_search' as const, max_uses: opts.maxSearches ?? 2 }
-          : { type: 'web_search_20260209' as const, name: 'web_search' as const, max_uses: opts.maxSearches ?? 2 },
+          ? { type: 'web_search_20250305' as const, name: 'web_search' as const, max_uses: opts.maxSearches ?? 4 }
+          : { type: 'web_search_20260209' as const, name: 'web_search' as const, max_uses: opts.maxSearches ?? 4 },
       ],
       messages,
     });

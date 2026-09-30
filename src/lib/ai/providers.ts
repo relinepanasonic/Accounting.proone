@@ -44,6 +44,7 @@ export function describeModelError(err: unknown): string {
 /** Boss call: Claude returns JSON matching `schema` (structured output). `deep` switches Sonnet -> Opus. */
 export async function askBoss<T>(opts: {
   deep: boolean;
+  effort?: 'low' | 'medium';
   system: string;
   prompt: string;
   schema: Record<string, unknown>;
@@ -55,7 +56,7 @@ export async function askBoss<T>(opts: {
     betas: ['server-side-fallback-2026-07-01'],
     fallbacks: 'default',
     output_config: {
-      effort: opts.deep ? 'high' : 'medium',
+      effort: opts.deep ? 'high' : opts.effort ?? 'medium',
       format: { type: 'json_schema', schema: opts.schema },
     },
     system: opts.system,
@@ -142,8 +143,10 @@ export async function askWorker(opts: {
 }
 
 /**
- * Researcher call: Claude with live web search. Server-side tool, so Anthropic runs the searches;
- * a long search turn can pause, in which case we resume it (bounded).
+ * Researcher call: Claude with live web search (a server-side tool, Anthropic runs the searches).
+ * Cost controls: few searches, automatic prompt caching so a resumed turn re-reads earlier pages at the
+ * cache price, low reasoning effort, and a modest output cap. Haiku uses the basic search tool (the
+ * dynamic-filtering version needs a larger model).
  */
 export async function askResearcher(opts: {
   model: string;
@@ -151,20 +154,28 @@ export async function askResearcher(opts: {
   prompt: string;
   maxSearches?: number;
 }): Promise<{ text: string } & ModelUsage> {
+  const isHaiku = opts.model.includes('haiku');
   const messages: Anthropic.MessageParam[] = [{ role: 'user', content: opts.prompt }];
   let tokensIn = 0;
   let tokensOut = 0;
   let model = opts.model;
 
-  for (let turn = 0; turn < 4; turn++) {
+  for (let turn = 0; turn < 3; turn++) {
     const res = await anthropic().messages.create({
       model: opts.model,
-      max_tokens: 8000,
+      max_tokens: 3000,
+      cache_control: { type: 'ephemeral' },
+      ...(isHaiku ? {} : { output_config: { effort: 'low' as const } }),
       system: opts.system,
-      tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: opts.maxSearches ?? 4 }],
+      tools: [
+        isHaiku
+          ? { type: 'web_search_20250305' as const, name: 'web_search' as const, max_uses: opts.maxSearches ?? 2 }
+          : { type: 'web_search_20260209' as const, name: 'web_search' as const, max_uses: opts.maxSearches ?? 2 },
+      ],
       messages,
     });
-    tokensIn += res.usage.input_tokens;
+    // Cached reads are billed at a fraction, so count them separately from fresh input.
+    tokensIn += res.usage.input_tokens + (res.usage.cache_creation_input_tokens ?? 0) + Math.round((res.usage.cache_read_input_tokens ?? 0) * 0.1);
     tokensOut += res.usage.output_tokens;
     model = res.model;
 

@@ -80,6 +80,8 @@ export interface TeamProfile {
   workerGuide: Partial<Record<AgentKind, string>>;
   /** Goals sent to this team run on the deepest boss model. */
   deepByDefault: boolean;
+  /** Cap on subtasks per brief (research is the expensive part). */
+  maxSubtasks?: number;
 }
 
 export const TEAM_PROFILES: Record<string, TeamProfile> = {
@@ -88,16 +90,17 @@ export const TEAM_PROFILES: Record<string, TeamProfile> = {
     name: 'AI Team Creator',
     mission: 'Design new, specialized AI teams: research what is possible, pick the best model for each job, and equip every agent with the right skills.',
     deepByDefault: false,
+    maxSubtasks: 3,
     roster: [
       { name: 'Mentor', title: 'Research Director (boss)', floor: 3, kind: 'planner', provider: 'anthropic', model: 'claude-sonnet-5-5' },
-      { name: 'Scout', title: 'Skill & Model Researcher', floor: 2, kind: 'researcher', provider: 'anthropic', model: 'claude-sonnet-5-5' },
+      { name: 'Scout', title: 'Skill & Model Researcher', floor: 2, kind: 'researcher', provider: 'anthropic', model: 'claude-haiku-4-5' },
       { name: 'Forge', title: 'Skill Installer', floor: 1, kind: 'installer', provider: 'groq', model: 'openai/gpt-oss-20b' },
     ],
     plannerGuide:
       'You run the AI Team Creator. The owner wants new AI teams that are specialized and skilled. ' +
       'Break the brief into research questions for Scout (level "specialist"): which skills an agent for that job needs, which AI models fit each job best ' +
       '(quality, speed, price, languages, tool use) with current evidence from the web, and what similar teams already do. ' +
-      'Give Scout ONE focused question per subtask, with the exact comparison you need. ' +
+      'Give Scout ONE focused question per subtask, with the exact comparison you need, and ask for a short answer (under 300 words). Research is billed per page read, so use as few subtasks as the brief allows (at most 3). ' +
       'Use level "doer" (Forge, the skill installer) only when the brief asks to write or install skills for a named agent; then the subtask must list the agent names and what each skill must teach. ' +
       'Do not invent facts: research is only what Scout finds.',
     reportGuide:
@@ -107,7 +110,7 @@ export const TEAM_PROFILES: Record<string, TeamProfile> = {
     workerGuide: {
       researcher:
         'You are Scout, the skill and model researcher. Search the web for current, specific evidence. Compare options side by side, ' +
-        'say which you would pick for the job and why, name the source of each claim, and flag anything you could not verify. Keep it concise and factual.',
+        'say which you would pick for the job and why, name the source of each claim, and flag anything you could not verify. Use at most two searches. Keep the answer under 300 words, concise and factual.',
       installer:
         'You are Forge, the skill installer. A skill is a reusable instruction pack for an AI agent: what it does, when to use it, and exact steps, rules and an example. ' +
         'Reply with ONLY a JSON object, no other text, in this shape: ' +
@@ -348,6 +351,7 @@ async function recoverStale(db: Db, workspaceId: string) {
 }
 
 async function planGoal(db: Db, workspaceId: string, goal: OfficeTask, agents: OfficeAgent[], profile: TeamProfile | null) {
+  const maxSubtasks = profile?.maxSubtasks ?? MAX_SUBTASKS;
   const planner = agents.find((a) => a.kind === 'planner');
   if (!(await claim(db, goal.id, 'queued', 'planning'))) return;
   await logEvent(db, workspaceId, goal.id, planner?.id || null, `${planner?.name || 'Boss'} is planning${goal.deep_think ? ' (deep think, Opus)' : ''}.`);
@@ -358,8 +362,9 @@ async function planGoal(db: Db, workspaceId: string, goal: OfficeTask, agents: O
       subtasks: { title: string; instructions: string; level: 'doer' | 'specialist' }[];
     }>({
       deep: goal.deep_think,
+      effort: 'low',
       system:
-        `${OFFICE_CONTEXT}\n\nYou are the Director. Split the owner's brief into at most ${MAX_SUBTASKS} small, independent subtasks for the worker floors. ` +
+        `${OFFICE_CONTEXT}\n\nYou are the Director. Split the owner's brief into at most ${maxSubtasks} small, independent subtasks for the worker floors. ` +
         'Use "doer" for simple, mechanical work (lists, rewriting, formatting, simple drafts) and "specialist" for work that needs judgment, analysis or research. ' +
         'Prefer fewer subtasks; a simple brief may need only one. Each subtask must be fully self-contained: copy into its instructions every fact from the brief the worker needs.' +
         (profile ? `\n\n${profile.plannerGuide}` : ''),
@@ -367,7 +372,7 @@ async function planGoal(db: Db, workspaceId: string, goal: OfficeTask, agents: O
       schema: PLAN_SCHEMA,
     });
 
-    const subtasks = (data.subtasks || []).slice(0, MAX_SUBTASKS);
+    const subtasks = (data.subtasks || []).slice(0, maxSubtasks);
     if (subtasks.length === 0) throw new Error('The boss produced no subtasks.');
 
     const byFloor = (floor: number) => agents.filter((a) => a.kind !== 'planner' && a.kind !== 'qc' && a.floor === floor && a.enabled);
@@ -531,7 +536,9 @@ async function reviewGoal(db: Db, workspaceId: string, goal: OfficeTask, subtask
     for (const s of subtasks) {
       if (s.status !== 'review') continue;
       const verdict = data.verdicts.find((v) => v.seq === s.seq);
-      if (verdict && !verdict.pass && s.attempts < MAX_ATTEMPTS) {
+      // Research is the expensive step: accept it with QC's note instead of paying for a second run.
+      const isResearch = agents.find((a) => a.id === s.agent_id)?.kind === 'researcher';
+      if (verdict && !verdict.pass && s.attempts < MAX_ATTEMPTS && !isResearch) {
         await setTask(db, s.id, { status: 'queued', qc_feedback: verdict.feedback });
         redo++;
       } else {

@@ -94,6 +94,27 @@ const FLOORS: { floor: number; name: string; blurb: string; hood: string; eye: s
   { floor: 1, name: 'Floor 1 · Doers', blurb: 'Simple, repeatable work', hood: '#dc2626', eye: '#38bdf8', shoe: '#ef4444' },
 ];
 
+// Rough USD per 1M tokens (input, output) by model family. Web search itself is billed per search on top.
+const PRICES: { match: string; inp: number; out: number }[] = [
+  { match: 'opus', inp: 4, out: 20 },
+  { match: 'sonnet', inp: 2, out: 10 },
+  { match: 'haiku', inp: 1, out: 5 },
+  { match: 'gpt-oss', inp: 0.075, out: 0.3 },
+  { match: 'gemini', inp: 0.3, out: 2.5 },
+];
+
+function estimateUsd(model: string | null, tin: number, tout: number): number {
+  const p = PRICES.find((x) => (model || '').toLowerCase().includes(x.match)) || { inp: 2, out: 10 };
+  return (tin * p.inp + tout * p.out) / 1_000_000;
+}
+
+function goalCost(g: { model_used: string | null; tokens_in: number; tokens_out: number; subtasks: Task[] }): number {
+  return (
+    estimateUsd(g.model_used, g.tokens_in, g.tokens_out) +
+    g.subtasks.reduce((sum, s) => sum + estimateUsd(s.model_used, s.tokens_in, s.tokens_out), 0)
+  );
+}
+
 const STATUS_LABEL: Record<Task['status'], string> = {
   queued: 'Waiting',
   planning: 'Boss planning',
@@ -483,7 +504,7 @@ export function OfficeView() {
                 <span className="flex-1 min-w-0">
                   <span className="block text-sm font-semibold text-zinc-100 truncate">{g.title}</span>
                   <span className="block text-[10px] text-zinc-500">
-                    {STATUS_LABEL[g.status]}{g.subtasks.length > 0 ? ` · ${done}/${g.subtasks.length} subtasks` : ''}{g.deep_think ? ' · deep think' : ''}
+                    {STATUS_LABEL[g.status]}{g.subtasks.length > 0 ? ` · ${done}/${g.subtasks.length} subtasks` : ''}{g.deep_think ? ' · deep think' : ''}{g.tokens_in + g.subtasks.reduce((n, s) => n + s.tokens_in, 0) > 0 ? ` · ≈ $${goalCost(g).toFixed(2)} + web searches` : ''}
                   </span>
                 </span>
                 {open ? <ChevronUp className="w-4 h-4 text-zinc-500" /> : <ChevronDown className="w-4 h-4 text-zinc-500" />}

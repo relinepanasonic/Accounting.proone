@@ -68,7 +68,7 @@ async function ReconciliationCore() {
       .order('issue_date', { ascending: false }),
     supabase
       .from('transactions')
-      .select('id, description, amount, due_date, transaction_date, category, reconciled, workspace_id, type')
+      .select('id, description, amount, due_date, transaction_date, category, reconciled, workspace_id, type, invoice_id')
       .eq('workspace_id', activeWorkspaceId)
       // Removed reconciled filter so user can match already-reconciled items to bank statement
       .order('due_date', { ascending: false }),
@@ -177,30 +177,48 @@ async function ReconciliationCore() {
     }
   }
 
+  // A "Paid" click books a payment transaction (linked by invoice_id) and zeroes the invoice balance.
+  // That payment transaction is what gets reconciled against the bank, so the invoice row is hidden.
+  const invoiceClientName = new Map<string, string>();
+  rawInvoices.forEach((inv) => {
+    const clientObj = Array.isArray(inv.clients) ? inv.clients[0] : inv.clients;
+    invoiceClientName.set(inv.id, clientObj?.name || 'Client Payee');
+  });
+  const invoicesWithPayment = new Set(
+    rawTransactions.filter((tx) => tx.invoice_id && tx.type === 'income').map((tx) => tx.invoice_id as string)
+  );
+
   const systemRecords: any[] = [
-    ...rawInvoices.map((inv) => {
-      const clientObj = Array.isArray(inv.clients) ? inv.clients[0] : inv.clients;
+    ...rawInvoices
+      .filter((inv) => !invoicesWithPayment.has(inv.id))
+      .map((inv) => {
+        const total = Number(inv.total_amount || 0);
+        const balance = total - Number(inv.amount_paid || 0);
+        return {
+          id: inv.id,
+          type: 'invoice' as const,
+          reference: inv.invoice_number || 'INV-REF',
+          payeeOrClient: invoiceClientName.get(inv.id),
+          date: inv.issue_date,
+          // Marked paid but no payment transaction here: still let it be matched at full value.
+          amount: balance > 0 ? balance : total,
+          reconciled: Boolean(inv.reconciled),
+          notes: `Invoice ${inv.invoice_number || ''}`,
+        };
+      }),
+    ...rawTransactions.map((tx) => {
+      const isInvoicePayment = Boolean(tx.invoice_id && tx.type === 'income');
       return {
-        id: inv.id,
-        type: 'invoice' as const,
-        reference: inv.invoice_number || 'INV-REF',
-        payeeOrClient: clientObj?.name || 'Client Payee',
-        date: inv.issue_date,
-        amount: Number(inv.total_amount || 0) - Number(inv.amount_paid || 0),
-        reconciled: Boolean(inv.reconciled),
-        notes: `Invoice ${inv.invoice_number || ''}`,
+        id: tx.id,
+        type: tx.type === 'income' ? ('income' as const) : ('expense' as const),
+        reference: isInvoicePayment ? tx.description || 'Invoice payment' : tx.category || 'CATEGORY-REF',
+        payeeOrClient: (isInvoicePayment && invoiceClientName.get(tx.invoice_id as string)) || tx.description || 'System Record',
+        date: tx.due_date || tx.transaction_date,
+        amount: Number(tx.amount || 0),
+        reconciled: Boolean(tx.reconciled),
+        notes: tx.description || '',
       };
     }),
-    ...rawTransactions.map((tx) => ({
-      id: tx.id,
-      type: tx.type === 'income' ? ('income' as const) : ('expense' as const),
-      reference: tx.category || 'CATEGORY-REF',
-      payeeOrClient: tx.description || 'System Record',
-      date: tx.due_date || tx.transaction_date,
-      amount: Number(tx.amount || 0),
-      reconciled: Boolean(tx.reconciled),
-      notes: tx.description || '',
-    })),
   ];
 
   return (

@@ -12,7 +12,8 @@ export async function reconcileRecord(
   bankAccountId?: string,
   adjustedAmount?: number,
   isPartialPayment?: boolean,
-  taxWriteoffAmount?: number
+  taxWriteoffAmount?: number,
+  bankDate?: string
 ) {
   const supabase = await createClient();
   
@@ -37,6 +38,7 @@ export async function reconcileRecord(
     }
   } else {
     const table = recordType === 'invoice' ? 'invoices' : 'transactions';
+    let linkedInvoiceId: string | null = null;
     const updateData: any = {
       ...(bankAccountId && table === 'invoices' ? { bank_account_id: bankAccountId } : {})
     };
@@ -44,6 +46,8 @@ export async function reconcileRecord(
       if (table === 'invoices') {
         const { data: inv } = await supabase.from('invoices').select('workspace_id, invoice_number, total_amount, amount_paid').eq('id', recordId).single();
         if (inv) {
+          // Balance already zero means the payment was booked earlier (Paid click): confirm only, no second ledger entry.
+          const alreadyBooked = Number(inv.total_amount) - Number(inv.amount_paid || 0) <= 0;
           if (isPartialPayment) {
             updateData.amount_paid = (Number(inv.amount_paid || 0)) + Number(adjustedAmount || 0);
           } else {
@@ -51,6 +55,10 @@ export async function reconcileRecord(
             updateData.bank_reference = bankReference || 'BANK-MATCHED';
             if (adjustedAmount !== undefined && !taxWriteoffAmount) {
               updateData.total_amount = adjustedAmount;
+            }
+            if (!alreadyBooked) {
+              updateData.amount_paid = updateData.total_amount ?? inv.total_amount;
+              updateData.status = 'paid';
             }
           }
           
@@ -67,7 +75,9 @@ export async function reconcileRecord(
           const todayStr = new Date().toISOString().split('T')[0];
           const actualBankRef = bankReference || 'BANK-MATCHED';
 
-          if (taxWriteoffAmount) {
+          if (alreadyBooked && !isPartialPayment) {
+            // nothing to post
+          } else if (taxWriteoffAmount) {
              const taxExpenseAccount = mappings.find(m => m.mapping_type === 'TAX_EXPENSE')?.account_code || '6010';
              const bankReceived = Number(adjustedAmount || 0);
              const totalAR = bankReceived + taxWriteoffAmount;
@@ -90,6 +100,15 @@ export async function reconcileRecord(
         if (adjustedAmount !== undefined) {
           updateData.amount = adjustedAmount;
         }
+        // Invoice payment: the real payment date is the bank date, not the day "Paid" was clicked.
+        const { data: tx } = await supabase.from('transactions').select('invoice_id').eq('id', recordId).single();
+        if (tx?.invoice_id) {
+          linkedInvoiceId = tx.invoice_id;
+          if (bankDate) {
+            updateData.transaction_date = bankDate;
+            await supabase.from('journal_entries').update({ transaction_date: bankDate }).eq('reference_id', recordId).eq('reference_type', 'payment_tx');
+          }
+        }
       }
 
     const { error } = await supabase
@@ -100,6 +119,19 @@ export async function reconcileRecord(
     if (error) {
       console.error('Error reconciling record:', error);
       throw new Error('Failed to reconcile record');
+    }
+
+    // Once every payment of an invoice is confirmed against the bank, the invoice itself is reconciled.
+    if (linkedInvoiceId) {
+      const { count } = await supabase
+        .from('transactions')
+        .select('id', { count: 'exact', head: true })
+        .eq('invoice_id', linkedInvoiceId)
+        .eq('type', 'income')
+        .neq('reconciled', true);
+      if (!count) {
+        await supabase.from('invoices').update({ reconciled: true, bank_reference: bankReference || 'BANK-MATCHED' }).eq('id', linkedInvoiceId);
+      }
     }
   }
 

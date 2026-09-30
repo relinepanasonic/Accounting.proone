@@ -61,6 +61,13 @@ function payeeSimilarity(a: string, b: string): number {
   return matches.length / Math.max(wordsB.length, 1);
 }
 
+// Local-time YYYY-MM-DD (toISOString would shift the day back in UTC+7); undefined if unparseable.
+function toIsoDate(value: string): string | undefined {
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return undefined;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 interface ReconciliationHUDProps {
   systemRecords: UnreconciledSystemRecord[];
   bankAccounts?: BankAccount[];
@@ -120,27 +127,37 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
 
   const activeBankLine = bankLines.find((b) => b.id === selectedBankId);
 
-  function findBestMatch(bankLine: BankLine): UnreconciledSystemRecord | null {
-    const candidates = recordsList.filter(
-      (r) =>
-        !r.reconciled &&
-        ((bankLine.amount > 0 && (r.type === 'invoice' || r.type === 'income')) ||
-          (bankLine.amount < 0 && (r.type === 'expense' || r.type === 'payroll')))
-    );
-    let best: UnreconciledSystemRecord | null = null;
-    let bestScore = -1;
-    for (const r of candidates) {
-      const amountMatch = Math.abs(r.amount - Math.abs(bankLine.amount)) < 0.01;
-      if (!amountMatch) continue;
-      const pScore = payeeSimilarity(bankLine.sourceDestination, r.payeeOrClient || r.reference);
-      // Payer name on the statement often differs from the client name, so date proximity
-      // is what separates same-amount candidates.
-      const dayGap = Math.abs(new Date(bankLine.date).getTime() - new Date(r.date).getTime()) / 86400000;
-      const dateScore = Number.isNaN(dayGap) ? 0 : dayGap <= 7 ? 1 : dayGap <= 31 ? 0.5 : 0;
-      const score = 0.5 + pScore * 0.25 + dateScore * 0.25;
-      if (score > bestScore) { bestScore = score; best = r; }
+  // One suggestion per bank line, and each system record is suggested at most once:
+  // all same-amount pairs are scored, then assigned best score first.
+  const suggestions = React.useMemo(() => {
+    const pairs: { lineId: string; record: UnreconciledSystemRecord; score: number }[] = [];
+    for (const bankLine of bankLines) {
+      for (const r of recordsList) {
+        if (r.reconciled) continue;
+        const typeOk = (bankLine.amount > 0 && (r.type === 'invoice' || r.type === 'income')) ||
+          (bankLine.amount < 0 && (r.type === 'expense' || r.type === 'payroll'));
+        if (!typeOk || Math.abs(r.amount - Math.abs(bankLine.amount)) >= 0.01) continue;
+        const pScore = payeeSimilarity(bankLine.sourceDestination, r.payeeOrClient || r.reference);
+        // Payer name on the statement often differs from the client name, so date proximity
+        // is what separates same-amount candidates.
+        const dayGap = Math.abs(new Date(bankLine.date).getTime() - new Date(r.date).getTime()) / 86400000;
+        const dateScore = Number.isNaN(dayGap) ? 0 : dayGap <= 7 ? 1 : dayGap <= 31 ? 0.5 : 0;
+        pairs.push({ lineId: bankLine.id, record: r, score: 0.5 + pScore * 0.25 + dateScore * 0.25 });
+      }
     }
-    return best;
+    pairs.sort((a, b) => b.score - a.score);
+    const byLine = new Map<string, UnreconciledSystemRecord>();
+    const usedRecords = new Set<string>();
+    for (const p of pairs) {
+      if (byLine.has(p.lineId) || usedRecords.has(p.record.id)) continue;
+      byLine.set(p.lineId, p.record);
+      usedRecords.add(p.record.id);
+    }
+    return byLine;
+  }, [bankLines, recordsList]);
+
+  function findBestMatch(bankLine: BankLine): UnreconciledSystemRecord | null {
+    return suggestions.get(bankLine.id) ?? null;
   }
 
   const bestMatchRecord = activeBankLine ? findBestMatch(activeBankLine) : null;
@@ -318,7 +335,8 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
             activeBankId, 
             (shouldClearDiff || isPartialPayment || isTaxWriteoff) ? activeBankLine.amount : undefined, 
             isPartialPayment,
-            taxWriteoffAmount
+            taxWriteoffAmount,
+            toIsoDate(activeBankLine.date)
           );
         }
         setBankLines((prev) => prev.filter((b) => b.id !== activeBankLine.id));

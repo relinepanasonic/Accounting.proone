@@ -1,7 +1,19 @@
 'use client';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { Send, Loader2, AlertTriangle, CheckCircle2, XCircle, Brain, ChevronDown, ChevronUp } from 'lucide-react';
+import type { RobotView } from '@/components/ai-office/Office3D';
+
+// three.js only loads in the browser, and only when this page is opened.
+const Office3D = dynamic(() => import('@/components/ai-office/Office3D'), {
+  ssr: false,
+  loading: () => (
+    <div className="absolute inset-0 flex items-center justify-center text-xs text-zinc-500">
+      <Loader2 className="w-4 h-4 animate-spin mr-2" /> Building the office...
+    </div>
+  ),
+});
 
 interface Agent {
   id: string;
@@ -100,6 +112,18 @@ export function OfficeView() {
   const [openGoalId, setOpenGoalId] = useState<string | null>(null);
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   const ticking = useRef(false);
+  const [view, setView] = useState<'3d' | '2d'>('3d');
+  const [webglOk, setWebglOk] = useState(true);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const c = document.createElement('canvas');
+      setWebglOk(Boolean(c.getContext('webgl2') || c.getContext('webgl')));
+    } catch {
+      setWebglOk(false);
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -206,6 +230,18 @@ export function OfficeView() {
   };
   const agentName = (id: string | null) => agents.find((a) => a.id === id)?.name || 'Unassigned';
 
+  const robotViews: RobotView[] = agents.map((a) => ({
+    id: a.id,
+    name: a.name,
+    title: a.title,
+    floor: a.floor,
+    kind: a.kind,
+    state: robotState(a),
+    task: currentTask(a)?.title || null,
+    brain: brainLabel(a),
+  }));
+  const selectedRobot = robotViews.find((r) => r.id === selectedId) || null;
+
   return (
     <div className="space-y-6">
       {/* Setup checklist */}
@@ -223,7 +259,45 @@ export function OfficeView() {
 
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
         {/* The building */}
-        <div className="xl:col-span-3 rounded-2xl border border-[#d4af37]/20 bg-[#0e0f14] overflow-hidden shadow-lg">
+        <div className="xl:col-span-3 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+              {view === '3d' ? 'Scroll to zoom · drag to rotate · click a robot' : 'Floors'}
+            </span>
+            {webglOk && (
+              <div className="inline-flex rounded-lg border border-zinc-800 overflow-hidden text-[10px] font-bold uppercase tracking-wider">
+                {(['3d', '2d'] as const).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setView(v)}
+                    className={`px-3 py-1 ${view === v ? 'bg-[#d4af37] text-black' : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200'}`}
+                  >
+                    {v === '3d' ? '3D office' : '2D floors'}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {view === '3d' && webglOk ? (
+            <>
+              <div className="relative h-[62vh] min-h-[440px] rounded-2xl border border-[#d4af37]/20 bg-[#07080d] overflow-hidden shadow-lg">
+                <Office3D robots={robotViews} selectedId={selectedId} onSelect={setSelectedId} />
+              </div>
+              {selectedRobot && (
+                <div className="rounded-xl border border-[#d4af37]/30 bg-[#0e0f14] p-3 text-xs flex flex-wrap items-center gap-x-6 gap-y-1">
+                  <span className="font-bold text-zinc-100">{selectedRobot.name}</span>
+                  <span className="text-zinc-400">{selectedRobot.title} · Floor {selectedRobot.floor}</span>
+                  <span className="font-mono text-zinc-500">{selectedRobot.brain}</span>
+                  <span className={selectedRobot.state === 'working' ? 'text-emerald-400' : selectedRobot.state === 'waiting' ? 'text-amber-400' : 'text-zinc-500'}>
+                    {selectedRobot.state === 'working' ? `Working: ${selectedRobot.task}` : selectedRobot.state === 'waiting' ? `Next up: ${selectedRobot.task}` : 'Idle, taking a break'}
+                  </span>
+                </div>
+              )}
+            </>
+          ) : (
+        <div className="rounded-2xl border border-[#d4af37]/20 bg-[#0e0f14] overflow-hidden shadow-lg">
           {FLOORS.map((f) => {
             const team = agents.filter((a) => a.floor === f.floor);
             return (
@@ -254,6 +328,8 @@ export function OfficeView() {
               </div>
             );
           })}
+        </div>
+          )}
         </div>
 
         {/* Brief + activity */}

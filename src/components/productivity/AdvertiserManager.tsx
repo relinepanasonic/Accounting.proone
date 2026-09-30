@@ -26,6 +26,11 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
   const [session, setSession] = useState<number>(1);
   const [showNewModal, setShowNewModal] = useState(false);
 
+  // Filter State
+  const [filterMonth, setFilterMonth] = useState<string>('');
+  const [filterAdvertiser, setFilterAdvertiser] = useState<string>('');
+  const [filterClient, setFilterClient] = useState<string>('');
+
   const loadLogs = async () => {
     setIsLoadingLogs(true);
     const res = await fetchAdvertiserLogs();
@@ -56,6 +61,16 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
     );
   }
 
+  const uniqueAdvertisers = Array.from(new Set(logs.map(l => l.advertiser_name))).filter(Boolean).sort();
+
+  const filteredLogs = logs.filter(log => {
+    let match = true;
+    if (filterMonth && !log.report_date.startsWith(filterMonth)) match = false;
+    if (filterAdvertiser && log.advertiser_name !== filterAdvertiser) match = false;
+    if (filterClient && log.client_id !== filterClient) match = false;
+    return match;
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -71,7 +86,7 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
 
         <button 
           onClick={() => setShowNewModal(true)}
-          className="gold-btn flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-bold uppercase tracking-wider"
+          className="gold-btn flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-bold uppercase tracking-wider w-full md:w-auto"
         >
           <PlayCircle className="w-5 h-5 text-black" />
           START RECORD
@@ -137,8 +152,48 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
         </div>
       )}
 
-      {/* Logs Table */}
+      {/* Logs Table Area */}
       <div className="gold-glass-panel rounded-2xl border border-[#d4af37]/20 overflow-hidden relative">
+        
+        {/* Filters */}
+        <div className="p-4 border-b border-zinc-800/80 bg-zinc-900/40 flex flex-col md:flex-row gap-4">
+          <div className="flex-1">
+            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Filter Month</label>
+            <input 
+              type="month"
+              value={filterMonth}
+              onChange={(e) => setFilterMonth(e.target.value)}
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#d4af37] transition-colors"
+            />
+          </div>
+          <div className="flex-1">
+            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Filter Advertiser</label>
+            <select 
+              value={filterAdvertiser}
+              onChange={(e) => setFilterAdvertiser(e.target.value)}
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#d4af37] transition-colors"
+            >
+              <option value="">All Advertisers</option>
+              {uniqueAdvertisers.map(adv => (
+                <option key={adv as string} value={adv as string}>{adv as string}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex-1">
+            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Filter Client</label>
+            <select 
+              value={filterClient}
+              onChange={(e) => setFilterClient(e.target.value)}
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#d4af37] transition-colors"
+            >
+              <option value="">All Clients</option>
+              {clients.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
         {isLoadingLogs && (
           <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
             <Loader2 className="w-8 h-8 text-[#d4af37] animate-spin" />
@@ -162,14 +217,14 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/50 text-zinc-300">
-              {logs.length === 0 && !isLoadingLogs ? (
+              {filteredLogs.length === 0 && !isLoadingLogs ? (
                 <tr>
                   <td colSpan={10} className="px-6 py-12 text-center text-zinc-500">
-                    No records found. Click "Start Record" to create one.
+                    No records found.
                   </td>
                 </tr>
               ) : (
-                logs.map((log, idx) => (
+                filteredLogs.map((log, idx) => (
                   <tr key={idx} className="hover:bg-zinc-900/50 transition-colors">
                     <td className="px-6 py-4 font-bold text-white">
                       {new Date(log.report_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}

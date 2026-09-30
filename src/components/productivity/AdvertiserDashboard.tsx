@@ -377,7 +377,7 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
         {/* Sub-Filters for Group */}
         {activeTab === 'group' && (
           <div className="p-4 bg-zinc-900/50 border-b border-zinc-800 flex flex-col md:flex-row gap-4 items-end">
-            <div>
+            <div className="w-full md:w-auto">
               <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Group Category</label>
               <select 
                 value={activeGroupCategory}
@@ -388,19 +388,19 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
                   if (namesForNewCat.length > 0) setActiveGroupName(namesForNewCat[0] as string);
                   else setActiveGroupName(`Group ${newCat} 1`);
                 }}
-                className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#d4af37]"
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#d4af37]"
               >
                 <option value="Hero">Group Hero</option>
                 <option value="Reguler">Group Reguler</option>
                 <option value="Low">Group Low Konversi</option>
               </select>
             </div>
-            <div>
+            <div className="w-full md:w-auto">
               <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Group Name</label>
               <select 
                 value={activeGroupName}
                 onChange={(e) => setActiveGroupName(e.target.value)}
-                className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#d4af37] min-w-[200px]"
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#d4af37] md:min-w-[200px]"
               >
                 {existingGroupNames.length === 0 && <option value={activeGroupName}>{activeGroupName}</option>}
                 {existingGroupNames.map(name => (
@@ -408,13 +408,13 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
                 ))}
               </select>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 w-full md:w-auto mt-2 md:mt-0">
               <input 
                 type="text" 
                 value={newGroupName}
                 onChange={(e) => setNewGroupName(e.target.value)}
                 placeholder="New group name..." 
-                className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#d4af37]"
+                className="flex-1 md:flex-none bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#d4af37]"
               />
               <button onClick={handleAddNewGroup} className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 p-2 rounded-lg transition-colors border border-zinc-700">
                 <Plus className="w-4 h-4" />
@@ -586,25 +586,25 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
             </tbody>
           </table>
           {activeData.length > 0 && (
-            <div className="p-4 border-t border-zinc-800 flex justify-between items-center bg-zinc-900/20">
+            <div className="p-4 border-t border-zinc-800 flex flex-col md:flex-row justify-between items-center gap-4 bg-zinc-900/20">
               <button 
                 onClick={addEmptyRow}
-                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold rounded-lg transition-colors border border-zinc-600 inline-flex items-center gap-2"
+                className="w-full md:w-auto px-4 py-3 md:py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-sm md:text-xs font-bold rounded-lg transition-colors border border-zinc-600 inline-flex justify-center items-center gap-2"
               >
                 + Add Row
               </button>
               
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 w-full md:w-auto">
                 <button 
                   onClick={clearData}
-                  className="flex items-center justify-center gap-2 px-4 py-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 text-xs font-bold rounded-xl transition-colors border border-red-500/20"
+                  className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-3 md:py-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 text-sm md:text-xs font-bold rounded-xl transition-colors border border-red-500/20"
                 >
                   <Trash2 className="w-4 h-4" /> Clear Current
                 </button>
                 <button 
                   onClick={handleSave}
                   disabled={isSaving}
-                  className="flex items-center justify-center gap-2 px-6 py-2 bg-[#d4af37]/10 text-[#d4af37] hover:bg-[#d4af37]/20 text-xs font-bold rounded-xl transition-colors border border-[#d4af37]/40 shadow-[0_0_15px_rgba(212,175,55,0.15)] disabled:opacity-50"
+                  className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-3 md:py-2 bg-[#d4af37]/10 text-[#d4af37] hover:bg-[#d4af37]/20 text-sm md:text-xs font-bold rounded-xl transition-colors border border-[#d4af37]/40 shadow-[0_0_15px_rgba(212,175,55,0.15)] disabled:opacity-50"
                 >
                   {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} 
                   SAVE RECORD

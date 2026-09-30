@@ -14,7 +14,7 @@ export interface RobotView {
   name: string;
   title: string;
   floor: number; // 1 doers, 2 specialists, 3 boss office
-  kind: 'planner' | 'qc' | 'worker';
+  kind: 'planner' | 'qc' | 'worker' | 'researcher' | 'installer';
   state: RobotState;
   task: string | null;
   brain: string;

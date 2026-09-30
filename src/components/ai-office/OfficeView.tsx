@@ -20,13 +20,15 @@ interface Agent {
   name: string;
   title: string;
   floor: number;
-  kind: 'planner' | 'qc' | 'worker';
+  team_id: string | null;
+  kind: 'planner' | 'qc' | 'worker' | 'researcher' | 'installer';
   provider: 'anthropic' | 'groq' | 'gemini';
   model: string;
 }
 
 interface Task {
   id: string;
+  team_id: string | null;
   seq: number;
   title: string;
   instructions: string;
@@ -56,9 +58,29 @@ interface OfficeEvent {
   created_at: string;
 }
 
+interface Team {
+  id: string;
+  slug: string;
+  name: string;
+  mission: string;
+  enabled: boolean;
+}
+
+interface Skill {
+  id: string;
+  name: string;
+  description: string;
+  suited_for: string;
+  instructions: string;
+  created_by: string | null;
+  agent_ids: string[];
+}
+
 interface OfficeState {
-  setup: { tables: boolean; anthropic: boolean; groq: boolean; gemini: boolean };
+  setup: { tables: boolean; teams: boolean; anthropic: boolean; groq: boolean; gemini: boolean };
   agents: Agent[];
+  teams: Team[];
+  skills: Skill[];
   goals: Goal[];
   events: OfficeEvent[];
   active: boolean;
@@ -107,6 +129,9 @@ export function OfficeView() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [brief, setBrief] = useState('');
   const [deepThink, setDeepThink] = useState(false);
+  const [teamId, setTeamId] = useState<string | null>(null);
+  const [activating, setActivating] = useState(false);
+  const [teamError, setTeamError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [openGoalId, setOpenGoalId] = useState<string | null>(null);
@@ -138,6 +163,27 @@ export function OfficeView() {
       return null;
     }
   }, []);
+
+  const activateCreator = async () => {
+    setActivating(true);
+    setTeamError(null);
+    try {
+      const res = await fetch('/api/ai-office/team', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: 'team-creator' }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Could not activate the team.');
+      const fresh = await refresh();
+      const team = fresh?.teams.find((t) => t.slug === 'team-creator');
+      if (team) setTeamId(team.id);
+    } catch (err: any) {
+      setTeamError(err?.message || 'Could not activate the team.');
+    } finally {
+      setActivating(false);
+    }
+  };
 
   // The work loop: one short step per request while any brief is open.
   const runLoop = useCallback(async () => {
@@ -184,7 +230,7 @@ export function OfficeView() {
       const res = await fetch('/api/ai-office/goal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brief, deepThink }),
+        body: JSON.stringify({ brief, deepThink, teamId }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Could not send the brief.');
@@ -210,13 +256,21 @@ export function OfficeView() {
     return <div className="flex items-center gap-2 text-sm text-zinc-400"><Loader2 className="w-4 h-4 animate-spin" /> Opening the office...</div>;
   }
 
-  const { setup, agents, goals, events } = state;
+  const { setup, teams, skills } = state;
   const ready = setup.tables && setup.anthropic;
+  const activeTeam = teams.find((t) => t.id === teamId) || null;
+  const inTeam = (x: { team_id: string | null }) => (x.team_id ?? null) === (activeTeam ? activeTeam.id : null);
+  const agents = state.agents.filter(inTeam);
+  const goals = state.goals.filter(inTeam);
+  const goalIds = new Set(goals.map((g) => g.id));
+  const events = state.events.filter((ev) => (ev.goal_id ? goalIds.has(ev.goal_id) : !activeTeam));
   const openGoals = goals.filter((g) => !['done', 'failed'].includes(g.status));
   const allSubtasks = goals.flatMap((g) => g.subtasks);
+  const hasQc = agents.some((a) => a.kind === 'qc');
+  const creatorActive = teams.some((t) => t.slug === 'team-creator');
 
   const robotState = (a: Agent): RobotState => {
-    if (a.kind === 'planner') return openGoals.some((g) => g.status === 'planning') ? 'working' : 'idle';
+    if (a.kind === 'planner') return openGoals.some((g) => g.status === 'planning' || (!hasQc && g.status === 'reviewing')) ? 'working' : 'idle';
     if (a.kind === 'qc') return openGoals.some((g) => g.status === 'reviewing') ? 'working' : 'idle';
     const mine = allSubtasks.filter((s) => s.agent_id === a.id);
     if (mine.some((s) => s.status === 'running')) return 'working';
@@ -244,6 +298,48 @@ export function OfficeView() {
 
   return (
     <div className="space-y-6">
+      {/* Teams */}
+      <div className="rounded-2xl border border-zinc-800 bg-[#0e0f14] p-3 space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setTeamId(null)}
+            className={`px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border ${!activeTeam ? 'bg-[#d4af37] text-black border-[#d4af37]' : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200'}`}
+          >
+            General Office
+          </button>
+          {teams.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTeamId(t.id)}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border ${activeTeam?.id === t.id ? 'bg-[#d4af37] text-black border-[#d4af37]' : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200'}`}
+            >
+              {t.name}
+            </button>
+          ))}
+        </div>
+        {activeTeam && <p className="text-xs text-zinc-400">{activeTeam.mission}</p>}
+        {!creatorActive && (
+          <div className="rounded-xl border border-dashed border-[#d4af37]/40 p-3 flex flex-wrap items-center gap-3">
+            <div className="flex-1 min-w-[220px]">
+              <div className="text-xs font-bold text-zinc-100">AI Team Creator <span className="text-zinc-500 font-normal">· not activated</span></div>
+              <div className="text-[11px] text-zinc-400 mt-0.5">Mentor (boss, deep research), Scout (skill and model research on the web), Forge (installs skills into agents).</div>
+              {!setup.teams && <div className="text-[11px] text-amber-300 mt-1">Run <span className="font-mono">supabase/migrations/20260930_ai_teams.sql</span> in Supabase first.</div>}
+              {teamError && <div className="text-[11px] text-red-400 mt-1">{teamError}</div>}
+            </div>
+            <button
+              type="button"
+              disabled={!ready || !setup.teams || activating}
+              onClick={activateCreator}
+              className="px-4 py-2 rounded-xl text-[11px] font-extrabold uppercase tracking-wider text-[#111] bg-gradient-to-r from-[#d4af37] to-[#f5d77f] disabled:opacity-40 inline-flex items-center gap-2"
+            >
+              {activating && <Loader2 className="w-3.5 h-3.5 animate-spin" />} Activate team
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* Setup checklist */}
       {(!setup.tables || !setup.anthropic || !setup.groq || !setup.gemini) && (
         <div className={`rounded-xl border p-4 text-xs space-y-1.5 ${ready ? 'border-zinc-800 bg-zinc-900/30' : 'border-amber-500/30 bg-amber-500/5'}`}>
@@ -335,7 +431,7 @@ export function OfficeView() {
         {/* Brief + activity */}
         <div className="xl:col-span-2 space-y-6">
           <form onSubmit={submit} className="rounded-2xl border border-[#d4af37]/20 bg-[#0e0f14] p-4 space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-white">Brief the boss</h3>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-white">{activeTeam ? `Brief ${activeTeam.name}` : 'Brief the boss'}</h3>
             <textarea
               value={brief}
               onChange={(e) => setBrief(e.target.value)}
@@ -345,7 +441,7 @@ export function OfficeView() {
               className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-[#d4af37] disabled:opacity-50"
             />
             <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
-              <input type="checkbox" checked={deepThink} onChange={(e) => setDeepThink(e.target.checked)} className="accent-[#d4af37]" />
+              <input type="checkbox" checked={deepThink || activeTeam?.slug === 'team-creator'} disabled={activeTeam?.slug === 'team-creator'} onChange={(e) => setDeepThink(e.target.checked)} className="accent-[#d4af37]" />
               <Brain className="w-3.5 h-3.5 text-[#d4af37]" /> Deep think (boss uses Opus instead of Sonnet; slower, costs more)
             </label>
             {formError && <p className="text-xs text-red-400">{formError}</p>}
@@ -440,6 +536,35 @@ export function OfficeView() {
           );
         })}
       </div>
+
+      {/* Skill library */}
+      {(creatorActive || skills.length > 0) && (
+        <div className="space-y-3">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-white">Skill library ({skills.length})</h3>
+          {skills.length === 0 && (
+            <div className="rounded-xl border border-dashed border-zinc-800 p-6 text-center text-sm text-zinc-500">
+              No skills yet. Ask the AI Team Creator to research and write skills for an agent; Forge saves and installs them here.
+            </div>
+          )}
+          {skills.map((sk) => (
+            <div key={sk.id} className="rounded-xl border border-zinc-800 bg-[#0e0f14] p-3 text-xs space-y-1">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="font-bold text-zinc-100">{sk.name}</span>
+                <span className="text-zinc-500">{sk.description}</span>
+                {sk.created_by && <span className="font-mono text-[10px] text-zinc-600">by {sk.created_by}</span>}
+              </div>
+              {sk.suited_for && <div className="text-zinc-400">Good for: {sk.suited_for}</div>}
+              <div className="text-[#f5d77f]">
+                Installed in: {sk.agent_ids.length === 0 ? 'nobody yet' : sk.agent_ids.map((id) => state.agents.find((a) => a.id === id)?.name || 'unknown').join(', ')}
+              </div>
+              <details className="text-zinc-500">
+                <summary className="cursor-pointer">Read the skill</summary>
+                <div className="mt-1 whitespace-pre-wrap text-zinc-300">{sk.instructions}</div>
+              </details>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

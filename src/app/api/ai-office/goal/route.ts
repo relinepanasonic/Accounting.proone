@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   if (brief.length > 8000) return NextResponse.json({ error: 'The brief is too long (max 8,000 characters).' }, { status: 400 });
 
   try {
-    const id = await submitGoal(access.supabase, access.workspaceId, access.userId, brief, Boolean(body?.deepThink));
+    const id = await submitGoal(access.supabase, access.workspaceId, access.userId, brief, Boolean(body?.deepThink), typeof body?.teamId === 'string' ? body.teamId : null);
     return NextResponse.json({ id });
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || 'Could not save the brief.' }, { status: 500 });

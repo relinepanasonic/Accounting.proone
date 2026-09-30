@@ -140,3 +140,47 @@ export async function askWorker(opts: {
     note: opts.provider === 'anthropic' ? undefined : `No ${opts.provider} key set, used Claude Haiku instead.`,
   };
 }
+
+/**
+ * Researcher call: Claude with live web search. Server-side tool, so Anthropic runs the searches;
+ * a long search turn can pause, in which case we resume it (bounded).
+ */
+export async function askResearcher(opts: {
+  model: string;
+  system: string;
+  prompt: string;
+  maxSearches?: number;
+}): Promise<{ text: string } & ModelUsage> {
+  const messages: Anthropic.MessageParam[] = [{ role: 'user', content: opts.prompt }];
+  let tokensIn = 0;
+  let tokensOut = 0;
+  let model = opts.model;
+
+  for (let turn = 0; turn < 4; turn++) {
+    const res = await anthropic().messages.create({
+      model: opts.model,
+      max_tokens: 8000,
+      system: opts.system,
+      tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: opts.maxSearches ?? 4 }],
+      messages,
+    });
+    tokensIn += res.usage.input_tokens;
+    tokensOut += res.usage.output_tokens;
+    model = res.model;
+
+    if (res.stop_reason === 'refusal') throw new Error('The researcher model declined this request.');
+    if (res.stop_reason === 'pause_turn') {
+      // Resume: hand the paused assistant turn back unchanged.
+      messages.push({ role: 'assistant', content: res.content });
+      continue;
+    }
+
+    let text = '';
+    for (const block of res.content) {
+      if (block.type === 'text') text += block.text;
+    }
+    if (!text.trim()) throw new Error('The researcher returned an empty answer.');
+    return { text, model, tokensIn, tokensOut };
+  }
+  throw new Error('The research took too many steps and was stopped.');
+}

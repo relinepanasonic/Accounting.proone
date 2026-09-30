@@ -1,26 +1,40 @@
 // AI Office engine. Server-side only.
-// A goal is planned by the boss (Claude), split into subtasks for the worker floors, checked by QC (Claude),
-// and closed with one report. `tickOffice` does ONE short step per call so it fits inside a serverless function;
+// A goal belongs to a team. The team's planner (Claude) splits it into subtasks, the team's workers do them
+// (researchers search the web, installers save skills, doers/specialists write), the planner/QC checks the work,
+// and one report is delivered. `tickOffice` does ONE short step per call so it fits inside a serverless function;
 // the office page (or a scheduler) calls it repeatedly while work is open.
 //
-// v1: agents have NO access to ERP data or actions. They work only from the text of the brief.
-import { askBoss, askWorker, describeModelError, providerStatus, type Provider } from '@/lib/ai/providers';
+// Agents have NO access to ERP data or actions. They work from the text of the brief, the web (researchers only)
+// and the skills installed into them.
+import { askBoss, askResearcher, askWorker, describeModelError, providerStatus, type Provider } from '@/lib/ai/providers';
 
 type Db = any; // Supabase client (user session; RLS limits it to founder / superadmin)
 
+export type AgentKind = 'planner' | 'qc' | 'worker' | 'researcher' | 'installer';
+
 export interface OfficeAgent {
   id: string;
+  team_id: string | null;
   name: string;
   title: string;
   floor: number;
-  kind: 'planner' | 'qc' | 'worker';
+  kind: AgentKind;
   provider: Provider;
   model: string;
   enabled: boolean;
 }
 
+export interface OfficeTeam {
+  id: string;
+  slug: string;
+  name: string;
+  mission: string;
+  enabled: boolean;
+}
+
 export interface OfficeTask {
   id: string;
+  team_id: string | null;
   parent_id: string | null;
   kind: 'goal' | 'subtask';
   seq: number;
@@ -40,7 +54,9 @@ export interface OfficeTask {
   created_at: string;
 }
 
-const DEFAULT_AGENTS: Omit<OfficeAgent, 'id' | 'enabled'>[] = [
+type RosterEntry = Omit<OfficeAgent, 'id' | 'team_id' | 'enabled'>;
+
+const GENERAL_AGENTS: RosterEntry[] = [
   { name: 'Atlas', title: 'Director (plans the work)', floor: 3, kind: 'planner', provider: 'anthropic', model: 'claude-sonnet-5-5' },
   { name: 'Vera', title: 'Inspector (quality control)', floor: 3, kind: 'qc', provider: 'anthropic', model: 'claude-sonnet-5-5' },
   { name: 'Nova', title: 'Specialist', floor: 2, kind: 'worker', provider: 'gemini', model: 'gemini-3.8-flash' },
@@ -51,6 +67,56 @@ const DEFAULT_AGENTS: Omit<OfficeAgent, 'id' | 'enabled'>[] = [
   { name: 'Zap', title: 'Doer', floor: 1, kind: 'worker', provider: 'groq', model: 'openai/gpt-oss-20b' },
 ];
 
+export interface TeamProfile {
+  slug: string;
+  name: string;
+  mission: string;
+  roster: RosterEntry[];
+  /** Extra guidance for this team's planner. */
+  plannerGuide: string;
+  /** Extra guidance for the final report. */
+  reportGuide: string;
+  /** Extra guidance per worker kind. */
+  workerGuide: Partial<Record<AgentKind, string>>;
+  /** Goals sent to this team run on the deepest boss model. */
+  deepByDefault: boolean;
+}
+
+export const TEAM_PROFILES: Record<string, TeamProfile> = {
+  'team-creator': {
+    slug: 'team-creator',
+    name: 'AI Team Creator',
+    mission: 'Design new, specialized AI teams: research what is possible, pick the best model for each job, and equip every agent with the right skills.',
+    deepByDefault: true,
+    roster: [
+      { name: 'Mentor', title: 'Research Director (boss)', floor: 3, kind: 'planner', provider: 'anthropic', model: 'claude-opus-5-5' },
+      { name: 'Scout', title: 'Skill & Model Researcher', floor: 2, kind: 'researcher', provider: 'anthropic', model: 'claude-sonnet-5-5' },
+      { name: 'Forge', title: 'Skill Installer', floor: 1, kind: 'installer', provider: 'groq', model: 'openai/gpt-oss-20b' },
+    ],
+    plannerGuide:
+      'You run the AI Team Creator. The owner wants new AI teams that are specialized and skilled. ' +
+      'Break the brief into research questions for Scout (level "specialist"): which skills an agent for that job needs, which AI models fit each job best ' +
+      '(quality, speed, price, languages, tool use) with current evidence from the web, and what similar teams already do. ' +
+      'Give Scout ONE focused question per subtask, with the exact comparison you need. ' +
+      'Use level "doer" (Forge, the skill installer) only when the brief asks to write or install skills for a named agent; then the subtask must list the agent names and what each skill must teach. ' +
+      'Do not invent facts: research is only what Scout finds.',
+    reportGuide:
+      'Write the final report as a proposal the owner can approve: (1) recommended team(s) with mission and why, ' +
+      '(2) for each role: the job, the best model with the reason and the source, and a cheaper alternative, ' +
+      '(3) the skills each agent needs, (4) risks and open questions, (5) the suggested first step. Cite the sources Scout found.',
+    workerGuide: {
+      researcher:
+        'You are Scout, the skill and model researcher. Search the web for current, specific evidence. Compare options side by side, ' +
+        'say which you would pick for the job and why, name the source of each claim, and flag anything you could not verify. Keep it concise and factual.',
+      installer:
+        'You are Forge, the skill installer. A skill is a reusable instruction pack for an AI agent: what it does, when to use it, and exact steps, rules and an example. ' +
+        'Reply with ONLY a JSON object, no other text, in this shape: ' +
+        '{"skills":[{"name":"short-kebab-name","description":"one sentence","suited_for":"jobs it helps with","instructions":"the full instructions, plain text","install_to":["AgentName"]}]}. ' +
+        'install_to may be empty if the brief names no agent.',
+    },
+  },
+};
+
 const MAX_SUBTASKS = 6;
 const WORKERS_PER_TICK = 4;
 const MAX_ATTEMPTS = 2; // first try + one redo after QC feedback
@@ -60,7 +126,7 @@ const OFFICE_CONTEXT =
   'You work in the AI Office of an Indonesian e-commerce agency ERP (accounting, sales, ads reporting). ' +
   'Agents currently have NO access to company data, files or actions: they work only from the text they are given. ' +
   'Never invent company figures, names or results. If a task needs data nobody provided, say exactly what is missing. ' +
-  'Write plain text without Markdown symbols. Answer in the language the owner used.';
+  'Write plain text without Markdown symbols unless told otherwise. Answer in the language the owner used.';
 
 const PLAN_SCHEMA = {
   type: 'object',
@@ -107,6 +173,7 @@ const QC_SCHEMA = {
 };
 
 const isMissingTable = (error: any) => error?.code === 'PGRST205' || error?.code === '42P01';
+const sameTeam = (a: { team_id: string | null }, teamId: string | null) => (a.team_id ?? null) === (teamId ?? null);
 
 async function logEvent(db: Db, workspaceId: string, goalId: string | null, agentId: string | null, message: string) {
   await db.from('ai_task_events').insert({ workspace_id: workspaceId, goal_id: goalId, agent_id: agentId, message });
@@ -134,15 +201,71 @@ export async function ensureAgents(db: Db, workspaceId: string): Promise<{ agent
 
   const { data: created } = await db
     .from('ai_agents')
-    .insert(DEFAULT_AGENTS.map((a) => ({ ...a, workspace_id: workspaceId })))
+    .insert(GENERAL_AGENTS.map((a) => ({ ...a, workspace_id: workspaceId })))
     .select('*');
   return { agents: (created || []).sort((a: OfficeAgent, b: OfficeAgent) => b.floor - a.floor || a.name.localeCompare(b.name)), tablesReady: true };
+}
+
+async function loadTeams(db: Db, workspaceId: string): Promise<{ teams: OfficeTeam[]; ready: boolean }> {
+  const { data, error } = await db.from('ai_teams').select('*').eq('workspace_id', workspaceId).order('created_at');
+  if (error) return { teams: [], ready: !isMissingTable(error) };
+  return { teams: data || [], ready: true };
+}
+
+/** Turns a team on: creates the team and its agents. Safe to call twice. */
+export async function activateTeam(db: Db, workspaceId: string, slug: string) {
+  const profile = TEAM_PROFILES[slug];
+  if (!profile) throw new Error('Unknown team.');
+
+  const { data: existing, error: lookupError } = await db.from('ai_teams').select('id, enabled').eq('workspace_id', workspaceId).eq('slug', slug).maybeSingle();
+  if (lookupError) {
+    if (isMissingTable(lookupError)) throw new Error('Team tables are missing. Run supabase/migrations/20260930_ai_teams.sql first.');
+    throw new Error(lookupError.message);
+  }
+  if (existing) {
+    if (!existing.enabled) await db.from('ai_teams').update({ enabled: true }).eq('id', existing.id);
+    return existing.id as string;
+  }
+
+  const { data: team, error } = await db
+    .from('ai_teams')
+    .insert({ workspace_id: workspaceId, slug, name: profile.name, mission: profile.mission })
+    .select('id')
+    .single();
+  if (error) throw new Error(error.message);
+
+  // Agent names are unique per workspace; suffix on the rare clash.
+  const { data: taken } = await db.from('ai_agents').select('name').eq('workspace_id', workspaceId);
+  const used = new Set<string>((taken || []).map((a: { name: string }) => a.name));
+  const rows = profile.roster.map((r) => {
+    let name = r.name;
+    for (let i = 2; used.has(name); i++) name = `${r.name} ${i}`;
+    used.add(name);
+    return { ...r, name, workspace_id: workspaceId, team_id: team.id };
+  });
+  const { error: agentError } = await db.from('ai_agents').insert(rows);
+  if (agentError) throw new Error(agentError.message);
+
+  await logEvent(db, workspaceId, null, null, `${profile.name} was activated with ${rows.length} agents.`);
+  return team.id as string;
 }
 
 export async function getOfficeState(db: Db, workspaceId: string) {
   const keys = providerStatus();
   const { agents, tablesReady } = await ensureAgents(db, workspaceId);
-  if (!tablesReady) return { setup: { tables: false, ...keys }, agents: [], goals: [], events: [], active: false };
+  if (!tablesReady) return { setup: { tables: false, teams: false, ...keys }, agents: [], teams: [], skills: [], goals: [], events: [], active: false };
+
+  const { teams, ready: teamsReady } = await loadTeams(db, workspaceId);
+
+  let skills: any[] = [];
+  if (teamsReady) {
+    const { data: skillRows } = await db.from('ai_skills').select('*').eq('workspace_id', workspaceId).order('created_at', { ascending: false });
+    const { data: links } = await db.from('ai_agent_skills').select('agent_id, skill_id').eq('workspace_id', workspaceId);
+    skills = (skillRows || []).map((s: any) => ({
+      ...s,
+      agent_ids: (links || []).filter((l: any) => l.skill_id === s.id).map((l: any) => l.agent_id),
+    }));
+  }
 
   const { data: goals } = await db
     .from('ai_tasks')
@@ -150,7 +273,7 @@ export async function getOfficeState(db: Db, workspaceId: string) {
     .eq('workspace_id', workspaceId)
     .eq('kind', 'goal')
     .order('created_at', { ascending: false })
-    .limit(8);
+    .limit(12);
 
   const goalIds = (goals || []).map((g: OfficeTask) => g.id);
   const { data: subtasks } = goalIds.length
@@ -162,7 +285,7 @@ export async function getOfficeState(db: Db, workspaceId: string) {
     .select('id, goal_id, agent_id, message, created_at')
     .eq('workspace_id', workspaceId)
     .order('created_at', { ascending: false })
-    .limit(60);
+    .limit(80);
 
   const withSubtasks = (goals || []).map((g: OfficeTask) => ({
     ...g,
@@ -170,24 +293,35 @@ export async function getOfficeState(db: Db, workspaceId: string) {
   }));
 
   return {
-    setup: { tables: true, ...keys },
+    setup: { tables: true, teams: teamsReady, ...keys },
     agents,
+    teams,
+    skills,
     goals: withSubtasks,
     events: events || [],
     active: withSubtasks.some((g: OfficeTask) => !['done', 'failed'].includes(g.status)),
   };
 }
 
-export async function submitGoal(db: Db, workspaceId: string, userId: string | null, brief: string, deepThink: boolean) {
+export async function submitGoal(db: Db, workspaceId: string, userId: string | null, brief: string, deepThink: boolean, teamId: string | null) {
   const text = brief.trim();
   const title = text.split('\n')[0].slice(0, 90);
+
+  let team: OfficeTeam | null = null;
+  if (teamId) {
+    const { data } = await db.from('ai_teams').select('*').eq('id', teamId).eq('workspace_id', workspaceId).maybeSingle();
+    if (!data || !data.enabled) throw new Error('That team is not active.');
+    team = data;
+  }
+  const deep = deepThink || Boolean(team && TEAM_PROFILES[team.slug]?.deepByDefault);
+
   const { data, error } = await db
     .from('ai_tasks')
-    .insert({ workspace_id: workspaceId, kind: 'goal', title, instructions: text, deep_think: deepThink, created_by: userId })
+    .insert({ workspace_id: workspaceId, team_id: teamId, kind: 'goal', title, instructions: text, deep_think: deep, created_by: userId })
     .select('id')
     .single();
   if (error) throw new Error(error.message);
-  await logEvent(db, workspaceId, data.id, null, `New brief for the boss: "${title}"`);
+  await logEvent(db, workspaceId, data.id, null, `New brief for ${team ? team.name : 'the boss'}: "${title}"`);
   return data.id as string;
 }
 
@@ -213,7 +347,7 @@ async function recoverStale(db: Db, workspaceId: string) {
   }
 }
 
-async function planGoal(db: Db, workspaceId: string, goal: OfficeTask, agents: OfficeAgent[]) {
+async function planGoal(db: Db, workspaceId: string, goal: OfficeTask, agents: OfficeAgent[], profile: TeamProfile | null) {
   const planner = agents.find((a) => a.kind === 'planner');
   if (!(await claim(db, goal.id, 'queued', 'planning'))) return;
   await logEvent(db, workspaceId, goal.id, planner?.id || null, `${planner?.name || 'Boss'} is planning${goal.deep_think ? ' (deep think, Opus)' : ''}.`);
@@ -226,8 +360,9 @@ async function planGoal(db: Db, workspaceId: string, goal: OfficeTask, agents: O
       deep: goal.deep_think,
       system:
         `${OFFICE_CONTEXT}\n\nYou are the Director. Split the owner's brief into at most ${MAX_SUBTASKS} small, independent subtasks for the worker floors. ` +
-        'Use "doer" for simple, mechanical work (lists, rewriting, formatting, simple drafts) and "specialist" for work that needs judgment or analysis. ' +
-        'Prefer fewer subtasks; a simple brief may need only one. Each subtask must be fully self-contained: copy into its instructions every fact from the brief the worker needs.',
+        'Use "doer" for simple, mechanical work (lists, rewriting, formatting, simple drafts) and "specialist" for work that needs judgment, analysis or research. ' +
+        'Prefer fewer subtasks; a simple brief may need only one. Each subtask must be fully self-contained: copy into its instructions every fact from the brief the worker needs.' +
+        (profile ? `\n\n${profile.plannerGuide}` : ''),
       prompt: `Owner's brief:\n\n${goal.instructions}`,
       schema: PLAN_SCHEMA,
     });
@@ -235,7 +370,7 @@ async function planGoal(db: Db, workspaceId: string, goal: OfficeTask, agents: O
     const subtasks = (data.subtasks || []).slice(0, MAX_SUBTASKS);
     if (subtasks.length === 0) throw new Error('The boss produced no subtasks.');
 
-    const byFloor = (floor: number) => agents.filter((a) => a.kind === 'worker' && a.floor === floor && a.enabled);
+    const byFloor = (floor: number) => agents.filter((a) => a.kind !== 'planner' && a.kind !== 'qc' && a.floor === floor && a.enabled);
     const counters: Record<number, number> = { 1: 0, 2: 0 };
     const rows = subtasks.map((s, i) => {
       let floor = s.level === 'specialist' ? 2 : 1;
@@ -243,7 +378,7 @@ async function planGoal(db: Db, workspaceId: string, goal: OfficeTask, agents: O
       const team = byFloor(floor);
       const agent = team.length ? team[counters[floor]++ % team.length] : null;
       return {
-        workspace_id: workspaceId, parent_id: goal.id, kind: 'subtask', seq: i + 1,
+        workspace_id: workspaceId, team_id: goal.team_id, parent_id: goal.id, kind: 'subtask', seq: i + 1,
         title: s.title.slice(0, 120), instructions: s.instructions, floor, agent_id: agent?.id || null,
       };
     });
@@ -260,8 +395,66 @@ async function planGoal(db: Db, workspaceId: string, goal: OfficeTask, agents: O
   }
 }
 
-async function runSubtask(db: Db, workspaceId: string, task: OfficeTask, agents: OfficeAgent[]) {
-  const agent = agents.find((a) => a.id === task.agent_id) || agents.find((a) => a.kind === 'worker' && a.floor === task.floor);
+/** Pulls the first JSON object out of a model answer (models sometimes wrap it in text or a code fence). */
+function extractJson(text: string): any | null {
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start === -1 || end <= start) return null;
+  try {
+    return JSON.parse(text.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+}
+
+/** Saves the skills an installer wrote and installs them into the named agents. Returns a readable summary. */
+async function installSkills(db: Db, workspaceId: string, installer: OfficeAgent, text: string, goalId: string | null) {
+  const parsed = extractJson(text);
+  const list: any[] = Array.isArray(parsed?.skills) ? parsed.skills : [];
+  if (list.length === 0) return 'No skills were saved: the answer was not in the expected format.';
+
+  const { data: allAgents } = await db.from('ai_agents').select('id, name').eq('workspace_id', workspaceId);
+  const byName = new Map<string, string>((allAgents || []).map((a: { id: string; name: string }) => [a.name.toLowerCase(), a.id]));
+  const lines: string[] = [];
+
+  for (const s of list.slice(0, 10)) {
+    const name = String(s?.name || '').trim().slice(0, 80);
+    const instructions = String(s?.instructions || '').trim();
+    if (!name || !instructions) continue;
+
+    const { data: skill, error } = await db
+      .from('ai_skills')
+      .upsert(
+        {
+          workspace_id: workspaceId, name, description: String(s.description || '').slice(0, 300),
+          suited_for: String(s.suited_for || '').slice(0, 300), instructions: instructions.slice(0, 6000), created_by: installer.name,
+        },
+        { onConflict: 'workspace_id,name' }
+      )
+      .select('id')
+      .single();
+    if (error || !skill) {
+      lines.push(`${name}: could not be saved (${error?.message || 'unknown error'}).`);
+      continue;
+    }
+
+    const installed: string[] = [];
+    const missing: string[] = [];
+    for (const target of Array.isArray(s.install_to) ? s.install_to : []) {
+      const agentId = byName.get(String(target).toLowerCase());
+      if (!agentId) { missing.push(String(target)); continue; }
+      await db.from('ai_agent_skills').upsert({ agent_id: agentId, skill_id: skill.id, workspace_id: workspaceId }, { onConflict: 'agent_id,skill_id' });
+      installed.push(String(target));
+    }
+    const note = `${name}: saved${installed.length ? `, installed into ${installed.join(', ')}` : ', not installed into any agent yet'}${missing.length ? ` (no agent named ${missing.join(', ')})` : ''}.`;
+    lines.push(note);
+    await logEvent(db, workspaceId, goalId, installer.id, `${installer.name} ${note}`);
+  }
+  return lines.length ? lines.join('\n') : 'No skills were saved: the answer had no usable skills.';
+}
+
+async function runSubtask(db: Db, workspaceId: string, task: OfficeTask, agents: OfficeAgent[], profile: TeamProfile | null) {
+  const agent = agents.find((a) => a.id === task.agent_id) || agents.find((a) => a.kind !== 'planner' && a.kind !== 'qc' && a.floor === task.floor);
   if (!agent) {
     await setTask(db, task.id, { status: 'failed', error: 'No worker available on this floor.' });
     return;
@@ -270,21 +463,37 @@ async function runSubtask(db: Db, workspaceId: string, task: OfficeTask, agents:
   await logEvent(db, workspaceId, task.parent_id, agent.id, `${agent.name} started "${task.title}"${task.attempts > 0 ? ' (redo)' : ''}.`);
 
   try {
+    // Installed skills become part of the agent's own instructions.
+    const { data: links } = await db.from('ai_agent_skills').select('skill_id').eq('agent_id', agent.id);
+    let skillBlock = '';
+    if (links && links.length > 0) {
+      const { data: skills } = await db.from('ai_skills').select('name, instructions').in('id', links.map((l: { skill_id: string }) => l.skill_id));
+      skillBlock = (skills || []).map((s: { name: string; instructions: string }) => `Skill "${s.name}":\n${s.instructions}`).join('\n\n');
+    }
+
     const redo = task.qc_feedback
       ? `\n\nYour previous answer was rejected by quality control. Fix this:\n${task.qc_feedback}\n\nYour previous answer:\n${task.result || '(none)'}`
       : '';
-    const out = await askWorker({
-      provider: agent.provider,
-      model: agent.model,
-      system: `${OFFICE_CONTEXT}\n\nYou are ${agent.name}, a ${agent.floor === 2 ? 'specialist' : 'doer'}. Do exactly the one task below and return only the finished work.`,
-      prompt: `Task: ${task.title}\n\n${task.instructions}${redo}`,
-    });
+    const role = profile?.workerGuide[agent.kind] || `You are ${agent.name}, a ${agent.floor === 2 ? 'specialist' : 'doer'}. Do exactly the one task below and return only the finished work.`;
+    const system = `${OFFICE_CONTEXT}\n\n${role}${skillBlock ? `\n\nYour installed skills. Follow them when relevant:\n${skillBlock}` : ''}`;
+    const prompt = `Task: ${task.title}\n\n${task.instructions}${redo}`;
+
+    const out =
+      agent.kind === 'researcher'
+        ? await askResearcher({ model: agent.provider === 'anthropic' ? agent.model : 'claude-sonnet-5-5', system, prompt })
+        : await askWorker({ provider: agent.provider, model: agent.model, system, prompt });
+
+    let result = out.text;
+    if (agent.kind === 'installer') {
+      const summary = await installSkills(db, workspaceId, agent, out.text, task.parent_id);
+      result = `${summary}\n\n--- Skill data ---\n${out.text}`;
+    }
 
     await setTask(db, task.id, {
-      status: 'review', result: out.text, error: null, model_used: out.model,
+      status: 'review', result, error: null, model_used: out.model,
       tokens_in: task.tokens_in + out.tokensIn, tokens_out: task.tokens_out + out.tokensOut,
     });
-    await logEvent(db, workspaceId, task.parent_id, agent.id, `${agent.name} finished "${task.title}".${out.note ? ` ${out.note}` : ''}`);
+    await logEvent(db, workspaceId, task.parent_id, agent.id, `${agent.name} finished "${task.title}".${'note' in out && out.note ? ` ${out.note}` : ''}`);
   } catch (err) {
     const message = describeModelError(err);
     const final = task.attempts + 1 >= MAX_ATTEMPTS;
@@ -293,7 +502,7 @@ async function runSubtask(db: Db, workspaceId: string, task: OfficeTask, agents:
   }
 }
 
-async function reviewGoal(db: Db, workspaceId: string, goal: OfficeTask, subtasks: OfficeTask[], agents: OfficeAgent[]) {
+async function reviewGoal(db: Db, workspaceId: string, goal: OfficeTask, subtasks: OfficeTask[], agents: OfficeAgent[], profile: TeamProfile | null) {
   const qc = agents.find((a) => a.kind === 'qc') || agents.find((a) => a.kind === 'planner');
   if (!(await claim(db, goal.id, 'running', 'reviewing'))) return;
   await logEvent(db, workspaceId, goal.id, qc?.id || null, `${qc?.name || 'QC'} is checking the work.`);
@@ -310,9 +519,10 @@ async function reviewGoal(db: Db, workspaceId: string, goal: OfficeTask, subtask
       deep: goal.deep_think,
       system:
         `${OFFICE_CONTEXT}\n\nYou are the Inspector. Check each subtask result against its instructions and the owner's brief. ` +
-        'Fail a result only for a real problem (wrong, incomplete, invented facts, off-task), and say exactly what to fix. ' +
+        'Fail a result only for a real problem (wrong, incomplete, invented facts, off-task, claims with no source when a source was required), and say exactly what to fix. ' +
         'Then write the final report for the owner from the work that passed. State plainly anything that could not be done and why ' +
-        '(for example, company data the agents cannot access yet). Do not claim work that was not done.',
+        '(for example, company data the agents cannot access yet). Do not claim work that was not done.' +
+        (profile ? `\n\n${profile.reportGuide}` : ''),
       prompt: `Owner's brief:\n\n${goal.instructions}\n\nWork from the floors:\n\n${work}`,
       schema: QC_SCHEMA,
     });
@@ -348,6 +558,7 @@ async function reviewGoal(db: Db, workspaceId: string, goal: OfficeTask, subtask
 export async function tickOffice(db: Db, workspaceId: string): Promise<{ active: boolean }> {
   const { agents, tablesReady } = await ensureAgents(db, workspaceId);
   if (!tablesReady) return { active: false };
+  const { teams } = await loadTeams(db, workspaceId);
 
   await recoverStale(db, workspaceId);
 
@@ -361,13 +572,25 @@ export async function tickOffice(db: Db, workspaceId: string): Promise<{ active:
   const goals: OfficeTask[] = openGoals || [];
   if (goals.length === 0) return { active: false };
 
+  const teamAgents = (teamId: string | null) => agents.filter((a) => sameTeam(a, teamId));
+  const profileOf = (teamId: string | null): TeamProfile | null => {
+    const team = teams.find((t) => t.id === teamId);
+    return team ? TEAM_PROFILES[team.slug] || null : null;
+  };
+
   const { data: subs } = await db.from('ai_tasks').select('*').in('parent_id', goals.map((g) => g.id)).order('seq');
   const subtasks: OfficeTask[] = subs || [];
+  const goalById = new Map(goals.map((g) => [g.id, g]));
 
   // 1. Workers first: finish work already planned.
   const queued = subtasks.filter((s) => s.status === 'queued').slice(0, WORKERS_PER_TICK);
   if (queued.length > 0) {
-    await Promise.all(queued.map((s) => runSubtask(db, workspaceId, s, agents)));
+    await Promise.all(
+      queued.map((s) => {
+        const teamId = goalById.get(s.parent_id || '')?.team_id ?? s.team_id ?? null;
+        return runSubtask(db, workspaceId, s, teamAgents(teamId), profileOf(teamId));
+      })
+    );
     return { active: true };
   }
 
@@ -378,14 +601,14 @@ export async function tickOffice(db: Db, workspaceId: string): Promise<{ active:
     return mine.length > 0 && mine.every((s) => ['review', 'done', 'failed'].includes(s.status));
   });
   if (toReview) {
-    await reviewGoal(db, workspaceId, toReview, subtasks.filter((s) => s.parent_id === toReview.id), agents);
+    await reviewGoal(db, workspaceId, toReview, subtasks.filter((s) => s.parent_id === toReview.id), teamAgents(toReview.team_id), profileOf(toReview.team_id));
     return { active: true };
   }
 
   // 3. Planning: the next brief in the queue.
   const toPlan = goals.find((g) => g.status === 'queued');
   if (toPlan) {
-    await planGoal(db, workspaceId, toPlan, agents);
+    await planGoal(db, workspaceId, toPlan, teamAgents(toPlan.team_id), profileOf(toPlan.team_id));
     return { active: true };
   }
 

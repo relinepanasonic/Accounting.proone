@@ -4,7 +4,7 @@ import { tickOffice } from '@/lib/ai/office-engine';
 
 export const dynamic = 'force-dynamic';
 // One step can include a Claude planning or QC call.
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 export async function POST() {
   const access = await getOfficeAccess();

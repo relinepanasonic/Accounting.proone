@@ -3,21 +3,12 @@ import { PabrikSosmedTabs } from '@/components/productivity/PabrikSosmedTabs';
 
 export default function PabrikSosmedLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold uppercase tracking-tight text-white flex items-center gap-2">
-            PABRIK SOSMED
-          </h1>
-          <p className="text-zinc-400 text-sm mt-1">
-            Manage your social media content and uploads.
-          </p>
-        </div>
+    <div className="flex flex-col h-[calc(100vh-8rem)]">
+      <div className="shrink-0 mb-4">
+        <PabrikSosmedTabs />
       </div>
-
-      <PabrikSosmedTabs />
       
-      <div className="pt-2">
+      <div className="flex-1 w-full overflow-hidden relative rounded-xl border border-zinc-800/60 bg-[#0a0a0a]">
         {children}
       </div>
     </div>

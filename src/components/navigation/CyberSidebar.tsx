@@ -15,9 +15,11 @@ import {
   ChevronLeft,
   ChevronRight,
   ShieldCheck,
+  Bot,
 } from 'lucide-react';
 
 const MAIN_MODULES = [
+  { name: 'AI Office', href: '/ai-office', icon: <Bot className="w-4 h-4" /> },
   { name: 'Accounting', href: '/', icon: <LayoutDashboard className="w-4 h-4" /> },
   { name: 'Sales', href: '/sales', icon: <ArrowUpRight className="w-4 h-4" /> },
   { name: 'Productivity', href: '/productivity', icon: <CheckSquare className="w-4 h-4" /> },

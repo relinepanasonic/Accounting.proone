@@ -9,9 +9,11 @@ import {
   CheckSquare,
   Users,
   Settings,
+  Bot,
 } from 'lucide-react';
 
 const MOBILE_NAV_ITEMS = [
+  { name: 'AI Office', href: '/ai-office', icon: <Bot className="w-5 h-5" /> },
   { name: 'Accounting', href: '/', icon: <LayoutDashboard className="w-5 h-5" /> },
   { name: 'Sales', href: '/sales', icon: <ArrowUpRight className="w-5 h-5" /> },
   { name: 'Productivity', href: '/productivity', icon: <CheckSquare className="w-5 h-5" /> },

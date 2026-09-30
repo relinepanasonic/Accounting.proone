@@ -190,7 +190,9 @@ async function ReconciliationCore() {
 
   const systemRecords: any[] = [
     ...rawInvoices
-      .filter((inv) => !invoicesWithPayment.has(inv.id))
+      // Fully paid invoices are represented by their payment transaction(s) (the paid amounts).
+      // An invoice still holding a balance (unpaid or partially paid) stays listed at that balance.
+      .filter((inv) => !(invoicesWithPayment.has(inv.id) && Number(inv.total_amount || 0) - Number(inv.amount_paid || 0) <= 0))
       .map((inv) => {
         const total = Number(inv.total_amount || 0);
         const balance = total - Number(inv.amount_paid || 0);

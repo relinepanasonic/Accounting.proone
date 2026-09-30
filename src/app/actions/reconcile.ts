@@ -101,9 +101,18 @@ export async function reconcileRecord(
           updateData.amount = adjustedAmount;
         }
         // Invoice payment: the real payment date is the bank date, not the day "Paid" was clicked.
-        const { data: tx } = await supabase.from('transactions').select('invoice_id').eq('id', recordId).single();
+        const { data: tx } = await supabase.from('transactions').select('invoice_id, amount').eq('id', recordId).single();
         if (tx?.invoice_id) {
           linkedInvoiceId = tx.invoice_id;
+          // Amount adjusted to the bank figure: keep the ledger lines and the invoice's paid total in step.
+          if (adjustedAmount !== undefined && Number(adjustedAmount) !== Number(tx.amount)) {
+            await supabase.from('journal_entries').update({ debit_amount: adjustedAmount }).eq('reference_id', recordId).eq('reference_type', 'payment_tx').gt('debit_amount', 0);
+            await supabase.from('journal_entries').update({ credit_amount: adjustedAmount }).eq('reference_id', recordId).eq('reference_type', 'payment_tx').gt('credit_amount', 0);
+            const { data: linkedInv } = await supabase.from('invoices').select('amount_paid').eq('id', tx.invoice_id).single();
+            if (linkedInv) {
+              await supabase.from('invoices').update({ amount_paid: Number(linkedInv.amount_paid || 0) + Number(adjustedAmount) - Number(tx.amount) }).eq('id', tx.invoice_id);
+            }
+          }
           if (bankDate) {
             updateData.transaction_date = bankDate;
             await supabase.from('journal_entries').update({ transaction_date: bankDate }).eq('reference_id', recordId).eq('reference_type', 'payment_tx');

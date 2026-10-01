@@ -2,8 +2,21 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { X, Loader2, Pencil, Download, MessageCircle } from 'lucide-react';
-import { fetchAdvertiserLogDetail } from '@/app/actions/advertiser';
-import { hasData, normalizeGroup, num, rupiah, sessionPdfFileName, splitReportDate, text, totals } from '@/lib/advertiser/report-utils';
+import { fetchAdvertiserLogDetail, fetchPreviousSession } from '@/app/actions/advertiser';
+import {
+  compareSessions,
+  hasData,
+  normalizeGroup,
+  num,
+  previousLabel,
+  rupiah,
+  saldoDisplay,
+  sessionPdfFileName,
+  splitReportDate,
+  text,
+  totals,
+  type PreviousSession,
+} from '@/lib/advertiser/report-utils';
 import { buildReportJpeg, buildReportPdf, downloadBlob } from '@/lib/advertiser/build-pdf';
 import { AdvertiserSessionReport } from './AdvertiserSessionReport';
 
@@ -22,6 +35,7 @@ interface SessionRow {
   data_group: any;
   data_mandiri: any;
   screenshot_url: string | null;
+  sisa_saldo_iklan?: string | null;
   created_at: string;
   updated_at?: string | null;
   advertiser_name: string;
@@ -113,6 +127,9 @@ export function AdvertiserLogDetail({
   const [pdf, setPdf] = useState<{ status: 'building' | 'ready' | 'error'; blob?: Blob; fileName?: string; error?: string }>({ status: 'building' });
   const [jpeg, setJpeg] = useState<{ blob?: Blob; fileName?: string; error?: string }>({});
   const [shareNotice, setShareNotice] = useState<string | null>(null);
+  const [prev, setPrev] = useState<{ loaded: boolean; data: PreviousSession | null }>({ loaded: false, data: null });
+  // The big screenshot makes the PDF/JPEG heavy, so it is left out unless asked for.
+  const [includeShot, setIncludeShot] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -133,6 +150,18 @@ export function AdvertiserLogDetail({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  useEffect(() => {
+    if (!sessions || sessions.length === 0) return;
+    let cancelled = false;
+    setPrev({ loaded: false, data: null });
+    fetchPreviousSession(log.client_id, log.report_date, active).then((res) => {
+      if (!cancelled) setPrev({ loaded: true, data: (res.data as PreviousSession | null) ?? null });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [log.client_id, log.report_date, active, sessions]);
+
   const current = sessions?.find((s) => s.session === active) || null;
   const inkubasi = current ? (Array.isArray(current.data_inkubasi) ? current.data_inkubasi : []).filter(hasData) : [];
   const groups = current ? normalizeGroup(current.data_group).filter(hasData) : [];
@@ -141,7 +170,7 @@ export function AdvertiserLogDetail({
   // Build the PDF in the background whenever the viewed session changes. Browsers only allow "share" right
   // after a click, so having the file ready beforehand is what makes the WhatsApp button work.
   useEffect(() => {
-    if (!current) return;
+    if (!current || !prev.loaded) return;
     let cancelled = false;
     setPdf({ status: 'building' });
     setJpeg({});
@@ -167,7 +196,7 @@ export function AdvertiserLogDetail({
       clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current?.session, current?.created_at, sessions]);
+  }, [current?.session, current?.created_at, sessions, prev.loaded, prev.data, includeShot]);
 
   const handleDownloadJpeg = () => {
     if (!jpeg.blob || !jpeg.fileName) return;
@@ -216,7 +245,7 @@ export function AdvertiserLogDetail({
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/80 p-3 md:p-8 overflow-y-auto" onClick={onClose}>
-      {current && <AdvertiserSessionReport ref={reportRef} clientName={log.client_name} reportDate={log.report_date} data={current} />}
+      {current && <AdvertiserSessionReport ref={reportRef} clientName={log.client_name} reportDate={log.report_date} data={current} previous={prev.data} includeScreenshot={includeShot} />}
       <div className="w-full max-w-5xl rounded-2xl border border-[#d4af37]/30 bg-[#0e0f14] shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-4 p-5 border-b border-zinc-800">
           <div>
@@ -325,6 +354,45 @@ export function AdvertiserLogDetail({
                   </p>
                 )}
                 {pdf.status === 'ready' && pdf.fileName && <p className="text-[10px] font-mono text-zinc-600">{pdf.fileName} · no recommendation included</p>}
+
+                <div className="flex flex-wrap items-center gap-3">
+                  {saldoDisplay(current.sisa_saldo_iklan) && (
+                    <div className="rounded-lg border border-[#d4af37]/30 bg-[#d4af37]/10 px-3 py-2">
+                      <div className="text-[9px] font-bold uppercase tracking-wider text-[#d4af37]">Sisa saldo iklan</div>
+                      <div className="text-base font-extrabold text-[#f5d77f] font-mono">{saldoDisplay(current.sisa_saldo_iklan)}</div>
+                    </div>
+                  )}
+                  <label className="inline-flex items-center gap-2 text-[11px] text-zinc-400 cursor-pointer">
+                    <input type="checkbox" checked={includeShot} onChange={(e) => setIncludeShot(e.target.checked)} className="accent-[#d4af37]" />
+                    Include screenshot in PDF / JPEG <span className="text-zinc-600">(off = lighter file)</span>
+                  </label>
+                </div>
+
+                <div className="rounded-xl border border-zinc-800 bg-black/20 p-3 space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h4 className="text-xs font-extrabold uppercase tracking-wider text-[#d4af37]">Perubahan Ads</h4>
+                    <span className="text-[11px] text-zinc-500">
+                      {!prev.loaded ? 'loading...' : prev.data ? `dibandingkan dengan ${previousLabel(prev.data)}` : 'belum ada sesi sebelumnya'}
+                    </span>
+                  </div>
+                  {prev.loaded && prev.data &&
+                    compareSessions(current, prev.data).map((section) => (
+                      <div key={section.title}>
+                        <div className="text-[11px] font-bold text-zinc-300 mb-1">{section.title}</div>
+                        <ol className="space-y-1">
+                          {section.lines.map((line, i) => (
+                            <li key={i} className={`text-xs flex gap-2 ${line.changed ? 'text-[#f5d77f] font-semibold' : 'text-zinc-400'}`}>
+                              <span className="w-5 text-zinc-600">{i + 1}.</span>
+                              <span>
+                                {!line.label.startsWith('Baris ') && <span className="text-zinc-500">{line.label}: </span>}
+                                {line.text}
+                              </span>
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    ))}
+                </div>
 
                 {current.note && (
                   <div className="rounded-lg border border-zinc-800 bg-black/30 px-3 py-2">

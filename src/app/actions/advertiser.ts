@@ -136,28 +136,39 @@ export async function saveAdvertiserReport(
   data_group: any,
   data_mandiri: any,
   screenshotUrl: string | null,
-  note: string | null
+  note: string | null,
+  sisaSaldo: string | null = null
 ) {
   const supabase = await createClient();
   const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
   const { data: userData } = await supabase.auth.getUser();
 
-  const { error } = await supabase
+  const base = {
+    workspace_id: activeWorkspaceId,
+    client_id: clientId,
+    report_date: reportDate,
+    session,
+    data_inkubasi,
+    data_group,
+    data_mandiri,
+    screenshot_url: screenshotUrl,
+    user_id: userData?.user?.id,
+    note,
+  };
+
+  let { error } = await supabase
     .from('advertiser_reports')
-    .upsert({
-      workspace_id: activeWorkspaceId,
-      client_id: clientId,
-      report_date: reportDate,
-      session,
-      data_inkubasi,
-      data_group,
-      data_mandiri,
-      screenshot_url: screenshotUrl,
-      user_id: userData?.user?.id,
-      note
-    }, {
-      onConflict: 'client_id, report_date, session'
-    });
+    .upsert({ ...base, sisa_saldo_iklan: sisaSaldo }, { onConflict: 'client_id, report_date, session' });
+
+  // The saldo column comes from supabase/migrations/20260930_advertiser_saldo.sql. Until that has been run,
+  // save everything else instead of losing the whole session, and say so.
+  if (error && (error.code === '42703' || error.code === 'PGRST204' || /sisa_saldo_iklan/.test(error.message))) {
+    const retry = await supabase.from('advertiser_reports').upsert(base, { onConflict: 'client_id, report_date, session' });
+    if (!retry.error) {
+      return { success: true, warning: 'Saved, but Sisa Saldo Iklan was NOT stored: run supabase/migrations/20260930_advertiser_saldo.sql in Supabase first.' };
+    }
+    error = retry.error;
+  }
 
   if (error) {
     console.error('Error saving advertiser report:', error);
@@ -197,4 +208,32 @@ export async function fetchAdvertiserLogDetail(clientId: string, reportDate: str
   return {
     data: (data || []).map((row: any) => ({ ...row, advertiser_name: names[row.user_id] || 'Unknown' })),
   };
+}
+
+/**
+ * The session right before this one for the same client: the latest earlier session on the same day,
+ * otherwise the last session of an earlier day (e.g. 1 Oct sesi 1 -> 30 Sep sesi 2 or 3).
+ */
+export async function fetchPreviousSession(clientId: string, reportDate: string, session: number) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(reportDate) || !Number.isInteger(session)) return { data: null };
+
+  const supabase = await createClient();
+  const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+
+  const { data, error } = await supabase
+    .from('advertiser_reports')
+    .select('session, report_date, data_inkubasi, data_group, data_mandiri')
+    .eq('workspace_id', activeWorkspaceId)
+    .eq('client_id', clientId)
+    .or(`report_date.lt.${reportDate},and(report_date.eq.${reportDate},session.lt.${session})`)
+    .order('report_date', { ascending: false })
+    .order('session', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Error fetching previous session:', error);
+    return { data: null };
+  }
+  return { data };
 }

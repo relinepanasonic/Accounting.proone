@@ -27,6 +27,7 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
 
   // Note for the session
   const [sessionNote, setSessionNote] = useState('');
+  const [sisaSaldo, setSisaSaldo] = useState('');
 
   // Data state per tab
   const [inkubasiData, setInkubasiData] = useState<any[]>([]);
@@ -86,12 +87,15 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
         setMandiriData(res.data.data_mandiri || []);
         setScreenshot(res.data.screenshot_url || null);
         setSessionNote(res.data.note || '');
+        // A historical fallback record (no exact report for this session yet) must not copy yesterday's balance.
+        setSisaSaldo(res.isHistorical ? '' : res.data.sisa_saldo_iklan || '');
       } else {
         setInkubasiData(Array(5).fill(null).map(() => getEmptyRowInkubasiGroup()));
         setGroupData(Array(5).fill(null).map(() => getEmptyRowInkubasiGroup('Hero', 'Group Hero 1')));
         setMandiriData(Array(5).fill(null).map(() => getEmptyRowMandiri()));
         setScreenshot(null);
         setSessionNote('');
+        setSisaSaldo('');
       }
       setIsLoading(false);
     }
@@ -100,18 +104,25 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
 
   const handleSave = async () => {
     setIsSaving(true);
-    await saveAdvertiserReport(
-      initialClient, 
-      initialDate, 
-      initialSession, 
-      inkubasiData, 
-      groupData, 
-      mandiriData, 
+    const result = await saveAdvertiserReport(
+      initialClient,
+      initialDate,
+      initialSession,
+      inkubasiData,
+      groupData,
+      mandiriData,
       screenshot,
-      sessionNote
+      sessionNote,
+      sisaSaldo.trim() || null
     );
     setIsSaving(false);
-    alert('Adjustments saved successfully!');
+    if (!result.success) {
+      alert('Could not save: ' + (result.error || 'unknown error'));
+    } else if ('warning' in result && result.warning) {
+      alert(result.warning);
+    } else {
+      alert('Adjustments saved successfully!');
+    }
   };
 
   const formatCurrency = (val: string) => {
@@ -339,6 +350,17 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
             onChange={(e) => setSessionNote(e.target.value)}
             placeholder="General session note (will appear in Advertiser Log)..."
             className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-300 focus:outline-none focus:border-[#d4af37] transition-colors"
+          />
+        </div>
+        <div className="w-full md:w-72">
+          <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Sisa Saldo Iklan</label>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={sisaSaldo}
+            onChange={(e) => setSisaSaldo(formatCurrency(e.target.value))}
+            placeholder="Rp 0"
+            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-[#f5d77f] font-mono focus:outline-none focus:border-[#d4af37] transition-colors"
           />
         </div>
       </div>

@@ -1,5 +1,17 @@
 import React from 'react';
-import { hasData, longReportDate, normalizeGroup, num, rupiah, text, totals } from '@/lib/advertiser/report-utils';
+import {
+  compareSessions,
+  hasData,
+  longReportDate,
+  normalizeGroup,
+  num,
+  previousLabel,
+  rupiah,
+  saldoDisplay,
+  text,
+  totals,
+  type PreviousSession,
+} from '@/lib/advertiser/report-utils';
 
 export interface ReportSession {
   session: number;
@@ -8,6 +20,7 @@ export interface ReportSession {
   data_group: any;
   data_mandiri: any;
   screenshot_url: string | null;
+  sisa_saldo_iklan?: string | null;
   created_at: string;
   advertiser_name: string;
 }
@@ -79,11 +92,16 @@ function RowsTable({ rows, mandiri }: { rows: any[]; mandiri?: boolean }) {
 const block: React.CSSProperties = { padding: '18px 32px', background: '#ffffff', fontFamily: 'Arial, Helvetica, sans-serif', color: '#111827' };
 const sectionTitle: React.CSSProperties = { fontSize: 13, fontWeight: 800, color: '#8a6d1d', textTransform: 'uppercase', letterSpacing: 1, margin: '0 0 10px' };
 
-export const AdvertiserSessionReport = React.forwardRef<HTMLDivElement, { clientName: string; reportDate: string; data: ReportSession }>(
-  function AdvertiserSessionReport({ clientName, reportDate, data }, ref) {
+export const AdvertiserSessionReport = React.forwardRef<
+  HTMLDivElement,
+  { clientName: string; reportDate: string; data: ReportSession; previous?: PreviousSession | null; includeScreenshot?: boolean }
+>(
+  function AdvertiserSessionReport({ clientName, reportDate, data, previous = null, includeScreenshot = false }, ref) {
     const inkubasi = (Array.isArray(data.data_inkubasi) ? data.data_inkubasi : []).filter(hasData);
     const groups = normalizeGroup(data.data_group).filter(hasData);
     const mandiri = (Array.isArray(data.data_mandiri) ? data.data_mandiri : []).filter(hasData);
+    const saldo = saldoDisplay(data.sisa_saldo_iklan);
+    const changes = compareSessions(data, previous);
     const groupKeys = Array.from(new Set(groups.map((g) => `${g.groupCategory || ''}|${g.groupName || 'Group'}`)));
 
     return (
@@ -96,6 +114,12 @@ export const AdvertiserSessionReport = React.forwardRef<HTMLDivElement, { client
           <div style={{ fontSize: 12, color: '#4b5563' }}>
             {longReportDate(reportDate)} · Advertiser: {data.advertiser_name}
           </div>
+          {saldo && (
+            <div style={{ marginTop: 10, display: 'inline-block', border: '1px solid #e5e7eb', background: '#f9fafb', borderRadius: 8, padding: '8px 12px' }}>
+              <div style={{ fontSize: 9, textTransform: 'uppercase', color: '#6b7280', fontWeight: 700 }}>Sisa saldo iklan</div>
+              <div style={{ fontSize: 18, fontWeight: 800 }}>{saldo}</div>
+            </div>
+          )}
           {data.note && (
             <div style={{ marginTop: 14, border: '1px solid #e5e7eb', background: '#f9fafb', borderRadius: 8, padding: '10px 12px' }}>
               <div style={{ fontSize: 9, textTransform: 'uppercase', color: '#6b7280', fontWeight: 700 }}>Catatan</div>
@@ -104,7 +128,33 @@ export const AdvertiserSessionReport = React.forwardRef<HTMLDivElement, { client
           )}
         </div>
 
-        {data.screenshot_url && (
+        <div data-pdf-block style={block}>
+          <div style={sectionTitle}>Perubahan Ads</div>
+          {previous ? (
+            <>
+              <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 10 }}>Dibandingkan dengan {previousLabel(previous)}</div>
+              {changes.length === 0 && <div style={{ fontSize: 12, color: '#6b7280' }}>Belum ada data iklan untuk dibandingkan.</div>}
+              {changes.map((section) => (
+                <div key={section.title} style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: '#374151', marginBottom: 4 }}>{section.title}</div>
+                  {section.lines.map((line, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 8, fontSize: 12, padding: '3px 0', fontWeight: line.changed ? 700 : 400 }}>
+                      <span style={{ width: 20, color: '#6b7280' }}>{i + 1}.</span>
+                      <span style={{ flex: 1 }}>
+                        {line.label.startsWith('Baris ') ? '' : <span style={{ color: '#6b7280' }}>{line.label}: </span>}
+                        {line.text}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </>
+          ) : (
+            <div style={{ fontSize: 12, color: '#6b7280' }}>Belum ada sesi sebelumnya untuk dibandingkan.</div>
+          )}
+        </div>
+
+        {includeScreenshot && data.screenshot_url && (
           <div data-pdf-block style={block}>
             <div style={sectionTitle}>Screenshot</div>
             {/* eslint-disable-next-line @next/next/no-img-element */}

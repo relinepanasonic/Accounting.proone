@@ -1033,3 +1033,76 @@ export async function getClientExpenseHistory(clientId: string) {
     return { success: false, error: err?.message || 'Failed to fetch expense history.' };
   }
 }
+
+/**
+ * Server Action: change a member's role here and which of the inviter's workspaces they can enter.
+ * The role is applied to the current workspace and to workspaces being added; roles the person already has
+ * in other workspaces are left alone.
+ */
+export async function updateTeamMemberAccess(payload: {
+  memberId: string;
+  role: 'superadmin' | 'accounting' | 'admin' | 'advertiser' | 'client';
+  workspaceIds: string[];
+}) {
+  try {
+    const supabase = await createClient();
+    const ctx = await getAuthenticatedWorkspaceContext(supabase);
+
+    if (ctx.role !== 'superadmin' && ctx.role !== 'founder') {
+      return { success: false, error: 'Only the Founder or a Superadmin can change access.' };
+    }
+    if (!['superadmin', 'accounting', 'admin', 'advertiser', 'client'].includes(payload.role)) {
+      return { success: false, error: 'Invalid role.' };
+    }
+
+    const manageable = new Set(ctx.availableWorkspaces.filter((w) => w.role === 'founder' || w.role === 'superadmin').map((w) => w.id));
+    const selected = Array.from(new Set(payload.workspaceIds.filter((id) => manageable.has(id))));
+    if (selected.length === 0) {
+      return { success: false, error: 'Choose at least one workspace (use the trash icon to remove the member).' };
+    }
+
+    const { data: member } = await supabase
+      .from('workspace_members')
+      .select('id, user_id, email, display_name, role')
+      .eq('id', payload.memberId)
+      .eq('workspace_id', ctx.activeWorkspaceId)
+      .single();
+    if (!member) return { success: false, error: 'Member not found.' };
+    if (member.user_id && member.user_id === ctx.userId) return { success: false, error: 'You cannot change your own access.' };
+    if (member.role === 'superadmin' && ctx.role !== 'founder') {
+      return { success: false, error: 'Only the Founder can change a Superadmin.' };
+    }
+
+    const identity = (workspaceId: string) => {
+      const q = supabase.from('workspace_members').select('id, role').eq('workspace_id', workspaceId);
+      return member.user_id ? q.eq('user_id', member.user_id) : q.ilike('email', member.email || '');
+    };
+
+    for (const workspaceId of manageable) {
+      const { data: existing } = await identity(workspaceId).maybeSingle();
+      const wanted = selected.includes(workspaceId);
+
+      if (wanted && !existing) {
+        const { error } = await supabase.from('workspace_members').insert({
+          workspace_id: workspaceId,
+          user_id: member.user_id,
+          email: member.email,
+          display_name: member.display_name,
+          role: payload.role,
+        });
+        if (error) return { success: false, error: error.message };
+      } else if (wanted && existing && workspaceId === ctx.activeWorkspaceId) {
+        const { error } = await supabase.from('workspace_members').update({ role: payload.role }).eq('id', existing.id);
+        if (error) return { success: false, error: error.message };
+      } else if (!wanted && existing) {
+        const { error } = await supabase.from('workspace_members').delete().eq('id', existing.id);
+        if (error) return { success: false, error: error.message };
+      }
+    }
+
+    revalidatePath('/settings/team');
+    return { success: true, removedFromCurrent: !selected.includes(ctx.activeWorkspaceId) };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to update access.' };
+  }
+}

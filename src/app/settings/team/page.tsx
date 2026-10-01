@@ -70,6 +70,25 @@ export default async function TeamSettingsPage() {
     .from('profiles')
     .select('id, email, full_name');
 
+  // Workspaces this person manages (founder: all). Access can only be granted to these.
+  const manageableWorkspaces = (wsCtx?.availableWorkspaces || [])
+    .filter((w) => w.role === 'founder' || w.role === 'superadmin')
+    .map((w) => ({ id: w.id, name: w.name }));
+
+  // Which of those workspaces each member can already enter.
+  const memberUserIds = (rawMembers || []).map((m: any) => m.user_id).filter(Boolean);
+  const accessByUser = new Map<string, string[]>();
+  if (memberUserIds.length > 0 && manageableWorkspaces.length > 0) {
+    const { data: access } = await queryClient
+      .from('workspace_members')
+      .select('user_id, workspace_id')
+      .in('workspace_id', manageableWorkspaces.map((w) => w.id))
+      .in('user_id', memberUserIds);
+    (access || []).forEach((a: any) => {
+      accessByUser.set(a.user_id, [...(accessByUser.get(a.user_id) || []), a.workspace_id]);
+    });
+  }
+
   const memberList: TeamMemberRecord[] = (rawMembers || [])
     .map((m: any, idx: number) => {
       const profile = profiles?.find((p) => p.id === m.user_id);
@@ -82,6 +101,7 @@ export default async function TeamSettingsPage() {
         name: profile?.full_name || `Workspace Staff #${idx + 1}`,
         role: isFounderUser ? 'founder' : (m.role || 'accounting'),
         isCurrentUser: user?.id === m.user_id,
+        workspaceIds: accessByUser.get(m.user_id) || [activeWorkspaceId],
       };
     })
     .filter((m: any) => {
@@ -92,5 +112,12 @@ export default async function TeamSettingsPage() {
       return true;
     });
 
-  return <TeamManager initialMembers={memberList} currentUserRole={currentUserRole} />;
+  return (
+    <TeamManager
+      initialMembers={memberList}
+      currentUserRole={currentUserRole}
+      workspaces={manageableWorkspaces}
+      activeWorkspaceId={activeWorkspaceId}
+    />
+  );
 }

@@ -13,7 +13,7 @@ interface NavigationShellProps {
 
 export function NavigationShell({ sidebar, bottomNav, children, limited }: NavigationShellProps) {
   const pathname = usePathname();
-  const isAuthPage = pathname === '/login' || pathname === '/register';
+  const isAuthPage = pathname === '/login' || pathname === '/register' || pathname.startsWith('/workspaces');
 
   return (
     <>

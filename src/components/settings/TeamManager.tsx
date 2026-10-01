@@ -4,7 +4,7 @@ import React, { useState, useTransition } from 'react';
 import { UserPlus, ShieldAlert, ShieldCheck, Loader2, AlertCircle, Check, Trash2, Edit2, X, Save, Copy, Link2 } from 'lucide-react';
 import { generateInviteLink } from '@/app/actions/invite';
 import Link from 'next/link';
-import { deleteTeamMember, updateTeamMemberRole } from '@/app/actions/settings';
+import { deleteTeamMember, updateTeamMemberAccess } from '@/app/actions/settings';
 
 export interface TeamMemberRecord {
   id: string;
@@ -12,14 +12,17 @@ export interface TeamMemberRecord {
   name?: string;
   role: 'superadmin' | 'accounting' | 'admin' | 'advertiser' | 'client' | 'founder';
   isCurrentUser?: boolean;
+  workspaceIds?: string[];
 }
 
 interface TeamManagerProps {
   initialMembers: TeamMemberRecord[];
   currentUserRole: string;
+  workspaces: { id: string; name: string }[];
+  activeWorkspaceId: string;
 }
 
-export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProps) {
+export function TeamManager({ initialMembers, currentUserRole, workspaces, activeWorkspaceId }: TeamManagerProps) {
   const [members, setMembers] = useState<TeamMemberRecord[]>(initialMembers);
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
@@ -32,6 +35,11 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editRole, setEditRole] = useState<'superadmin' | 'accounting' | 'admin' | 'advertiser' | 'client' | 'founder'>('accounting');
   const [isPending, startTransition] = useTransition();
+  // Workspaces a new member can enter (default: the current one) and, while editing, an existing member's.
+  const [inviteWorkspaceIds, setInviteWorkspaceIds] = useState<string[]>([activeWorkspaceId]);
+  const [editWorkspaceIds, setEditWorkspaceIds] = useState<string[]>([]);
+  const workspaceName = (id: string) => workspaces.find((w) => w.id === id)?.name || 'Workspace';
+  const toggleId = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
 
   const handleDelete = (id: string) => {
     if (!confirm('Are you sure you want to revoke clearance for this member?')) return;
@@ -53,15 +61,24 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
   const handleUpdateRole = (id: string) => {
     startTransition(async () => {
       try {
-        const res = await updateTeamMemberRole({ memberId: id, role: editRole });
+        const res = await updateTeamMemberAccess({
+          memberId: id,
+          role: editRole as 'superadmin' | 'accounting' | 'admin' | 'advertiser' | 'client',
+          workspaceIds: editWorkspaceIds,
+        });
         if (res.success) {
-          setMembers((prev) => prev.map((m) => (m.id === id ? { ...m, role: editRole } : m)));
+          if ('removedFromCurrent' in res && res.removedFromCurrent) {
+            // No longer a member of this workspace: drop them from this list.
+            setMembers((prev) => prev.filter((m) => m.id !== id));
+          } else {
+            setMembers((prev) => prev.map((m) => (m.id === id ? { ...m, role: editRole, workspaceIds: editWorkspaceIds } : m)));
+          }
           setEditingId(null);
         } else {
-          setErrorMsg(res.error || 'Failed to update role.');
+          setErrorMsg(res.error || 'Failed to update access.');
         }
       } catch (err: any) {
-        setErrorMsg(err.message || 'Error updating role.');
+        setErrorMsg(err.message || 'Error updating access.');
       }
     });
   };
@@ -76,7 +93,7 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
 
     startTransition(async () => {
       try {
-        const res = await generateInviteLink({ email, username, fullName: name, role });
+        const res = await generateInviteLink({ email, username, fullName: name, role, workspaceIds: inviteWorkspaceIds });
 
         if (!res.success) {
           setErrorMsg(res.error || 'Failed to generate invite link.');
@@ -87,6 +104,7 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
               email,
               name: name || email.split('@')[0],
               role,
+              workspaceIds: inviteWorkspaceIds,
             },
             ...prev,
           ]);
@@ -225,11 +243,33 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
               <option value="superadmin">SUPERADMIN (Full Ownership & Settings)</option>
             </select>
           </div>
+
+          {workspaces.length > 0 && (
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1">
+                WORKSPACES THEY CAN ENTER *
+              </label>
+              <div className="rounded-xl border border-zinc-800 bg-zinc-950/80 divide-y divide-zinc-900">
+                {workspaces.map((w) => (
+                  <label key={w.id} className="flex items-center gap-2.5 px-3 py-2 text-xs text-zinc-200 cursor-pointer hover:bg-zinc-900/60">
+                    <input
+                      type="checkbox"
+                      checked={inviteWorkspaceIds.includes(w.id)}
+                      onChange={() => setInviteWorkspaceIds((list) => toggleId(list, w.id))}
+                      className="accent-[#d4af37]"
+                    />
+                    <span className="truncate">{w.name}</span>
+                  </label>
+                ))}
+              </div>
+              <p className="mt-1 text-[10px] text-zinc-500">The role above applies in every workspace you tick.</p>
+            </div>
+          )}
         </div>
 
         <button
           type="submit"
-          disabled={isPending || !email || !username || !name}
+          disabled={isPending || !email || !username || !name || inviteWorkspaceIds.length === 0}
           className="gold-btn w-full inline-flex items-center justify-center gap-2 py-3 rounded-full text-xs font-extrabold uppercase tracking-wider shadow-[0_0_20px_rgba(212,175,55,0.3)] disabled:opacity-50"
         >
           {isPending ? (
@@ -272,6 +312,33 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
                       )}
                     </div>
                     <div className="text-[11px] text-zinc-400 font-mono">{m.email}</div>
+                    {editingId === m.id ? (
+                      <div className="mt-2 space-y-1">
+                        <div className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">Can enter</div>
+                        {workspaces.map((w) => (
+                          <label key={w.id} className="flex items-center gap-2 text-[11px] text-zinc-200 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={editWorkspaceIds.includes(w.id)}
+                              onChange={() => setEditWorkspaceIds((list) => toggleId(list, w.id))}
+                              className="accent-[#d4af37]"
+                            />
+                            {w.name}
+                          </label>
+                        ))}
+                        <div className="text-[9px] text-zinc-500">Role applies here and to workspaces you add.</div>
+                      </div>
+                    ) : (
+                      workspaces.length > 1 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {(m.workspaceIds || []).map((id) => (
+                            <span key={id} className="text-[9px] px-1.5 py-0.5 rounded border border-zinc-700 text-zinc-400">
+                              {workspaceName(id)}
+                            </span>
+                          ))}
+                        </div>
+                      )
+                    )}
                   </td>
                   <td className="py-3.5 px-3">
                     {editingId === m.id ? (
@@ -323,6 +390,7 @@ export function TeamManager({ initialMembers, currentUserRole }: TeamManagerProp
                               onClick={() => {
                                 setEditingId(m.id);
                                 setEditRole(m.role);
+                                setEditWorkspaceIds(m.workspaceIds && m.workspaceIds.length > 0 ? m.workspaceIds : [activeWorkspaceId]);
                               }}
                               className="text-[#d4af37]/60 hover:text-[#f5d77f] transition-colors ml-2"
                               title="Edit Role"

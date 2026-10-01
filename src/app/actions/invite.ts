@@ -9,6 +9,7 @@ export async function generateInviteLink(formData: {
   username: string;
   fullName: string;
   role: string;
+  workspaceIds?: string[];
 }): Promise<{ success?: boolean; link?: string; error?: string }> {
   const wsCtx = await getAuthenticatedWorkspaceContext();
 
@@ -22,6 +23,14 @@ export async function generateInviteLink(formData: {
 
   if (!formData.email || !formData.username || !formData.fullName) {
     return { error: 'Email, username and name are all required.' };
+  }
+
+  // Workspaces the inviter may grant access to: only the ones where they are founder / superadmin.
+  const grantable = new Set(wsCtx.availableWorkspaces.filter((w) => w.role === 'founder' || w.role === 'superadmin').map((w) => w.id));
+  const requested = formData.workspaceIds && formData.workspaceIds.length > 0 ? formData.workspaceIds : [wsCtx.activeWorkspaceId];
+  const targetWorkspaceIds = Array.from(new Set(requested.filter((id) => grantable.has(id))));
+  if (targetWorkspaceIds.length === 0) {
+    return { error: 'Choose at least one workspace you manage.' };
   }
 
   const adminClient = createAdminClient(
@@ -68,15 +77,15 @@ export async function generateInviteLink(formData: {
     // Non-fatal: continue
   }
 
-  // 3. Add the user to the current workspace with the assigned role
+  // 3. Add the user to every chosen workspace with the assigned role
   const { error: memberError } = await adminClient.from('workspace_members').upsert(
-    {
-      workspace_id: wsCtx.activeWorkspaceId,
+    targetWorkspaceIds.map((workspaceId) => ({
+      workspace_id: workspaceId,
       user_id: newUserId,
       role: formData.role,
       email: formData.email.toLowerCase().trim(),
       display_name: formData.fullName.trim(),
-    },
+    })),
     { onConflict: 'workspace_id,user_id' }
   );
 

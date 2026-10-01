@@ -157,6 +157,16 @@ export function WorkspaceSwitcher({
               type="button"
               onClick={() => {
                 setIsOpen(false);
+                window.location.assign('/workspaces');
+              }}
+              className="w-full py-2 mb-1 rounded-xl text-center text-[10px] font-bold tracking-wider text-zinc-300 bg-zinc-800/80 hover:bg-zinc-700/80 hover:text-white transition-all uppercase"
+            >
+              ALL WORKSPACES
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsOpen(false);
                 router.push(`/settings/workspaces/${activeWorkspaceId}`);
               }}
               className="w-full py-2 mb-1 rounded-xl text-center text-[10px] font-bold tracking-wider text-zinc-300 bg-zinc-800/80 hover:bg-zinc-700/80 hover:text-white transition-all uppercase"

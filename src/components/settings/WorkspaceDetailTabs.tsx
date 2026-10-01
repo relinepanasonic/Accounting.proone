@@ -1393,6 +1393,8 @@ export function WorkspaceDetailTabs({
               isCurrentUser: s.user_id === currentUserId
             }))}
             currentUserRole={currentUserRole}
+            workspaces={[]}
+            activeWorkspaceId={targetWorkspaceId}
           />
           
           <div className="bg-white/5 backdrop-blur-md border border-yellow-600/30 rounded-3xl p-6 sm:p-8 space-y-6 shadow-[0_0_40px_rgba(0,0,0,0.5)]">

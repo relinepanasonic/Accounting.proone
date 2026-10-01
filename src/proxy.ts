@@ -5,7 +5,7 @@ import { isFounderEmail } from '@/lib/auth/founders';
 
 // advertiser / client roles may open ONLY these areas. Every finance route is closed to them.
 const LIMITED_ROLE_HOME = '/productivity/pabrik-sosmed/dashboard';
-const LIMITED_ROLE_ALLOWED = ['/productivity/pabrik-sosmed', '/no-access'];
+const LIMITED_ROLE_ALLOWED = ['/productivity/pabrik-sosmed', '/no-access', '/workspaces'];
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({
@@ -97,6 +97,14 @@ export async function proxy(request: NextRequest) {
 
     if (role === 'none' && pathname !== '/no-access') {
       return pathname.startsWith('/api/') ? NextResponse.json({ error: 'Forbidden' }, { status: 403 }) : redirectTo('/no-access');
+    }
+
+    // Landing page: once per browser session, choose which workspace to enter. The cookie holds the user id,
+    // so a different account on the same browser is asked again.
+    const isPage = request.method === 'GET' && !pathname.startsWith('/api/');
+    const onLanding = pathname === '/workspaces' || pathname.startsWith('/workspaces/') || pathname === '/no-access';
+    if (isPage && !onLanding && request.cookies.get('workspace_chosen')?.value !== user.id) {
+      return redirectTo('/workspaces');
     }
 
     if (isAdminApi && role !== 'founder' && role !== 'superadmin') {

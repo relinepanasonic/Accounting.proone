@@ -5,6 +5,7 @@ import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
+import { isFounderEmail } from '@/lib/auth/founders';
 
 export interface BankAccountItem {
   id?: string;
@@ -959,7 +960,7 @@ export async function deleteTeamMember(payload: { memberId: string }) {
     // Attempt to delete the member from the workspace
     const { data: member, error: fetchError } = await supabase
       .from('workspace_members')
-      .select('user_id, role')
+      .select('user_id, role, email')
       .eq('id', payload.memberId)
       .eq('workspace_id', workspaceId)
       .single();
@@ -970,6 +971,11 @@ export async function deleteTeamMember(payload: { memberId: string }) {
 
     if (member.user_id && member.user_id === userId) {
       return { success: false, error: 'You cannot remove your own access.' };
+    }
+
+    // Founders are defined by email and are never removed from here.
+    if (isFounderEmail(member.email)) {
+      return { success: false, error: 'The Founder cannot be removed.' };
     }
 
     // Only the Founder can remove a Superadmin.
@@ -987,9 +993,27 @@ export async function deleteTeamMember(payload: { memberId: string }) {
       return { success: false, error: deleteError.message };
     }
 
-    // Note: We don't delete their auth.users account, just their workspace access.
+    // If that was their last workspace, delete the login itself so the email can be invited again as a new person.
+    // (Past records they saved keep working, but show no name.)
+    let loginDeleted = false;
+    let loginError: string | null = null;
+    if (member.user_id) {
+      const admin = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+      const { count } = await admin
+        .from('workspace_members')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', member.user_id);
+
+      if (!count) {
+        await admin.from('profiles').delete().eq('id', member.user_id);
+        const { error: authError } = await admin.auth.admin.deleteUser(member.user_id);
+        if (authError) loginError = authError.message;
+        else loginDeleted = true;
+      }
+    }
+
     revalidatePath('/settings/team');
-    return { success: true };
+    return { success: true, loginDeleted, loginError };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Failed to remove team member.' };
   }

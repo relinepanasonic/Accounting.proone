@@ -50,13 +50,19 @@ export function TeamManager({ initialMembers, currentUserRole, workspaces, activ
   const toggleId = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
 
   const handleDelete = (id: string) => {
-    if (!confirm('Are you sure you want to revoke clearance for this member?')) return;
+    if (!confirm('Remove this person?\n\nIf this is the only workspace they belong to, their login is deleted completely, so the same email can be invited again as a new person.')) return;
     
     startTransition(async () => {
       try {
         const res = await deleteTeamMember({ memberId: id });
         if (res.success) {
           setMembers((prev) => prev.filter((m) => m.id !== id));
+          if ('loginError' in res && res.loginError) {
+            setErrorMsg(`Removed from this workspace, but the login could not be deleted: ${res.loginError}`);
+          } else if ('loginDeleted' in res && res.loginDeleted) {
+            setSuccessMsg('Member removed and their login deleted. That email can be invited again.');
+            setInviteLink(null);
+          }
         } else {
           setErrorMsg(res.error || 'Failed to remove member.');
         }

@@ -50,9 +50,10 @@ export async function POST(request: Request) {
   if (!title || brief.length < 5) return NextResponse.json({ error: 'Write a title and the brief.' }, { status: 400 });
   const t = timing(body);
   if ('error' in t) return NextResponse.json({ error: t.error }, { status: 400 });
+  if (typeof body?.teamId !== 'string' || !body.teamId) return NextResponse.json({ error: 'Choose a team. Activate the AI Scout Team first.' }, { status: 400 });
 
   const { error } = await access.supabase.from('ai_schedules').insert({
-    workspace_id: access.workspaceId, team_id: typeof body?.teamId === 'string' && body.teamId ? body.teamId : null,
+    workspace_id: access.workspaceId, team_id: body.teamId,
     title, brief, ...t, enabled: true, created_by: access.userId,
   });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

@@ -57,16 +57,6 @@ export interface OfficeTask {
 
 type RosterEntry = Omit<OfficeAgent, 'id' | 'team_id' | 'enabled'>;
 
-const GENERAL_AGENTS: RosterEntry[] = [
-  { name: 'Atlas', title: 'Director (plans the work)', floor: 3, kind: 'planner', provider: 'anthropic', model: 'claude-sonnet-5-5' },
-  { name: 'Vera', title: 'Inspector (quality control)', floor: 3, kind: 'qc', provider: 'anthropic', model: 'claude-sonnet-5-5' },
-  { name: 'Nova', title: 'Specialist', floor: 2, kind: 'worker', provider: 'gemini', model: 'gemini-3.8-flash' },
-  { name: 'Kiro', title: 'Specialist', floor: 2, kind: 'worker', provider: 'gemini', model: 'gemini-3.8-flash' },
-  { name: 'Bit', title: 'Doer', floor: 1, kind: 'worker', provider: 'groq', model: 'openai/gpt-oss-20b' },
-  { name: 'Dot', title: 'Doer', floor: 1, kind: 'worker', provider: 'groq', model: 'openai/gpt-oss-20b' },
-  { name: 'Pix', title: 'Doer', floor: 1, kind: 'worker', provider: 'groq', model: 'openai/gpt-oss-20b' },
-  { name: 'Zap', title: 'Doer', floor: 1, kind: 'worker', provider: 'groq', model: 'openai/gpt-oss-20b' },
-];
 
 export interface TeamProfile {
   slug: string;
@@ -86,42 +76,44 @@ export interface TeamProfile {
 }
 
 export const TEAM_PROFILES: Record<string, TeamProfile> = {
-  'team-creator': {
-    slug: 'team-creator',
-    name: 'AI Team Creator',
-    mission: 'Design new, specialized AI teams: research what is possible, pick the best model for each job, and equip every agent with the right skills.',
+  'scout-team': {
+    slug: 'scout-team',
+    name: 'AI Scout Team',
+    mission:
+      'Recommend the right AI team for any new job (Instagram, SEO, website builder...): research what our AI APIs can do, find reusable skills on GitHub, and plan how many agents are needed, each with one skill.',
     deepByDefault: false,
-    maxSubtasks: 3,
+    maxSubtasks: 2,
     roster: [
-      { name: 'Mentor', title: 'Research Director (boss)', floor: 3, kind: 'planner', provider: 'anthropic', model: 'claude-sonnet-5-5' },
-      { name: 'Scout', title: 'Skill & Model Researcher', floor: 2, kind: 'researcher', provider: 'anthropic', model: 'claude-haiku-4-5' },
-      { name: 'Forge', title: 'Skill Installer', floor: 1, kind: 'installer', provider: 'groq', model: 'openai/gpt-oss-20b' },
+      { name: 'Jax', title: 'Team Lead (plans, checks, writes the recommendation)', floor: 3, kind: 'planner', provider: 'anthropic', model: 'claude-sonnet-5-5' },
+      { name: 'Rex', title: 'Model & API Researcher', floor: 2, kind: 'researcher', provider: 'anthropic', model: 'claude-haiku-4-5' },
+      { name: 'Gil', title: 'GitHub Skill Hunter', floor: 2, kind: 'researcher', provider: 'anthropic', model: 'claude-haiku-4-5' },
     ],
     plannerGuide:
-      'You run the AI Team Creator. The owner wants new AI teams that are specialized and skilled. ' +
-      'Research ONLY what the brief asks for. If the brief asks about team structure and skills, plan research on skills and team structure; ' +
-      'do NOT add model or price comparisons unless the brief asks which AI model to use, or asks you to build or equip the team. ' +
-      'Break the brief into research questions for Scout (level "specialist"). Give Scout ONE focused question per subtask, ' +
-      'and ask for a short answer (under 250 words). Research is billed per page read, so use as few subtasks as the brief allows (at most 3). ' +
-      'Use level "doer" (Forge, the skill installer) only when the brief asks to write or install skills for a named agent; then the subtask must list the agent names and what each skill must teach. ' +
-      'Do not invent facts: research is only what Scout finds.',
+      'You are Jax, lead of the AI Scout Team. The owner asks which AI team to build for a new job (for example an Instagram team, SEO team or website builder team). ' +
+      'You have two helpers: Rex researches AI models and APIs; Gil finds reusable skills on GitHub. Use only the helpers the brief needs (one or two, never more). ' +
+      'Give each helper ONE focused question, written so it can be answered without seeing anything else, and set "agent" to that helper name. ' +
+      'Rex: which of the models in the fact sheet below fits each kind of task in this job (writing, research, review, bulk work, images), plus anything newer or cheaper that is worth knowing. ' +
+      'Gil: GitHub repositories that contain good skills, prompts or agent definitions for this job; ask for repository name, URL, and a one-line reason for each, at most 5. ' +
+      'Use level "specialist" for both. Ask for short answers (under 250 words). Research is billed per page read, so do not add questions the brief does not need.\n\n' +
+      'FACT SHEET - the AI the owner can use (own API keys). Agents in this office produce TEXT only; image, video or audio generation needs tools that are not connected yet, so say so when a role needs them.\n' +
+      '- Claude Opus 5.5: deepest reasoning, about $4 in / $20 out per 1M tokens. Use for hard planning only.\n' +
+      '- Claude Sonnet 5.5: strong all-rounder, about $2 / $10. Default for leads, writers and quality control.\n' +
+      '- Claude Haiku 4.5: fast and cheap, about $1 / $5. The only model here with live web search.\n' +
+      '- Gemini 3.8 Flash (Google): cheap and fast, good for bulk drafting and summaries.\n' +
+      '- Groq gpt-oss-20b: very cheap and fast, only for simple, mechanical work (lists, rewriting, formatting).',
     reportGuide:
-      'Write the final report for a busy owner. Be decisive: give ONE recommendation, not a menu of options. ' +
-      'Begin with the direct answer to the brief in 2 or 3 sentences (for example the number of agents and why). ' +
-      'Then a short numbered list of the recommended agents, each with its single skill and one line on what it produces. ' +
-      'Then the first 2 or 3 steps to start. Keep it under 350 words, short sentences, no tables, no Markdown symbols. ' +
-      'Do NOT write paragraphs about source quality, tool limits or what could not be verified. Put everything unverified in ONE final line starting with "Belum terverifikasi:". ' +
-      'Add model and price advice only if the brief asked for it.',
+      'You are Jax. Write the recommendation for a busy owner, in the language the owner used. Be decisive: ONE team, not options. Use exactly this shape and no Markdown symbols or tables:\n' +
+      'Line 1: "Team of N" (N = number of agents, as small as the job allows).\n' +
+      'Then one numbered line per agent: "1. Name - Role - Model - Skill". Role = the job. Model = one model from the fact sheet. Skill = the ONE skill or memory that agent carries (give it a short name).\n' +
+      'Rules for the team: one agent = one skill; split an agent in two only when it would need two different skills; include a quality-control agent when the output needs checking; use the cheapest model that does the job well.\n' +
+      'Then "Kenapa model ini:" with one short line per agent. Then "Skill untuk di-download:" with up to 5 GitHub items Gil found (repo name, URL, one line why). Only use URLs that appear in the research; never invent a link; if none were found write "belum ada yang ditemukan".\n' +
+      'Then "Biaya per tugas:" low, medium or high with one short reason. If something is unknown or unverified, put it in ONE final line starting with "Belum terverifikasi:". Keep it under 400 words.',
     workerGuide: {
       researcher:
-        'You are Scout, the skill and model researcher. Search the web for current, specific evidence and answer the ONE question you were given. ' +
-        'You have up to 4 searches, so choose your queries carefully and stop searching as soon as you can answer. ' +
-        'Give your pick and the reason, and name the source of each claim. If something is missing, say so in one short line; never write about tool or search limits. Keep the answer under 250 words.',
-      installer:
-        'You are Forge, the skill installer. A skill is a reusable instruction pack for an AI agent: what it does, when to use it, and exact steps, rules and an example. ' +
-        'Reply with ONLY a JSON object, no other text, in this shape: ' +
-        '{"skills":[{"name":"short-kebab-name","description":"one sentence","suited_for":"jobs it helps with","instructions":"the full instructions, plain text","install_to":["AgentName"]}]}. ' +
-        'install_to may be empty if the brief names no agent.',
+        'You are a researcher on the AI Scout Team. Search the web for current, specific evidence and answer the ONE question you were given. ' +
+        'You have up to 4 searches, so choose queries carefully and stop as soon as you can answer. ' +
+        'For GitHub questions, search for repositories (github.com) and list each as: name, URL, what it does, and why it fits. Only list repositories you actually saw in the search results; never guess a URL. ' +
+        'For model questions, name the model, what it is best at, and the source. If something is missing, say so in one short line; never write about tool or search limits. Keep the answer under 250 words.',
     },
   },
 };
@@ -149,8 +141,9 @@ const PLAN_SCHEMA = {
           title: { type: 'string' },
           instructions: { type: 'string', description: 'Complete, self-contained instructions. The worker sees nothing else.' },
           level: { type: 'string', enum: ['doer', 'specialist'] },
+          agent: { type: 'string', description: 'Name of the helper agent that should do this, or an empty string for any.' },
         },
-        required: ['title', 'instructions', 'level'],
+        required: ['title', 'instructions', 'level', 'agent'],
         additionalProperties: false,
       },
     },
@@ -203,16 +196,11 @@ async function setTask(db: Db, taskId: string, fields: Record<string, unknown>) 
   await db.from('ai_tasks').update({ ...fields, updated_at: new Date().toISOString() }).eq('id', taskId);
 }
 
+/** The agents that exist. Nothing is created automatically: teams are switched on by the owner. */
 export async function ensureAgents(db: Db, workspaceId: string): Promise<{ agents: OfficeAgent[]; tablesReady: boolean }> {
   const { data, error } = await db.from('ai_agents').select('*').eq('workspace_id', workspaceId).order('floor', { ascending: false }).order('name');
   if (error) return { agents: [], tablesReady: !isMissingTable(error) };
-  if (data.length > 0) return { agents: data, tablesReady: true };
-
-  const { data: created } = await db
-    .from('ai_agents')
-    .insert(GENERAL_AGENTS.map((a) => ({ ...a, workspace_id: workspaceId })))
-    .select('*');
-  return { agents: (created || []).sort((a: OfficeAgent, b: OfficeAgent) => b.floor - a.floor || a.name.localeCompare(b.name)), tablesReady: true };
+  return { agents: data || [], tablesReady: true };
 }
 
 async function loadTeams(db: Db, workspaceId: string): Promise<{ teams: OfficeTeam[]; ready: boolean }> {
@@ -326,6 +314,7 @@ export async function submitGoal(
   }
   const text = brief.trim();
   const title = text.split('\n')[0].slice(0, 90);
+  if (!teamId) throw new Error('Choose a team first. Activate the AI Scout Team in Virtual Office.');
 
   let team: OfficeTeam | null = null;
   if (teamId) {
@@ -395,9 +384,13 @@ async function planGoal(db: Db, workspaceId: string, goal: OfficeTask, agents: O
 
   try {
     const memory = await memoryBlock(db, workspaceId, goal.team_id, planner?.id || null);
+    const helperLines = agents
+      .filter((a) => a.kind !== 'planner' && a.kind !== 'qc' && a.enabled)
+      .map((a) => `- ${a.name}: ${a.title} (floor ${a.floor})`)
+      .join('\n');
     const { data, model, tokensIn, tokensOut } = await askBoss<{
       approach: string;
-      subtasks: { title: string; instructions: string; level: 'doer' | 'specialist' }[];
+      subtasks: { title: string; instructions: string; level: 'doer' | 'specialist'; agent?: string }[];
     }>({
       deep: goal.deep_think,
       effort: 'low',
@@ -405,6 +398,7 @@ async function planGoal(db: Db, workspaceId: string, goal: OfficeTask, agents: O
         `${OFFICE_CONTEXT}\n\nYou are the Director. Split the owner's brief into at most ${maxSubtasks} small, independent subtasks for the worker floors. ` +
         'Use "doer" for simple, mechanical work (lists, rewriting, formatting, simple drafts) and "specialist" for work that needs judgment, analysis or research. ' +
         'Prefer fewer subtasks; a simple brief may need only one. Each subtask must be fully self-contained: copy into its instructions every fact from the brief the worker needs.' +
+        `\n\nYour helpers (set "agent" to a helper name to give it the subtask):\n${helperLines || '(none)'}` +
         (profile ? `\n\n${profile.plannerGuide}` : '') +
         (memory ? `\n\n${memory}` : ''),
       prompt: `Owner's brief:\n\n${goal.instructions}`,
@@ -420,7 +414,9 @@ async function planGoal(db: Db, workspaceId: string, goal: OfficeTask, agents: O
       let floor = s.level === 'specialist' ? 2 : 1;
       if (byFloor(floor).length === 0) floor = floor === 2 ? 1 : 2;
       const team = byFloor(floor);
-      const agent = team.length ? team[counters[floor]++ % team.length] : null;
+      const named = agents.find((a) => a.kind !== 'planner' && a.kind !== 'qc' && a.enabled && a.name.toLowerCase() === String(s.agent || '').trim().toLowerCase());
+      if (named) floor = named.floor;
+      const agent = named || (team.length ? team[counters[floor]++ % team.length] : null);
       return {
         workspace_id: workspaceId, team_id: goal.team_id, parent_id: goal.id, kind: 'subtask', seq: i + 1,
         title: s.title.slice(0, 120), instructions: s.instructions, floor, agent_id: agent?.id || null,
@@ -520,7 +516,7 @@ async function runSubtask(db: Db, workspaceId: string, task: OfficeTask, agents:
     const redo = task.qc_feedback
       ? `\n\nYour previous answer was rejected by quality control. Fix this:\n${task.qc_feedback}\n\nYour previous answer:\n${task.result || '(none)'}`
       : '';
-    const role = profile?.workerGuide[agent.kind] || `You are ${agent.name}, a ${agent.floor === 2 ? 'specialist' : 'doer'}. Do exactly the one task below and return only the finished work.`;
+    const role = `You are ${agent.name}, ${agent.title}. ` + (profile?.workerGuide[agent.kind] || `Do exactly the one task below and return only the finished work.`);
     const system = `${OFFICE_CONTEXT}\n\n${role}${skillBlock ? `\n\nYour installed skills. Follow them when relevant:\n${skillBlock}` : ''}${memory ? `\n\n${memory}` : ''}`;
     const prompt = `Task: ${task.title}\n\n${task.instructions}${redo}`;
 

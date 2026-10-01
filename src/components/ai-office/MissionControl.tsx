@@ -136,7 +136,7 @@ export function MissionControl() {
     [refresh]
   );
 
-  const teamName = useCallback((id: string | null) => (id ? data?.teams.find((t) => t.id === id)?.name || 'Team' : 'General Office'), [data]);
+  const teamName = useCallback((id: string | null) => (id ? data?.teams.find((t) => t.id === id)?.name || 'Team' : 'No team'), [data]);
   const agentName = useCallback((id: string | null) => (id ? data?.agents.find((a) => a.id === id)?.name || 'Agent' : null), [data]);
   const openGoal = data?.goals.find((g) => g.id === openGoalId) || null;
 
@@ -371,7 +371,7 @@ function TeamTab({ d, act, teamName }: { d: Mission; act: Act; teamName: (id: st
           </section>
         );
       })}
-      <p className="text-[11px] text-zinc-600">New teams are created in Virtual Office. A switched-off agent gets no new work.</p>
+      <p className="text-[11px] text-zinc-600">Teams are switched on in Virtual Office. A switched-off agent gets no new work.</p>
     </div>
   );
 }
@@ -498,7 +498,7 @@ function CalendarTab({ d, act, teamName }: { d: Mission; act: Act; teamName: (id
   const pickedList = onDay(picked);
 
   const save = async () => {
-    const ok = await act(() => call('/api/ai-office/schedule', 'POST', { ...form, teamId: form.teamId || null }), 'Recurring job saved.');
+    const ok = await act(() => call('/api/ai-office/schedule', 'POST', { ...form, teamId: form.teamId || d.teams[0]?.id || null }), 'Recurring job saved.');
     if (ok) setForm((f) => ({ ...f, title: '', brief: '' }));
   };
 
@@ -593,8 +593,7 @@ function CalendarTab({ d, act, teamName }: { d: Mission; act: Act; teamName: (id
           <H><Plus className="mr-1 inline h-3.5 w-3.5" /> New recurring job</H>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <input className={input} placeholder="Title, e.g. Weekly SEO ideas" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-            <select className={input} value={form.teamId} onChange={(e) => setForm({ ...form, teamId: e.target.value })}>
-              <option value="">General Office</option>
+            <select className={input} value={form.teamId || d.teams[0]?.id || ''} onChange={(e) => setForm({ ...form, teamId: e.target.value })}>
               {d.teams.filter((t) => t.enabled).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
             <textarea className={`${input} md:col-span-2`} rows={3} placeholder="The brief: what the team must do each time" value={form.brief} onChange={(e) => setForm({ ...form, brief: e.target.value })} />
@@ -669,14 +668,14 @@ function ActivityTab({ d, agentName, teamName, open }: { d: Mission; agentName: 
 function MemoryTab({ d, act, teamName, agentName }: { d: Mission; act: Act; teamName: (id: string | null) => string; agentName: (id: string | null) => string | null }) {
   const [form, setForm] = useState({ teamId: '', agentId: '', title: '', content: '', pinned: false });
   const [editing, setEditing] = useState<{ id: string; title: string; content: string } | null>(null);
-  const teamAgents = d.agents.filter((a) => (a.team_id ?? '') === form.teamId);
+  const teamAgents = d.agents.filter((a) => (a.team_id ?? '') === (form.teamId || d.teams[0]?.id || ''));
   const groups = useMemo(() => {
     const keys = Array.from(new Set([GENERAL, ...d.teams.map((t) => t.id)]));
     return keys.map((k) => ({ k, notes: d.memories.filter((m) => teamKey(m.team_id) === k) })).filter((g) => g.notes.length > 0);
   }, [d]);
 
   const save = async () => {
-    const ok = await act(() => call('/api/ai-office/memory', 'POST', { ...form, teamId: form.teamId || null, agentId: form.agentId || null }), 'Note saved. The team reads it from the next task.');
+    const ok = await act(() => call('/api/ai-office/memory', 'POST', { ...form, teamId: form.teamId || d.teams[0]?.id || null, agentId: form.agentId || null }), 'Note saved. The team reads it from the next task.');
     if (ok) setForm((f) => ({ ...f, title: '', content: '', pinned: false }));
   };
 
@@ -685,8 +684,7 @@ function MemoryTab({ d, act, teamName, agentName }: { d: Mission; act: Act; team
       <Card className="h-fit">
         <H><Plus className="mr-1 inline h-3.5 w-3.5" /> New note</H>
         <div className="space-y-3">
-          <select className={input} value={form.teamId} onChange={(e) => setForm({ ...form, teamId: e.target.value, agentId: '' })}>
-            <option value="">General Office</option>
+          <select className={input} value={form.teamId || d.teams[0]?.id || ''} onChange={(e) => setForm({ ...form, teamId: e.target.value, agentId: '' })}>
             {d.teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
           <select className={input} value={form.agentId} onChange={(e) => setForm({ ...form, agentId: e.target.value })}>

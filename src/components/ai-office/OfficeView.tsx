@@ -183,12 +183,12 @@ export function OfficeView() {
       const res = await fetch('/api/ai-office/team', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug: 'team-creator' }),
+        body: JSON.stringify({ slug: 'scout-team' }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Could not activate the team.');
       const fresh = await refresh();
-      const team = fresh?.teams.find((t) => t.slug === 'team-creator');
+      const team = fresh?.teams.find((t) => t.slug === 'scout-team');
       if (team) setTeamId(team.id);
     } catch (err: any) {
       setTeamError(err?.message || 'Could not activate the team.');
@@ -259,7 +259,7 @@ export function OfficeView() {
       const res = await fetch('/api/ai-office/goal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brief, deepThink, teamId }),
+        body: JSON.stringify({ brief, deepThink, teamId: activeTeam ? activeTeam.id : null }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Could not send the brief.');
@@ -287,7 +287,7 @@ export function OfficeView() {
 
   const { setup, teams, skills } = state;
   const ready = setup.tables && setup.anthropic;
-  const activeTeam = teams.find((t) => t.id === teamId) || null;
+  const activeTeam = teams.find((t) => t.id === teamId) || teams[0] || null;
   const inTeam = (x: { team_id: string | null }) => (x.team_id ?? null) === (activeTeam ? activeTeam.id : null);
   const agents = state.agents.filter(inTeam);
   const goals = state.goals.filter(inTeam);
@@ -296,7 +296,7 @@ export function OfficeView() {
   const openGoals = goals.filter((g) => !['done', 'failed'].includes(g.status));
   const allSubtasks = goals.flatMap((g) => g.subtasks);
   const hasQc = agents.some((a) => a.kind === 'qc');
-  const creatorActive = teams.some((t) => t.slug === 'team-creator');
+  const creatorActive = teams.some((t) => t.slug === 'scout-team');
 
   const robotState = (a: Agent): RobotState => {
     if (a.kind === 'planner') return openGoals.some((g) => g.status === 'planning' || (!hasQc && g.status === 'reviewing')) ? 'working' : 'idle';
@@ -330,13 +330,6 @@ export function OfficeView() {
       {/* Teams */}
       <div className="rounded-2xl border border-zinc-800 bg-[#0e0f14] p-3 space-y-3">
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setTeamId(null)}
-            className={`px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border ${!activeTeam ? 'bg-[#d4af37] text-black border-[#d4af37]' : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200'}`}
-          >
-            General Office
-          </button>
           {teams.map((t) => (
             <button
               key={t.id}
@@ -352,8 +345,8 @@ export function OfficeView() {
         {!creatorActive && (
           <div className="rounded-xl border border-dashed border-[#d4af37]/40 p-3 flex flex-wrap items-center gap-3">
             <div className="flex-1 min-w-[220px]">
-              <div className="text-xs font-bold text-zinc-100">AI Team Creator <span className="text-zinc-500 font-normal">· not activated</span></div>
-              <div className="text-[11px] text-zinc-400 mt-0.5">Mentor (boss, deep research), Scout (skill and model research on the web), Forge (installs skills into agents).</div>
+              <div className="text-xs font-bold text-zinc-100">AI Scout Team <span className="text-zinc-500 font-normal">· not activated</span></div>
+              <div className="text-[11px] text-zinc-400 mt-0.5">Jax (lead) with Rex (researches AI models and APIs) and Gil (finds skills on GitHub). Tell it the job you want a team for; it recommends the team.</div>
               {!setup.teams && <div className="text-[11px] text-amber-300 mt-1">Run <span className="font-mono">supabase/migrations/20260930_ai_teams.sql</span> in Supabase first.</div>}
               {teamError && <div className="text-[11px] text-red-400 mt-1">{teamError}</div>}
             </div>
@@ -474,16 +467,16 @@ export function OfficeView() {
               <Brain className="w-3.5 h-3.5 text-[#d4af37]" /> Deep think (boss uses Opus instead of Sonnet; slower, costs more)
             </label>
             <p className="text-[11px] text-zinc-500">
-              Goes to: <span className="font-bold text-[#f5d77f]">{activeTeam ? activeTeam.name : 'General Office'}</span>
-              {!activeTeam && creatorActive && ' · to design a new AI team, switch to the AI Team Creator tab above.'}
+              Goes to: <span className="font-bold text-[#f5d77f]">{activeTeam ? activeTeam.name : 'no team yet'}</span>
+              {!activeTeam && ' · activate the AI Scout Team above first.'}
             </p>
             {formError && <p className="text-xs text-red-400">{formError}</p>}
             <button
               type="submit"
-              disabled={!ready || sending || brief.trim().length < 5}
+              disabled={!ready || sending || !activeTeam || brief.trim().length < 5}
               className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wider text-[#111] bg-gradient-to-r from-[#d4af37] to-[#f5d77f] disabled:opacity-40"
             >
-              {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Send to the boss
+              {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Send to the lead
             </button>
           </form>
 

@@ -22,6 +22,7 @@ export async function POST(request: Request) {
   const teamId = idOrNull(body?.teamId);
   const agentId = idOrNull(body?.agentId);
   if (!title || !content) return NextResponse.json({ error: 'Write a title and the note.' }, { status: 400 });
+  if (!teamId) return NextResponse.json({ error: 'Choose a team. Activate the AI Scout Team first.' }, { status: 400 });
   if (!(await checkAgent(access.supabase, access.workspaceId, teamId, agentId))) return NextResponse.json({ error: 'That agent is not in this team.' }, { status: 400 });
 
   const { error } = await access.supabase.from('ai_memories').insert({

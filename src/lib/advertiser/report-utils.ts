@@ -46,9 +46,9 @@ export function longReportDate(reportDate: string) {
   return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'UTC' });
 }
 
-/** "Sesi 1 25 Sep 26 Japar Utomo.pdf" */
-export function sessionPdfFileName(reportDate: string, session: number, clientName: string) {
+/** "Sesi 1 25 Sep 26 Japar Utomo.pdf" (or .jpg) */
+export function sessionPdfFileName(reportDate: string, session: number, clientName: string, ext: "pdf" | "jpg" = "pdf") {
   const { dd, mmm, yy } = splitReportDate(reportDate);
   const safeClient = clientName.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim() || 'Client';
-  return `Sesi ${session} ${dd} ${mmm} ${yy} ${safeClient}.pdf`;
+  return `Sesi ${session} ${dd} ${mmm} ${yy} ${safeClient}.${ext}`;
 }

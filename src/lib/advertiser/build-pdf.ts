@@ -73,6 +73,29 @@ export async function buildReportPdf(root: HTMLElement): Promise<Blob> {
   return pdf.output('blob');
 }
 
+/** The whole report as ONE tall JPEG (handy for WhatsApp: it previews inline). */
+export async function buildReportJpeg(root: HTMLElement): Promise<Blob> {
+  const all = root.querySelector<HTMLElement>('[data-report-all]');
+  if (!all) throw new Error('Nothing to put in the image.');
+
+  await waitForImages(root);
+
+  const domtoimage = (await import('dom-to-image-more')).default;
+  const w = all.offsetWidth;
+  const h = all.offsetHeight;
+  // Browsers cap canvas height (about 16,000 px), so very long reports are rendered a little smaller.
+  const scale = Math.min(2, 15000 / h);
+
+  const dataUrl = await domtoimage.toJpeg(all, {
+    quality: 0.9,
+    bgcolor: '#ffffff',
+    width: w * scale,
+    height: h * scale,
+    style: { transform: `scale(${scale})`, transformOrigin: 'top left', width: `${w}px`, height: `${h}px` },
+  });
+  return (await fetch(dataUrl)).blob();
+}
+
 /** Saves a blob as a file in the browser. */
 export function downloadBlob(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);

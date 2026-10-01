@@ -89,6 +89,7 @@ export const AdvertiserSessionReport = React.forwardRef<HTMLDivElement, { client
     return (
       // Off-screen but really rendered, so it can be captured. The blocks inside stay in normal flow.
       <div ref={ref} aria-hidden style={{ position: 'fixed', left: -10000, top: 0, width: PDF_WIDTH_PX, pointerEvents: 'none' }}>
+        <div data-report-all style={{ background: '#ffffff' }}>
         <div data-pdf-block style={{ ...block, paddingTop: 32 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: '#8a6d1d', textTransform: 'uppercase', letterSpacing: 2 }}>Laporan Iklan · Sesi {data.session}</div>
           <div style={{ fontSize: 24, fontWeight: 800, margin: '6px 0 4px' }}>{clientName}</div>
@@ -147,6 +148,7 @@ export const AdvertiserSessionReport = React.forwardRef<HTMLDivElement, { client
             <div style={{ fontSize: 12, color: '#6b7280' }}>Belum ada data iklan yang diisi untuk sesi ini.</div>
           </div>
         )}
+        </div>
       </div>
     );
   }

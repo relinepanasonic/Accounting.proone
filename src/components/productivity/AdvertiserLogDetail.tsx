@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { X, Loader2, Pencil, Download, MessageCircle } from 'lucide-react';
 import { fetchAdvertiserLogDetail } from '@/app/actions/advertiser';
 import { hasData, normalizeGroup, num, rupiah, sessionPdfFileName, splitReportDate, text, totals } from '@/lib/advertiser/report-utils';
-import { buildReportPdf, downloadBlob } from '@/lib/advertiser/build-pdf';
+import { buildReportJpeg, buildReportPdf, downloadBlob } from '@/lib/advertiser/build-pdf';
 import { AdvertiserSessionReport } from './AdvertiserSessionReport';
 
 interface LogSummary {
@@ -111,6 +111,7 @@ export function AdvertiserLogDetail({
   const [active, setActive] = useState<number>(1);
   const reportRef = useRef<HTMLDivElement>(null);
   const [pdf, setPdf] = useState<{ status: 'building' | 'ready' | 'error'; blob?: Blob; fileName?: string; error?: string }>({ status: 'building' });
+  const [jpeg, setJpeg] = useState<{ blob?: Blob; fileName?: string; error?: string }>({});
   const [shareNotice, setShareNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -143,12 +144,20 @@ export function AdvertiserLogDetail({
     if (!current) return;
     let cancelled = false;
     setPdf({ status: 'building' });
+    setJpeg({});
     setShareNotice(null);
     const timer = setTimeout(async () => {
       try {
         if (!reportRef.current) throw new Error('Report not ready.');
         const blob = await buildReportPdf(reportRef.current);
         if (!cancelled) setPdf({ status: 'ready', blob, fileName: sessionPdfFileName(log.report_date, current.session, log.client_name) });
+        // The JPEG is made right after, so it is also ready when you click.
+        try {
+          const img = await buildReportJpeg(reportRef.current);
+          if (!cancelled) setJpeg({ blob: img, fileName: sessionPdfFileName(log.report_date, current.session, log.client_name, 'jpg') });
+        } catch (imgErr: any) {
+          if (!cancelled) setJpeg({ error: imgErr?.message || 'Could not build the image.' });
+        }
       } catch (err: any) {
         if (!cancelled) setPdf({ status: 'error', error: err?.message || 'Could not build the PDF.' });
       }
@@ -159,6 +168,11 @@ export function AdvertiserLogDetail({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current?.session, current?.created_at, sessions]);
+
+  const handleDownloadJpeg = () => {
+    if (!jpeg.blob || !jpeg.fileName) return;
+    downloadBlob(jpeg.blob, jpeg.fileName);
+  };
 
   const handleDownload = () => {
     if (pdf.status !== 'ready' || !pdf.blob || !pdf.fileName) return;
@@ -268,6 +282,15 @@ export function AdvertiserLogDetail({
                       className="inline-flex items-center gap-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 px-3 py-1.5 rounded-lg text-white font-bold"
                     >
                       {pdf.status === 'building' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} PDF
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDownloadJpeg}
+                      disabled={!jpeg.blob}
+                      title={jpeg.error ? jpeg.error : 'Save the whole report as one JPEG image'}
+                      className="inline-flex items-center gap-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 px-3 py-1.5 rounded-lg text-white font-bold"
+                    >
+                      {!jpeg.blob && !jpeg.error ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} JPEG
                     </button>
                     <button
                       type="button"

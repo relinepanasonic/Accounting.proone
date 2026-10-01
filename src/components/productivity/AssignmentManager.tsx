@@ -2,6 +2,7 @@
 
 import React, { useState, useTransition } from 'react';
 import { toggleClientAssignment } from '@/app/actions/assignments';
+import { ASSIGNMENT_JOBS } from '@/lib/assignments/jobs';
 import { UserPlus, Loader2, Search, CheckSquare, Square } from 'lucide-react';
 
 interface Client {
@@ -12,38 +13,45 @@ interface Client {
 interface StaffMember {
   user_id: string;
   role: string;
-  profiles: { full_name: string; email: string };
+  name: string;
+  email: string;
 }
 
 interface AssignmentManagerProps {
   clients: Client[];
   staff: StaffMember[];
-  assignments: { client_id: string; user_id: string }[];
+  assignments: { client_id: string; user_id: string; job: string }[];
 }
 
 export function AssignmentManager({ clients, staff, assignments }: AssignmentManagerProps) {
   const [selectedUserId, setSelectedUserId] = useState<string>(staff[0]?.user_id || '');
+  const [job, setJob] = useState<string>(ASSIGNMENT_JOBS[0].key);
   const [searchTerm, setSearchTerm] = useState('');
+  const [error, setError] = useState('');
   const [isPending, startTransition] = useTransition();
 
   const handleToggle = (clientId: string, isCurrentlyAssigned: boolean) => {
     if (!selectedUserId) return;
-    
+    setError('');
     startTransition(async () => {
-      await toggleClientAssignment(clientId, selectedUserId, !isCurrentlyAssigned);
+      const res = await toggleClientAssignment(clientId, selectedUserId, job, !isCurrentlyAssigned);
+      if (!res?.success) setError(res?.error || 'Could not save.');
     });
   };
 
   const filteredClients = clients.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
-  // Get assignments for the currently selected user
+  // Clients this person holds for the selected job
   const userAssignedClientIds = new Set(
-    assignments.filter(a => a.user_id === selectedUserId).map(a => a.client_id)
+    assignments.filter(a => a.user_id === selectedUserId && a.job === job).map(a => a.client_id)
   );
+  const countFor = (userId: string) => assignments.filter(a => a.user_id === userId).length;
+  const jobCount = (key: string) => assignments.filter(a => a.user_id === selectedUserId && a.job === key).length;
+  const selected = staff.find(s => s.user_id === selectedUserId);
 
   return (
     <div className="bg-[#0e0f14] border border-[#d4af37]/20 rounded-xl overflow-hidden shadow-xl flex flex-col md:flex-row min-h-[600px]">
-      
+
       {/* Left Sidebar: Staff Selection */}
       <div className="w-full md:w-1/3 bg-zinc-900/40 border-r border-[#d4af37]/20 flex flex-col">
         <div className="p-4 border-b border-zinc-800">
@@ -52,8 +60,10 @@ export function AssignmentManager({ clients, staff, assignments }: AssignmentMan
           </h2>
         </div>
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          {staff.length === 0 && <div className="p-6 text-center text-xs text-zinc-500">No staff in this workspace yet.</div>}
           {staff.map(member => {
             const isSelected = member.user_id === selectedUserId;
+            const n = countFor(member.user_id);
             return (
               <button
                 key={member.user_id}
@@ -62,11 +72,9 @@ export function AssignmentManager({ clients, staff, assignments }: AssignmentMan
                   isSelected ? 'bg-[#d4af37]/15 border border-[#d4af37]/30 shadow-md' : 'hover:bg-zinc-800/50 border border-transparent'
                 }`}
               >
-                <span className={`font-bold text-sm ${isSelected ? 'text-[#f5d77f]' : 'text-zinc-200'}`}>
-                  {member.profiles?.full_name || member.profiles?.email}
-                </span>
+                <span className={`font-bold text-sm ${isSelected ? 'text-[#f5d77f]' : 'text-zinc-200'}`}>{member.name}</span>
                 <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-mono mt-1">
-                  ROLE: {member.role}
+                  {member.role}{n > 0 ? ` · ${n} assigned` : ''}
                 </span>
               </button>
             );
@@ -74,29 +82,53 @@ export function AssignmentManager({ clients, staff, assignments }: AssignmentMan
         </div>
       </div>
 
-      {/* Right Area: Client Assignments */}
+      {/* Right Area: Job + Client Assignments */}
       <div className="w-full md:w-2/3 flex flex-col relative">
         {isPending && (
           <div className="absolute inset-0 bg-black/20 backdrop-blur-[1px] flex items-center justify-center z-10">
             <Loader2 className="w-8 h-8 text-[#d4af37] animate-spin" />
           </div>
         )}
-        
-        <div className="p-4 border-b border-zinc-800 flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-sm font-bold text-zinc-100 uppercase">Assign Clients</h2>
-            <p className="text-xs text-zinc-500 mt-1">Select clients for the active staff member.</p>
+
+        <div className="p-4 border-b border-zinc-800 space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {ASSIGNMENT_JOBS.map(j => {
+              const active = j.key === job;
+              const n = jobCount(j.key);
+              return (
+                <button
+                  key={j.key}
+                  onClick={() => setJob(j.key)}
+                  title={j.hint}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider border transition-all ${
+                    active ? 'bg-[#d4af37] text-black border-[#d4af37]' : 'bg-zinc-900/60 text-zinc-400 border-zinc-700 hover:border-zinc-500'
+                  }`}
+                >
+                  {j.label}{n > 0 ? ` (${n})` : ''}
+                </button>
+              );
+            })}
           </div>
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-            <input 
-              type="text" 
-              placeholder="Search clients..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="pl-9 pr-4 py-2 bg-zinc-950 border border-zinc-700/50 rounded-lg text-sm text-zinc-200 focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] focus:outline-none w-64"
-            />
+
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-sm font-bold text-zinc-100 uppercase">
+                {selected ? selected.name : 'No staff'} · {ASSIGNMENT_JOBS.find(j => j.key === job)?.label}
+              </h2>
+              <p className="text-xs text-zinc-500 mt-1">Tick the clients this person handles for this job.</p>
+            </div>
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+              <input
+                type="text"
+                placeholder="Search clients..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="pl-9 pr-4 py-2 bg-zinc-950 border border-zinc-700/50 rounded-lg text-sm text-zinc-200 focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] focus:outline-none w-56"
+              />
+            </div>
           </div>
+          {error && <div className="text-xs text-red-400">{error}</div>}
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 content-start">
@@ -107,8 +139,8 @@ export function AssignmentManager({ clients, staff, assignments }: AssignmentMan
                 key={client.id}
                 onClick={() => handleToggle(client.id, isAssigned)}
                 className={`flex items-center gap-3 p-4 rounded-xl border transition-all text-left ${
-                  isAssigned 
-                    ? 'bg-emerald-500/10 border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.1)]' 
+                  isAssigned
+                    ? 'bg-emerald-500/10 border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.1)]'
                     : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-600'
                 }`}
               >
@@ -124,9 +156,7 @@ export function AssignmentManager({ clients, staff, assignments }: AssignmentMan
             );
           })}
           {filteredClients.length === 0 && (
-            <div className="col-span-full p-8 text-center text-zinc-500">
-              No clients match your search.
-            </div>
+            <div className="col-span-full p-8 text-center text-zinc-500">No clients match your search.</div>
           )}
         </div>
       </div>

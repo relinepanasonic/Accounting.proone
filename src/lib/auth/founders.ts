@@ -2,5 +2,7 @@
 // Pure module (no next/headers) so the proxy can import it.
 const FOUNDER_EMAILS = ['nicojapar@gmail.com'];
 
+export const founderEmails = () => [...FOUNDER_EMAILS];
+
 export const isFounderEmail = (email?: string | null) =>
   !!email && FOUNDER_EMAILS.includes(email.trim().toLowerCase());

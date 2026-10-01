@@ -1408,8 +1408,8 @@ export function WorkspaceDetailTabs({
             </div>
             <AssignmentManager 
               clients={clients} 
-              staff={staff.filter(s => s.role === 'admin' || s.role === 'advertiser')} 
-              assignments={assignments} 
+              staff={staff.filter(s => s.role === 'admin' || s.role === 'advertiser').map(s => ({ user_id: s.user_id, role: s.role, name: s.profiles?.full_name || s.profiles?.email || 'Unknown', email: s.profiles?.email || '' }))} 
+              assignments={assignments.map(a => ({ ...a, job: (a as any).job || 'advertising' }))} 
             />
           </div>
         </div>

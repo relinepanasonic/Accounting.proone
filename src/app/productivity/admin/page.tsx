@@ -1,5 +1,6 @@
 import React from 'react';
 import { createClient } from '@/lib/supabase/server';
+import { assignedClientIds } from '@/lib/assignments/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { getShopeeReports } from '@/app/actions/productivity';
 import { ShopeeReportTracker } from '@/components/productivity/ShopeeReportTracker';
@@ -22,17 +23,9 @@ export default async function AdminDivisionPage() {
   const { data: userData } = await supabase.auth.getUser();
 
   if (role !== 'superadmin' && role !== 'founder' && clients) {
-    const { data: assignments } = await supabase
-      .from('client_assignments')
-      .select('client_id')
-      .eq('workspace_id', activeWorkspaceId)
-      .eq('user_id', userData.user?.id);
-
-    if (assignments) {
-      const assignedIds = new Set(assignments.map(a => a.client_id));
+    const assignedIds = await assignedClientIds(supabase, activeWorkspaceId, userData.user?.id, 'admin');
+    {
       clients = clients.filter(c => assignedIds.has(c.id));
-    } else {
-      clients = [];
     }
   }
 

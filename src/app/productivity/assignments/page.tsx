@@ -1,6 +1,7 @@
 import React from 'react';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
+import { founderEmails } from '@/lib/auth/founders';
 import { AssignmentManager } from '@/components/productivity/AssignmentManager';
 import { ShieldAlert, Users } from 'lucide-react';
 
@@ -34,26 +35,51 @@ export default async function AssignmentsPage() {
     .or('contact_type.eq.client,contact_type.is.null')
     .order('name');
 
-  // Fetch staff for current workspace (Advertiser/Admin)
-  const { data: staff } = await supabase
+  // Everyone who can hold a job: the workspace members, plus the founder (who may have no membership row).
+  // profiles can't be embedded from workspace_members, so they are read in a second query.
+  const { data: members } = await supabase
     .from('workspace_members')
-    .select(`
-      user_id, 
-      role,
-      profiles (full_name, email)
-    `)
+    .select('user_id, role, display_name, email')
     .eq('workspace_id', activeWorkspaceId)
-    .in('role', ['admin', 'advertiser', 'client', 'accounting', 'superadmin']) // Show assignable roles
-    .not('user_id', 'is', null);
+    .not('user_id', 'is', null)
+    .in('role', ['superadmin', 'accounting', 'admin', 'advertiser']);
 
-  // Fetch all assignments for current workspace
-  const { data: assignments, error } = await supabase
+  const { data: founderProfiles } = await supabase.from('profiles').select('id, full_name, email').in('email', founderEmails());
+
+  const ids = Array.from(new Set([...(members || []).map((m: any) => m.user_id as string), ...(founderProfiles || []).map((p: any) => p.id as string)]));
+  const { data: profiles } = ids.length ? await supabase.from('profiles').select('id, full_name, email').in('id', ids) : { data: [] as any[] };
+  const byId = new Map<string, any>((profiles || []).map((p: any) => [p.id, p]));
+  const founderIds = new Set((founderProfiles || []).map((p: any) => p.id as string));
+
+  const staffById = new Map<string, { user_id: string; role: string; name: string; email: string }>();
+  for (const m of (members || []) as any[]) {
+    const p = byId.get(m.user_id);
+    const email = String(p?.email || m.email || '');
+    staffById.set(m.user_id, {
+      user_id: m.user_id,
+      role: founderIds.has(m.user_id) ? 'founder' : m.role,
+      name: String(p?.full_name || m.display_name || email.split('@')[0] || 'Unknown'),
+      email,
+    });
+  }
+  for (const f of (founderProfiles || []) as any[]) {
+    if (staffById.has(f.id)) continue;
+    staffById.set(f.id, { user_id: f.id, role: 'founder', name: String(f.full_name || f.email.split('@')[0]), email: String(f.email || '') });
+  }
+  const rank: Record<string, number> = { founder: 0, superadmin: 1, accounting: 2, admin: 3, advertiser: 4 };
+  const staff = Array.from(staffById.values()).sort((a, b) => (rank[a.role] ?? 9) - (rank[b.role] ?? 9) || a.name.localeCompare(b.name));
+
+  // All assignments. Before the job migration is run there is no job column: those rows count as advertising.
+  let jobsReady = true;
+  let { data: assignments, error } = await supabase
     .from('client_assignments')
-    .select('client_id, user_id')
+    .select('client_id, user_id, job')
     .eq('workspace_id', activeWorkspaceId);
-
-  // If table doesn't exist yet, we pass empty array so UI doesn't crash
-  const safeAssignments = assignments || [];
+  if (error) {
+    jobsReady = false;
+    const legacy = await supabase.from('client_assignments').select('client_id, user_id').eq('workspace_id', activeWorkspaceId);
+    assignments = (legacy.data || []).map((a: any) => ({ ...a, job: 'advertising' }));
+  }
 
   return (
     <div className="p-4 lg:p-8 space-y-6 animate-in fade-in zoom-in-95 duration-300">
@@ -63,15 +89,17 @@ export default async function AssignmentsPage() {
         </div>
         <div>
           <h1 className="text-2xl font-extrabold text-zinc-100 font-serif">Client Assignments</h1>
-          <p className="text-sm text-zinc-400 mt-1">Assign clients to specific Advertiser and Admin staff members.</p>
+          <p className="text-sm text-zinc-400 mt-1">Pick a job, pick a person, then tick the clients they handle for that job.</p>
         </div>
       </div>
 
-      <AssignmentManager 
-        clients={clients || []} 
-        staff={(staff as any) || []} 
-        assignments={safeAssignments} 
-      />
+      {!jobsReady && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
+          Only <b>Advertising</b> can be saved until <span className="font-mono">supabase/migrations/20260930_assignment_jobs.sql</span> is run in Supabase.
+        </div>
+      )}
+
+      <AssignmentManager clients={clients || []} staff={staff} assignments={(assignments || []) as any} />
     </div>
   );
 }

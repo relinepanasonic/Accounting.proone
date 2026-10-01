@@ -294,27 +294,33 @@ export function OfficeView() {
   const goalIds = new Set(goals.map((g) => g.id));
   const events = state.events.filter((ev) => (ev.goal_id ? goalIds.has(ev.goal_id) : !activeTeam));
   const openGoals = goals.filter((g) => !['done', 'failed'].includes(g.status));
-  const allSubtasks = goals.flatMap((g) => g.subtasks);
-  const hasQc = agents.some((a) => a.kind === 'qc');
   const creatorActive = teams.some((t) => t.slug === 'scout-team');
 
+  // Every team has its own island, so each agent reads the work of ITS team.
+  const teamWork = (teamId: string | null) => {
+    const tg = state.goals.filter((g) => (g.team_id ?? null) === (teamId ?? null));
+    return { open: tg.filter((g) => !['done', 'failed'].includes(g.status)), subs: tg.flatMap((g) => g.subtasks) };
+  };
   const robotState = (a: Agent): RobotState => {
-    if (a.kind === 'planner') return openGoals.some((g) => g.status === 'planning' || (!hasQc && g.status === 'reviewing')) ? 'working' : 'idle';
-    if (a.kind === 'qc') return openGoals.some((g) => g.status === 'reviewing') ? 'working' : 'idle';
-    const mine = allSubtasks.filter((s) => s.agent_id === a.id);
+    const { open, subs } = teamWork(a.team_id);
+    const qc = state.agents.some((x) => (x.team_id ?? null) === (a.team_id ?? null) && x.kind === 'qc');
+    if (a.kind === 'planner') return open.some((g) => g.status === 'planning' || (!qc && g.status === 'reviewing')) ? 'working' : 'idle';
+    if (a.kind === 'qc') return open.some((g) => g.status === 'reviewing') ? 'working' : 'idle';
+    const mine = subs.filter((s) => s.agent_id === a.id);
     if (mine.some((s) => s.status === 'running')) return 'working';
     if (mine.some((s) => s.status === 'queued')) return 'waiting';
     return 'idle';
   };
-  const currentTask = (a: Agent) => allSubtasks.find((s) => s.agent_id === a.id && (s.status === 'running' || s.status === 'queued'));
+  const currentTask = (a: Agent) => teamWork(a.team_id).subs.find((s) => s.agent_id === a.id && (s.status === 'running' || s.status === 'queued'));
   const brainLabel = (a: Agent) => {
     if (a.provider === 'anthropic') return a.model;
     return setup[a.provider] ? a.model : 'claude-haiku-4-5 (stand-in)';
   };
   const agentName = (id: string | null) => agents.find((a) => a.id === id)?.name || 'Unassigned';
 
-  const robotViews: RobotView[] = agents.map((a) => ({
+  const robotViews: RobotView[] = state.agents.map((a) => ({
     id: a.id,
+    teamId: a.team_id,
     name: a.name,
     title: a.title,
     floor: a.floor,
@@ -380,7 +386,7 @@ export function OfficeView() {
         <div className="xl:col-span-3 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-              {view === '3d' ? 'Scroll to zoom · drag to rotate · click a robot' : 'Floors'}
+              {view === '3d' ? 'Scroll to zoom · drag to rotate · click an island or a robot' : 'Floors'}
             </span>
             {webglOk && (
               <div className="inline-flex rounded-lg border border-zinc-800 overflow-hidden text-[10px] font-bold uppercase tracking-wider">
@@ -401,7 +407,7 @@ export function OfficeView() {
           {view === '3d' && webglOk ? (
             <>
               <div className="relative h-[62vh] min-h-[440px] rounded-2xl border border-[#d4af37]/20 bg-[#07080d] overflow-hidden shadow-lg">
-                <Office3D robots={robotViews} selectedId={selectedId} onSelect={setSelectedId} />
+                <Office3D robots={robotViews} teams={teams.map((t) => ({ id: t.id, name: t.name }))} focusTeamId={activeTeam ? activeTeam.id : null} selectedId={selectedId} onSelect={setSelectedId} onFocusTeam={setTeamId} />
               </div>
               {selectedRobot && (
                 <div className="rounded-xl border border-[#d4af37]/30 bg-[#0e0f14] p-3 text-xs flex flex-wrap items-center gap-x-6 gap-y-1">

@@ -158,17 +158,17 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
         {/* Filters */}
         <div className="p-4 border-b border-zinc-800/80 bg-zinc-900/40 flex flex-col md:flex-row gap-4">
           <div className="flex-1">
-            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Filter Month</label>
             <input 
               type="month"
+              aria-label="Month"
               value={filterMonth}
               onChange={(e) => setFilterMonth(e.target.value)}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#d4af37] transition-colors"
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:cursor-pointer focus:outline-none focus:border-[#d4af37] transition-colors"
             />
           </div>
           <div className="flex-1">
-            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Filter Advertiser</label>
             <select 
+              aria-label="Advertiser"
               value={filterAdvertiser}
               onChange={(e) => setFilterAdvertiser(e.target.value)}
               className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#d4af37] transition-colors"
@@ -180,8 +180,8 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
             </select>
           </div>
           <div className="flex-1">
-            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Filter Client</label>
             <select 
+              aria-label="Client"
               value={filterClient}
               onChange={(e) => setFilterClient(e.target.value)}
               className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#d4af37] transition-colors"

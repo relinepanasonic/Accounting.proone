@@ -2,7 +2,7 @@
 
 import React, { useState, useTransition } from 'react';
 import { UserPlus, ShieldAlert, ShieldCheck, Loader2, AlertCircle, Check, Trash2, Edit2, X, Save, Copy, Link2 } from 'lucide-react';
-import { generateInviteLink } from '@/app/actions/invite';
+import { createInvite, revokeInvite } from '@/app/actions/invite';
 import Link from 'next/link';
 import { deleteTeamMember, updateTeamMemberAccess } from '@/app/actions/settings';
 
@@ -20,13 +20,21 @@ interface TeamManagerProps {
   currentUserRole: string;
   workspaces: { id: string; name: string }[];
   activeWorkspaceId: string;
+  pendingInvites?: PendingInvite[];
 }
 
-export function TeamManager({ initialMembers, currentUserRole, workspaces, activeWorkspaceId }: TeamManagerProps) {
+export interface PendingInvite {
+  id: string;
+  fullName: string;
+  role: string;
+  expiresAt: string;
+  workspaceIds: string[];
+}
+
+export function TeamManager({ initialMembers, currentUserRole, workspaces, activeWorkspaceId, pendingInvites = [] }: TeamManagerProps) {
   const [members, setMembers] = useState<TeamMemberRecord[]>(initialMembers);
-  const [email, setEmail] = useState('');
-  const [username, setUsername] = useState('');
   const [name, setName] = useState('');
+  const [pending, setPending] = useState<PendingInvite[]>(pendingInvites);
   const [role, setRole] = useState<'superadmin' | 'accounting' | 'admin' | 'advertiser' | 'client'>('accounting');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -85,7 +93,7 @@ export function TeamManager({ initialMembers, currentUserRole, workspaces, activ
 
   const handleInvite = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !username || !name) return;
+    if (name.trim().length < 2) return;
     setErrorMsg(null);
     setSuccessMsg(null);
     setInviteLink(null);
@@ -93,30 +101,33 @@ export function TeamManager({ initialMembers, currentUserRole, workspaces, activ
 
     startTransition(async () => {
       try {
-        const res = await generateInviteLink({ email, username, fullName: name, role, workspaceIds: inviteWorkspaceIds });
+        const res = await createInvite({ fullName: name, role, workspaceIds: inviteWorkspaceIds });
 
         if (!res.success) {
-          setErrorMsg(res.error || 'Failed to generate invite link.');
+          setErrorMsg(res.error || 'Failed to create the invitation.');
         } else {
-          setMembers((prev) => [
-            {
-              id: Math.random().toString(),
-              email,
-              name: name || email.split('@')[0],
-              role,
-              workspaceIds: inviteWorkspaceIds,
-            },
-            ...prev,
-          ]);
+          if (res.inviteId && res.expiresAt) {
+            setPending((prev) => [
+              { id: res.inviteId!, fullName: name.trim(), role, expiresAt: res.expiresAt!, workspaceIds: inviteWorkspaceIds },
+              ...prev,
+            ]);
+          }
           setInviteLink(res.link || null);
-          setSuccessMsg(`Invite link generated for ${email}. Copy the link below and send it to them. They will set their own password on first login.`);
-          setEmail('');
-          setUsername('');
+          setSuccessMsg(`Invitation ready for ${name.trim()}. Send them this link: it works once and expires in 7 days. They enter their own email, phone, username and password.`);
           setName('');
         }
       } catch (err: any) {
-        setErrorMsg(err?.message || 'Error generating invite link');
+        setErrorMsg(err?.message || 'Error creating the invitation');
       }
+    });
+  };
+
+  const handleRevokeInvite = (id: string) => {
+    if (!confirm('Cancel this invitation? The link will stop working.')) return;
+    startTransition(async () => {
+      const res = await revokeInvite(id);
+      if (res.success) setPending((prev) => prev.filter((i) => i.id !== id));
+      else setErrorMsg(res.error || 'Could not cancel the invitation.');
     });
   };
 
@@ -187,40 +198,12 @@ export function TeamManager({ initialMembers, currentUserRole, workspaces, activ
         <div className="space-y-3">
           <div>
             <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1">
-              EMAIL *
-            </label>
-            <input
-              type="email"
-              required
-              placeholder="e.g. siska@company.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#d4af37]"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1">
-              USERNAME *
+              NAME *
             </label>
             <input
               type="text"
               required
-              placeholder="e.g. siska.handayani"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-300 focus:outline-none focus:border-[#d4af37]"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1">
-              FULL NAME *
-            </label>
-            <input
-              type="text"
-              required
-              placeholder="e.g. Siska Handayani"
+              placeholder="Their name, e.g. Siska Handayani"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-300 focus:outline-none focus:border-[#d4af37]"
@@ -269,7 +252,7 @@ export function TeamManager({ initialMembers, currentUserRole, workspaces, activ
 
         <button
           type="submit"
-          disabled={isPending || !email || !username || !name || inviteWorkspaceIds.length === 0}
+          disabled={isPending || name.trim().length < 2 || inviteWorkspaceIds.length === 0}
           className="gold-btn w-full inline-flex items-center justify-center gap-2 py-3 rounded-full text-xs font-extrabold uppercase tracking-wider shadow-[0_0_20px_rgba(212,175,55,0.3)] disabled:opacity-50"
         >
           {isPending ? (
@@ -289,6 +272,27 @@ export function TeamManager({ initialMembers, currentUserRole, workspaces, activ
           </h3>
           <span className="text-[10px] font-mono text-[#f5d77f]">SUPERADMIN ACCESS CONFIRMED</span>
         </div>
+
+        {pending.length > 0 && (
+          <div className="rounded-2xl border border-[#d4af37]/25 bg-black/20">
+            <div className="px-4 py-2.5 border-b border-[#d4af37]/15 text-[10px] font-bold uppercase tracking-wider text-[#f5d77f]">
+              PENDING INVITATIONS ({pending.length})
+            </div>
+            <div className="divide-y divide-zinc-900">
+              {pending.map((inv) => (
+                <div key={inv.id} className="px-4 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                  <span className="font-bold text-white">{inv.fullName}</span>
+                  <span className="text-[10px] font-mono uppercase text-zinc-400">{inv.role}</span>
+                  <span className="text-[10px] text-zinc-500">{inv.workspaceIds.map((id) => workspaceName(id)).join(', ')}</span>
+                  <span className="text-[10px] text-zinc-600 ml-auto">expires {new Date(inv.expiresAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}</span>
+                  <button type="button" onClick={() => handleRevokeInvite(inv.id)} className="text-red-900 hover:text-red-500" title="Cancel invitation">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">

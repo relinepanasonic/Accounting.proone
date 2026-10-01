@@ -1,108 +1,87 @@
 'use server';
 
 import { headers } from 'next/headers';
+import { revalidatePath } from 'next/cache';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
+import { hashInviteToken, INVITE_ROLES, INVITE_TTL_DAYS, newInviteToken } from '@/lib/auth/invites';
 
-export async function generateInviteLink(formData: {
-  email: string;
-  username: string;
+const admin = () =>
+  createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+
+/**
+ * Creates a one-time invitation link. The admin only gives a name, a role and the workspaces; the person
+ * fills in email, phone, username and password themselves when they open the link.
+ */
+export async function createInvite(input: {
   fullName: string;
   role: string;
-  workspaceIds?: string[];
-}): Promise<{ success?: boolean; link?: string; error?: string }> {
-  const wsCtx = await getAuthenticatedWorkspaceContext();
+  workspaceIds: string[];
+}): Promise<{ success?: boolean; link?: string; inviteId?: string; expiresAt?: string; error?: string }> {
+  const ctx = await getAuthenticatedWorkspaceContext();
 
-  if (!['superadmin', 'founder'].includes(wsCtx.role)) {
+  if (!['superadmin', 'founder'].includes(ctx.role)) {
     return { error: 'Unauthorized: only superadmins can invite users.' };
   }
+  if (!(INVITE_ROLES as readonly string[]).includes(input.role)) return { error: 'Invalid role.' };
 
-  if (!['superadmin', 'accounting', 'admin', 'advertiser', 'client'].includes(formData.role)) {
-    return { error: 'Invalid role.' };
+  const fullName = input.fullName.trim();
+  if (fullName.length < 2) return { error: 'Please enter the person\'s name.' };
+
+  // Only workspaces where the inviter is founder / superadmin can be granted.
+  const grantable = new Set(ctx.availableWorkspaces.filter((w) => w.role === 'founder' || w.role === 'superadmin').map((w) => w.id));
+  const requested = input.workspaceIds.length > 0 ? input.workspaceIds : [ctx.activeWorkspaceId];
+  const workspaceIds = Array.from(new Set(requested.filter((id) => grantable.has(id))));
+  if (workspaceIds.length === 0) return { error: 'Choose at least one workspace you manage.' };
+
+  const token = newInviteToken();
+  const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 86400000).toISOString();
+
+  const { data, error } = await admin()
+    .from('workspace_invites')
+    .insert({
+      token_hash: hashInviteToken(token),
+      full_name: fullName,
+      role: input.role,
+      workspace_ids: workspaceIds,
+      invited_by: ctx.userId,
+      expires_at: expiresAt,
+    })
+    .select('id')
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST205' || error.code === '42P01') {
+      return { error: 'Invitations are not set up yet: run supabase/migrations/20260930_workspace_invites.sql in Supabase.' };
+    }
+    return { error: error.message };
   }
 
-  if (!formData.email || !formData.username || !formData.fullName) {
-    return { error: 'Email, username and name are all required.' };
+  // SITE_URL (e.g. https://accounting.profesoronline.id) wins so the link always points at the real domain.
+  const h = await headers();
+  const siteUrl = (process.env.SITE_URL || `${h.get('x-forwarded-proto') || 'http'}://${h.get('host') || 'localhost:3000'}`).replace(/\/$/, '');
+
+  revalidatePath('/settings/team');
+  return { success: true, link: `${siteUrl}/join/${token}`, inviteId: data.id, expiresAt };
+}
+
+/** Cancels an invitation that has not been used yet. */
+export async function revokeInvite(inviteId: string): Promise<{ success: boolean; error?: string }> {
+  const ctx = await getAuthenticatedWorkspaceContext();
+  if (!['superadmin', 'founder'].includes(ctx.role)) return { success: false, error: 'Unauthorized.' };
+
+  const db = admin();
+  const { data: invite } = await db.from('workspace_invites').select('id, workspace_ids, used_at').eq('id', inviteId).maybeSingle();
+  if (!invite) return { success: false, error: 'Invitation not found.' };
+  if (invite.used_at) return { success: false, error: 'This invitation was already used.' };
+
+  const grantable = new Set(ctx.availableWorkspaces.filter((w) => w.role === 'founder' || w.role === 'superadmin').map((w) => w.id));
+  if (!(invite.workspace_ids as string[]).some((id) => grantable.has(id))) {
+    return { success: false, error: 'You do not manage this invitation.' };
   }
 
-  // Workspaces the inviter may grant access to: only the ones where they are founder / superadmin.
-  const grantable = new Set(wsCtx.availableWorkspaces.filter((w) => w.role === 'founder' || w.role === 'superadmin').map((w) => w.id));
-  const requested = formData.workspaceIds && formData.workspaceIds.length > 0 ? formData.workspaceIds : [wsCtx.activeWorkspaceId];
-  const targetWorkspaceIds = Array.from(new Set(requested.filter((id) => grantable.has(id))));
-  if (targetWorkspaceIds.length === 0) {
-    return { error: 'Choose at least one workspace you manage.' };
-  }
-
-  const adminClient = createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-
-  // Derive the site URL from the incoming request headers — works on any host with no env var needed.
-  const headersList = await headers();
-  const host = headersList.get('host') || 'localhost:3000';
-  const proto = headersList.get('x-forwarded-proto') || 'http';
-  // SITE_URL (e.g. https://accounting.profesoronline.id) wins so links generated anywhere point at the real domain.
-  const siteUrl = (process.env.SITE_URL || `${proto}://${host}`).replace(/\/$/, '');
-  const redirectTo = `${siteUrl}/auth/confirm`;
-
-  // 1. Generate an invite link via Supabase Admin API
-  const { data, error: genError } = await adminClient.auth.admin.generateLink({
-    type: 'invite',
-    email: formData.email.toLowerCase().trim(),
-    options: {
-      redirectTo,
-    },
-  });
-
-  if (genError || !data?.user) {
-    return { error: genError?.message || 'Failed to generate invite link.' };
-  }
-
-  const newUserId = data.user.id;
-
-  // 2. Create or update the profile with username and full name
-  const { error: profileError } = await adminClient.from('profiles').upsert(
-    {
-      id: newUserId,
-      email: formData.email.toLowerCase().trim(),
-      username: formData.username.trim(),
-      full_name: formData.fullName.trim(),
-    },
-    { onConflict: 'id' }
-  );
-
-  if (profileError) {
-    console.error('Profile upsert error:', profileError);
-    // Non-fatal: continue
-  }
-
-  // 3. Add the user to every chosen workspace with the assigned role
-  const { error: memberError } = await adminClient.from('workspace_members').upsert(
-    targetWorkspaceIds.map((workspaceId) => ({
-      workspace_id: workspaceId,
-      user_id: newUserId,
-      role: formData.role,
-      email: formData.email.toLowerCase().trim(),
-      display_name: formData.fullName.trim(),
-    })),
-    { onConflict: 'workspace_id,user_id' }
-  );
-
-  if (memberError) {
-    console.error('Member upsert error:', memberError);
-    return { error: memberError.message };
-  }
-
-  // Build the link on OUR domain instead of returning Supabase's action_link (…supabase.co/auth/v1/verify).
-  // /auth/confirm verifies the token server-side, so no Supabase redirect allow-list is involved either.
-  const tokenHash = data.properties?.hashed_token;
-  if (!tokenHash) {
-    return { error: 'Failed to generate invite link.' };
-  }
-
-  return {
-    success: true,
-    link: `${siteUrl}/auth/confirm?token_hash=${encodeURIComponent(tokenHash)}&type=invite`,
-  };
+  const { error } = await db.from('workspace_invites').delete().eq('id', inviteId);
+  if (error) return { success: false, error: error.message };
+  revalidatePath('/settings/team');
+  return { success: true };
 }

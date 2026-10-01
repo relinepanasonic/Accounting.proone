@@ -3,12 +3,13 @@
 import React, { useState, useTransition } from 'react';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { AlertCircle, Loader2, Lock, Mail, KeyRound, ShieldCheck } from 'lucide-react';
+import { AlertCircle, Loader2, Mail, ShieldCheck } from 'lucide-react';
+import { PasswordInput } from '@/components/auth/PasswordInput';
 import { ProfessorTokoOnlineLogo } from '@/components/invoices/ProfessorTokoOnlineLogo';
 import { signInAction } from '@/app/actions/auth';
 
 export function LoginForm() {
-  const [identifier, setIdentifier] = useState('professortokoonline@gmail.com');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -34,11 +35,6 @@ export function LoginForm() {
         setErrorMsg(err?.message || 'Failed to authenticate.');
       }
     });
-  };
-
-  const handleQuickFillDemo = () => {
-    setIdentifier('professortokoonline@gmail.com');
-    setPassword('SuperAdmin2026!');
   };
 
   return (
@@ -104,18 +100,14 @@ export function LoginForm() {
                 SECURITY PASSPHRASE *
               </label>
             </div>
-            <div className="relative">
-              <Lock className="absolute left-3.5 top-3.5 w-4 h-4 text-[#d4af37]/70" />
-              <input
-                type="password"
-                name="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••••••"
-                className="w-full bg-zinc-950/90 border border-zinc-800/90 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] transition-all"
-              />
-            </div>
+            <PasswordInput
+              name="password"
+              required
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••••••"
+            />
           </div>
 
           <button
@@ -132,15 +124,6 @@ export function LoginForm() {
           </button>
         </form>
 
-        <div className="mt-5 pt-4 border-t border-[#d4af37]/20 flex items-center justify-between text-[10px] relative z-10">
-          <span className="text-zinc-500 font-mono">NEW RECRUIT?</span>
-          <a
-            href="/register"
-            className="text-[#f5d77f] hover:underline font-mono inline-flex items-center gap-1 font-bold tracking-widest"
-          >
-            CREATE ACCOUNT
-          </a>
-        </div>
       </div>
     </div>
   );

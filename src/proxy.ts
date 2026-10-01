@@ -51,6 +51,7 @@ export async function proxy(request: NextRequest) {
   const isPublicPath =
     pathname.startsWith('/login') ||
     pathname.startsWith('/register') ||
+    pathname.startsWith('/join/') ||
     pathname.startsWith('/set-password') ||
     pathname.startsWith('/auth/') ||
     (pathname.startsWith('/api/') && !isAdminApi);

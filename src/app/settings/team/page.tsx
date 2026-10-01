@@ -112,12 +112,33 @@ export default async function TeamSettingsPage() {
       return true;
     });
 
+  // Invitations that have not been used yet, for the workspaces this person manages.
+  const adminForInvites = (await import('@supabase/supabase-js')).createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+  const { data: inviteRows } = await adminForInvites
+    .from('workspace_invites')
+    .select('id, full_name, role, workspace_ids, expires_at')
+    .is('used_at', null)
+    .gt('expires_at', new Date().toISOString())
+    .overlaps('workspace_ids', manageableWorkspaces.map((w) => w.id))
+    .order('created_at', { ascending: false });
+  const pendingInvites = (inviteRows || []).map((i: any) => ({
+    id: i.id as string,
+    fullName: i.full_name as string,
+    role: i.role as string,
+    expiresAt: i.expires_at as string,
+    workspaceIds: i.workspace_ids as string[],
+  }));
+
   return (
     <TeamManager
       initialMembers={memberList}
       currentUserRole={currentUserRole}
       workspaces={manageableWorkspaces}
       activeWorkspaceId={activeWorkspaceId}
+      pendingInvites={pendingInvites}
     />
   );
 }

@@ -72,7 +72,8 @@ export async function reconcileRecord(
             if (bankRes?.coa_account_code) bankAccountCode = bankRes.coa_account_code;
           }
           const arAccount = mappings.find(m => m.mapping_type === 'AR')?.account_code || '1100';
-          const todayStr = new Date().toISOString().split('T')[0];
+          // Book the payment on the day the money hit the bank, not the day it was matched.
+          const todayStr = bankDate || new Date().toISOString().split('T')[0];
           const actualBankRef = bankReference || 'BANK-MATCHED';
 
           if (alreadyBooked && !isPartialPayment) {

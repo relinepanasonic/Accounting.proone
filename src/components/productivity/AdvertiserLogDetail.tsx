@@ -21,6 +21,8 @@ import {
 import { buildReportJpeg, buildReportPdf, downloadBlob } from '@/lib/advertiser/build-pdf';
 import { AdvertiserSessionReport } from './AdvertiserSessionReport';
 import { RecommendationPanel } from './RecommendationList';
+import { ScreenshotThumbs } from './ScreenshotThumbs';
+import { parseShots, shotLabel } from '@/lib/advertiser/screenshots';
 import type { Recommendation } from '@/lib/advertiser/optimasi';
 
 interface LogSummary {
@@ -434,13 +436,12 @@ export function AdvertiserLogDetail({
                   </div>
                 )}
 
-                {current.screenshot_url && (
-                  <div>
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Screenshot</div>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={current.screenshot_url} alt="Advertiser screenshot" className="max-h-[360px] rounded-lg border border-zinc-800 object-contain" />
+                {Object.entries(parseShots(current.screenshot_url)).map(([key, imgs]) => (
+                  <div key={key}>
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Screenshots · {shotLabel(key)}</div>
+                    <ScreenshotThumbs images={imgs} size={96} />
                   </div>
-                )}
+                ))}
 
                 <Section title="GMV Max Auto" count={inkubasi.length}>
                   <RowsTable rows={inkubasi} kind="inkubasi" />

@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { ScreenshotThumbs } from './ScreenshotThumbs';
+import { GMV_KEY, MANDIRI_KEY, MAX_SHOTS, compressImage, groupKey, parseShots, serializeShots, shotLabel, type Shots } from '@/lib/advertiser/screenshots';
 import { ClipboardPaste, Save, Trash2, AlertCircle, TrendingUp, Users, Target, Loader2, Plus, ArrowLeft } from 'lucide-react';
 import { fetchAdvertiserReport, saveAdvertiserReport } from '@/app/actions/advertiser';
 
@@ -33,7 +35,7 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
   const [inkubasiData, setInkubasiData] = useState<any[]>([]);
   const [groupData, setGroupData] = useState<any[]>([]); // Flat array of all group rows
   const [mandiriData, setMandiriData] = useState<any[]>([]);
-  const [screenshot, setScreenshot] = useState<string | null>(null);
+  const [shots, setShots] = useState<Shots>({});
 
   // Group Filter State
   const [activeGroupCategory, setActiveGroupCategory] = useState<GroupCategory>('Hero');
@@ -76,7 +78,7 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
         let rawGroup = res.data.data_group || [];
         if (!Array.isArray(rawGroup)) {
           // Migrate old nested format to flat format if necessary
-          const flat = [];
+          const flat: any[] = [];
           if (rawGroup.hero) rawGroup.hero.forEach((r: any) => flat.push({ ...r, groupCategory: 'Hero', groupName: 'Group Hero 1' }));
           if (rawGroup.reguler) rawGroup.reguler.forEach((r: any) => flat.push({ ...r, groupCategory: 'Reguler', groupName: 'Group Reguler 1' }));
           if (rawGroup.low) rawGroup.low.forEach((r: any) => flat.push({ ...r, groupCategory: 'Low', groupName: 'Group Low 1' }));
@@ -85,7 +87,8 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
         setGroupData(rawGroup);
         
         setMandiriData(res.data.data_mandiri || []);
-        setScreenshot(res.data.screenshot_url || null);
+        // A historical fallback record (no exact report for this session yet) must not copy yesterday's pictures.
+        setShots(res.isHistorical ? {} : parseShots(res.data.screenshot_url));
         setSessionNote(res.data.note || '');
         // A historical fallback record (no exact report for this session yet) must not copy yesterday's balance.
         setSisaSaldo(res.isHistorical ? '' : res.data.sisa_saldo_iklan || '');
@@ -93,7 +96,7 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
         setInkubasiData(Array(5).fill(null).map(() => getEmptyRowInkubasiGroup()));
         setGroupData(Array(5).fill(null).map(() => getEmptyRowInkubasiGroup('Hero', 'Group Hero 1')));
         setMandiriData(Array(5).fill(null).map(() => getEmptyRowMandiri()));
-        setScreenshot(null);
+        setShots({});
         setSessionNote('');
         setSisaSaldo('');
       }
@@ -111,7 +114,7 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
       inkubasiData,
       groupData,
       mandiriData,
-      screenshot,
+      serializeShots(shots),
       sessionNote,
       sisaSaldo.trim() || null
     );
@@ -141,6 +144,17 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
     return '';
   };
 
+  // Which section a pasted picture belongs to: GMV Max Auto, the group being edited, or Iklan Mandiri.
+  const shotKey = () => (activeTab === 'inkubasi' ? GMV_KEY : activeTab === 'group' ? groupKey(activeGroupCategory, activeGroupName) : MANDIRI_KEY);
+  const removeShot = (key: string, index: number) =>
+    setShots((prev) => {
+      const next = (prev[key] || []).filter((_, i) => i !== index);
+      const copy = { ...prev };
+      if (next.length) copy[key] = next;
+      else delete copy[key];
+      return copy;
+    });
+
   const handlePaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
 
@@ -156,11 +170,19 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
     if (imageItem) {
       const blob = imageItem.getAsFile();
       if (blob) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          setScreenshot(event.target?.result as string);
-        };
-        reader.readAsDataURL(blob);
+        const key = shotKey();
+        if ((shots[key]?.length || 0) >= MAX_SHOTS) {
+          alert(`Up to ${MAX_SHOTS} screenshots per section. Remove one first.`);
+          return;
+        }
+        compressImage(blob)
+          .then((url) =>
+            setShots((prev) => {
+              const cur = prev[key] || [];
+              return cur.length >= MAX_SHOTS ? prev : { ...prev, [key]: [...cur, url] };
+            })
+          )
+          .catch(() => alert('Could not read that image.'));
       }
       return;
     }
@@ -282,7 +304,11 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
       setGroupData(prev => prev.filter(r => r.groupCategory !== activeGroupCategory || r.groupName !== activeGroupName));
     }
     else if (activeTab === 'mandiri') setMandiriData([]);
-    setScreenshot(null);
+    setShots((prev) => {
+      const copy = { ...prev };
+      delete copy[shotKey()];
+      return copy;
+    });
   };
 
   const getActiveData = () => {
@@ -457,7 +483,7 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
             <div className="flex-1">
               <h3 className="text-zinc-100 font-bold mb-1">Paste Screenshot (SS) or Spreadsheet Here</h3>
               <p className="text-zinc-400 text-xs mb-3">
-                Click into the box below and press Ctrl+V to paste your image screenshot OR text data from Excel.
+                Click into the box below and press Ctrl+V to paste your image screenshot OR text data from Excel. Up to 4 screenshots per section (GMV Max Auto, each group, Iklan Mandiri).
               </p>
               <textarea 
                 onPaste={handlePaste}
@@ -468,14 +494,23 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
           </div>
         </div>
 
-        {/* Display Screenshot if any */}
-        {screenshot && (
-          <div className="p-4 border-b border-zinc-800 bg-black/40 flex flex-col items-center">
-            <div className="flex w-full justify-between items-center mb-3">
-              <h3 className="text-sm font-bold text-[#d4af37] uppercase tracking-wider">Pasted Screenshot (SS)</h3>
-              <button onClick={() => setScreenshot(null)} className="text-xs text-red-400 hover:text-red-300">Remove Image</button>
-            </div>
-            <img src={screenshot} alt="Pasted screenshot" className="max-w-full h-auto rounded-lg border border-zinc-700 shadow-lg object-contain max-h-[400px]" />
+        {/* Screenshots of the section being edited (small, click to enlarge) */}
+        {((shots[shotKey()]?.length || 0) > 0 || (shots.all?.length || 0) > 0) && (
+          <div className="p-4 border-b border-zinc-800 bg-black/40 space-y-3">
+            {(shots[shotKey()]?.length || 0) > 0 && (
+              <div>
+                <h3 className="text-[11px] font-bold text-[#d4af37] uppercase tracking-wider mb-2">
+                  Screenshots · {shotLabel(shotKey())} ({shots[shotKey()].length}/{MAX_SHOTS})
+                </h3>
+                <ScreenshotThumbs images={shots[shotKey()]} onRemove={(i) => removeShot(shotKey(), i)} />
+              </div>
+            )}
+            {(shots.all?.length || 0) > 0 && (
+              <div>
+                <h3 className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Earlier screenshot of this session</h3>
+                <ScreenshotThumbs images={shots.all} onRemove={(i) => removeShot('all', i)} />
+              </div>
+            )}
           </div>
         )}
 

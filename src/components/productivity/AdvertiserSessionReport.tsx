@@ -13,6 +13,8 @@ import {
   type PreviousSession,
 } from '@/lib/advertiser/report-utils';
 
+import { allShots, parseShots } from '@/lib/advertiser/screenshots';
+
 export interface ReportSession {
   session: number;
   note: string | null;
@@ -154,11 +156,15 @@ export const AdvertiserSessionReport = React.forwardRef<
           )}
         </div>
 
-        {includeScreenshot && data.screenshot_url && (
+        {includeScreenshot && allShots(parseShots(data.screenshot_url)).length > 0 && (
           <div data-pdf-block style={block}>
             <div style={sectionTitle}>Screenshot</div>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={data.screenshot_url} alt="" style={{ maxWidth: '100%', maxHeight: 640, objectFit: 'contain', border: '1px solid #e5e7eb', borderRadius: 6 }} />
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {allShots(parseShots(data.screenshot_url)).map((src, i) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img key={i} src={src} alt="" style={{ width: 360, maxHeight: 300, objectFit: 'contain', border: '1px solid #e5e7eb', borderRadius: 6 }} />
+              ))}
+            </div>
           </div>
         )}
 

@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { isOptimizingPath, isPabrikPath, OPTIMIZING_CHILDREN } from '@/components/navigation/nav-config';
 
 const MODULES = {
   accounting: {
@@ -34,9 +35,6 @@ const MODULES = {
     match: ['/productivity'],
     items: [
       { name: 'Dashboard', href: '/productivity' },
-      { name: 'Admin', href: '/productivity/admin' },
-      { name: 'Advertiser', href: '/productivity/advertiser' },
-      { name: 'Pabrik Sosmed', href: '/productivity/pabrik-sosmed' },
       { name: 'Assignments', href: '/productivity/assignments' },
     ]
   },
@@ -63,6 +61,30 @@ const MODULES = {
 export function ModuleSubNav() {
   const pathname = usePathname();
   
+  // Pabrik Sosmed has its own Dashboard / Upload tabs inside the page.
+  if (isPabrikPath(pathname)) return null;
+
+  // Admin and Advertiser have no tab bar of their own. On desktop the sidebar group is enough;
+  // on phones this row lets you hop between the three Optimizing pages.
+  const optimizingSwitcher = isOptimizingPath(pathname) ? (
+    <div className="lg:hidden w-full bg-[#0e0f14]/90 border-b border-[#d4af37]/20 px-4 py-2 flex items-center gap-2 overflow-x-auto">
+      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 shrink-0">Optimizing</span>
+      {OPTIMIZING_CHILDREN.map((c) => (
+        <Link
+          key={c.href}
+          href={c.href}
+          className={`shrink-0 text-xs font-semibold px-3 py-1 rounded-full border ${
+            c.isActive(pathname) ? 'bg-[#d4af37]/20 text-[#f5d77f] border-[#d4af37]/40' : 'text-zinc-400 border-zinc-800'
+          }`}
+        >
+          {c.name}
+        </Link>
+      ))}
+    </div>
+  ) : null;
+
+  if (pathname.startsWith('/productivity/admin') || pathname.startsWith('/productivity/advertiser')) return optimizingSwitcher;
+
   let activeModuleKey = 'accounting'; // default fallback
   
   if (pathname.startsWith('/sales')) activeModuleKey = 'sales';
@@ -73,6 +95,8 @@ export function ModuleSubNav() {
   const activeModule = MODULES[activeModuleKey as keyof typeof MODULES];
 
   return (
+    <>
+    {optimizingSwitcher}
     <div className="w-full bg-[#0e0f14]/90 backdrop-blur-md border-b border-[#d4af37]/20 px-6 py-3 flex items-center gap-6 overflow-x-auto scrollbar-hide sticky top-0 z-30">
       {activeModule.items.map(item => {
         let isActive = false;
@@ -97,5 +121,6 @@ export function ModuleSubNav() {
         );
       })}
     </div>
+    </>
   );
 }

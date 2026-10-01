@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -16,15 +16,39 @@ import {
   ChevronRight,
   ShieldCheck,
   Bot,
+  TrendingUp,
+  ChevronDown,
+  Shield,
+  Megaphone,
+  Share2,
 } from 'lucide-react';
+import {
+  isAccountingPath,
+  isHrdPath,
+  isPabrikPath,
+  isProductivityPath,
+  isOptimizingPath,
+  OPTIMIZING_CHILDREN,
+} from '@/components/navigation/nav-config';
 
-const MAIN_MODULES = [
-  { name: 'AI Office', href: '/ai-office', icon: <Bot className="w-4 h-4" /> },
-  { name: 'Accounting', href: '/', icon: <LayoutDashboard className="w-4 h-4" /> },
-  { name: 'Sales', href: '/sales', icon: <ArrowUpRight className="w-4 h-4" /> },
-  { name: 'Productivity', href: '/productivity', icon: <CheckSquare className="w-4 h-4" /> },
-  { name: 'HRD', href: '/payroll', icon: <Users className="w-4 h-4" /> },
-  { name: 'System', href: '/settings', icon: <Settings className="w-4 h-4" /> },
+type NavEntry =
+  | { type: 'link'; name: string; href: string; icon: React.ReactNode; isActive: (p: string) => boolean }
+  | { type: 'group'; name: string; icon: React.ReactNode };
+
+const OPTIMIZING_ICONS: Record<string, React.ReactNode> = {
+  Admin: <Shield className="w-3.5 h-3.5" />,
+  Sales: <ArrowUpRight className="w-3.5 h-3.5" />,
+  Advertiser: <Megaphone className="w-3.5 h-3.5" />,
+};
+
+const MAIN_MODULES: NavEntry[] = [
+  { type: 'link', name: 'AI Office', href: '/ai-office', icon: <Bot className="w-4 h-4" />, isActive: (p) => p.startsWith('/ai-office') },
+  { type: 'link', name: 'Accounting', href: '/', icon: <LayoutDashboard className="w-4 h-4" />, isActive: isAccountingPath },
+  { type: 'group', name: 'Optimizing', icon: <TrendingUp className="w-4 h-4" /> },
+  { type: 'link', name: 'Pabrik Sosmed', href: '/productivity/pabrik-sosmed', icon: <Share2 className="w-4 h-4" />, isActive: isPabrikPath },
+  { type: 'link', name: 'Productivity', href: '/productivity', icon: <CheckSquare className="w-4 h-4" />, isActive: isProductivityPath },
+  { type: 'link', name: 'HRD', href: '/payroll', icon: <Users className="w-4 h-4" />, isActive: isHrdPath },
+  { type: 'link', name: 'System', href: '/settings', icon: <Settings className="w-4 h-4" />, isActive: (p) => p.startsWith('/settings') },
 ];
 
 interface CyberSidebarProps {
@@ -33,7 +57,34 @@ interface CyberSidebarProps {
 
 export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [optimizingOpen, setOptimizingOpen] = useState(true);
   const pathname = usePathname();
+
+  // Remember whether the Optimizing group was left open or closed.
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem('sidebar-optimizing-open');
+      if (saved === '0') setOptimizingOpen(false);
+    } catch {
+      // storage unavailable: keep the default
+    }
+  }, []);
+
+  // Opening a page inside the group always reveals it.
+  useEffect(() => {
+    if (isOptimizingPath(pathname)) setOptimizingOpen(true);
+  }, [pathname]);
+
+  const toggleOptimizing = () => {
+    setOptimizingOpen((open) => {
+      try {
+        window.localStorage.setItem('sidebar-optimizing-open', open ? '0' : '1');
+      } catch {
+        // ignore
+      }
+      return !open;
+    });
+  };
 
   const activeId = workspaceContext?.activeWorkspaceId || '11111111-1111-1111-1111-111111111111';
   const activeName = workspaceContext?.activeWorkspaceName || 'Professor Toko Online HQ';
@@ -41,7 +92,7 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
   // advertiser / client see Pabrik Sosmed only, never the finance navigation.
   const limited = activeRole === 'advertiser' || activeRole === 'client';
   const modules = limited
-    ? [{ name: 'Pabrik Sosmed', href: '/productivity/pabrik-sosmed', icon: <CheckSquare className="w-4 h-4" /> }]
+    ? ([{ type: 'link', name: 'Pabrik Sosmed', href: '/productivity/pabrik-sosmed', icon: <Share2 className="w-4 h-4" />, isActive: isPabrikPath }] as NavEntry[])
     : MAIN_MODULES;
   const availableWorkspaces = workspaceContext?.availableWorkspaces || [];
 
@@ -121,15 +172,60 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
         {/* Navigation Menu Links */}
         <nav className="p-3 space-y-2 mt-2">
           {modules.map((item) => {
-            let isActive = false;
-            if (item.name === 'Accounting') {
-              isActive = ['/', '/invoices', '/expenses', '/assets', '/ledger', '/reconcile'].some(p => pathname === p || pathname.startsWith(p + '/'));
-            } else if (item.name === 'HRD') {
-              isActive = pathname.startsWith('/payroll') || pathname.startsWith('/hrd');
-            } else {
-              isActive = pathname.startsWith(item.href);
+            if (item.type === 'group') {
+              const groupActive = isOptimizingPath(pathname);
+              const headerClass = `group w-full flex items-center justify-between px-3 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                groupActive && !optimizingOpen
+                  ? 'bg-gradient-to-r from-[#d4af37]/20 to-[#d4af37]/5 text-[#f5d77f] border border-[#d4af37]/40'
+                  : groupActive
+                    ? 'text-[#f5d77f]'
+                    : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900/60'
+              }`;
+
+              // Collapsed sidebar: just the icon, which opens the first page of the group.
+              if (isCollapsed) {
+                return (
+                  <Link key={item.name} href={OPTIMIZING_CHILDREN[1].href} title={item.name} className={headerClass}>
+                    <span className={groupActive ? 'text-[#f5d77f]' : 'text-zinc-500 group-hover:text-[#d4af37]'}>{item.icon}</span>
+                  </Link>
+                );
+              }
+
+              return (
+                <div key={item.name}>
+                  <button type="button" onClick={toggleOptimizing} aria-expanded={optimizingOpen} className={headerClass}>
+                    <span className="flex items-center gap-3">
+                      <span className={groupActive ? 'text-[#f5d77f]' : 'text-zinc-500 group-hover:text-[#d4af37]'}>{item.icon}</span>
+                      <span className="font-sans tracking-wide">{item.name}</span>
+                    </span>
+                    <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform duration-200 ${optimizingOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {optimizingOpen && (
+                    <div className="mt-1 ml-5 pl-3 border-l border-[#d4af37]/20 space-y-1">
+                      {OPTIMIZING_CHILDREN.map((child) => {
+                        const active = child.isActive(pathname);
+                        return (
+                          <Link
+                            key={child.href}
+                            href={child.href}
+                            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-semibold transition-all duration-200 ${
+                              active
+                                ? 'bg-gradient-to-r from-[#d4af37]/20 to-[#d4af37]/5 text-[#f5d77f] border border-[#d4af37]/40'
+                                : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900/60'
+                            }`}
+                          >
+                            <span className={active ? 'text-[#f5d77f]' : 'text-zinc-500'}>{OPTIMIZING_ICONS[child.name]}</span>
+                            <span className="font-sans tracking-wide">{child.name}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
             }
 
+            const isActive = item.isActive(pathname);
             return (
               <Link
                 key={item.href}

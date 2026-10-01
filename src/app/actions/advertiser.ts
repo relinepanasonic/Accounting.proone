@@ -84,7 +84,7 @@ export async function fetchAdvertiserLogs() {
         return modal > 0 && biaya > (0.8 * modal);
       });
       if (needsAction) {
-        grouped[key].recommendation = "Check Detail Produk, Pindahkan Iklan yang boros ke Ikan Group";
+        grouped[key].recommendation = "Check Detail Produk, Pindahkan Iklan yang boros ke Iklan Group";
       }
     }
   });

@@ -21,6 +21,7 @@ import {
   Shield,
   Megaphone,
   Share2,
+  Activity,
 } from 'lucide-react';
 import {
   isAccountingPath,
@@ -95,7 +96,10 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
   const optimizingChildren = activeRole === 'advertiser' ? OPTIMIZING_CHILDREN.filter((c) => c.name === 'Advertiser') : OPTIMIZING_CHILDREN;
   const modules: NavEntry[] =
     activeRole === 'advertiser'
-      ? [{ type: 'group', name: 'Optimizing', icon: <TrendingUp className="w-4 h-4" /> }]
+      ? [
+          { type: 'group', name: 'Optimizing', icon: <TrendingUp className="w-4 h-4" /> },
+          { type: 'link', name: 'My Productivity', href: '/productivity/me', icon: <Activity className="w-4 h-4" />, isActive: (p) => p.startsWith('/productivity/me') },
+        ]
       : limited
         ? [{ type: 'link', name: 'Pabrik Sosmed', href: '/productivity/pabrik-sosmed', icon: <Share2 className="w-4 h-4" />, isActive: isPabrikPath }]
         : MAIN_MODULES;

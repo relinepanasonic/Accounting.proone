@@ -12,6 +12,7 @@ import {
   Bot,
   TrendingUp,
   Share2,
+  Activity,
 } from 'lucide-react';
 import {
   isAccountingPath,
@@ -36,7 +37,10 @@ export function BottomMobileNav({ limited = false, role }: { limited?: boolean; 
   const pathname = usePathname();
   const navItems = limited
     ? role === 'advertiser'
-      ? [{ name: 'Advertiser', href: '/productivity/advertiser', icon: <TrendingUp className="w-5 h-5" />, isActive: isOptimizingPath }]
+      ? [
+          { name: 'Advertiser', href: '/productivity/advertiser', icon: <TrendingUp className="w-5 h-5" />, isActive: isOptimizingPath },
+          { name: 'My Work', href: '/productivity/me', icon: <Activity className="w-5 h-5" />, isActive: (p: string) => p.startsWith('/productivity/me') },
+        ]
       : [{ name: 'Pabrik Sosmed', href: '/productivity/pabrik-sosmed', icon: <Share2 className="w-5 h-5" />, isActive: isPabrikPath }]
     : MOBILE_NAV_ITEMS;
 

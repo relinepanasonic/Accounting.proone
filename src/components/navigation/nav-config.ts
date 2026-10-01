@@ -13,7 +13,12 @@ export const isOptimizingPath = (p: string) => isOptimizingAdminPath(p) || isOpt
 export const isPabrikPath = (p: string) => p === '/productivity/pabrik-sosmed' || p.startsWith('/productivity/pabrik-sosmed/');
 
 // Productivity keeps only its own pages (dashboard + assignments).
-export const isProductivityPath = (p: string) => p === '/productivity' || p === '/productivity/assignments' || p.startsWith('/productivity/assignments/');
+export const isProductivityPath = (p: string) =>
+  p === '/productivity' ||
+  p === '/productivity/assignments' ||
+  p.startsWith('/productivity/assignments/') ||
+  p === '/productivity/me' ||
+  p.startsWith('/productivity/person/');
 
 export const isHrdPath = (p: string) => p.startsWith('/payroll') || p.startsWith('/hrd');
 

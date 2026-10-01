@@ -11,7 +11,7 @@ const LIMITED_ROLE_HOME: Record<string, string> = {
   client: '/productivity/pabrik-sosmed',
 };
 const LIMITED_ROLE_ALLOWED: Record<string, string[]> = {
-  advertiser: ['/productivity/advertiser', '/no-access', '/workspaces'],
+  advertiser: ['/productivity/advertiser', '/productivity/me', '/no-access', '/workspaces'],
   client: ['/productivity/pabrik-sosmed', '/no-access', '/workspaces'],
 };
 

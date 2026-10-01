@@ -166,3 +166,35 @@ export async function saveAdvertiserReport(
 
   return { success: true };
 }
+
+/** Everything one advertiser saved for one client on one day: every session, with who saved it and when. */
+export async function fetchAdvertiserLogDetail(clientId: string, reportDate: string) {
+  const supabase = await createClient();
+  const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+
+  const { data, error } = await supabase
+    .from('advertiser_reports')
+    .select('*')
+    .eq('workspace_id', activeWorkspaceId)
+    .eq('client_id', clientId)
+    .eq('report_date', reportDate)
+    .order('session', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching log detail:', error);
+    return { data: [] as any[] };
+  }
+
+  const userIds = [...new Set((data || []).filter((d: any) => d.user_id).map((d: any) => d.user_id))];
+  const names: Record<string, string> = {};
+  if (userIds.length > 0) {
+    const { data: profs } = await supabase.from('profiles').select('id, full_name, email').in('id', userIds);
+    (profs || []).forEach((p: any) => {
+      names[p.id] = p.full_name || p.email;
+    });
+  }
+
+  return {
+    data: (data || []).map((row: any) => ({ ...row, advertiser_name: names[row.user_id] || 'Unknown' })),
+  };
+}

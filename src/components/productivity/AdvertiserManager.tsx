@@ -5,6 +5,7 @@ import { Calendar, Clock, Plus, Loader2, PlayCircle, History, CheckCircle2, Circ
 import { fetchAdvertiserLogs } from '@/app/actions/advertiser';
 import { AdvertiserDashboard } from './AdvertiserDashboard';
 import { ClientSelect } from '@/components/ui/ClientSelect';
+import { AdvertiserLogDetail } from './AdvertiserLogDetail';
 
 interface Client {
   id: string;
@@ -25,6 +26,7 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
   const [reportDate, setReportDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [session, setSession] = useState<number>(1);
   const [showNewModal, setShowNewModal] = useState(false);
+  const [detailLog, setDetailLog] = useState<any | null>(null);
 
   // Filter State
   const [filterMonth, setFilterMonth] = useState<string>('');
@@ -116,7 +118,7 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
                   type="date"
                   value={reportDate}
                   onChange={(e) => setReportDate(e.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#d4af37] transition-colors"
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-white [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:cursor-pointer focus:outline-none focus:border-[#d4af37] transition-colors"
                 />
               </div>
 
@@ -152,6 +154,20 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
         </div>
       )}
 
+      {detailLog && (
+        <AdvertiserLogDetail
+          log={detailLog}
+          onClose={() => setDetailLog(null)}
+          onEdit={(sessionNumber) => {
+            setSelectedClient(detailLog.client_id);
+            setReportDate(detailLog.report_date);
+            setSession(sessionNumber);
+            setDetailLog(null);
+            setIsEditing(true);
+          }}
+        />
+      )}
+
       {/* Logs Table Area */}
       <div className="gold-glass-panel rounded-2xl border border-[#d4af37]/20 overflow-hidden relative">
         
@@ -163,7 +179,7 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
               aria-label="Month"
               value={filterMonth}
               onChange={(e) => setFilterMonth(e.target.value)}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:cursor-pointer focus:outline-none focus:border-[#d4af37] transition-colors"
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:cursor-pointer focus:outline-none focus:border-[#d4af37] transition-colors"
             />
           </div>
           <div className="flex-1">
@@ -225,7 +241,12 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
                 </tr>
               ) : (
                 filteredLogs.map((log, idx) => (
-                  <tr key={idx} className="hover:bg-zinc-900/50 transition-colors">
+                  <tr
+                    key={idx}
+                    onClick={() => setDetailLog(log)}
+                    className="hover:bg-zinc-900/50 transition-colors cursor-pointer"
+                    title="Click to see what the advertiser did"
+                  >
                     <td className="px-6 py-4 font-bold text-white">
                       {new Date(log.report_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
                     </td>
@@ -262,7 +283,8 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <button 
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setSelectedClient(log.client_id);
                           setReportDate(log.report_date);
                           // Default to the first available session or just 1
@@ -271,7 +293,7 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
                         }}
                         className="text-xs bg-zinc-800 hover:bg-zinc-700 px-3 py-1.5 rounded-lg text-white font-bold transition-colors"
                       >
-                        VIEW / EDIT
+                        EDIT
                       </button>
                     </td>
                   </tr>

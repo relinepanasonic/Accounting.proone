@@ -48,7 +48,7 @@ export default async function RootLayout({
       <body className="bg-[#0b0c10] text-zinc-100 antialiased selection:bg-[#d4af37] selection:text-black flex min-h-screen">
         <NavigationShell
           sidebar={<CyberSidebar workspaceContext={wsContext} />}
-          bottomNav={<BottomMobileNav limited={limited} />}
+          bottomNav={<BottomMobileNav limited={limited} role={wsContext.role} />}
           limited={limited}
         >
           {children}

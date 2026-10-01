@@ -91,9 +91,14 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
   const activeRole = workspaceContext?.role || 'none';
   // advertiser / client see Pabrik Sosmed only, never the finance navigation.
   const limited = activeRole === 'advertiser' || activeRole === 'client';
-  const modules = limited
-    ? ([{ type: 'link', name: 'Pabrik Sosmed', href: '/productivity/pabrik-sosmed', icon: <Share2 className="w-4 h-4" />, isActive: isPabrikPath }] as NavEntry[])
-    : MAIN_MODULES;
+// advertiser: only Optimizing > Advertiser. client: only Pabrik Sosmed.
+  const optimizingChildren = activeRole === 'advertiser' ? OPTIMIZING_CHILDREN.filter((c) => c.name === 'Advertiser') : OPTIMIZING_CHILDREN;
+  const modules: NavEntry[] =
+    activeRole === 'advertiser'
+      ? [{ type: 'group', name: 'Optimizing', icon: <TrendingUp className="w-4 h-4" /> }]
+      : limited
+        ? [{ type: 'link', name: 'Pabrik Sosmed', href: '/productivity/pabrik-sosmed', icon: <Share2 className="w-4 h-4" />, isActive: isPabrikPath }]
+        : MAIN_MODULES;
   const availableWorkspaces = workspaceContext?.availableWorkspaces || [];
 
   return (
@@ -185,7 +190,7 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
               // Collapsed sidebar: just the icon, which opens the first page of the group.
               if (isCollapsed) {
                 return (
-                  <Link key={item.name} href={OPTIMIZING_CHILDREN[1].href} title={item.name} className={headerClass}>
+                  <Link key={item.name} href={(optimizingChildren.find((c) => c.name === 'Sales') ?? optimizingChildren[0]).href} title={item.name} className={headerClass}>
                     <span className={groupActive ? 'text-[#f5d77f]' : 'text-zinc-500 group-hover:text-[#d4af37]'}>{item.icon}</span>
                   </Link>
                 );
@@ -202,7 +207,7 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
                   </button>
                   {optimizingOpen && (
                     <div className="mt-1 ml-5 pl-3 border-l border-[#d4af37]/20 space-y-1">
-                      {OPTIMIZING_CHILDREN.map((child) => {
+                      {optimizingChildren.map((child) => {
                         const active = child.isActive(pathname);
                         return (
                           <Link

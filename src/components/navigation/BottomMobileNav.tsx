@@ -32,10 +32,12 @@ const MOBILE_NAV_ITEMS = [
   { name: 'System', href: '/settings', icon: <Settings className="w-5 h-5" />, isActive: (p: string) => p.startsWith('/settings') },
 ];
 
-export function BottomMobileNav({ limited = false }: { limited?: boolean }) {
+export function BottomMobileNav({ limited = false, role }: { limited?: boolean; role?: string }) {
   const pathname = usePathname();
   const navItems = limited
-    ? [{ name: 'Pabrik Sosmed', href: '/productivity/pabrik-sosmed/dashboard', icon: <Share2 className="w-5 h-5" />, isActive: isPabrikPath }]
+    ? role === 'advertiser'
+      ? [{ name: 'Advertiser', href: '/productivity/advertiser', icon: <TrendingUp className="w-5 h-5" />, isActive: isOptimizingPath }]
+      : [{ name: 'Pabrik Sosmed', href: '/productivity/pabrik-sosmed', icon: <Share2 className="w-5 h-5" />, isActive: isPabrikPath }]
     : MOBILE_NAV_ITEMS;
 
   return (

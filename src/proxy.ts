@@ -4,8 +4,16 @@ import { sharedCookieOptions } from '@/lib/supabase/cookie-options';
 import { isFounderEmail } from '@/lib/auth/founders';
 
 // advertiser / client roles may open ONLY these areas. Every finance route is closed to them.
-const LIMITED_ROLE_HOME = '/productivity/pabrik-sosmed/dashboard';
-const LIMITED_ROLE_ALLOWED = ['/productivity/pabrik-sosmed', '/no-access', '/workspaces'];
+// advertiser: the Advertising Logs page (Optimizing > Advertiser) only.
+// client: the embedded Digital Ads reports (Pabrik Sosmed) only.
+const LIMITED_ROLE_HOME: Record<string, string> = {
+  advertiser: '/productivity/advertiser',
+  client: '/productivity/pabrik-sosmed',
+};
+const LIMITED_ROLE_ALLOWED: Record<string, string[]> = {
+  advertiser: ['/productivity/advertiser', '/no-access', '/workspaces'],
+  client: ['/productivity/pabrik-sosmed', '/no-access', '/workspaces'],
+};
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({
@@ -113,8 +121,8 @@ export async function proxy(request: NextRequest) {
     }
 
     if ((role === 'advertiser' || role === 'client') && !pathname.startsWith('/api/')) {
-      const allowed = LIMITED_ROLE_ALLOWED.some((p) => pathname === p || pathname.startsWith(p + '/'));
-      if (!allowed) return redirectTo(LIMITED_ROLE_HOME);
+      const allowed = LIMITED_ROLE_ALLOWED[role].some((p) => pathname === p || pathname.startsWith(p + '/'));
+      if (!allowed) return redirectTo(LIMITED_ROLE_HOME[role]);
     }
   }
 

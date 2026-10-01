@@ -253,3 +253,110 @@ export async function quickResolveAndReconcile(
   revalidatePath('/');
   return { success: true, transactionId: data.id };
 }
+
+/**
+ * Undo a bank match: the record goes back to "not reconciled", the ledger lines posted by that match are
+ * removed, and an invoice's paid amount is reduced by what the match added. Records that were CREATED by
+ * Quick Log (they only exist because of that match) are deleted with their ledger lines.
+ * Not restored: a total or amount that was adjusted during the match, and the original payment date.
+ */
+export async function unreconcileRecord(recordId: string, recordType: 'invoice' | 'expense' | 'payroll' | 'income') {
+  const supabase = await createClient();
+  const ctx = await getAuthenticatedWorkspaceContext(supabase);
+
+  if (!['founder', 'superadmin', 'accounting'].includes(ctx.role)) {
+    return { success: false, error: 'Only the Founder, a Superadmin or Accounting can undo a match.' };
+  }
+
+  let bankReference: string | null = null;
+  let deleted = false;
+
+  if (recordType === 'payroll') {
+    const { data: row } = await supabase.from('payroll').select('notes, workspace_id').eq('id', recordId).single();
+    if (!row || row.workspace_id !== ctx.activeWorkspaceId) return { success: false, error: 'Record not found.' };
+    const m = String(row.notes || '').match(/^PAID VIA RECONCILIATION - ([\s\S]*)$/);
+    bankReference = m ? m[1] : null;
+    const { error } = await supabase.from('payroll').update({ status: 'draft', payment_date: null, notes: m ? '' : row.notes }).eq('id', recordId);
+    if (error) return { success: false, error: error.message };
+  } else if (recordType === 'invoice') {
+    const { data: inv } = await supabase
+      .from('invoices')
+      .select('id, workspace_id, assigned_workspace_id, bank_reference, amount_paid, total_amount, status')
+      .eq('id', recordId)
+      .single();
+    if (!inv || (inv.workspace_id !== ctx.activeWorkspaceId && inv.assigned_workspace_id !== ctx.activeWorkspaceId)) {
+      return { success: false, error: 'Record not found.' };
+    }
+    bankReference = inv.bank_reference || null;
+
+    // Ledger lines posted by this match: the ones carrying the bank reference, plus a tax/fee write-off
+    // line posted in the same moment (it has no reference in its text).
+    let credits = 0;
+    if (bankReference) {
+      const { data: lines } = await supabase
+        .from('journal_entries')
+        .select('id, description, credit_amount, created_at')
+        .eq('reference_id', recordId)
+        .eq('reference_type', 'bank_match');
+      const matched = (lines || []).filter((l: any) => String(l.description || '').includes(bankReference as string));
+      const times = matched.map((l: any) => new Date(l.created_at).getTime());
+      const writeoffs = (lines || []).filter(
+        (l: any) =>
+          String(l.description || '').startsWith('Tax/Fee Write-off') &&
+          times.some((t: number) => Math.abs(new Date(l.created_at).getTime() - t) < 5000)
+      );
+      const toDelete = [...matched, ...writeoffs].map((l: any) => l.id);
+      credits = matched.reduce((sum: number, l: any) => sum + Number(l.credit_amount || 0), 0);
+      if (toDelete.length > 0) {
+        const { error } = await supabase.from('journal_entries').delete().in('id', toDelete);
+        if (error) return { success: false, error: error.message };
+      }
+    }
+
+    const update: Record<string, unknown> = { reconciled: false, bank_reference: null };
+    if (credits > 0) {
+      const newPaid = Math.max(0, Number(inv.amount_paid || 0) - credits);
+      update.amount_paid = newPaid;
+      update.status = newPaid <= 0 ? 'sent' : newPaid < Number(inv.total_amount) ? 'partial_paid' : inv.status;
+    }
+    const { error } = await supabase.from('invoices').update(update).eq('id', recordId);
+    if (error) return { success: false, error: error.message };
+  } else {
+    const { data: tx } = await supabase
+      .from('transactions')
+      .select('id, workspace_id, invoice_id, bank_reference')
+      .eq('id', recordId)
+      .single();
+    if (!tx || tx.workspace_id !== ctx.activeWorkspaceId) return { success: false, error: 'Record not found.' };
+    bankReference = tx.bank_reference || null;
+
+    const { data: quick } = await supabase
+      .from('journal_entries')
+      .select('id')
+      .eq('reference_id', recordId)
+      .in('reference_type', ['quick_income', 'quick_expense']);
+
+    if (quick && quick.length > 0) {
+      // Made by Quick Log for this bank line: it has no reason to exist without the match.
+      await supabase.from('journal_entries').delete().in('id', quick.map((q: any) => q.id));
+      const { error } = await supabase.from('transactions').delete().eq('id', recordId);
+      if (error) return { success: false, error: error.message };
+      deleted = true;
+    } else {
+      const { error } = await supabase.from('transactions').update({ reconciled: false, bank_reference: null }).eq('id', recordId);
+      if (error) return { success: false, error: error.message };
+      // A payment of an invoice is no longer confirmed by the bank, so neither is the invoice.
+      if (tx.invoice_id) {
+        await supabase.from('invoices').update({ reconciled: false, bank_reference: null }).eq('id', tx.invoice_id);
+      }
+    }
+  }
+
+  revalidatePath('/payroll');
+  revalidatePath('/reconcile');
+  revalidatePath('/invoices');
+  revalidatePath('/expenses');
+  revalidatePath('/ledger');
+  revalidatePath('/');
+  return { success: true, deleted, bankReference: bankReference && bankReference.startsWith('BANK-REF:') ? bankReference : null };
+}

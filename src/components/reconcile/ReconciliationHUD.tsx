@@ -13,7 +13,7 @@ import {
   ArrowRight,
   ChevronUp,
 } from 'lucide-react';
-import { reconcileRecord, quickResolveAndReconcile } from '@/app/actions/reconcile';
+import { reconcileRecord, quickResolveAndReconcile, unreconcileRecord } from '@/app/actions/reconcile';
 import { createClientRecord } from '@/app/actions/settings';
 import { RupiahInput } from '@/components/ui/RupiahInput';
 
@@ -106,6 +106,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   const [filterYear, setFilterYear] = useState<number>(currentYear);
   const [activeFilterTab, setActiveFilterTab] = useState<'all' | 'matched' | 'unmatched'>('all');
   const [showReconciled, setShowReconciled] = useState(false);
+  const [reconciledRefs, setReconciledRefs] = useState<string[]>(reconciledBankRefs);
   const [optionsDialog, setOptionsDialog] = useState<{
     title: string;
     message: React.ReactNode;
@@ -206,7 +207,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
             return;
           }
           if (result.data && Array.isArray(result.data)) {
-            const reconciledSet = new Set(reconciledBankRefs);
+            const reconciledSet = new Set(reconciledRefs);
             const parsed: BankLine[] = result.data
               .filter((t: any) => !reconciledSet.has(`BANK-REF:${t.date}:${t.amount}:${t.sourceDestination}`))
               .map((t: any, i: number) => ({
@@ -240,7 +241,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
         const text = ev.target?.result as string;
         if (!text) return;
         const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
-        const reconciledSet = new Set(reconciledBankRefs);
+        const reconciledSet = new Set(reconciledRefs);
         const parsed: BankLine[] = [];
         for (let i = 1; i < lines.length; i++) {
           const cols = lines[i].split(',');
@@ -285,12 +286,36 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
     let shouldClearDiff = false;
     let isPartialPayment = false;
     let isTaxWriteoff = false;
-    
-    if (bankAmountAbs !== recordAmountAbs) {
-      if (targetRecords.length > 1) { 
-        await askOptions('Error', 'Amount mismatch with multiple records. Adjust manually.', [{ text: 'Close', value: 'close', isPrimary: true }]); 
-        return; 
+    let multiAdjust: { recordId: string; newAmount: number } | null = null;
+
+    if (targetRecords.length > 1 && bankAmountAbs !== recordAmountAbs) {
+      // Several records paid with one transfer that does not add up exactly (usually a rounding difference).
+      const diffSigned = bankAmountAbs - recordAmountAbs; // positive: the bank received more
+      const last = targetRecords[targetRecords.length - 1];
+      const newAmount = Math.abs(last.amount) + diffSigned;
+      const lastName = last.payeeOrClient || last.reference;
+      if (newAmount <= 0) {
+        await askOptions('Cannot match', 'The difference is larger than the last selected record. Select the records again.', [{ text: 'Close', value: 'close', isPrimary: true }]);
+        return;
       }
+      const choice = await askOptions(
+        'Amounts do not add up',
+        <div className="space-y-1 text-sm">
+          <p>Bank: <span className="text-[#f5d77f]">Rp {bankAmountAbs.toLocaleString('id-ID')}</span></p>
+          <p>{targetRecords.length} records: <span className="text-white">Rp {recordAmountAbs.toLocaleString('id-ID')}</span></p>
+          <p className="mt-2 text-zinc-300">Difference: <span className="font-bold text-white">Rp {Math.abs(diffSigned).toLocaleString('id-ID')}</span> ({diffSigned > 0 ? 'bank received more' : 'bank received less'})</p>
+          <p className="mt-3 text-zinc-400">The difference is applied to "{lastName}", which becomes Rp {newAmount.toLocaleString('id-ID')}. All records are then matched.</p>
+        </div>,
+        [
+          { text: `Apply Rp ${Math.abs(diffSigned).toLocaleString('id-ID')} and match`, value: 'adjust', isPrimary: true },
+          { text: 'Cancel', value: 'cancel', isDanger: true }
+        ]
+      );
+      if (choice !== 'adjust') return;
+      multiAdjust = { recordId: last.id, newAmount };
+    }
+
+    if (bankAmountAbs !== recordAmountAbs && targetRecords.length === 1) {
       const diffAbs = recordAmountAbs - bankAmountAbs;
       
       if (bankAmountAbs < recordAmountAbs && targetRecords[0].type === 'invoice') {
@@ -333,7 +358,9 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
             targetRecord.type, 
             uniqueRef, 
             activeBankId, 
-            (shouldClearDiff || isPartialPayment || isTaxWriteoff) ? activeBankLine.amount : undefined, 
+            multiAdjust
+              ? (targetRecord.id === multiAdjust.recordId ? multiAdjust.newAmount : undefined)
+              : (shouldClearDiff || isPartialPayment || isTaxWriteoff) ? Math.abs(activeBankLine.amount) : undefined, 
             isPartialPayment,
             taxWriteoffAmount,
             toIsoDate(activeBankLine.date)
@@ -343,11 +370,52 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
         if (isPartialPayment) {
           setRecordsList((prev) => prev.map((r) => activeTargetIds.includes(r.id) ? { ...r, amount: r.amount > 0 ? r.amount - bankAmountAbs : r.amount + bankAmountAbs } : r));
         } else {
-          setRecordsList((prev) => prev.filter((r) => !activeTargetIds.includes(r.id)));
+          setRecordsList((prev) => prev.map((r) => (activeTargetIds.includes(r.id) ? { ...r, reconciled: true } : r)));
         }
         setSelectedRecordIds([]);
         setSelectedBankId(null);
       } catch (err) { console.error(err); }
+    });
+  };
+
+  const handleUndoMatch = async (rec: UnreconciledSystemRecord) => {
+    const name = rec.payeeOrClient || rec.reference;
+    const choice = await askOptions(
+      'Undo this match?',
+      <div className="space-y-2 text-sm">
+        <p>"{name}" will go back to <span className="text-white font-bold">not reconciled</span> and the ledger lines posted by the match are removed.</p>
+        <p className="text-zinc-400">If one bank transfer was matched to several records, undo each of them. Amounts that were adjusted during the match are not restored.</p>
+      </div>,
+      [
+        { text: 'Undo match', value: 'undo', isPrimary: true },
+        { text: 'Keep it', value: 'cancel', isDanger: true }
+      ]
+    );
+    if (choice !== 'undo') return;
+
+    startTransition(async () => {
+      try {
+        const res = await unreconcileRecord(rec.id, rec.type);
+        if (!res.success) {
+          await askOptions('Could not undo', res.error || 'Something went wrong.', [{ text: 'Close', value: 'close', isPrimary: true }]);
+          return;
+        }
+        setRecordsList((prev) => (res.deleted ? prev.filter((r) => r.id !== rec.id) : prev.map((r) => (r.id === rec.id ? { ...r, reconciled: false } : r))));
+
+        // Put the bank line back in the feed so it can be matched again, correctly.
+        const ref = res.bankReference;
+        if (ref) {
+          setReconciledRefs((prev) => prev.filter((r) => r !== ref));
+          const m = ref.match(/^BANK-REF:([^:]+):([^:]+):([\s\S]*)$/);
+          if (m) {
+            const restored: BankLine = { id: `undo-${ref}`, date: m[1], sourceDestination: m[3], transactionDetails: '', notes: '', rekFrom: '', amount: Number(m[2]) };
+            setBankLines((prev) => (prev.some((b) => b.id === restored.id) ? prev : [...prev, restored].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())));
+          }
+        }
+        await askOptions('Match undone', ref ? 'The bank line is back in the feed on the left.' : 'The record is open again. Upload the bank statement again to see its bank line.', [{ text: 'Close', value: 'close', isPrimary: true }]);
+      } catch (err) {
+        console.error(err);
+      }
     });
   };
 
@@ -696,6 +764,16 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                   {rec.notes && <div className="text-[10px] text-zinc-500 font-mono mt-1 truncate">{rec.notes}</div>}
                   <div className="mt-2 flex items-center gap-2 flex-wrap">
                     {rec.reconciled && <span className="text-emerald-500 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded text-[9px]">ALREADY CLEARED</span>}
+                    {rec.reconciled && (
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={(e) => { e.stopPropagation(); handleUndoMatch(rec); }}
+                        className="ml-auto text-red-300 font-bold bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 px-2 py-0.5 rounded text-[9px] uppercase tracking-wider disabled:opacity-40"
+                      >
+                        Undo match
+                      </button>
+                    )}
                     {isBest && amountMatch && pScore > 0.3 && <span className="text-[#f5d77f] font-bold bg-[#d4af37]/10 px-1.5 py-0.5 rounded text-[9px]">\u2605 BEST MATCH</span>}
                     {isBest && amountMatch && pScore <= 0.3 && <span className="text-yellow-400 font-bold bg-yellow-400/10 px-1.5 py-0.5 rounded text-[9px]">SAME AMOUNT</span>}
                   </div>

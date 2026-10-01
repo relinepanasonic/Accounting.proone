@@ -44,8 +44,10 @@ export async function completeInvite(
     return { success: false, error: 'This invitation is no longer valid. Ask your admin for a new link.' };
   }
 
-  const { data: taken } = await db.from('profiles').select('id').eq('username', username).maybeSingle();
-  if (taken) return { success: false, error: 'That username is already taken. Please choose another.' };
+  const { data: taken } = await db.from('profiles').select('id, email').eq('username', username).maybeSingle();
+  if (taken && (taken.email || '').toLowerCase() !== email) {
+    return { success: false, error: 'That username is already taken. Please choose another.' };
+  }
 
   // Claim the invitation first so two people cannot use the same link at once.
   const { data: claimed } = await db
@@ -59,24 +61,51 @@ export async function completeInvite(
   }
   const release = () => db.from('workspace_invites').update({ used_at: null }).eq('id', invite.id);
 
+  let userId: string;
+  let isExisting = false;
+
   const { data: created, error: createError } = await db.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
     user_metadata: { full_name: invite.full_name, username, phone },
   });
-  if (createError || !created?.user) {
-    await release();
+
+  if (created?.user) {
+    userId = created.user.id;
+  } else {
     const already = /already|registered|exists/i.test(createError?.message || '');
-    return {
-      success: false,
-      error: already ? 'This email already has an account. Ask your admin to add your existing account to the workspace.' : createError?.message || 'Could not create your account.',
-    };
+    if (!already) {
+      await release();
+      return { success: false, error: createError?.message || 'Could not create your account.' };
+    }
+
+    // The email already has a login (for example someone removed from the team earlier and invited again).
+    // Removing a member only takes away workspace access; the login stays. They can come back by proving it is
+    // theirs with that account's current password. Their existing password is kept.
+    const verifier = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data: signedIn, error: passwordError } = await verifier.auth.signInWithPassword({ email, password });
+    if (passwordError || !signedIn?.user) {
+      await release();
+      return {
+        success: false,
+        error: "This email already has an account. Enter that account's existing password to join, or use a different email.",
+      };
+    }
+    userId = signedIn.user.id;
+    isExisting = true;
   }
-  const userId = created.user.id;
 
   // Profile (phone is optional so this still works before the phone column exists).
-  const profile = { id: userId, email, username, full_name: invite.full_name };
+  const { data: existingProfile } = await db.from('profiles').select('username, full_name').eq('id', userId).maybeSingle();
+  const profile = {
+    id: userId,
+    email,
+    username: existingProfile?.username || username,
+    full_name: existingProfile?.full_name || invite.full_name,
+  };
   let { error: profileError } = await db.from('profiles').upsert({ ...profile, phone }, { onConflict: 'id' });
   if (profileError && (profileError.code === '42703' || profileError.code === 'PGRST204' || /phone/.test(profileError.message))) {
     ({ error: profileError } = await db.from('profiles').upsert(profile, { onConflict: 'id' }));
@@ -95,7 +124,7 @@ export async function completeInvite(
   );
   if (memberError) {
     console.error('Member upsert error:', memberError);
-    await db.auth.admin.deleteUser(userId);
+    if (!isExisting) await db.auth.admin.deleteUser(userId);
     await release();
     return { success: false, error: 'Could not set up your workspace access. Please try again.' };
   }

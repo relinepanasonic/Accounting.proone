@@ -165,6 +165,17 @@ export function AdvertiserLogDetail({
     downloadBlob(pdf.blob, pdf.fileName);
   };
 
+  // WhatsApp Web cannot be handed a file by a web page, so: save the PDF, open WhatsApp Web, and the file is
+  // attached by hand (drag it in from the browser's download bar, or use the + / paperclip button).
+  const handleWhatsAppWeb = () => {
+    if (pdf.status !== 'ready' || !pdf.blob || !pdf.fileName || !current) return;
+    const { dd, mmm, yy } = splitReportDate(log.report_date);
+    const message = `Laporan iklan Sesi ${current.session} · ${dd} ${mmm} ${yy} · ${log.client_name}`;
+    window.open(`https://web.whatsapp.com/send?text=${encodeURIComponent(message)}`, '_blank', 'noopener');
+    downloadBlob(pdf.blob, pdf.fileName);
+    setShareNotice(`Saved "${pdf.fileName}" to your downloads and opened WhatsApp Web. Choose the chat, then drag the file from your browser's download list into it, or click + and Document.`);
+  };
+
   const handleWhatsApp = async () => {
     if (pdf.status !== 'ready' || !pdf.blob || !pdf.fileName || !current) return;
     const { dd, mmm, yy } = splitReportDate(log.report_date);
@@ -262,9 +273,19 @@ export function AdvertiserLogDetail({
                       type="button"
                       onClick={handleWhatsApp}
                       disabled={pdf.status !== 'ready'}
+                      title="Share sheet: WhatsApp desktop app or phone"
                       className="inline-flex items-center gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-3 py-1.5 rounded-lg text-white font-bold"
                     >
                       {pdf.status === 'building' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageCircle className="w-3.5 h-3.5" />} WhatsApp
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleWhatsAppWeb}
+                      disabled={pdf.status !== 'ready'}
+                      title="Opens WhatsApp Web and saves the PDF so you can drop it into the chat"
+                      className="inline-flex items-center gap-1.5 text-xs bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 px-3 py-1.5 rounded-lg text-white font-bold"
+                    >
+                      {pdf.status === 'building' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageCircle className="w-3.5 h-3.5" />} WhatsApp Web
                     </button>
                     <button
                       type="button"

@@ -129,10 +129,11 @@ export function buildRecommendations(today: DayFigures, history: DayFigures[] = 
     });
   });
 
-  // The store's average ROAS = total sales / total ad cost across all the groups.
+  // The store's average ROAS = total sales / total ad cost of EVERY ad (GMV Max Auto + all groups + Iklan Mandiri),
+  // the same figure Shopee shows as ROAS for the whole store.
   const groups = normalizeGroup(today.data_group).filter(hasData);
   const mandiriRows = rowsOf(today.data_mandiri);
-  const base = groups.length ? groups : [...groups, ...mandiriRows];
+  const base = [...rowsOf(today.data_inkubasi), ...groups, ...mandiriRows];
   const avg = sums(base).roas;
 
   const decide = (section: Exclude<RecSection, 'gmv'>, name: string, s: ReturnType<typeof sums>) => {

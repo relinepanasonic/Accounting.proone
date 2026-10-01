@@ -11,7 +11,7 @@ Turn one day's Shopee ad figures into one clear action per group / ad. Answer in
 
 - **GMV Max Auto** = the old "Inkubasi" campaign (stored as `inkubasi` in the app). Modal harian is usually Rp 50.000, target ROAS is Auto.
 - **Usage** = biaya iklan / modal harian.
-- **Maxed out** = usage >= 90%. **Low** = usage < 70%. Between 70% and 90% = "Pantau", no action. (Constants `MAXED_AT` and `LOW_BELOW` in `optimasi.ts`.)
+- **Maxed out** = usage >= 99% (biaya iklan reached the modal harian, e.g. 25k of 25k). **Low** = usage < 70% (e.g. 65k of 100k). Between 70% and 99% = "Pantau", no action. (Constants `MAXED_AT` and `LOW_BELOW` in `optimasi.ts`.)
 - **ROAS** of a group = total penjualan / total biaya iklan of that group (never an average of row ROAS values).
 - **Average ROAS of the store** = total penjualan / total biaya iklan of ALL Group Ads (Hero + Regular + Low together). If the store has no groups, use all rows.
 - "Above" = ROAS >= average. No spend (biaya 0) counts as below.

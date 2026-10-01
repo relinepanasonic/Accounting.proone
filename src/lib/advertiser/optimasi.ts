@@ -2,8 +2,8 @@
 // The same rules are written down in .claude/skills/OptimasiShopee/SKILL.md - keep the two identical.
 import { hasData, normalizeGroup, num } from '@/lib/advertiser/report-utils';
 
-/** Biaya iklan at or above this share of Modal harian = "maxed out" (Shopee rarely spends exactly 100%). */
-export const MAXED_AT = 0.9;
+/** Biaya iklan reached Modal harian (e.g. 25k of 25k) = "maxed out"; 99% allows for rounding. */
+export const MAXED_AT = 0.99;
 /** Biaya iklan below this share of Modal harian = "low" (the budget is not being used). */
 export const LOW_BELOW = 0.7;
 

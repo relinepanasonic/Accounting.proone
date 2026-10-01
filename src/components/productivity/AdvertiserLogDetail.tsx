@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { X, Loader2, Pencil, Download, MessageCircle } from 'lucide-react';
 import { fetchAdvertiserLogDetail, fetchPreviousSession } from '@/app/actions/advertiser';
 import {
+  buildReportMessage,
   compareSessions,
   hasData,
   normalizeGroup,
@@ -198,6 +199,26 @@ export function AdvertiserLogDetail({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current?.session, current?.created_at, sessions, prev.loaded, prev.data, includeShot]);
 
+  const reportMessage = current
+    ? buildReportMessage({
+        clientName: log.client_name,
+        reportDate: log.report_date,
+        session: current.session,
+        sisaSaldo: current.sisa_saldo_iklan,
+        sections: compareSessions(current, prev.data),
+        hasPrevious: prev.data !== null,
+      })
+    : '';
+
+  const handleCopyText = async () => {
+    try {
+      await navigator.clipboard.writeText(reportMessage);
+      setShareNotice('Message text copied. Paste it into the WhatsApp chat.');
+    } catch {
+      setShareNotice('Could not copy automatically: select the text in the preview below and copy it.');
+    }
+  };
+
   const handleDownloadJpeg = () => {
     if (!jpeg.blob || !jpeg.fileName) return;
     downloadBlob(jpeg.blob, jpeg.fileName);
@@ -212,8 +233,7 @@ export function AdvertiserLogDetail({
   // attached by hand (drag it in from the browser's download bar, or use the + / paperclip button).
   const handleWhatsAppWeb = () => {
     if (pdf.status !== 'ready' || !pdf.blob || !pdf.fileName || !current) return;
-    const { dd, mmm, yy } = splitReportDate(log.report_date);
-    const message = `Laporan iklan Sesi ${current.session} · ${dd} ${mmm} ${yy} · ${log.client_name}`;
+    const message = reportMessage;
     window.open(`https://web.whatsapp.com/send?text=${encodeURIComponent(message)}`, '_blank', 'noopener');
     downloadBlob(pdf.blob, pdf.fileName);
     setShareNotice(`Saved "${pdf.fileName}" to your downloads and opened WhatsApp Web. Choose the chat, then drag the file from your browser's download list into it, or click + and Document.`);
@@ -221,8 +241,7 @@ export function AdvertiserLogDetail({
 
   const handleWhatsApp = async () => {
     if (pdf.status !== 'ready' || !pdf.blob || !pdf.fileName || !current) return;
-    const { dd, mmm, yy } = splitReportDate(log.report_date);
-    const message = `Laporan iklan Sesi ${current.session} · ${dd} ${mmm} ${yy} · ${log.client_name}`;
+    const message = reportMessage;
     const file = new File([pdf.blob], pdf.fileName, { type: 'application/pdf' });
 
     // Phones (and some desktop browsers) can hand the PDF straight to WhatsApp through the share sheet.
@@ -314,6 +333,15 @@ export function AdvertiserLogDetail({
                     </button>
                     <button
                       type="button"
+                      onClick={handleCopyText}
+                      disabled={!prev.loaded}
+                      title="Copy the message text for WhatsApp"
+                      className="inline-flex items-center gap-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 px-3 py-1.5 rounded-lg text-white font-bold"
+                    >
+                      <MessageCircle className="w-3.5 h-3.5" /> Copy text
+                    </button>
+                    <button
+                      type="button"
                       onClick={handleDownloadJpeg}
                       disabled={!jpeg.blob}
                       title={jpeg.error ? jpeg.error : 'Save the whole report as one JPEG image'}
@@ -352,6 +380,12 @@ export function AdvertiserLogDetail({
                   <p className={`text-xs ${pdf.status === 'error' ? 'text-red-400' : 'text-emerald-400'}`}>
                     {pdf.status === 'error' ? `PDF failed: ${pdf.error}` : shareNotice}
                   </p>
+                )}
+                {prev.loaded && (
+                  <details className="rounded-lg border border-zinc-800 bg-black/20 px-3 py-2">
+                    <summary className="cursor-pointer text-[11px] font-bold uppercase tracking-wider text-zinc-400">Message text for WhatsApp</summary>
+                    <pre className="mt-2 whitespace-pre-wrap text-xs text-zinc-200 font-sans">{reportMessage}</pre>
+                  </details>
                 )}
                 {pdf.status === 'ready' && pdf.fileName && <p className="text-[10px] font-mono text-zinc-600">{pdf.fileName} · no recommendation included</p>}
 

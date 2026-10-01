@@ -68,13 +68,24 @@ export interface PreviousSession extends SessionData {
   report_date: string;
 }
 
+export type ChangePart = {
+  kind: 'target' | 'modal';
+  dir: 'up' | 'down' | 'same' | 'first';
+  value: string; // "11" or "Rp 30.000"
+};
+
 export interface CompareLine {
-  label: string;
-  text: string;
+  label: string; // product name, or "Baris 1" when the row has none
+  text: string; // sentence used on screen and in the PDF
   changed: boolean;
+  isNew: boolean; // row did not exist in the previous session
+  parts: ChangePart[];
+  note: string;
 }
 
 export interface CompareSection {
+  kind: 'inkubasi' | 'group' | 'mandiri';
+  name: string; // "Inkubasi", "Group Hero 1", "Mandiri"
   title: string;
   lines: CompareLine[];
 }
@@ -91,24 +102,29 @@ const rowKey = (r: any, idx: number) => {
   return name && name !== '-' ? `n|${name}` : `i|${idx}`;
 };
 
-function describeRow(cur: any, prev: any | null): { text: string; changed: boolean } {
-  const parts: string[] = [];
+function describeRow(cur: any, prev: any | null, hasPrevious: boolean): Omit<CompareLine, 'label' | 'note'> {
+  const parts: ChangePart[] = [];
+  const bits: string[] = [];
   let changed = false;
+  const isNew = hasPrevious && !prev;
 
   const curT = parseTarget(cur.targetRoas);
   const prevT = prev ? parseTarget(prev.targetRoas) : null;
   if (curT !== null) {
     if (prevT === null) {
-      parts.push(`Target ROAS ${fmtTarget(curT)}`);
-      changed = changed || Boolean(prev);
+      parts.push({ kind: 'target', dir: 'first', value: fmtTarget(curT) });
+      bits.push(`Target ROAS ${fmtTarget(curT)}`);
     } else if (curT > prevT) {
-      parts.push(`Target ROAS dinaikkan ke ${fmtTarget(curT)}`);
+      parts.push({ kind: 'target', dir: 'up', value: fmtTarget(curT) });
+      bits.push(`Target ROAS dinaikkan ke ${fmtTarget(curT)}`);
       changed = true;
     } else if (curT < prevT) {
-      parts.push(`Target ROAS diturunkan ke ${fmtTarget(curT)}`);
+      parts.push({ kind: 'target', dir: 'down', value: fmtTarget(curT) });
+      bits.push(`Target ROAS diturunkan ke ${fmtTarget(curT)}`);
       changed = true;
     } else {
-      parts.push(`Target ROAS tetap ${fmtTarget(curT)}`);
+      parts.push({ kind: 'target', dir: 'same', value: fmtTarget(curT) });
+      bits.push(`Target ROAS tetap ${fmtTarget(curT)}`);
     }
   }
 
@@ -116,25 +132,35 @@ function describeRow(cur: any, prev: any | null): { text: string; changed: boole
   const prevM = prev ? num(prev.modalHarian) : 0;
   if (curM > 0) {
     if (!prev || prevM === 0) {
-      parts.push(`modal harian ${rupiah(curM)}`);
+      parts.push({ kind: 'modal', dir: 'first', value: rupiah(curM) });
+      bits.push(`modal harian ${rupiah(curM)}`);
     } else if (curM > prevM) {
-      parts.push(`modal harian naik menjadi ${rupiah(curM)}`);
+      parts.push({ kind: 'modal', dir: 'up', value: rupiah(curM) });
+      bits.push(`modal harian naik menjadi ${rupiah(curM)}`);
       changed = true;
     } else if (curM < prevM) {
-      parts.push(`modal harian turun menjadi ${rupiah(curM)}`);
+      parts.push({ kind: 'modal', dir: 'down', value: rupiah(curM) });
+      bits.push(`modal harian turun menjadi ${rupiah(curM)}`);
       changed = true;
     } else {
-      parts.push('modal harian tetap');
+      parts.push({ kind: 'modal', dir: 'same', value: rupiah(curM) });
+      bits.push('modal harian tetap');
     }
   }
 
-  if (parts.length === 0) return { text: 'Tidak ada Target ROAS / modal harian yang diisi', changed: false };
-  const joined = parts.join(', ');
-  const text = !changed && prev ? `Stay (${joined})` : joined.charAt(0).toUpperCase() + joined.slice(1);
-  return { text, changed };
+  if (isNew) changed = true;
+
+  if (bits.length === 0) return { text: 'Tidak ada Target ROAS / modal harian yang diisi', changed: false, isNew, parts };
+  const joined = bits.join(', ');
+  const text = isNew
+    ? `Baru · ${joined}`
+    : !changed && hasPrevious
+      ? `Stay (${joined})`
+      : joined.charAt(0).toUpperCase() + joined.slice(1);
+  return { text, changed, isNew, parts };
 }
 
-function compareRows(curRows: any[], prevRows: any[]): CompareLine[] {
+function compareRows(curRows: any[], prevRows: any[], hasPrevious: boolean): CompareLine[] {
   const prevByKey = new Map<string, any>();
   prevRows.forEach((r, i) => {
     const k = rowKey(r, i);
@@ -144,17 +170,20 @@ function compareRows(curRows: any[], prevRows: any[]): CompareLine[] {
   return curRows.map((r, i) => {
     const prev = prevByKey.get(rowKey(r, i)) ?? null;
     const label = String(r?.iklanProduk ?? r?.infoIklan ?? '').trim() || `Baris ${i + 1}`;
-    return { label, ...describeRow(r, prev) };
+    return { label, note: String(r?.note ?? '').trim(), ...describeRow(r, prev, hasPrevious) };
   });
 }
 
 /** Per section (Inkubasi, each Iklan Group, Mandiri): what changed since the previous session. */
 export function compareSessions(current: SessionData, previous: SessionData | null): CompareSection[] {
   const rowsOf = (raw: any) => (Array.isArray(raw) ? raw : []).filter(hasData);
+  const hasPrevious = previous !== null;
   const sections: CompareSection[] = [];
 
   const ink = rowsOf(current.data_inkubasi);
-  if (ink.length) sections.push({ title: 'Inkubasi', lines: compareRows(ink, previous ? rowsOf(previous.data_inkubasi) : []) });
+  if (ink.length) {
+    sections.push({ kind: 'inkubasi', name: 'Inkubasi', title: 'Inkubasi', lines: compareRows(ink, previous ? rowsOf(previous.data_inkubasi) : [], hasPrevious) });
+  }
 
   const groupsNow = normalizeGroup(current.data_group).filter(hasData);
   const groupsPrev = previous ? normalizeGroup(previous.data_group).filter(hasData) : [];
@@ -163,11 +192,18 @@ export function compareSessions(current: SessionData, previous: SessionData | nu
     const [category, name] = key.split('|');
     const now = groupsNow.filter((g) => `${g.groupCategory || ''}|${g.groupName || 'Group'}` === key);
     const before = groupsPrev.filter((g) => `${g.groupCategory || ''}|${g.groupName || 'Group'}` === key);
-    sections.push({ title: `Iklan Group · ${name}${category ? ` (${category})` : ''}`, lines: compareRows(now, before) });
+    sections.push({
+      kind: 'group',
+      name,
+      title: `Iklan Group · ${name}${category ? ` (${category})` : ''}`,
+      lines: compareRows(now, before, hasPrevious),
+    });
   }
 
   const man = rowsOf(current.data_mandiri);
-  if (man.length) sections.push({ title: 'Mandiri', lines: compareRows(man, previous ? rowsOf(previous.data_mandiri) : []) });
+  if (man.length) {
+    sections.push({ kind: 'mandiri', name: 'Mandiri', title: 'Mandiri', lines: compareRows(man, previous ? rowsOf(previous.data_mandiri) : [], hasPrevious) });
+  }
 
   return sections;
 }
@@ -182,4 +218,74 @@ export function saldoDisplay(raw: string | null | undefined): string | null {
 export function previousLabel(prev: { session: number; report_date: string }) {
   const { dd, mmm, yy } = splitReportDate(prev.report_date);
   return `Sesi ${prev.session} · ${dd} ${mmm} ${yy}`;
+}
+
+// ---------------------------------------------------------------------------------------------
+// The text that goes into WhatsApp with the file (same layout the advertiser writes by hand)
+// ---------------------------------------------------------------------------------------------
+
+const rpComma = (n: number) => `Rp ${n.toLocaleString('en-US')}`;
+
+function messageChanges(line: CompareLine): string {
+  if (line.isNew) {
+    const bits = line.parts.map((p) => (p.kind === 'target' ? `Target ROAS ${p.value}` : `modal harian ${rpComma(num(p.value))}`));
+    return `Baru${bits.length ? ` - ${bits.join(', ')}` : ''}`;
+  }
+  return line.parts
+    .filter((p) => p.dir === 'up' || p.dir === 'down')
+    .map((p) => {
+      const verb = p.dir === 'up' ? 'Naik' : 'Turun';
+      return p.kind === 'target' ? `${verb} Target ROAS menjadi ${p.value}` : `${verb} modal harian menjadi ${rpComma(num(p.value))}`;
+    })
+    .join(', ');
+}
+
+export function buildReportMessage(opts: {
+  clientName: string;
+  reportDate: string;
+  session: number;
+  sisaSaldo: string | null | undefined;
+  sections: CompareSection[];
+  hasPrevious: boolean;
+}): string {
+  const { dd, mmm } = splitReportDate(opts.reportDate);
+  const year = opts.reportDate.slice(0, 4);
+  const out: string[] = [];
+
+  out.push(`Laporan Iklan Sesi ${opts.session}. ${dd} ${mmm} ${year} - ${opts.clientName}`);
+  const saldo = num(opts.sisaSaldo);
+  if (saldo > 0) out.push(`Sisa Saldo Iklan: ${rpComma(saldo)}`);
+
+  out.push('', 'Perubahan Iklan');
+  if (!opts.hasPrevious) {
+    out.push('Belum ada sesi sebelumnya untuk dibandingkan.');
+    return out.join('\n');
+  }
+
+  const changedLines = (section: CompareSection) => section.lines.filter((l) => l.changed);
+  const main: string[] = [];
+  const mandiri: string[] = [];
+
+  for (const section of opts.sections) {
+    for (const line of changedLines(section)) {
+      const changes = messageChanges(line);
+      if (!changes) continue;
+      const product = line.label.startsWith('Baris ') ? '' : line.label;
+      const note = line.note ? ` - Notes: ${line.note}` : '';
+      if (section.kind === 'mandiri') {
+        mandiri.push(`${product || line.label} - ${changes}${note}`);
+      } else {
+        const where = section.kind === 'inkubasi' ? 'Inkubasi' : section.name;
+        main.push(`${where} - ${product ? `${product}: ` : ''}${changes}${note}`);
+      }
+    }
+  }
+
+  if (main.length === 0 && mandiri.length === 0) {
+    out.push('Tidak ada perubahan, semua Stay.');
+    return out.join('\n');
+  }
+  out.push(...main);
+  if (mandiri.length) out.push('', 'Iklan Mandiri', ...mandiri);
+  return out.join('\n');
 }

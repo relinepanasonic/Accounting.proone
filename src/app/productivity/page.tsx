@@ -5,6 +5,8 @@ import { Activity, Megaphone, Shield, Smartphone } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { loadActivity, loadPeople, parseRange } from '@/lib/productivity/activity';
+import { loadKpi } from '@/lib/kpi/load';
+import { KpiScoreboard } from '@/components/kpi/KpiScoreboard';
 import { TeamOverview } from '@/components/productivity/ActivityViews';
 
 export const dynamic = 'force-dynamic';
@@ -19,6 +21,9 @@ export default async function ProductivityPage({ searchParams }: { searchParams:
   const range = parseRange((await searchParams).range);
   const people = await loadPeople(supabase, ctx.activeWorkspaceId);
   const data = await loadActivity(supabase, ctx.activeWorkspaceId, people, range);
+  // Owners (founder / superadmin) have no KPI of their own; the scoreboard is for the staff.
+  const staff = people.filter((p) => p.role !== 'superadmin' && p.role !== 'founder');
+  const kpiRows = await Promise.all(staff.map(async (person) => ({ person, kpi: await loadKpi(person, ctx.activeWorkspaceId) })));
 
   return (
     <div className="p-4 lg:p-8 space-y-8 animate-in fade-in zoom-in-95 duration-300">
@@ -32,6 +37,8 @@ export default async function ProductivityPage({ searchParams }: { searchParams:
         </div>
         <Link href="/productivity/me" className="text-xs font-bold uppercase tracking-wider text-[#f5d77f] hover:underline">My own page</Link>
       </div>
+
+      <KpiScoreboard rows={kpiRows} />
 
       <TeamOverview
         activities={data.activities}

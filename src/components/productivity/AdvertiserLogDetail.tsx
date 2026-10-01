@@ -1,8 +1,11 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { X, Loader2, Pencil } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { X, Loader2, Pencil, Download, MessageCircle } from 'lucide-react';
 import { fetchAdvertiserLogDetail } from '@/app/actions/advertiser';
+import { hasData, normalizeGroup, num, rupiah, sessionPdfFileName, splitReportDate, text, totals } from '@/lib/advertiser/report-utils';
+import { buildReportPdf, downloadBlob } from '@/lib/advertiser/build-pdf';
+import { AdvertiserSessionReport } from './AdvertiserSessionReport';
 
 interface LogSummary {
   client_id: string;
@@ -22,34 +25,6 @@ interface SessionRow {
   created_at: string;
   updated_at?: string | null;
   advertiser_name: string;
-}
-
-const num = (v: unknown) => parseFloat(String(v ?? '').replace(/\D/g, '') || '0');
-const rupiah = (n: number) => (n ? `Rp ${n.toLocaleString('id-ID')}` : '-');
-const text = (v: unknown) => (v === null || v === undefined || v === '' ? '-' : String(v));
-
-// A row counts as "worked on" when the advertiser typed anything meaningful into it.
-const hasData = (r: any) =>
-  Boolean(r) && ['iklanProduk', 'infoIklan', 'modalHarian', 'biayaIklan', 'penjualan', 'konversi', 'produkTerjual', 'note'].some((k) => String(r[k] ?? '').trim() !== '');
-
-function totals(rows: any[]) {
-  const modal = rows.reduce((s, r) => s + num(r.modalHarian), 0);
-  const biaya = rows.reduce((s, r) => s + num(r.biayaIklan), 0);
-  const jual = rows.reduce((s, r) => s + num(r.penjualan), 0);
-  return { modal, biaya, jual, roas: biaya > 0 ? (jual / biaya).toFixed(2) : '-' };
-}
-
-function normalizeGroup(raw: any): any[] {
-  if (Array.isArray(raw)) return raw;
-  // Older records stored groups as { hero: [], reguler: [], low: [] }.
-  if (raw && typeof raw === 'object') {
-    return [
-      ...(raw.hero || []).map((r: any) => ({ ...r, groupCategory: 'Hero', groupName: 'Group Hero 1' })),
-      ...(raw.reguler || []).map((r: any) => ({ ...r, groupCategory: 'Reguler', groupName: 'Group Reguler 1' })),
-      ...(raw.low || []).map((r: any) => ({ ...r, groupCategory: 'Low', groupName: 'Group Low 1' })),
-    ];
-  }
-  return [];
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
@@ -134,6 +109,9 @@ export function AdvertiserLogDetail({
 }) {
   const [sessions, setSessions] = useState<SessionRow[] | null>(null);
   const [active, setActive] = useState<number>(1);
+  const reportRef = useRef<HTMLDivElement>(null);
+  const [pdf, setPdf] = useState<{ status: 'building' | 'ready' | 'error'; blob?: Blob; fileName?: string; error?: string }>({ status: 'building' });
+  const [shareNotice, setShareNotice] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -159,10 +137,61 @@ export function AdvertiserLogDetail({
   const groups = current ? normalizeGroup(current.data_group).filter(hasData) : [];
   const mandiri = current ? (Array.isArray(current.data_mandiri) ? current.data_mandiri : []).filter(hasData) : [];
 
+  // Build the PDF in the background whenever the viewed session changes. Browsers only allow "share" right
+  // after a click, so having the file ready beforehand is what makes the WhatsApp button work.
+  useEffect(() => {
+    if (!current) return;
+    let cancelled = false;
+    setPdf({ status: 'building' });
+    setShareNotice(null);
+    const timer = setTimeout(async () => {
+      try {
+        if (!reportRef.current) throw new Error('Report not ready.');
+        const blob = await buildReportPdf(reportRef.current);
+        if (!cancelled) setPdf({ status: 'ready', blob, fileName: sessionPdfFileName(log.report_date, current.session, log.client_name) });
+      } catch (err: any) {
+        if (!cancelled) setPdf({ status: 'error', error: err?.message || 'Could not build the PDF.' });
+      }
+    }, 150);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current?.session, current?.created_at, sessions]);
+
+  const handleDownload = () => {
+    if (pdf.status !== 'ready' || !pdf.blob || !pdf.fileName) return;
+    downloadBlob(pdf.blob, pdf.fileName);
+  };
+
+  const handleWhatsApp = async () => {
+    if (pdf.status !== 'ready' || !pdf.blob || !pdf.fileName || !current) return;
+    const { dd, mmm, yy } = splitReportDate(log.report_date);
+    const message = `Laporan iklan Sesi ${current.session} · ${dd} ${mmm} ${yy} · ${log.client_name}`;
+    const file = new File([pdf.blob], pdf.fileName, { type: 'application/pdf' });
+
+    // Phones (and some desktop browsers) can hand the PDF straight to WhatsApp through the share sheet.
+    if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: pdf.fileName.replace(/\.pdf$/i, ''), text: message });
+        return;
+      } catch (err: any) {
+        if (err?.name === 'AbortError') return; // the user closed the share sheet
+      }
+    }
+
+    // Otherwise: save the file and open WhatsApp, where the PDF has to be attached by hand.
+    downloadBlob(pdf.blob, pdf.fileName);
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank', 'noopener');
+    setShareNotice('PDF saved to your downloads. In WhatsApp, choose the chat and attach that file.');
+  };
+
   const groupNames = Array.from(new Set(groups.map((g) => `${g.groupCategory || ''}|${g.groupName || 'Group'}`)));
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/80 p-3 md:p-8 overflow-y-auto" onClick={onClose}>
+      {current && <AdvertiserSessionReport ref={reportRef} clientName={log.client_name} reportDate={log.report_date} data={current} />}
       <div className="w-full max-w-5xl rounded-2xl border border-[#d4af37]/30 bg-[#0e0f14] shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-4 p-5 border-b border-zinc-800">
           <div>
@@ -220,14 +249,38 @@ export function AdvertiserLogDetail({
                     {current.updated_at && current.updated_at !== current.created_at ? ` · last edited ${stamp(current.updated_at)}` : ''}
                     {' '}by <span className="text-zinc-300">{current.advertiser_name}</span>
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => onEdit(current.session)}
-                    className="inline-flex items-center gap-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 px-3 py-1.5 rounded-lg text-white font-bold"
-                  >
-                    <Pencil className="w-3.5 h-3.5" /> Edit Sesi {current.session}
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleDownload}
+                      disabled={pdf.status !== 'ready'}
+                      className="inline-flex items-center gap-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 px-3 py-1.5 rounded-lg text-white font-bold"
+                    >
+                      {pdf.status === 'building' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} PDF
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleWhatsApp}
+                      disabled={pdf.status !== 'ready'}
+                      className="inline-flex items-center gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-3 py-1.5 rounded-lg text-white font-bold"
+                    >
+                      {pdf.status === 'building' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageCircle className="w-3.5 h-3.5" />} WhatsApp
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onEdit(current.session)}
+                      className="inline-flex items-center gap-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 px-3 py-1.5 rounded-lg text-white font-bold"
+                    >
+                      <Pencil className="w-3.5 h-3.5" /> Edit Sesi {current.session}
+                    </button>
+                  </div>
                 </div>
+                {(pdf.status === 'error' || shareNotice) && (
+                  <p className={`text-xs ${pdf.status === 'error' ? 'text-red-400' : 'text-emerald-400'}`}>
+                    {pdf.status === 'error' ? `PDF failed: ${pdf.error}` : shareNotice}
+                  </p>
+                )}
+                {pdf.status === 'ready' && pdf.fileName && <p className="text-[10px] font-mono text-zinc-600">{pdf.fileName} · no recommendation included</p>}
 
                 {current.note && (
                   <div className="rounded-lg border border-zinc-800 bg-black/30 px-3 py-2">

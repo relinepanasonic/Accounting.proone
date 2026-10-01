@@ -85,14 +85,11 @@ export function ModuleSubNav() {
 
   if (pathname.startsWith('/productivity/admin') || pathname.startsWith('/productivity/advertiser')) return optimizingSwitcher;
 
-  let activeModuleKey = 'accounting'; // default fallback
-  
-  if (pathname.startsWith('/sales')) activeModuleKey = 'sales';
-  else if (pathname.startsWith('/productivity')) activeModuleKey = 'productivity';
-  else if (pathname.startsWith('/payroll') || pathname.startsWith('/hrd')) activeModuleKey = 'hrd';
-  else if (pathname.startsWith('/settings')) activeModuleKey = 'system';
-  
-  const activeModule = MODULES[activeModuleKey as keyof typeof MODULES];
+  // Only pages that belong to a module get its tab bar; anything else (AI Office, Workspaces, ...) gets none.
+  const inModule = (m: { match: string[] }) =>
+    m.match.some((p) => (p === '/' ? pathname === '/' : pathname === p || pathname.startsWith(p + '/')));
+  const activeModule = Object.values(MODULES).find(inModule);
+  if (!activeModule) return optimizingSwitcher;
 
   return (
     <>

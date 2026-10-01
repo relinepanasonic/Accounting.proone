@@ -64,7 +64,7 @@ export interface UnlinkedActivity {
 const STAFF_ROLES = ['superadmin', 'accounting', 'admin', 'advertiser'];
 
 /** Names a person may appear under in other systems (sales deals, the dashboard app). */
-const nameKeys = (p: Person) => {
+export const nameKeys = (p: Person) => {
   const full = p.name.trim().toLowerCase();
   const first = full.split(/\s+/)[0];
   const local = p.email.split('@')[0].toLowerCase();

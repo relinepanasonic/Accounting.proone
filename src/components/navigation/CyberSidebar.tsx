@@ -98,7 +98,7 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
     activeRole === 'advertiser'
       ? [
           { type: 'group', name: 'Optimizing', icon: <TrendingUp className="w-4 h-4" /> },
-          { type: 'link', name: 'My Productivity', href: '/productivity/me', icon: <Activity className="w-4 h-4" />, isActive: (p) => p.startsWith('/productivity/me') },
+          { type: 'link', name: 'My KPI', href: '/productivity/me', icon: <Activity className="w-4 h-4" />, isActive: (p) => p.startsWith('/productivity/me') },
         ]
       : limited
         ? [{ type: 'link', name: 'Pabrik Sosmed', href: '/productivity/pabrik-sosmed', icon: <Share2 className="w-4 h-4" />, isActive: isPabrikPath }]

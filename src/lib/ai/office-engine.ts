@@ -7,6 +7,7 @@
 // Agents have NO access to ERP data or actions. They work from the text of the brief, the web (researchers only)
 // and the skills installed into them.
 import { askBoss, askResearcher, askWorker, describeModelError, providerStatus, type Provider } from '@/lib/ai/providers';
+import { budgetBlocks, memoryBlock } from '@/lib/ai/office-extras';
 
 type Db = any; // Supabase client (user session; RLS limits it to founder / superadmin)
 
@@ -311,7 +312,18 @@ export async function getOfficeState(db: Db, workspaceId: string) {
   };
 }
 
-export async function submitGoal(db: Db, workspaceId: string, userId: string | null, brief: string, deepThink: boolean, teamId: string | null) {
+export async function submitGoal(
+  db: Db,
+  workspaceId: string,
+  userId: string | null,
+  brief: string,
+  deepThink: boolean,
+  teamId: string | null,
+  scheduleId: string | null = null
+) {
+  if (await budgetBlocks(db, workspaceId)) {
+    throw new Error('The monthly AI budget is used up. Raise it in Mission Control > Dashboard, or wait for next month.');
+  }
   const text = brief.trim();
   const title = text.split('\n')[0].slice(0, 90);
 
@@ -325,7 +337,7 @@ export async function submitGoal(db: Db, workspaceId: string, userId: string | n
 
   const { data, error } = await db
     .from('ai_tasks')
-    .insert({ workspace_id: workspaceId, team_id: teamId, kind: 'goal', title, instructions: text, deep_think: deep, created_by: userId })
+    .insert({ workspace_id: workspaceId, team_id: teamId, kind: 'goal', title, instructions: text, deep_think: deep, created_by: userId, ...(scheduleId ? { schedule_id: scheduleId } : {}) })
     .select('id')
     .single();
   if (error) throw new Error(error.message);
@@ -382,6 +394,7 @@ async function planGoal(db: Db, workspaceId: string, goal: OfficeTask, agents: O
   await logEvent(db, workspaceId, goal.id, planner?.id || null, `${planner?.name || 'Boss'} is planning${goal.deep_think ? ' (deep think, Opus)' : ''}.`);
 
   try {
+    const memory = await memoryBlock(db, workspaceId, goal.team_id, planner?.id || null);
     const { data, model, tokensIn, tokensOut } = await askBoss<{
       approach: string;
       subtasks: { title: string; instructions: string; level: 'doer' | 'specialist' }[];
@@ -392,7 +405,8 @@ async function planGoal(db: Db, workspaceId: string, goal: OfficeTask, agents: O
         `${OFFICE_CONTEXT}\n\nYou are the Director. Split the owner's brief into at most ${maxSubtasks} small, independent subtasks for the worker floors. ` +
         'Use "doer" for simple, mechanical work (lists, rewriting, formatting, simple drafts) and "specialist" for work that needs judgment, analysis or research. ' +
         'Prefer fewer subtasks; a simple brief may need only one. Each subtask must be fully self-contained: copy into its instructions every fact from the brief the worker needs.' +
-        (profile ? `\n\n${profile.plannerGuide}` : ''),
+        (profile ? `\n\n${profile.plannerGuide}` : '') +
+        (memory ? `\n\n${memory}` : ''),
       prompt: `Owner's brief:\n\n${goal.instructions}`,
       schema: PLAN_SCHEMA,
     });
@@ -501,11 +515,13 @@ async function runSubtask(db: Db, workspaceId: string, task: OfficeTask, agents:
       skillBlock = (skills || []).map((s: { name: string; instructions: string }) => `Skill "${s.name}":\n${s.instructions}`).join('\n\n');
     }
 
+    const memory = await memoryBlock(db, workspaceId, task.team_id ?? null, agent.id);
+
     const redo = task.qc_feedback
       ? `\n\nYour previous answer was rejected by quality control. Fix this:\n${task.qc_feedback}\n\nYour previous answer:\n${task.result || '(none)'}`
       : '';
     const role = profile?.workerGuide[agent.kind] || `You are ${agent.name}, a ${agent.floor === 2 ? 'specialist' : 'doer'}. Do exactly the one task below and return only the finished work.`;
-    const system = `${OFFICE_CONTEXT}\n\n${role}${skillBlock ? `\n\nYour installed skills. Follow them when relevant:\n${skillBlock}` : ''}`;
+    const system = `${OFFICE_CONTEXT}\n\n${role}${skillBlock ? `\n\nYour installed skills. Follow them when relevant:\n${skillBlock}` : ''}${memory ? `\n\n${memory}` : ''}`;
     const prompt = `Task: ${task.title}\n\n${task.instructions}${redo}`;
 
     const out =
@@ -541,6 +557,7 @@ async function reviewGoal(db: Db, workspaceId: string, goal: OfficeTask, subtask
     const work = subtasks
       .map((s) => `--- Subtask ${s.seq}: ${s.title} [${s.status}]\nInstructions: ${s.instructions}\nResult:\n${s.status === 'failed' ? `(failed: ${s.error || 'no result'})` : s.result || '(empty)'}`)
       .join('\n\n');
+    const memory = await memoryBlock(db, workspaceId, goal.team_id, qc?.id || null);
 
     const { data, tokensIn, tokensOut } = await askBoss<{
       verdicts: { seq: number; pass: boolean; feedback: string }[];
@@ -554,7 +571,8 @@ async function reviewGoal(db: Db, workspaceId: string, goal: OfficeTask, subtask
         '(for example, company data the agents cannot access yet). Do not claim work that was not done. ' +
         'You cannot start or schedule any further work: never write that something "will be rerun", "will be corrected" or "will be delivered". ' +
         'If parts failed, give the best answer you can from what passed, say in one line which parts are missing, and tell the owner to press "Retry failed parts" on this brief.' +
-        (profile ? `\n\n${profile.reportGuide}` : ''),
+        (profile ? `\n\n${profile.reportGuide}` : '') +
+        (memory ? `\n\n${memory}` : ''),
       prompt: `Owner's brief:\n\n${goal.instructions}\n\nWork from the floors:\n\n${work}`,
       schema: QC_SCHEMA,
     });
@@ -605,6 +623,7 @@ export async function tickOffice(db: Db, workspaceId: string): Promise<{ active:
     .order('created_at');
   const goals: OfficeTask[] = openGoals || [];
   if (goals.length === 0) return { active: false };
+  if (await budgetBlocks(db, workspaceId)) return { active: false };
 
   const teamAgents = (teamId: string | null) => agents.filter((a) => sameTeam(a, teamId));
   const profileOf = (teamId: string | null): TeamProfile | null => {

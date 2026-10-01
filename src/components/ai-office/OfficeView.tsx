@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { Send, Loader2, AlertTriangle, CheckCircle2, XCircle, Brain, ChevronDown, ChevronUp } from 'lucide-react';
 import type { RobotView } from '@/components/ai-office/Office3D';
+import { costUsd } from '@/lib/ai/costs';
 
 // three.js only loads in the browser, and only when this page is opened.
 const Office3D = dynamic(() => import('@/components/ai-office/Office3D'), {
@@ -94,19 +95,8 @@ const FLOORS: { floor: number; name: string; blurb: string; hood: string; eye: s
   { floor: 1, name: 'Floor 1 · Doers', blurb: 'Simple, repeatable work', hood: '#dc2626', eye: '#38bdf8', shoe: '#ef4444' },
 ];
 
-// Rough USD per 1M tokens (input, output) by model family. Web search itself is billed per search on top.
-const PRICES: { match: string; inp: number; out: number }[] = [
-  { match: 'opus', inp: 4, out: 20 },
-  { match: 'sonnet', inp: 2, out: 10 },
-  { match: 'haiku', inp: 1, out: 5 },
-  { match: 'gpt-oss', inp: 0.075, out: 0.3 },
-  { match: 'gemini', inp: 0.3, out: 2.5 },
-];
-
-function estimateUsd(model: string | null, tin: number, tout: number): number {
-  const p = PRICES.find((x) => (model || '').toLowerCase().includes(x.match)) || { inp: 2, out: 10 };
-  return (tin * p.inp + tout * p.out) / 1_000_000;
-}
+// One price table for the whole AI Office (estimate).
+const estimateUsd = (model: string | null, tin: number, tout: number) => costUsd(model, tin, tout);
 
 function goalCost(g: { model_used: string | null; tokens_in: number; tokens_out: number; subtasks: Task[] }): number {
   return (

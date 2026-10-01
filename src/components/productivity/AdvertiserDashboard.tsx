@@ -373,7 +373,7 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
             activeTab === 'inkubasi' ? 'bg-[#0e0f14] text-[#d4af37] shadow-md border border-[#d4af37]/30' : 'text-zinc-500 hover:text-zinc-300'
           }`}
         >
-          <TrendingUp className="w-4 h-4" /> Inkubasi
+          <TrendingUp className="w-4 h-4" /> GMV Max Auto
         </button>
         <button
           onClick={() => setActiveTab('group')}

@@ -20,6 +20,8 @@ import {
 } from '@/lib/advertiser/report-utils';
 import { buildReportJpeg, buildReportPdf, downloadBlob } from '@/lib/advertiser/build-pdf';
 import { AdvertiserSessionReport } from './AdvertiserSessionReport';
+import { RecommendationPanel } from './RecommendationList';
+import type { Recommendation } from '@/lib/advertiser/optimasi';
 
 interface LogSummary {
   client_id: string;
@@ -27,6 +29,7 @@ interface LogSummary {
   report_date: string;
   advertiser_name: string;
   recommendation?: string;
+  recs?: Recommendation[];
 }
 
 interface SessionRow {
@@ -285,11 +288,7 @@ export function AdvertiserLogDetail({
           <div className="p-12 text-center text-sm text-zinc-500">No saved data for this day.</div>
         ) : (
           <div className="p-5 space-y-5">
-            {log.recommendation && (
-              <div className="rounded-lg border border-[#d4af37]/30 bg-[#d4af37]/10 px-3 py-2 text-xs text-[#f5d77f]">
-                <span className="font-bold uppercase tracking-wider">Recommendation: </span>{log.recommendation}
-              </div>
-            )}
+            <RecommendationPanel recs={log.recs} />
 
             <div className="flex flex-wrap items-center gap-2">
               {[1, 2, 3].map((n) => {
@@ -443,7 +442,7 @@ export function AdvertiserLogDetail({
                   </div>
                 )}
 
-                <Section title="Inkubasi" count={inkubasi.length}>
+                <Section title="GMV Max Auto" count={inkubasi.length}>
                   <RowsTable rows={inkubasi} kind="inkubasi" />
                 </Section>
 

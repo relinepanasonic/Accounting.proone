@@ -164,7 +164,7 @@ export const AdvertiserSessionReport = React.forwardRef<
 
         {inkubasi.length > 0 && (
           <div data-pdf-block style={block}>
-            <div style={sectionTitle}>Inkubasi</div>
+            <div style={sectionTitle}>GMV Max Auto</div>
             <Stats rows={inkubasi} />
             <RowsTable rows={inkubasi} />
           </div>

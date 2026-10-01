@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
+import { actionable, buildRecommendations, type DayFigures } from '@/lib/advertiser/optimasi';
 
 export async function fetchAdvertiserLogs() {
   const supabase = await createClient();
@@ -17,6 +18,8 @@ export async function fetchAdvertiserLogs() {
       session,
       note,
       data_inkubasi,
+      data_group,
+      data_mandiri,
       created_at,
       user_id,
       clients ( name )
@@ -76,17 +79,24 @@ export async function fetchAdvertiserLogs() {
       grouped[key].note = row.note;
     }
 
-    // Evaluate Recommendation based on Inkubasi
-    if (row.data_inkubasi && Array.isArray(row.data_inkubasi)) {
-      const needsAction = row.data_inkubasi.some((r: any) => {
-        const modal = parseFloat(r.modalHarian?.replace(/,/g, '') || '0');
-        const biaya = parseFloat(r.biayaIklan?.replace(/,/g, '') || '0');
-        return modal > 0 && biaya > (0.8 * modal);
-      });
-      if (needsAction) {
-        grouped[key].recommendation = "Check Detail Produk, Pindahkan Iklan yang boros ke Iklan Group";
-      }
+    // Keep the figures of the LAST session saved that day: the recommendation is read from them.
+    if (!grouped[key]._figs || row.session >= grouped[key]._figsSession) {
+      grouped[key]._figsSession = row.session;
+      grouped[key]._figs = { date: row.report_date, data_inkubasi: row.data_inkubasi, data_group: row.data_group, data_mandiri: row.data_mandiri } as DayFigures;
     }
+  });
+
+  // OptimasiShopee: one set of recommendations per client and day, with the earlier days of that client as history.
+  const figsByClient: Record<string, DayFigures[]> = {};
+  Object.values(grouped).forEach((g: any) => {
+    (figsByClient[g.client_id] = figsByClient[g.client_id] || []).push(g._figs);
+  });
+  Object.values(grouped).forEach((g: any) => {
+    const history = (figsByClient[g.client_id] || []).filter((f) => f.date < g._figs.date);
+    g.recs = buildRecommendations(g._figs, history);
+    g.recommendation = actionable(g.recs)[0]?.action || '';
+    delete g._figs;
+    delete g._figsSession;
   });
 
   return { data: Object.values(grouped).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) };

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { RecommendationChips } from './RecommendationList';
 import { Calendar, Clock, Plus, Loader2, PlayCircle, History, CheckCircle2, Circle } from 'lucide-react';
 import { fetchAdvertiserLogs } from '@/app/actions/advertiser';
 import { AdvertiserDashboard } from './AdvertiserDashboard';
@@ -269,13 +270,7 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      {log.recommendation ? (
-                        <span className="inline-block px-2 py-1 bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/30 rounded text-xs font-bold max-w-[250px] whitespace-normal">
-                          {log.recommendation}
-                        </span>
-                      ) : (
-                        <span className="text-zinc-600">-</span>
-                      )}
+                      <RecommendationChips recs={log.recs} />
                     </td>
                     <td className="px-6 py-4 text-xs font-mono text-zinc-500">
                       <div>{new Date(log.created_at).toLocaleDateString()}</div>

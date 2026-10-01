@@ -85,7 +85,7 @@ export interface CompareLine {
 
 export interface CompareSection {
   kind: 'inkubasi' | 'group' | 'mandiri';
-  name: string; // "Inkubasi", "Group Hero 1", "Mandiri"
+  name: string; // "GMV Max Auto", "Group Hero 1", "Mandiri"
   title: string;
   lines: CompareLine[];
 }
@@ -182,7 +182,7 @@ export function compareSessions(current: SessionData, previous: SessionData | nu
 
   const ink = rowsOf(current.data_inkubasi);
   if (ink.length) {
-    sections.push({ kind: 'inkubasi', name: 'Inkubasi', title: 'Inkubasi', lines: compareRows(ink, previous ? rowsOf(previous.data_inkubasi) : [], hasPrevious) });
+    sections.push({ kind: 'inkubasi', name: 'GMV Max Auto', title: 'GMV Max Auto', lines: compareRows(ink, previous ? rowsOf(previous.data_inkubasi) : [], hasPrevious) });
   }
 
   const groupsNow = normalizeGroup(current.data_group).filter(hasData);
@@ -275,7 +275,7 @@ export function buildReportMessage(opts: {
       if (section.kind === 'mandiri') {
         mandiri.push(`${product || line.label} - ${changes}${note}`);
       } else {
-        const where = section.kind === 'inkubasi' ? 'Inkubasi' : section.name;
+        const where = section.kind === 'inkubasi' ? 'GMV Max Auto' : section.name;
         main.push(`${where} - ${product ? `${product}: ` : ''}${changes}${note}`);
       }
     }

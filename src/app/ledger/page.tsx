@@ -1,5 +1,6 @@
 import React, { Suspense } from 'react';
-import { ShieldAlert, BookOpen, CheckCircle2 } from 'lucide-react';
+import Link from 'next/link';
+import { ShieldAlert, BookOpen, CheckCircle2, ScanSearch } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 
@@ -204,6 +205,9 @@ export default function LedgerPage() {
             GLOBAL FINANCIAL TELEMETRY • IMMUTABLE AUDIT TRAIL
           </p>
         </div>
+        <Link href="/ledger/check" className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-black bg-gradient-to-r from-[#d4af37] to-[#f5d77f] px-4 py-2 rounded-full hover:brightness-110">
+          <ScanSearch className="w-3.5 h-3.5" /> Ledger Check
+        </Link>
         <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-400 uppercase tracking-wider bg-zinc-900 px-4 py-2 rounded-full border border-zinc-800">
           <CheckCircle2 className="w-3 h-3 text-[#d4af37]" />
           LEDGER SYNCHRONIZED

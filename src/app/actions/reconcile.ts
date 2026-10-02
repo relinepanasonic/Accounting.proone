@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { resolveArAccount } from '@/lib/accounting/accounts';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { getWorkspaceMappings } from './mappings';
@@ -71,7 +72,7 @@ export async function reconcileRecord(
             const { data: bankRes } = await supabase.from('workspace_bank_accounts').select('coa_account_code').eq('id', bankAccountId).single();
             if (bankRes?.coa_account_code) bankAccountCode = bankRes.coa_account_code;
           }
-          const arAccount = mappings.find(m => m.mapping_type === 'AR')?.account_code || '1100';
+          const arAccount = resolveArAccount(mappings);
           // Book the payment on the day the money hit the bank, not the day it was matched.
           const todayStr = bankDate || new Date().toISOString().split('T')[0];
           const actualBankRef = bankReference || 'BANK-MATCHED';

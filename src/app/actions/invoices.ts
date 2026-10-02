@@ -48,6 +48,7 @@ export interface InvoiceActionResult {
 
 import { getAuthenticatedWorkspaceContext as getCanonicalWorkspaceContext } from '@/lib/auth/workspace-context';
 import { getWorkspaceMappings } from './mappings';
+import { resolveArAccount } from '@/lib/accounting/accounts';
 
 /**
  * Helper: Retrieve Authenticated User ID and their active workspace_id (respecting multi-tenant cookie)
@@ -314,8 +315,7 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
       const mappings = await getWorkspaceMappings(workspaceId);
       let salesAccount = mappings.find(m => m.mapping_type === 'SALES')?.account_code || '4000';
     if (salesAccount === '4001') salesAccount = '4000';
-      let arAccount = mappings.find(m => m.mapping_type === 'AR')?.account_code || '1200';
-    if (arAccount === '1002') arAccount = '1200';
+      const arAccount = resolveArAccount(mappings);
 
       await supabase.from('journal_entries').delete().eq('reference_id', payload.id).eq('reference_type', 'invoice');
       
@@ -620,8 +620,7 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
       const mappings = await getWorkspaceMappings(workspaceId);
       let salesAccount = mappings.find(m => m.mapping_type === 'SALES')?.account_code || '4000';
     if (salesAccount === '4001') salesAccount = '4000';
-      let arAccount = mappings.find(m => m.mapping_type === 'AR')?.account_code || '1200';
-    if (arAccount === '1002') arAccount = '1200';
+      const arAccount = resolveArAccount(mappings);
 
       const { error: jeErr } = await supabase.from('journal_entries').insert([
         { workspace_id: workspaceId, account_code: arAccount, transaction_date: payload.issueDate, debit_amount: totalAmount, credit_amount: 0, description: `Invoice ${invoiceNumberToUse}`, reference_id: invoice.id, reference_type: 'invoice' },
@@ -773,8 +772,7 @@ export async function toggleInvoiceStatus(invoiceId: string, currentStatus: stri
         const todayStr = new Date().toISOString().split('T')[0];
 
         const mappings = await getWorkspaceMappings(workspaceId);
-        let arAccount = mappings.find(m => m.mapping_type === 'AR')?.account_code || '1200';
-    if (arAccount === '1002') arAccount = '1200';
+        const arAccount = resolveArAccount(mappings);
 
         // Clean up any prior payment JE for this invoice just in case
         await supabase.from('journal_entries').delete().eq('reference_id', invoiceId).eq('reference_type', 'payment');
@@ -968,8 +966,7 @@ export async function recordInvoicePayment(invoiceId: string, amount: number, pa
 
     // 3. Ledger Double-Entry
     const mappings = await getWorkspaceMappings(workspaceId);
-    let arAccount = mappings.find(m => m.mapping_type === 'AR')?.account_code || '1200';
-    if (arAccount === '1002') arAccount = '1200';
+    const arAccount = resolveArAccount(mappings);
     
     let chosenBank: any = null;
     let debitAccountCode = '1000';

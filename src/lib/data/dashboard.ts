@@ -40,27 +40,30 @@ export interface DashboardTelemetry {
 
 export interface DashboardTelemetryOptions {
   monthFilter?: number | null;
+  workspaceIds?: string[];
 }
 
 export async function getDashboardTelemetry(options: DashboardTelemetryOptions = {}): Promise<DashboardTelemetry> {
-  const { monthFilter = null } = options;
+  const { monthFilter = null, workspaceIds } = options;
   const supabase = await createClient();
   const { activeWorkspaceId, userEmail, availableWorkspaces } = await getAuthenticatedWorkspaceContext(supabase);
   const mask = clientMask({ userEmail, availableWorkspaces });
+
+  const queryWorkspaceIds = workspaceIds && workspaceIds.length > 0 ? workspaceIds : [activeWorkspaceId];
 
   const [invoicesRes, clientsRes, txRes] = await Promise.all([
     supabase
       .from('invoices')
       .select('id, status, total_amount, issue_date, created_at, client_id, clients(name), invoice_line_items(package_name, description, amount, quantity)')
-      .eq('workspace_id', activeWorkspaceId),
+      .in('workspace_id', queryWorkspaceIds),
     supabase
       .from('clients')
       .select('id, name, created_at')
-      .eq('workspace_id', activeWorkspaceId),
+      .in('workspace_id', queryWorkspaceIds),
     supabase
       .from('transactions')
       .select('id, description, amount, due_date, category, reconciled')
-      .eq('workspace_id', activeWorkspaceId)
+      .in('workspace_id', queryWorkspaceIds)
   ]);
 
   const invoices = invoicesRes.data || [];

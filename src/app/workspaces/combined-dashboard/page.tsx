@@ -1,22 +1,37 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
-import { LayoutDashboard, ArrowLeft, TrendingUp, DollarSign, Activity } from 'lucide-react';
+import { LayoutDashboard, ArrowLeft } from 'lucide-react';
+import { getDashboardTelemetry } from '@/lib/data/dashboard';
+
+import { DashboardTopNumbers } from '@/components/dashboard/center-column/DashboardTopNumbers';
+import { DashboardBottomNumbers } from '@/components/dashboard/center-column/DashboardBottomNumbers';
+import { DashboardChartsRow3 } from '@/components/dashboard/center-column/DashboardChartsRow3';
+import { DashboardChartsRow4 } from '@/components/dashboard/center-column/DashboardChartsRow4';
+import { DashboardTablesRow5 } from '@/components/dashboard/center-column/DashboardTablesRow5';
 
 export const dynamic = 'force-dynamic';
+
+const ColumnSkeleton = () => (
+  <div className="flex flex-col gap-6 animate-pulse">
+    <div className="gold-glass-panel rounded-2xl h-32"></div>
+    <div className="gold-glass-panel rounded-2xl h-32"></div>
+    <div className="gold-glass-panel rounded-2xl h-64"></div>
+  </div>
+);
 
 export default async function CombinedDashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ w?: string }>;
+  searchParams: Promise<{ w?: string; month?: string }>;
 }) {
   const supabase = await createClient();
   const ctx = await getAuthenticatedWorkspaceContext(supabase);
 
   if (!ctx.userId) redirect('/login');
 
-  const { w } = await searchParams;
+  const { w, month } = await searchParams;
   if (!w) redirect('/workspaces/combined-setup');
 
   const requestedIds = w.split(',').filter(Boolean);
@@ -36,6 +51,9 @@ export default async function CombinedDashboardPage({
     .in('id', validIds);
 
   const workspaceNames = (workspaces || []).map(ws => ws.name).join(' + ');
+
+  const monthFilter = month ? parseInt(month, 10) : null;
+  const telemetry = await getDashboardTelemetry({ monthFilter, workspaceIds: validIds });
 
   return (
     <div className="min-h-screen bg-[#0b0c10] text-zinc-100 flex flex-col">
@@ -62,52 +80,24 @@ export default async function CombinedDashboardPage({
         </a>
       </div>
 
-      <div className="flex-1 p-4 lg:p-8 space-y-8 max-w-7xl mx-auto w-full">
-        
-        {/* Placeholder Stat Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="gold-glass-panel rounded-2xl p-6 border border-[#d4af37]/20">
-            <div className="flex items-center gap-4 text-[#d4af37] mb-4">
-              <div className="p-3 bg-[#d4af37]/10 rounded-xl">
-                <DollarSign className="w-6 h-6" />
-              </div>
-              <h3 className="text-sm font-bold uppercase tracking-wider">Total Combined Revenue</h3>
-            </div>
-            <p className="text-3xl font-serif font-bold text-white">Rp 0</p>
-            <p className="text-xs text-zinc-500 mt-2">Aggregated across {validIds.length} companies</p>
-          </div>
-
-          <div className="gold-glass-panel rounded-2xl p-6 border border-zinc-800">
-            <div className="flex items-center gap-4 text-emerald-500 mb-4">
-              <div className="p-3 bg-emerald-500/10 rounded-xl">
-                <TrendingUp className="w-6 h-6" />
-              </div>
-              <h3 className="text-sm font-bold uppercase tracking-wider">Net Margin</h3>
-            </div>
-            <p className="text-3xl font-serif font-bold text-white">Rp 0</p>
-            <p className="text-xs text-zinc-500 mt-2">Aggregated across {validIds.length} companies</p>
-          </div>
-
-          <div className="gold-glass-panel rounded-2xl p-6 border border-zinc-800">
-            <div className="flex items-center gap-4 text-blue-500 mb-4">
-              <div className="p-3 bg-blue-500/10 rounded-xl">
-                <Activity className="w-6 h-6" />
-              </div>
-              <h3 className="text-sm font-bold uppercase tracking-wider">Combined Expenses</h3>
-            </div>
-            <p className="text-3xl font-serif font-bold text-white">Rp 0</p>
-            <p className="text-xs text-zinc-500 mt-2">Aggregated across {validIds.length} companies</p>
-          </div>
-        </div>
-
-        <div className="gold-glass-panel rounded-2xl p-8 border border-zinc-800 text-center">
-          <h2 className="text-xl font-bold text-white mb-2">Aggregated Data Engine Initialized</h2>
-          <p className="text-zinc-400 max-w-2xl mx-auto">
-            This is the foundation for your combined dashboard. We have securely loaded your workspace context for <strong>{workspaceNames}</strong>.
-            From here, we can begin aggregating the specific charts and ledgers you need for high-level company analysis.
-          </p>
-        </div>
-
+      <div className="flex-1 p-4 lg:p-8 max-w-[1600px] mx-auto w-full">
+        {/* V2 DASHBOARD LAYOUT */}
+        <Suspense fallback={<ColumnSkeleton />}>
+          {/* ROW 1 */}
+          <DashboardTopNumbers telemetry={telemetry} />
+          
+          {/* ROW 2 */}
+          <DashboardBottomNumbers telemetry={telemetry} />
+          
+          {/* ROW 3 */}
+          <DashboardChartsRow3 telemetry={telemetry} />
+          
+          {/* ROW 4 */}
+          <DashboardChartsRow4 telemetry={telemetry} />
+          
+          {/* ROW 5 */}
+          <DashboardTablesRow5 telemetry={telemetry} />
+        </Suspense>
       </div>
     </div>
   );

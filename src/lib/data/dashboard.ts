@@ -142,7 +142,8 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
 
     if (inv.client_id) {
       activeClients.add(inv.client_id);
-      const cName = mask(inv.client_id, inv.clients?.name);
+      const clientObj = Array.isArray(inv.clients) ? inv.clients[0] : inv.clients;
+      const cName = mask.name(clientObj?.name, (inv as any).assigned_workspace_id, 'Unknown Client');
       clientRevenueMap.set(cName, (clientRevenueMap.get(cName) || 0) + amt);
     }
 

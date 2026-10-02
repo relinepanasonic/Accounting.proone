@@ -1,52 +1,43 @@
 import 'server-only';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
-import { clientMask, HIDDEN_CLIENT } from '@/lib/auth/client-privacy';
-import { formatIndoDate } from '@/lib/utils';
+import { clientMask } from '@/lib/auth/client-privacy';
 
 export interface DashboardTelemetry {
   totalRevenue: number;
-  totalSales: number;
+  paidRevenue: number;
+  avgMonthlyRevenue: number;
   avgOrderValue: number;
-  newCustomersCount: number;
-  customerActiveCount: number;
+  activeClientCount: number;
+  newClientCount: number;
 
-  salesVsPaid: {
-    months: string[];
-    issued: number[];
-    paid: number[];
-  };
-  topProducts: Array<{ name: string; amount: number }>;
+  totalCogs: number;
+  totalCost: number;
+  totalSalary: number;
+  totalCashFlow: number;
+  totalAR: number;
 
-  costs: {
-    months: string[];
-    cogs: number[];
-    general: number[];
+  revenueVsCost: {
+    labels: string[];
+    revenue: number[];
+    cost: number[];
   };
-  bankBalance: {
-    months: string[];
+
+  pnl: {
+    labels: string[];
+    profit: number[];
+  };
+
+  liveCash: {
+    labels: string[];
     balance: number[];
   };
 
-  accountsPayable: number;
-  accountsReceivable: number;
-  netCashFlow: number;
-
-  clientMetrics: Array<{
-    id: string;
-    name: string;
-    joinSince: string;
-    totalInvoices: number;
-    totalPaid: number;
-    ar: number;
-    status: 'Healthy' | 'Debt' | 'Out';
-  }>;
+  topExpenses: Array<{ name: string; amount: number }>;
+  topClients: Array<{ name: string; revenue: number }>;
+  topProducts: Array<{ name: string; sold: number; revenue: number }>;
 }
 
-/**
- * Concurrent, zero-waterfall server-side telemetry fetcher.
- * Uses Promise.all to fetch Invoices, Clients, Bills, and Fixed Assets simultaneously.
- */
 export interface DashboardTelemetryOptions {
   monthFilter?: number | null;
 }
@@ -57,291 +48,217 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
   const { activeWorkspaceId, userEmail, availableWorkspaces } = await getAuthenticatedWorkspaceContext(supabase);
   const mask = clientMask({ userEmail, availableWorkspaces });
 
-  // Concurrent Execution via Promise.all (Anti-Waterfall Guardrail)
-  const [invoicesRes, clientsRes, billsRes] = await Promise.all([
+  const [invoicesRes, clientsRes, txRes] = await Promise.all([
     supabase
       .from('invoices')
-      .select('id, invoice_number, status, total_amount, due_date, issue_date, created_at, client_id, assigned_workspace_id, clients(name), invoice_line_items(package_name, description, amount)')
-      .eq('workspace_id', activeWorkspaceId)
-      .order('created_at', { ascending: false }),
+      .select('id, status, total_amount, issue_date, created_at, client_id, clients(name), invoice_line_items(package_name, description, amount, quantity)')
+      .eq('workspace_id', activeWorkspaceId),
     supabase
       .from('clients')
       .select('id, name, created_at')
       .eq('workspace_id', activeWorkspaceId),
     supabase
       .from('transactions')
-      .select('id, description, amount, due_date, reconciled, category, is_upcoming_bill')
+      .select('id, description, amount, due_date, category, reconciled')
       .eq('workspace_id', activeWorkspaceId)
   ]);
 
   const invoices = invoicesRes.data || [];
   const clients = clientsRes.data || [];
-  const transactions = billsRes.data || [];
+  const transactions = txRes.data || [];
 
-  const currentYear = 2026;
+  const currentYear = new Date().getFullYear();
 
-  // Helper to map a date to an index (0-11) where 0 is Jan, 11 is Dec of currentYear
-  const getMonthOffset = (dateStr: string | null) => {
-    if (!dateStr) return -1;
+  // Helper to determine bucket index (0-11 for months, 0-4 for weeks if month filtered)
+  const isTargetPeriod = (dateStr: string | null) => {
+    if (!dateStr) return false;
     const d = new Date(dateStr);
-    if (d.getFullYear() === currentYear) {
-      return d.getMonth();
-    }
-    return -1;
+    if (d.getFullYear() !== currentYear) return false;
+    if (monthFilter !== null && d.getMonth() !== monthFilter) return false;
+    return true;
   };
 
-  const chartMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const getBucketIndex = (dateStr: string | null) => {
+    if (!dateStr) return -1;
+    const d = new Date(dateStr);
+    if (d.getFullYear() !== currentYear) return -1;
+    if (monthFilter === null) {
+      return d.getMonth(); // 0 - 11
+    } else {
+      if (d.getMonth() !== monthFilter) return -1;
+      return Math.min(4, Math.floor((d.getDate() - 1) / 7)); // 0 - 4
+    }
+  };
 
-  // --- 1. Top Stats (Numbers) & Top Products ---
-  let totalRevenue = 0; 
-  let totalSales = 0;   
-  let paidInvoicesCount = 0;
-  
-  const issuedByMonth = new Array(12).fill(0);
-  const paidByMonth = new Array(12).fill(0);
+  const numBuckets = monthFilter === null ? 12 : 5;
+  const labels = monthFilter === null 
+    ? ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    : ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5'];
 
-  let accountsReceivable = 0;
-  const productSales = new Map<string, number>();
+  // Initialize aggregations
+  let totalRevenue = 0;
+  let paidRevenue = 0;
+  let invoiceCount = 0;
+  let totalAR = 0;
+
+  const bucketRevenue = new Array(numBuckets).fill(0);
+  const bucketCost = new Array(numBuckets).fill(0);
+  const bucketProfit = new Array(numBuckets).fill(0);
+  const bucketCashFlow = new Array(numBuckets).fill(0);
+
+  const clientRevenueMap = new Map<string, number>();
+  const activeClients = new Set<string>();
+  const productMap = new Map<string, { sold: number; revenue: number }>();
 
   // Process Invoices
   for (const inv of invoices) {
-    const d = new Date(inv.issue_date || inv.created_at);
-    const isCurrentYear = d.getFullYear() === currentYear;
-    const isTargetMonth = monthFilter === null || d.getMonth() === monthFilter;
-    
+    const d = inv.issue_date || inv.created_at;
     const amt = Number(inv.total_amount || 0);
     const st = (inv.status || 'draft').toLowerCase();
-    
-    // Only count current year invoices for Revenue and Sales, and only if it matches month filter
-    if (isCurrentYear && isTargetMonth) {
-      if (st !== 'cancelled') {
-        totalRevenue += amt;
-        const idx = getMonthOffset(inv.issue_date || inv.created_at);
-        if (idx !== -1) issuedByMonth[idx] += amt;
-        
-        // Accumulate Top Products for current year non-cancelled invoices
-        if (Array.isArray(inv.invoice_line_items)) {
-          for (const item of inv.invoice_line_items) {
-            const itemAmt = Number(item.amount || 0);
-            const name = item.package_name || item.description || 'Unknown Item';
-            productSales.set(name, (productSales.get(name) || 0) + itemAmt);
-          }
-        }
-      }
 
-      if (st === 'paid') {
-        totalSales += amt;
-        paidInvoicesCount++;
-        const idx = getMonthOffset(inv.issue_date || inv.created_at);
-        if (idx !== -1) paidByMonth[idx] += amt;
-      }
+    // AR is all-time outstanding (pending, overdue, draft)
+    if (['pending', 'overdue', 'draft'].includes(st)) {
+      totalAR += amt;
     }
 
-    // AR includes ALL TIME pending/draft/overdue
-    if (st === 'pending' || st === 'overdue' || st === 'draft') {
-      accountsReceivable += amt;
+    if (!isTargetPeriod(d)) continue;
+    if (st === 'cancelled') continue;
+
+    totalRevenue += amt;
+    invoiceCount++;
+    const bIdx = getBucketIndex(d);
+    if (bIdx !== -1) {
+      bucketRevenue[bIdx] += amt;
+      bucketProfit[bIdx] += amt; // Add revenue to profit
+    }
+
+    if (st === 'paid') {
+      paidRevenue += amt;
+      if (bIdx !== -1) bucketCashFlow[bIdx] += amt; // Cash in
+    }
+
+    if (inv.client_id) {
+      activeClients.add(inv.client_id);
+      const cName = mask(inv.client_id, inv.clients?.name);
+      clientRevenueMap.set(cName, (clientRevenueMap.get(cName) || 0) + amt);
+    }
+
+    if (Array.isArray(inv.invoice_line_items)) {
+      for (const item of inv.invoice_line_items) {
+        const iAmt = Number(item.amount || 0);
+        const iQty = Number(item.quantity || 1);
+        const name = item.package_name || item.description || 'Unknown Item';
+        const curr = productMap.get(name) || { sold: 0, revenue: 0 };
+        productMap.set(name, { sold: curr.sold + iQty, revenue: curr.revenue + iAmt });
+      }
     }
   }
 
-  const avgOrderValue = paidInvoicesCount > 0 ? totalSales / paidInvoicesCount : 0;
-
-  // --- 2. Client Metrics & Activity Tracking ---
-  const clientLastActivity = new Map<string, Date>();
-  const clientFirstInvoice = new Map<string, Date>();
-  const activeClientsInMonth = new Set<string>();
-  
-  const currentMonthIdx = new Date().getMonth();
-  const targetMonthIdx = monthFilter !== null ? monthFilter : currentMonthIdx;
-
-  // Find last activity (invoice) per client and active status
-  for (const inv of invoices) {
-    if (!inv.client_id) continue;
-    const d = new Date(inv.issue_date || inv.created_at);
-    const existingLast = clientLastActivity.get(inv.client_id);
-    if (!existingLast || d > existingLast) {
-      clientLastActivity.set(inv.client_id, d);
-    }
-
-    const existingFirst = clientFirstInvoice.get(inv.client_id);
-    if (!existingFirst || d < existingFirst) {
-      clientFirstInvoice.set(inv.client_id, d);
-    }
-
-    if (d.getMonth() === targetMonthIdx && d.getFullYear() === currentYear) {
-      activeClientsInMonth.add(inv.client_id);
-    }
-  }
-
-  let newCustomersCount = 0;
-  const customerActiveCount = activeClientsInMonth.size;
-
+  let newClientCount = 0;
   for (const c of clients) {
-    // Count as new customer if their first invoice was in the target month
-    const firstInvDate = clientFirstInvoice.get(c.id);
-    if (firstInvDate && firstInvDate.getMonth() === targetMonthIdx && firstInvDate.getFullYear() === currentYear) {
-      newCustomersCount++;
-    } else if (!firstInvDate) {
-      // Fallback: If no invoice yet, count by creation date
-      const createdDate = new Date(c.created_at);
-      if (createdDate.getMonth() === targetMonthIdx && createdDate.getFullYear() === currentYear) {
-        newCustomersCount++;
-      }
+    if (isTargetPeriod(c.created_at)) {
+      newClientCount++;
     }
   }
 
-  const topProducts = Array.from(productSales.entries())
+  // Expenses & Cash Out
+  let totalCogs = 0;
+  let totalCost = 0;
+  let totalSalary = 0;
+  const expenseCoaMap = new Map<string, number>();
+
+  for (const tx of transactions) {
+    const amt = Number(tx.amount || 0);
+    const cat = (tx.category || '').toLowerCase();
+    const d = tx.due_date;
+
+    if (!isTargetPeriod(d)) continue;
+
+    totalCost += amt;
+    const bIdx = getBucketIndex(d);
+    if (bIdx !== -1) {
+      bucketCost[bIdx] += amt;
+      bucketProfit[bIdx] -= amt; // Subtract cost from profit
+    }
+
+    if (tx.reconciled) {
+      if (bIdx !== -1) bucketCashFlow[bIdx] -= amt; // Cash out
+    }
+
+    if (cat.includes('cogs') || cat.includes('cost of goods') || cat.includes('inventory')) {
+      totalCogs += amt;
+    } else if (cat.includes('salary') || cat.includes('payroll') || cat.includes('wages')) {
+      totalSalary += amt;
+    }
+
+    const coaName = tx.category || 'Uncategorized';
+    expenseCoaMap.set(coaName, (expenseCoaMap.get(coaName) || 0) + amt);
+  }
+
+  const avgOrderValue = invoiceCount > 0 ? totalRevenue / invoiceCount : 0;
+  
+  let monthsWithData = 0;
+  if (monthFilter === null) {
+    for (let i = 0; i < 12; i++) {
+      if (bucketRevenue[i] > 0) monthsWithData++;
+    }
+  }
+  const avgMonthlyRevenue = monthFilter === null 
+    ? (monthsWithData > 0 ? totalRevenue / monthsWithData : 0)
+    : totalRevenue; // If 1 month selected, avg monthly is just that month's revenue
+
+  const totalCashFlow = paidRevenue - transactions.filter(t => isTargetPeriod(t.due_date) && t.reconciled).reduce((s, t) => s + Number(t.amount), 0);
+
+  // Cumulative Live Cash
+  const liveCashBalance = new Array(numBuckets).fill(0);
+  let runningCash = 0;
+  for (let i = 0; i < numBuckets; i++) {
+    runningCash += bucketCashFlow[i];
+    liveCashBalance[i] = runningCash;
+  }
+
+  const topExpenses = Array.from(expenseCoaMap.entries())
     .map(([name, amount]) => ({ name, amount }))
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 10);
 
-  // --- 3. Costs vs COGS & Cash Flow ---
-  const cogsByMonth = new Array(12).fill(0);
-  const genByMonth = new Array(12).fill(0);
-  let accountsPayable = 0;
-  let netCashFlow = 0; // Total Paid Invoices - Total Paid Transactions (all time or just active balance, we'll do all time)
+  const topClients = Array.from(clientRevenueMap.entries())
+    .map(([name, revenue]) => ({ name, revenue }))
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 10);
 
-  const bankBalanceByMonth = new Array(12).fill(0);
-
-  // We will build running balance up to current month.
-  // First, sum everything before the currentYear as starting balance
-  let startingBalance = 0;
-
-  for (const inv of invoices) {
-    if ((inv.status || '').toLowerCase() === 'paid') {
-      const idx = getMonthOffset(inv.issue_date || inv.created_at);
-      const amt = Number(inv.total_amount || 0);
-      if (idx === -1) {
-        // before current year
-        const d = new Date(inv.issue_date || inv.created_at);
-        if (d.getFullYear() < currentYear) {
-          startingBalance += amt;
-        }
-      } else {
-        bankBalanceByMonth[idx] += amt;
-      }
-      netCashFlow += amt;
-    }
-  }
-
-  for (const tx of transactions) {
-    const amt = Number(tx.amount || 0);
-    const st = tx.reconciled ? 'paid' : 'pending';
-    const cat = (tx.category || '').toLowerCase();
-    
-    if (st === 'pending' && tx.is_upcoming_bill) {
-      accountsPayable += amt;
-    }
-
-    if (st === 'paid') {
-      netCashFlow -= amt;
-      const idx = getMonthOffset(tx.due_date);
-      
-      if (idx === -1) {
-        const d = new Date(tx.due_date);
-        if (d.getFullYear() < currentYear) {
-          startingBalance -= amt;
-        }
-      } else {
-        bankBalanceByMonth[idx] -= amt; // outflows decrease balance
-        if (cat.includes('cogs') || cat.includes('inventory') || cat.includes('cost of goods')) {
-          cogsByMonth[idx] += amt;
-        } else {
-          genByMonth[idx] += amt;
-        }
-      }
-    }
-  }
-
-  // Accumulate Running Bank Balance
-  let runningBal = startingBalance;
-  for (let i = 0; i < 12; i++) {
-    runningBal += bankBalanceByMonth[i];
-    bankBalanceByMonth[i] = runningBal;
-  }
-
-  // --- 4. Client Metrics Table ---
-  const clientMetricsMap = new Map<string, any>();
-  for (const c of clients) {
-    clientMetricsMap.set(c.id, {
-      id: c.id,
-      name: c.name,
-      joinSince: formatIndoDate(c.created_at),
-      totalInvoices: 0,
-      totalPaid: 0,
-      ar: 0,
-      status: 'Healthy'
-    });
-  }
-
-  for (const inv of invoices) {
-    const cid = inv.client_id;
-    if (!cid) continue;
-    const m = clientMetricsMap.get(cid);
-    if (!m) continue;
-
-    const amt = Number(inv.total_amount || 0);
-    const st = (inv.status || 'draft').toLowerCase();
-
-    if (st !== 'draft') m.totalInvoices++;
-    if (st === 'paid') m.totalPaid += amt;
-    if (st === 'pending' || st === 'overdue') m.ar += amt;
-  }
-
-  const threeMonthsAgo = new Date();
-  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-
-  // A client whose invoices are ALL hidden from this viewer is shown as "Hidden client".
-  const hiddenClientIds = new Set<string>();
-  if (mask.active) {
-    const seen = new Map<string, boolean>(); // client -> every invoice so far is hidden
-    for (const inv of invoices) {
-      if (!inv.client_id) continue;
-      seen.set(inv.client_id, (seen.get(inv.client_id) ?? true) && mask.hides(inv.assigned_workspace_id));
-    }
-    seen.forEach((allHidden, id) => allHidden && hiddenClientIds.add(id));
-  }
-
-  const clientMetrics = Array.from(clientMetricsMap.values()).map(m => {
-    if (hiddenClientIds.has(m.id)) m.name = HIDDEN_CLIENT;
-    const lastActive = clientLastActivity.get(m.id);
-    if (!lastActive || lastActive < threeMonthsAgo) {
-      m.status = 'Out';
-    } else if (m.ar > 0) {
-      // Find if they have any overdue
-      const hasOverdue = invoices.some(i => i.client_id === m.id && (i.status || '').toLowerCase() === 'overdue');
-      if (hasOverdue) m.status = 'Debt';
-    }
-    return m;
-  }).sort((a, b) => b.totalPaid - a.totalPaid);
+  const topProducts = Array.from(productMap.entries())
+    .map(([name, val]) => ({ name, sold: val.sold, revenue: val.revenue }))
+    .sort((a, b) => b.sold - a.sold)
+    .slice(0, 10);
 
   return {
     totalRevenue,
-    totalSales,
+    paidRevenue,
+    avgMonthlyRevenue,
     avgOrderValue,
-    newCustomersCount,
-    customerActiveCount,
-    
-    salesVsPaid: {
-      months: chartMonths,
-      issued: issuedByMonth,
-      paid: paidByMonth
+    activeClientCount: activeClients.size,
+    newClientCount,
+    totalCogs,
+    totalCost,
+    totalSalary,
+    totalCashFlow,
+    totalAR,
+    revenueVsCost: {
+      labels,
+      revenue: bucketRevenue,
+      cost: bucketCost,
     },
+    pnl: {
+      labels,
+      profit: bucketProfit,
+    },
+    liveCash: {
+      labels,
+      balance: liveCashBalance,
+    },
+    topExpenses,
+    topClients,
     topProducts,
-    
-    costs: {
-      months: chartMonths,
-      cogs: cogsByMonth,
-      general: genByMonth
-    },
-    bankBalance: {
-      months: chartMonths,
-      balance: bankBalanceByMonth
-    },
-
-    accountsPayable,
-    accountsReceivable,
-    netCashFlow,
-
-    clientMetrics
   };
 }

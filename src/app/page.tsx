@@ -2,22 +2,23 @@ import React, { Suspense } from 'react';
 import Link from 'next/link';
 import { Settings, Plus, Receipt, Building2, AlertTriangle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
-import { DashboardStatsCards } from '@/components/dashboard/header/DashboardStatsCards';
-import { DashboardRow1 } from '@/components/dashboard/center-column/DashboardRow1';
-import { DashboardRow2 } from '@/components/dashboard/center-column/DashboardRow2';
-import { DashboardRow3 } from '@/components/dashboard/center-column/DashboardRow3';
-import { ClientAnalyticsTable } from '@/components/dashboard/center-column/ClientAnalyticsTable';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { getDashboardTelemetry } from '@/lib/data/dashboard';
 import { MonthFilter } from '@/components/dashboard/MonthFilter';
+
+import { DashboardTopNumbers } from '@/components/dashboard/center-column/DashboardTopNumbers';
+import { DashboardBottomNumbers } from '@/components/dashboard/center-column/DashboardBottomNumbers';
+import { DashboardChartsRow3 } from '@/components/dashboard/center-column/DashboardChartsRow3';
+import { DashboardChartsRow4 } from '@/components/dashboard/center-column/DashboardChartsRow4';
+import { DashboardTablesRow5 } from '@/components/dashboard/center-column/DashboardTablesRow5';
 
 export const dynamic = 'force-dynamic';
 
 const ColumnSkeleton = () => (
   <div className="flex flex-col gap-6 animate-pulse">
-    <div className="gold-glass-panel rounded-2xl h-60"></div>
+    <div className="gold-glass-panel rounded-2xl h-32"></div>
+    <div className="gold-glass-panel rounded-2xl h-32"></div>
     <div className="gold-glass-panel rounded-2xl h-64"></div>
-    <div className="gold-glass-panel rounded-2xl h-48"></div>
   </div>
 );
 
@@ -53,7 +54,6 @@ export default async function CyberneticAccountingDashboardRSC({ searchParams }:
       .limit(1);
     
     if (!existingDepr || existingDepr.length === 0) {
-      // Check if any of these assets actually have annual_depreciation > 0
       if (assets.some((a: any) => Number(a.annual_depreciation) > 0)) {
         needsDepreciation = true;
       }
@@ -69,9 +69,8 @@ export default async function CyberneticAccountingDashboardRSC({ searchParams }:
       {/* Main Container */}
       <div className="max-w-[1600px] mx-auto px-6 py-8 relative z-10 flex flex-col min-h-screen justify-between">
         <div>
-          {/* Executive Welcome Header (Pic 3 Replacement) */}
+          {/* Executive Welcome Header */}
           <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 mb-6 border-b border-[#d4af37]/20">
-            {/* Left Side: Welcome, user - Name Workspace */}
             <div className="space-y-2">
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-wide text-white font-serif">
                 Welcome, <span className="text-[#f5d77f]">{userName}</span>
@@ -87,7 +86,6 @@ export default async function CyberneticAccountingDashboardRSC({ searchParams }:
               </div>
             </div>
 
-            {/* Right Side: Quick Actions, Setting (gear Icon), and Photo of user */}
             <div className="flex items-center gap-3 self-start sm:self-center">
               <Link
                 href="/invoices/new"
@@ -105,7 +103,6 @@ export default async function CyberneticAccountingDashboardRSC({ searchParams }:
                 <span>RECORD EXPENSE</span>
               </Link>
 
-              {/* Setting (gear Icon) */}
               <Link
                 href="/settings"
                 title="Workspace & User Settings"
@@ -114,9 +111,8 @@ export default async function CyberneticAccountingDashboardRSC({ searchParams }:
                 <Settings className="w-5 h-5" />
               </Link>
 
-              {/* Photo of user / Avatar */}
               <Link
-                href="/settings/workspaces"
+                href="/workspaces"
                 title={`Logged in as ${userName}`}
                 className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-[#18233c] via-[#d4af37] to-[#f5d77f] p-0.5 shadow-[0_0_25px_rgba(212,175,55,0.35)] flex items-center justify-center overflow-hidden shrink-0 group transition-transform hover:scale-105"
               >
@@ -124,7 +120,6 @@ export default async function CyberneticAccountingDashboardRSC({ searchParams }:
                   {userName.substring(0, 2).toUpperCase()}
                 </div>
               </Link>
-              {/* New Month Filter Component */}
               <MonthFilter />
             </div>
           </header>
@@ -150,19 +145,26 @@ export default async function CyberneticAccountingDashboardRSC({ searchParams }:
             </div>
           )}
 
-          {/* TOP EXECUTIVE STATS BAR WITH MINI SPARKLINES (NUMBERS) */}
-          <DashboardStatsCards telemetry={telemetry} />
-
-          {/* V2 DASHBOARD STACKED ROWS */}
+          {/* V2 DASHBOARD LAYOUT */}
           <Suspense fallback={<ColumnSkeleton />}>
-            <DashboardRow1 telemetry={telemetry} />
-            <DashboardRow2 telemetry={telemetry} />
-            <DashboardRow3 telemetry={telemetry} />
-            <ClientAnalyticsTable telemetry={telemetry} />
+            {/* ROW 1 */}
+            <DashboardTopNumbers telemetry={telemetry} />
+            
+            {/* ROW 2 */}
+            <DashboardBottomNumbers telemetry={telemetry} />
+            
+            {/* ROW 3 */}
+            <DashboardChartsRow3 telemetry={telemetry} />
+            
+            {/* ROW 4 */}
+            <DashboardChartsRow4 telemetry={telemetry} />
+            
+            {/* ROW 5 */}
+            <DashboardTablesRow5 telemetry={telemetry} />
           </Suspense>
         </div>
 
-        {/* Minimal Executive Footer (No Buttons or Numbers Strip) */}
+        {/* Minimal Executive Footer */}
         <footer className="mt-12 pt-6 border-t border-[#d4af37]/15 flex flex-col sm:flex-row items-center justify-between text-xs font-mono text-zinc-500">
           <div>
             ADVANCE ACCOUNTING & INVOICE GENERATOR • IDR REALTIME PARITY ENGINE

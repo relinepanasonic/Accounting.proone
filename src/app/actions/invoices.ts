@@ -69,6 +69,44 @@ async function getAuthenticatedWorkspaceContext(supabase: any): Promise<{
 
 // Statuses that are considered "draft" — must NEVER be pushed to New Wave
 const DRAFT_STATUSES = new Set(['draft']);
+/** Statuses that are NOT in the books: a draft is not issued yet, a cancelled invoice is void. */
+const UNPOSTED_STATUSES = new Set(['draft', 'cancelled']);
+
+/**
+ * Makes the ledger match the invoice: removes its old "invoice" posting and, when the invoice is issued
+ * (not a draft / cancelled / quotation, amount > 0), writes exactly one receivable + sales pair.
+ * Called after every create, edit and status change, so postings can never stack up.
+ */
+async function syncInvoicePosting(supabase: any, workspaceId: string, invoiceId: string): Promise<string | null> {
+  const { data: inv } = await supabase
+    .from('invoices')
+    .select('id, invoice_number, status, is_quotation, total_amount, issue_date, workspace_id')
+    .eq('id', invoiceId)
+    .eq('workspace_id', workspaceId)
+    .maybeSingle();
+  if (!inv) return 'Invoice not found for ledger posting.';
+
+  const { error: delErr } = await supabase
+    .from('journal_entries')
+    .delete()
+    .eq('reference_id', invoiceId)
+    .eq('reference_type', 'invoice')
+    .eq('workspace_id', workspaceId);
+  if (delErr) return 'Could not replace the old ledger posting: ' + delErr.message; // never stack a second posting
+
+  const total = Number(inv.total_amount || 0);
+  if (inv.is_quotation || UNPOSTED_STATUSES.has(String(inv.status || '').toLowerCase()) || total <= 0) return null;
+
+  const mappings = await getWorkspaceMappings(workspaceId);
+  let salesAccount = mappings.find(m => m.mapping_type === 'SALES')?.account_code || '4000';
+  if (salesAccount === '4001') salesAccount = '4000';
+  const arAccount = resolveArAccount(mappings);
+  const { error } = await supabase.from('journal_entries').insert([
+    { workspace_id: workspaceId, account_code: arAccount, transaction_date: inv.issue_date, debit_amount: total, credit_amount: 0, description: `Invoice ${inv.invoice_number}`, reference_id: invoiceId, reference_type: 'invoice' },
+    { workspace_id: workspaceId, account_code: salesAccount, transaction_date: inv.issue_date, debit_amount: 0, credit_amount: total, description: `Invoice ${inv.invoice_number}`, reference_id: invoiceId, reference_type: 'invoice' },
+  ]);
+  return error ? 'Ledger posting failed: ' + error.message : null;
+}
 
 /**
  * Push a DELETE for a specific invoice to New Wave (fire-and-forget safe).
@@ -248,9 +286,7 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
       .update(updateData)
       .eq('id', payload.id);
       
-    if (workspaceId !== '11111111-1111-1111-1111-111111111111') {
       updateQuery = updateQuery.eq('workspace_id', workspaceId);
-    }
     
     let { error: updateError } = await updateQuery;
 
@@ -270,9 +306,7 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
         .update(safeUpdate)
         .eq('id', payload.id);
         
-      if (workspaceId !== '11111111-1111-1111-1111-111111111111') {
-        retryQuery = retryQuery.eq('workspace_id', workspaceId);
-      }
+          retryQuery = retryQuery.eq('workspace_id', workspaceId);
       
       const retry = await retryQuery;
       updateError = retry.error;
@@ -310,22 +344,8 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
       return { success: false, error: 'Invoice updated, but line items failed to save.' };
     }
 
-    // New Double-Entry logic (replace old entries)
-    if (!payload.isQuotation && totalAmount > 0) {
-      const mappings = await getWorkspaceMappings(workspaceId);
-      let salesAccount = mappings.find(m => m.mapping_type === 'SALES')?.account_code || '4000';
-    if (salesAccount === '4001') salesAccount = '4000';
-      const arAccount = resolveArAccount(mappings);
-
-      await supabase.from('journal_entries').delete().eq('reference_id', payload.id).eq('reference_type', 'invoice');
-      
-      const { error: jeErr } = await supabase.from('journal_entries').insert([
-        { workspace_id: workspaceId, account_code: arAccount, transaction_date: payload.issueDate, debit_amount: totalAmount, credit_amount: 0, description: `Invoice ${payload.invoiceNumber}`, reference_id: payload.id, reference_type: 'invoice' },
-        { workspace_id: workspaceId, account_code: salesAccount, transaction_date: payload.issueDate, debit_amount: 0, credit_amount: totalAmount, description: `Invoice ${payload.invoiceNumber}`, reference_id: payload.id, reference_type: 'invoice' }
-      ]);
-    } else {
-      await supabase.from('journal_entries').delete().eq('reference_id', payload.id).eq('reference_type', 'invoice');
-    }
+    // Ledger follows the invoice: posted only when issued (a draft stays out of the books).
+    await syncInvoicePosting(supabase, workspaceId, payload.id);
 
     const syncRes = await syncInvoiceToNewWave(payload.id, supabase);
 
@@ -379,9 +399,7 @@ export async function updateInvoiceProjectDate(invoiceId: string, newDate: strin
 
     // Fetch existing notes
     let query = supabase.from('invoices').select('notes').eq('id', invoiceId);
-    if (workspaceId !== '11111111-1111-1111-1111-111111111111') {
       query = query.eq('workspace_id', workspaceId);
-    }
     
     const { data: inv } = await query.single();
     if (!inv) throw new Error('Invoice not found or unauthorized');
@@ -408,9 +426,7 @@ export async function updateInvoiceProjectDate(invoiceId: string, newDate: strin
       .update({ notes: newNotes })
       .eq('id', invoiceId);
       
-    if (workspaceId !== '11111111-1111-1111-1111-111111111111') {
       updateQuery = updateQuery.eq('workspace_id', workspaceId);
-    }
 
     const { error } = await updateQuery;
     if (error) throw new Error(error.message);
@@ -615,18 +631,8 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
       };
     }
 
-    // New Double-Entry logic
-    if (!payload.isQuotation && totalAmount > 0) {
-      const mappings = await getWorkspaceMappings(workspaceId);
-      let salesAccount = mappings.find(m => m.mapping_type === 'SALES')?.account_code || '4000';
-    if (salesAccount === '4001') salesAccount = '4000';
-      const arAccount = resolveArAccount(mappings);
-
-      const { error: jeErr } = await supabase.from('journal_entries').insert([
-        { workspace_id: workspaceId, account_code: arAccount, transaction_date: payload.issueDate, debit_amount: totalAmount, credit_amount: 0, description: `Invoice ${invoiceNumberToUse}`, reference_id: invoice.id, reference_type: 'invoice' },
-        { workspace_id: workspaceId, account_code: salesAccount, transaction_date: payload.issueDate, debit_amount: 0, credit_amount: totalAmount, description: `Invoice ${invoiceNumberToUse}`, reference_id: invoice.id, reference_type: 'invoice' }
-      ]);
-    }
+    // A new invoice starts as a draft: it goes into the ledger when it is finalized (sent).
+    await syncInvoicePosting(supabase, workspaceId, invoice.id);
 
     const syncRes = await syncInvoiceToNewWave(invoice.id, supabase);
 
@@ -655,9 +661,7 @@ export async function duplicateInvoice(invoiceId: string) {
     const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
     let origQuery = supabase.from('invoices').select('*').eq('id', invoiceId);
-    if (workspaceId !== '11111111-1111-1111-1111-111111111111') {
       origQuery = origQuery.eq('workspace_id', workspaceId);
-    }
     const { data: orig, error: fetchErr } = await origQuery.single();
 
     if (fetchErr || !orig) {
@@ -744,15 +748,16 @@ export async function toggleInvoiceStatus(invoiceId: string, currentStatus: stri
       .update({ status: nextStatus })
       .eq('id', invoiceId);
 
-    if (workspaceId !== '11111111-1111-1111-1111-111111111111') {
       updateQuery = updateQuery.eq('workspace_id', workspaceId);
-    }
 
     const { error } = await updateQuery;
 
     if (error) {
       return { success: false, error: error.message };
     }
+
+    // An invoice marked paid / unpaid is issued, so its receivable must be in the ledger.
+    await syncInvoicePosting(supabase, workspaceId, invoiceId);
 
     // Double-entry ledger integration: watch COA and affect COA Bank Account when paid
     if (nextStatus === 'paid') {
@@ -810,15 +815,16 @@ export async function markInvoiceAsFinalized(invoiceId: string) {
       .update({ status: 'sent' })
       .eq('id', invoiceId);
 
-    if (workspaceId !== '11111111-1111-1111-1111-111111111111') {
       updateQuery = updateQuery.eq('workspace_id', workspaceId);
-    }
 
     const { error } = await updateQuery;
 
     if (error) {
       return { success: false, error: error.message };
     }
+
+    // Now that it is issued, it goes into the ledger.
+    await syncInvoicePosting(supabase, workspaceId, invoiceId);
 
     revalidatePath('/invoices');
     revalidatePath(`/invoices/${invoiceId}`);

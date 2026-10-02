@@ -34,6 +34,8 @@ export interface CreateInvoicePayload {
   pphAmount?: number;
   dppAmount?: number;
   taxAmount?: number;
+  /** Set when Accounting makes this invoice from a salesman's invoice request. */
+  requestId?: string;
 }
 
 export interface UpdateInvoicePayload extends CreateInvoicePayload {
@@ -49,6 +51,8 @@ export interface InvoiceActionResult {
 import { getAuthenticatedWorkspaceContext as getCanonicalWorkspaceContext } from '@/lib/auth/workspace-context';
 import { getWorkspaceMappings } from './mappings';
 import { resolveArAccount } from '@/lib/accounting/accounts';
+import { createAdminClient as createServiceClient } from '@/lib/api/supabase-admin';
+import { completeInvoiceRequest, onInvoicePaid } from '@/lib/sales/server';
 
 /**
  * Helper: Retrieve Authenticated User ID and their active workspace_id (respecting multi-tenant cookie)
@@ -544,7 +548,7 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
         client_id: payload.clientId,
         invoice_number: invoiceNumberToUse,
         is_quotation: payload.isQuotation || false,
-        status: 'draft',
+        status: payload.requestId ? 'sent' : 'draft',
         issue_date: payload.issueDate,
         due_date: payload.dueDate,
         subtotal: subtotal,
@@ -633,6 +637,12 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
 
     // A new invoice starts as a draft: it goes into the ledger when it is finalized (sent).
     await syncInvoicePosting(supabase, workspaceId, invoice.id);
+
+    // Made from a salesman's request: stamp the card, tell the salesman.
+    if (payload.requestId) {
+      const { userId } = await getAuthenticatedWorkspaceContext(supabase);
+      await completeInvoiceRequest(createServiceClient(), payload.requestId, invoice.id, userId, workspaceId);
+    }
 
     const syncRes = await syncInvoiceToNewWave(invoice.id, supabase);
 
@@ -758,6 +768,7 @@ export async function toggleInvoiceStatus(invoiceId: string, currentStatus: stri
 
     // An invoice marked paid / unpaid is issued, so its receivable must be in the ledger.
     await syncInvoicePosting(supabase, workspaceId, invoiceId);
+    if (nextStatus === 'paid') await onInvoicePaid(createServiceClient(), invoiceId);
 
     // Double-entry ledger integration: watch COA and affect COA Bank Account when paid
     if (nextStatus === 'paid') {
@@ -1022,6 +1033,7 @@ export async function recordInvoicePayment(invoiceId: string, amount: number, pa
     if (invErr) throw new Error('Failed to update invoice balance. ' + (invErr.message || JSON.stringify(invErr)));
 
     await syncInvoiceToNewWave(invoiceId, supabase);
+    if (newStatus === 'paid') await onInvoicePaid(createServiceClient(), invoiceId);
 
     revalidatePath('/invoices');
     revalidatePath(`/invoices/${invoiceId}`);

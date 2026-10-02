@@ -14,6 +14,7 @@ const ROLE_LABEL: Record<string, string> = {
   accounting: 'Accounting',
   admin: 'Admin',
   advertiser: 'Advertiser',
+  sales: 'Sales',
   client: 'Client',
 };
 

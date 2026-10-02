@@ -36,7 +36,12 @@ const MOBILE_NAV_ITEMS = [
 export function BottomMobileNav({ limited = false, role }: { limited?: boolean; role?: string }) {
   const pathname = usePathname();
   const navItems = limited
-    ? role === 'advertiser'
+    ? role === 'sales'
+      ? [
+          { name: 'Sales', href: '/sales', icon: <TrendingUp className="w-5 h-5" />, isActive: (p: string) => p === '/sales' || p.startsWith('/sales/') },
+          { name: 'My KPI', href: '/productivity/me', icon: <Activity className="w-5 h-5" />, isActive: (p: string) => p.startsWith('/productivity/me') },
+        ]
+      : role === 'advertiser'
       ? [
           { name: 'Advertiser', href: '/productivity/advertiser', icon: <TrendingUp className="w-5 h-5" />, isActive: isOptimizingPath },
           { name: 'My KPI', href: '/productivity/me', icon: <Activity className="w-5 h-5" />, isActive: (p: string) => p.startsWith('/productivity/me') },

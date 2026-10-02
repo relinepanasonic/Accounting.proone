@@ -1,6 +1,7 @@
 import 'server-only';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
+import { withoutProspects } from '@/lib/sales/prospects';
 import { clientMask } from '@/lib/auth/client-privacy';
 
 export interface DashboardTelemetry {
@@ -56,10 +57,11 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
       .from('invoices')
       .select('id, status, total_amount, issue_date, created_at, client_id, clients(name), invoice_line_items(package_name, description, amount, quantity)')
       .in('workspace_id', queryWorkspaceIds),
-    supabase
-      .from('clients')
-      .select('id, name, created_at')
-      .in('workspace_id', queryWorkspaceIds),
+    withoutProspects((hide) => {
+      let q = supabase.from('clients').select('id, name, created_at').in('workspace_id', queryWorkspaceIds);
+      if (hide) q = q.eq('is_prospect', false);
+      return q;
+    }),
     supabase
       .from('transactions')
       .select('id, description, amount, due_date, category, reconciled')

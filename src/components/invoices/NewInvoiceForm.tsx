@@ -243,7 +243,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
     setErrorMsg(null);
     startTransition(async () => {
       try {
-        if (initialData) {
+        if (initialData?.id) {
           const res = await updateInvoice({
             id: initialData.id,
             clientId,
@@ -301,6 +301,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
               discountAmount: Number(l.discountAmount) || 0,
             })),
             isHistorical,
+            requestId: initialData?.requestId || undefined,
             isQuotation: submitAsQuotation,
             assignedWorkspaceId: assignedWorkspaceId || undefined,
             taxCalculationType,
@@ -860,7 +861,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
             <Check className="w-4 h-4 text-black" />
           )}
           <span className="font-extrabold">
-            {isPending ? 'GENERATING...' : isQuotation ? (initialData ? 'UPDATE QUOTATION' : 'SAVE QUOTATION') : (initialData ? 'UPDATE INVOICE' : 'SAVE INVOICE')}
+            {isPending ? 'GENERATING...' : isQuotation ? (initialData?.id ? 'UPDATE QUOTATION' : 'SAVE QUOTATION') : (initialData?.id ? 'UPDATE INVOICE' : 'SAVE INVOICE')}
           </span>
         </button>
       </div>

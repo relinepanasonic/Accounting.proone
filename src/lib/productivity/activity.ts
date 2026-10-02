@@ -61,7 +61,7 @@ export interface UnlinkedActivity {
   lastActive: string | null;
 }
 
-const STAFF_ROLES = ['superadmin', 'accounting', 'admin', 'advertiser'];
+const STAFF_ROLES = ['superadmin', 'accounting', 'admin', 'advertiser', 'sales'];
 
 /** Names a person may appear under in other systems (sales deals, the dashboard app). */
 export const nameKeys = (p: Person) => {

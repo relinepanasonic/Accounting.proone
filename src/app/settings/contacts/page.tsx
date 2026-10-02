@@ -1,4 +1,5 @@
 import React from 'react';
+import { withoutProspects } from '@/lib/sales/prospects';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { ContactCrmManager, type ClientRecord } from '@/components/settings/ContactCrmManager';
@@ -9,14 +10,16 @@ export default async function ClientsSettingsPage() {
   const supabase = await createClient();
   const wsCtx = await getAuthenticatedWorkspaceContext(supabase);
 
-  let clientQuery = supabase.from('clients').select('*');
-  if (wsCtx.activeWorkspaceId === '11111111-1111-1111-1111-111111111111') {
-    clientQuery = clientQuery.or(`workspace_id.in.(11111111-1111-1111-1111-111111111111,f7262187-2a08-4454-b046-b4fd91f2f642,b9f6425f-ad1f-4911-a182-ab788c5fa0e3),workspace_id.is.null`);
-  } else {
-    clientQuery = clientQuery.or(`workspace_id.eq.${wsCtx.activeWorkspaceId},workspace_id.is.null`);
-  }
-
-  const { data: clients } = await clientQuery.order('name', { ascending: true });
+  const { data: clients } = await withoutProspects((hide) => {
+    let clientQuery = supabase.from('clients').select('*');
+    if (wsCtx.activeWorkspaceId === '11111111-1111-1111-1111-111111111111') {
+      clientQuery = clientQuery.or(`workspace_id.in.(11111111-1111-1111-1111-111111111111,f7262187-2a08-4454-b046-b4fd91f2f642,b9f6425f-ad1f-4911-a182-ab788c5fa0e3),workspace_id.is.null`);
+    } else {
+      clientQuery = clientQuery.or(`workspace_id.eq.${wsCtx.activeWorkspaceId},workspace_id.is.null`);
+    }
+    if (hide) clientQuery = clientQuery.eq('is_prospect', false);
+    return clientQuery.order('name', { ascending: true });
+  });
 
   const { data: invoices } = await supabase.from('invoices').select('client_id, total_amount').neq('status', 'void');
   const invoiceTotals = (invoices || []).reduce((acc, inv) => {

@@ -1,5 +1,6 @@
 import React from 'react';
 import { createClient } from '@/lib/supabase/server';
+import { withoutProspects } from '@/lib/sales/prospects';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { formatCurrency } from '@/lib/utils/currency';
 import { Mail, Phone, MapPin, CheckCircle, Clock } from 'lucide-react';
@@ -9,11 +10,14 @@ export default async function SalesClientsPage() {
   const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
   // Fetch clients along with their invoices
-  const { data: clients } = await supabase
-    .from('clients')
-    .select('id, name, email, phone, address, invoices(status, total_amount, amount_paid)')
-    .eq('workspace_id', activeWorkspaceId)
-    .order('name');
+  const { data: clients } = await withoutProspects((hide) => {
+    let q = supabase
+      .from('clients')
+      .select('id, name, email, phone, address, invoices(status, total_amount, amount_paid)')
+      .eq('workspace_id', activeWorkspaceId);
+    if (hide) q = q.eq('is_prospect', false);
+    return q.order('name');
+  });
 
   const clientsWithStats = (clients || []).map(c => {
     let totalInvoiced = 0;

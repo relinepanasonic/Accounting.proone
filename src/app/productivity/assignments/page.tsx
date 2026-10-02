@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { founderEmails } from '@/lib/auth/founders';
 import { AssignmentManager } from '@/components/productivity/AssignmentManager';
+import { ProjectQueue } from '@/components/productivity/ProjectQueue';
+import { createAdminClient } from '@/lib/api/supabase-admin';
 import { ShieldAlert, Users } from 'lucide-react';
 
 export default async function AssignmentsPage() {
@@ -42,7 +44,7 @@ export default async function AssignmentsPage() {
     .select('user_id, role, display_name, email')
     .eq('workspace_id', activeWorkspaceId)
     .not('user_id', 'is', null)
-    .in('role', ['superadmin', 'accounting', 'admin', 'advertiser']);
+    .in('role', ['superadmin', 'accounting', 'admin', 'advertiser', 'sales']);
 
   const { data: founderProfiles } = await supabase.from('profiles').select('id, full_name, email').in('email', founderEmails());
 
@@ -81,6 +83,27 @@ export default async function AssignmentsPage() {
     assignments = (legacy.data || []).map((a: any) => ({ ...a, job: 'advertising' }));
   }
 
+  // Projects started from the sales pipeline that no advertiser / admin has been given yet.
+  const adminDb = createAdminClient();
+  const { data: projectRows } = await adminDb
+    .from('projects')
+    .select('id, client_id, name, start_date, end_date, deliverables, status')
+    .eq('workspace_id', activeWorkspaceId)
+    .is('handler_assigned_at', null)
+    .order('start_date');
+  const projClientIds = Array.from(new Set((projectRows || []).map((p: any) => p.client_id)));
+  const { data: projClients } = projClientIds.length ? await adminDb.from('clients').select('id, name').in('id', projClientIds) : { data: [] as any[] };
+  const projClientName = new Map<string, string>((projClients || []).map((c: any) => [c.id, c.name]));
+  const queue = (projectRows || []).map((p: any) => ({
+    id: p.id,
+    client_name: projClientName.get(p.client_id) || 'Client',
+    name: p.name,
+    start_date: p.start_date,
+    end_date: p.end_date,
+    deliverables: p.deliverables || [],
+    status: p.status,
+  }));
+
   return (
     <div className="p-4 lg:p-8 space-y-6 animate-in fade-in zoom-in-95 duration-300">
       <div className="flex items-center gap-4">
@@ -98,6 +121,8 @@ export default async function AssignmentsPage() {
           Only <b>Advertising</b> can be saved until <span className="font-mono">supabase/migrations/20260930_assignment_jobs.sql</span> is run in Supabase.
         </div>
       )}
+
+      <ProjectQueue projects={queue} staff={staff.filter((m) => m.role !== 'client').map((m) => ({ user_id: m.user_id, name: m.name, role: m.role }))} />
 
       <AssignmentManager clients={clients || []} staff={staff} assignments={(assignments || []) as any} />
     </div>

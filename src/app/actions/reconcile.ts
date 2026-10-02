@@ -2,6 +2,8 @@
 
 import { revalidatePath } from 'next/cache';
 import { resolveArAccount } from '@/lib/accounting/accounts';
+import { createAdminClient } from '@/lib/api/supabase-admin';
+import { onInvoicePaid } from '@/lib/sales/server';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { getWorkspaceMappings } from './mappings';
@@ -130,6 +132,13 @@ export async function reconcileRecord(
     if (error) {
       console.error('Error reconciling record:', error);
       throw new Error('Failed to reconcile record');
+    }
+
+    // Matching a bank line that pays an invoice in full wins the deal.
+    if (recordType === 'invoice' && updateData.status === 'paid') await onInvoicePaid(createAdminClient(), recordId);
+    if (linkedInvoiceId) {
+      const { data: li } = await supabase.from('invoices').select('status').eq('id', linkedInvoiceId).maybeSingle();
+      if (li?.status === 'paid') await onInvoicePaid(createAdminClient(), linkedInvoiceId);
     }
 
     // Once every payment of an invoice is confirmed against the bank, the invoice itself is reconciled.

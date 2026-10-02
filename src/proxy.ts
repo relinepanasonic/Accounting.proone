@@ -8,10 +8,12 @@ import { isFounderEmail } from '@/lib/auth/founders';
 // client: the embedded Digital Ads reports (Pabrik Sosmed) only.
 const LIMITED_ROLE_HOME: Record<string, string> = {
   advertiser: '/productivity/advertiser',
+  sales: '/sales',
   client: '/productivity/pabrik-sosmed',
 };
 const LIMITED_ROLE_ALLOWED: Record<string, string[]> = {
   advertiser: ['/productivity/advertiser', '/productivity/me', '/no-access', '/workspaces'],
+  sales: ['/sales', '/productivity/me', '/no-access', '/workspaces'],
   client: ['/productivity/pabrik-sosmed', '/no-access', '/workspaces'],
 };
 
@@ -62,6 +64,7 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith('/join/') ||
     pathname.startsWith('/set-password') ||
     pathname.startsWith('/auth/') ||
+    pathname.startsWith('/share/') ||
     (pathname.startsWith('/api/') && !isAdminApi);
 
   if (!user && !isPublicPath) {
@@ -120,7 +123,7 @@ export async function proxy(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    if ((role === 'advertiser' || role === 'client') && !pathname.startsWith('/api/')) {
+    if ((role === 'advertiser' || role === 'sales' || role === 'client') && !pathname.startsWith('/api/')) {
       const allowed = LIMITED_ROLE_ALLOWED[role].some((p) => pathname === p || pathname.startsWith(p + '/'));
       if (!allowed) return redirectTo(LIMITED_ROLE_HOME[role]);
     }

@@ -91,7 +91,7 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
   const activeName = workspaceContext?.activeWorkspaceName || 'Professor Toko Online HQ';
   const activeRole = workspaceContext?.role || 'none';
   // advertiser / client see Pabrik Sosmed only, never the finance navigation.
-  const limited = activeRole === 'advertiser' || activeRole === 'client';
+  const limited = activeRole === 'advertiser' || activeRole === 'sales' || activeRole === 'client';
 // advertiser: only Optimizing > Advertiser. client: only Pabrik Sosmed.
   const optimizingChildren = activeRole === 'advertiser' ? OPTIMIZING_CHILDREN.filter((c) => c.name === 'Advertiser') : OPTIMIZING_CHILDREN;
   const modules: NavEntry[] =
@@ -100,6 +100,11 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
           { type: 'group', name: 'Optimizing', icon: <TrendingUp className="w-4 h-4" /> },
           { type: 'link', name: 'My KPI', href: '/productivity/me', icon: <Activity className="w-4 h-4" />, isActive: (p) => p.startsWith('/productivity/me') },
         ]
+      : activeRole === 'sales'
+        ? [
+            { type: 'link', name: 'Sales', href: '/sales', icon: <TrendingUp className="w-4 h-4" />, isActive: (p) => p === '/sales' || p.startsWith('/sales/') },
+            { type: 'link', name: 'My KPI', href: '/productivity/me', icon: <Activity className="w-4 h-4" />, isActive: (p) => p.startsWith('/productivity/me') },
+          ]
       : limited
         ? [{ type: 'link', name: 'Pabrik Sosmed', href: '/productivity/pabrik-sosmed', icon: <Share2 className="w-4 h-4" />, isActive: isPabrikPath }]
         : MAIN_MODULES;

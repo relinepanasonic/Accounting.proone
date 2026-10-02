@@ -12,6 +12,9 @@ export interface CatalogProduct {
   name: string;
   description?: string;
   unit_price: number;
+  duration_type?: 'none' | 'day' | 'month' | 'deliverable' | null;
+  duration_value?: number | null;
+  deliverable_unit?: string | null;
   quantity?: number;
   scale?: string;
 }
@@ -21,6 +24,47 @@ interface CatalogManagerProps {
   initialProducts: CatalogProduct[];
 }
 
+
+type DurType = 'none' | 'day' | 'month' | 'deliverable';
+
+/** How long the project of this product lasts: nothing, days, months, or a number of videos / photos. */
+function ProjectLengthFields({
+  type, value, unit, onType, onValue, onUnit, compact,
+}: {
+  type: DurType; value: string; unit: string; onType: (v: DurType) => void; onValue: (v: string) => void; onUnit: (v: string) => void; compact?: boolean;
+}) {
+  const box = compact
+    ? 'bg-black border border-yellow-600/40 rounded-xl px-2 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-[#d4af37]'
+    : 'bg-zinc-950/80 border border-zinc-800 rounded-xl px-2 py-2 text-xs font-mono text-white focus:outline-none focus:border-[#d4af37]';
+  return (
+    <div>
+      <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1">PROJECT LENGTH</label>
+      <div className="flex flex-wrap gap-2">
+        <select value={type} onChange={(e) => onType(e.target.value as DurType)} className={box}>
+          <option value="none">No project length</option>
+          <option value="day">Days</option>
+          <option value="month">Months</option>
+          <option value="deliverable">Number of videos / photos</option>
+        </select>
+        {type !== 'none' && (
+          <input type="number" min="1" value={value} onChange={(e) => onValue(e.target.value)} className={`${box} w-20 text-center`} aria-label="Length" />
+        )}
+        {type === 'deliverable' && (
+          <input type="text" value={unit} onChange={(e) => onUnit(e.target.value)} placeholder="video" className={`${box} w-24`} aria-label="Unit" />
+        )}
+      </div>
+    </div>
+  );
+}
+
+const lengthLabel = (type?: string | null, value?: number | null, unit?: string | null) => {
+  const v = Number(value || 0);
+  if (!type || type === 'none' || v <= 0) return '';
+  if (type === 'day') return `${v} day${v === 1 ? '' : 's'}`;
+  if (type === 'month') return `${v} month${v === 1 ? '' : 's'}`;
+  return `${v} ${unit || 'item'}${v === 1 ? '' : 's'}`;
+};
+
 export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogManagerProps) {
   const [products, setProducts] = useState<CatalogProduct[]>(initialProducts);
   const [name, setName] = useState('');
@@ -28,6 +72,12 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
   const [unitPrice, setUnitPrice] = useState('85000000');
   const [quantity, setQuantity] = useState('1');
   const [scale, setScale] = useState('pc');
+  const [durType, setDurType] = useState<DurType>('none');
+  const [durValue, setDurValue] = useState('1');
+  const [delUnit, setDelUnit] = useState('video');
+  const [editDurType, setEditDurType] = useState<DurType>('none');
+  const [editDurValue, setEditDurValue] = useState('1');
+  const [editDelUnit, setEditDelUnit] = useState('video');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editDesc, setEditDesc] = useState('');
@@ -51,6 +101,9 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
           unitPrice: Number(unitPrice) || 0,
           quantity: Number(quantity) || 1,
           scale: scale || 'pc',
+          durationType: durType,
+          durationValue: Number(durValue) || 0,
+          deliverableUnit: delUnit,
         });
 
         if (!res.success) {
@@ -64,6 +117,9 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
               unit_price: Number(unitPrice) || 0,
               quantity: Number(quantity) || 1,
               scale: scale || 'pc',
+              duration_type: durType,
+              duration_value: durType === 'none' ? 0 : Number(durValue) || 0,
+              deliverable_unit: durType === 'deliverable' ? delUnit : null,
             },
             ...prev,
           ]);
@@ -72,6 +128,8 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
           setUnitPrice('1000000');
           setQuantity('1');
           setScale('pc');
+          setDurType('none');
+          setDurValue('1');
         }
       } catch (err: any) {
         setErrorMsg(err?.message || 'Error saving item');
@@ -97,12 +155,15 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
         unitPrice: Number(editPrice) || 0,
         quantity: Number(editQuantity) || 1,
         scale: editScale || 'pc',
+        durationType: editDurType,
+        durationValue: Number(editDurValue) || 0,
+        deliverableUnit: editDelUnit,
       });
       if (res.success) {
         setProducts((prev) =>
           prev.map((p) =>
             p.id === id
-              ? { ...p, name: editName.trim(), description: editDesc, unit_price: Number(editPrice) || 0, quantity: Number(editQuantity) || 1, scale: editScale || 'pc' }
+              ? { ...p, name: editName.trim(), description: editDesc, unit_price: Number(editPrice) || 0, quantity: Number(editQuantity) || 1, scale: editScale || 'pc', duration_type: editDurType, duration_value: editDurType === 'none' ? 0 : Number(editDurValue) || 0, deliverable_unit: editDurType === 'deliverable' ? editDelUnit : null }
               : p
           )
         );
@@ -214,6 +275,8 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
           </div>
         </div>
 
+        <ProjectLengthFields type={durType} value={durValue} unit={delUnit} onType={setDurType} onValue={setDurValue} onUnit={setDelUnit} />
+
         <button
           type="submit"
           disabled={isPending}
@@ -316,6 +379,9 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
                           className="w-44 bg-black border border-yellow-600/40 rounded-xl px-2.5 py-1.5 text-xs font-mono text-[#f5d77f] text-right focus:outline-none focus:border-[#d4af37] ml-auto"
                         />
                       </div>
+                      <div className="mt-3 text-left">
+                        <ProjectLengthFields compact type={editDurType} value={editDurValue} unit={editDelUnit} onType={setEditDurType} onValue={setEditDurValue} onUnit={setEditDelUnit} />
+                      </div>
                     </td>
                     <td className="py-3 px-3 text-right align-top whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1.5 mt-4">
@@ -342,6 +408,9 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
                   <tr key={item.id} className="hover:bg-zinc-900/40 transition-colors">
                     <td className="py-3.5 px-3">
                       <div className="font-bold text-white">{item.name}</div>
+                      {lengthLabel(item.duration_type, item.duration_value, item.deliverable_unit) && (
+                        <span className="mt-1 inline-block rounded-full border border-[#d4af37]/30 bg-[#d4af37]/10 px-2 py-0.5 text-[10px] font-bold text-[#f5d77f]">Project: {lengthLabel(item.duration_type, item.duration_value, item.deliverable_unit)}</span>
+                      )}
                       <DescriptionBullets
                         description={item.description}
                         allBullets={true}
@@ -376,6 +445,9 @@ export function CatalogManager({ targetWorkspaceId, initialProducts }: CatalogMa
                             setEditPrice(item.unit_price.toString());
                             setEditQuantity((item.quantity || 1).toString());
                             setEditScale(item.scale || 'pc');
+                            setEditDurType((item.duration_type as DurType) || 'none');
+                            setEditDurValue(String(item.duration_value || 1));
+                            setEditDelUnit(item.deliverable_unit || 'video');
                           }}
                           disabled={isPending}
                           className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-[#f5d77f]/50 text-zinc-500 hover:text-[#f5d77f] transition-colors"

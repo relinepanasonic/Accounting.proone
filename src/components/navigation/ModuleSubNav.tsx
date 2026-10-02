@@ -25,7 +25,6 @@ const MODULES = {
       { name: 'Dashboard', href: '/sales' },
       { name: 'Absensi', href: '/sales/absensi' },
       { name: 'To-Do', href: '/sales/todo' },
-      { name: 'Leads Database', href: '/sales/leads' },
       { name: 'Pipeline', href: '/sales/pipeline' },
       { name: 'Client', href: '/sales/clients' },
       { name: 'A/R', href: '/sales/ar' },
@@ -57,7 +56,7 @@ const MODULES = {
   }
 };
 
-export function ModuleSubNav() {
+export function ModuleSubNav({ role }: { role?: string }) {
   const pathname = usePathname();
   
   // Pabrik Sosmed has its own Dashboard / Upload tabs inside the page.
@@ -94,7 +93,7 @@ export function ModuleSubNav() {
     <>
     {optimizingSwitcher}
     <div className="w-full bg-[#0e0f14]/90 backdrop-blur-md border-b border-[#d4af37]/20 px-6 py-3 flex items-center gap-6 overflow-x-auto scrollbar-hide sticky top-0 z-30">
-      {activeModule.items.map(item => {
+      {activeModule.items.filter((item) => !(role === 'sales' && (item.href === '/sales/ar' || item.href === '/sales/reimbursement'))).map(item => {
         let isActive = false;
         if (item.href === '/' || item.href === '/sales') {
           isActive = pathname === item.href;

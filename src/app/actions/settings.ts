@@ -432,6 +432,19 @@ export async function updateGeneralSettings(payload: {
   }
 }
 
+type ProjectLength = { durationType?: 'none' | 'day' | 'month' | 'deliverable'; durationValue?: number; deliverableUnit?: string };
+
+/** Catalog columns for "how long the project lasts". Left out entirely until the sales-flow migration has been run. */
+function lengthColumns(p: ProjectLength) {
+  const type = p.durationType && ['day', 'month', 'deliverable'].includes(p.durationType) ? p.durationType : 'none';
+  return {
+    duration_type: type,
+    duration_value: type === 'none' ? 0 : Math.max(0, Math.round(Number(p.durationValue) || 0)),
+    deliverable_unit: type === 'deliverable' ? String(p.deliverableUnit || 'video').trim().slice(0, 30) : null,
+  };
+}
+const isMissingLengthColumn = (e: any) => e?.code === '42703' || e?.code === 'PGRST204' || /duration_type|duration_value|deliverable_unit/.test(e?.message || '');
+
 /**
  * Create a new Product / Service in the catalog
  */
@@ -442,7 +455,7 @@ export async function createProduct(payload: {
   unitPrice: number;
   quantity?: number;
   scale?: string;
-}) {
+} & ProjectLength) {
   try {
     const supabase = await createClient();
     const { workspaceId: activeId } = await resolveWorkspaceContext(supabase);
@@ -452,14 +465,20 @@ export async function createProduct(payload: {
       return { success: false, error: 'Product or Service name is required.' };
     }
 
-    const { error } = await supabase.from('products').insert({
+    const row = {
       workspace_id: workspaceId,
       name: payload.name,
       description: payload.description || null,
       unit_price: Number(payload.unitPrice) || 0,
       quantity: Number(payload.quantity) || 1,
       scale: payload.scale || 'pc',
-    });
+    };
+    const wanted = lengthColumns(payload);
+    let { error } = await supabase.from('products').insert(wanted.duration_type === 'none' ? row : { ...row, ...wanted });
+    if (error && isMissingLengthColumn(error)) {
+      if (wanted.duration_type !== 'none') return { success: false, error: 'Run supabase/migrations/20261003_sales_flow.sql in Supabase to save project lengths.' };
+      ({ error } = await supabase.from('products').insert(row));
+    }
 
     if (error) {
       return { success: false, error: error.message };
@@ -510,23 +529,26 @@ export async function updateProduct(payload: {
   unitPrice: number;
   quantity?: number;
   scale?: string;
-}) {
+} & ProjectLength) {
   try {
     const supabase = await createClient();
     if (!payload.id || !payload.name) {
       return { success: false, error: 'Product ID and Name are required.' };
     }
 
-    const { error } = await supabase
-      .from('products')
-      .update({
-        name: payload.name,
-        description: payload.description || null,
-        unit_price: Number(payload.unitPrice) || 0,
-        quantity: Number(payload.quantity) || 1,
-        scale: payload.scale || 'pc',
-      })
-      .eq('id', payload.id);
+    const row = {
+      name: payload.name,
+      description: payload.description || null,
+      unit_price: Number(payload.unitPrice) || 0,
+      quantity: Number(payload.quantity) || 1,
+      scale: payload.scale || 'pc',
+    };
+    const wanted = lengthColumns(payload);
+    let { error } = await supabase.from('products').update({ ...row, ...wanted }).eq('id', payload.id);
+    if (error && isMissingLengthColumn(error)) {
+      if (wanted.duration_type !== 'none') return { success: false, error: 'Run supabase/migrations/20261003_sales_flow.sql in Supabase to save project lengths.' };
+      ({ error } = await supabase.from('products').update(row).eq('id', payload.id));
+    }
 
     if (error) {
       return { success: false, error: error.message };
@@ -816,7 +838,7 @@ export async function deleteClientRecord(clientId: string) {
 export async function inviteTeamMember(payload: {
   email: string;
   name: string;
-  role: 'superadmin' | 'accounting' | 'admin' | 'advertiser' | 'client';
+  role: 'superadmin' | 'accounting' | 'admin' | 'advertiser' | 'sales' | 'client';
 }) {
   try {
     const supabase = await createClient();
@@ -905,7 +927,7 @@ export async function inviteTeamMember(payload: {
 /**
  * Server Action: Update a team member's role
  */
-export async function updateTeamMemberRole(payload: { memberId: string; role: 'superadmin' | 'accounting' | 'admin' | 'advertiser' | 'client' | 'founder' }) {
+export async function updateTeamMemberRole(payload: { memberId: string; role: 'superadmin' | 'accounting' | 'admin' | 'advertiser' | 'sales' | 'client' | 'founder' }) {
   try {
     const supabase = await createClient();
     const { workspaceId, role: currentRole } = await resolveWorkspaceContext(supabase);
@@ -924,7 +946,7 @@ export async function updateTeamMemberRole(payload: { memberId: string; role: 's
     }
 
     // Founders are defined by email (see lib/auth/founders.ts), never by a membership row.
-    if (!['superadmin', 'accounting', 'admin', 'advertiser', 'client'].includes(payload.role)) {
+    if (!['superadmin', 'accounting', 'admin', 'advertiser', 'sales', 'client'].includes(payload.role)) {
       return { success: false, error: 'Invalid role.' };
     }
 
@@ -1065,7 +1087,7 @@ export async function getClientExpenseHistory(clientId: string) {
  */
 export async function updateTeamMemberAccess(payload: {
   memberId: string;
-  role: 'superadmin' | 'accounting' | 'admin' | 'advertiser' | 'client';
+  role: 'superadmin' | 'accounting' | 'admin' | 'advertiser' | 'sales' | 'client';
   workspaceIds: string[];
 }) {
   try {
@@ -1075,7 +1097,7 @@ export async function updateTeamMemberAccess(payload: {
     if (ctx.role !== 'superadmin' && ctx.role !== 'founder') {
       return { success: false, error: 'Only the Founder or a Superadmin can change access.' };
     }
-    if (!['superadmin', 'accounting', 'admin', 'advertiser', 'client'].includes(payload.role)) {
+    if (!['superadmin', 'accounting', 'admin', 'advertiser', 'sales', 'client'].includes(payload.role)) {
       return { success: false, error: 'Invalid role.' };
     }
 

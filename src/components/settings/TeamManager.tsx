@@ -10,7 +10,7 @@ export interface TeamMemberRecord {
   id: string;
   email: string;
   name?: string;
-  role: 'superadmin' | 'accounting' | 'admin' | 'advertiser' | 'client' | 'founder';
+  role: 'superadmin' | 'accounting' | 'admin' | 'advertiser' | 'sales' | 'client' | 'founder';
   isCurrentUser?: boolean;
   workspaceIds?: string[];
 }
@@ -35,13 +35,13 @@ export function TeamManager({ initialMembers, currentUserRole, workspaces, activ
   const [members, setMembers] = useState<TeamMemberRecord[]>(initialMembers);
   const [name, setName] = useState('');
   const [pending, setPending] = useState<PendingInvite[]>(pendingInvites);
-  const [role, setRole] = useState<'superadmin' | 'accounting' | 'admin' | 'advertiser' | 'client'>('accounting');
+  const [role, setRole] = useState<'superadmin' | 'accounting' | 'admin' | 'advertiser' | 'sales' | 'client'>('accounting');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editRole, setEditRole] = useState<'superadmin' | 'accounting' | 'admin' | 'advertiser' | 'client' | 'founder'>('accounting');
+  const [editRole, setEditRole] = useState<'superadmin' | 'accounting' | 'admin' | 'advertiser' | 'sales' | 'client' | 'founder'>('accounting');
   const [isPending, startTransition] = useTransition();
   // Workspaces a new member can enter (default: the current one) and, while editing, an existing member's.
   const [inviteWorkspaceIds, setInviteWorkspaceIds] = useState<string[]>([activeWorkspaceId]);
@@ -77,7 +77,7 @@ export function TeamManager({ initialMembers, currentUserRole, workspaces, activ
       try {
         const res = await updateTeamMemberAccess({
           memberId: id,
-          role: editRole as 'superadmin' | 'accounting' | 'admin' | 'advertiser' | 'client',
+          role: editRole as 'superadmin' | 'accounting' | 'admin' | 'advertiser' | 'sales' | 'client',
           workspaceIds: editWorkspaceIds,
         });
         if (res.success) {
@@ -227,6 +227,7 @@ export function TeamManager({ initialMembers, currentUserRole, workspaces, activ
             >
               <option value="accounting">ACCOUNTING (Full Ledger & Invoice Rights)</option>
               <option value="advertiser">ADVERTISER (Ads Data Input, Assigned Clients Only)</option>
+              <option value="sales">SALES (Leads, Pipeline, Invoice Requests; no finance)</option>
               <option value="client">CLIENT (Read-Only Ads Reports, Assigned Clients Only)</option>
               <option value="admin">ADMIN (Operations & Client Reporting)</option>
               <option value="superadmin">SUPERADMIN (Full Ownership & Settings)</option>
@@ -360,6 +361,7 @@ export function TeamManager({ initialMembers, currentUserRole, workspaces, activ
                         <option value="superadmin">SUPERADMIN</option>
                         <option value="accounting">ACCOUNTING</option>
                         <option value="advertiser">ADVERTISER</option>
+                        <option value="sales">SALES</option>
                         <option value="client">CLIENT</option>
                         <option value="admin">ADMIN</option>
                       </select>

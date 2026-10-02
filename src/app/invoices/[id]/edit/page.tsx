@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Edit3, Package } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
+import { withoutProspects } from '@/lib/sales/prospects';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { NewInvoiceForm } from '@/components/invoices/NewInvoiceForm';
 
@@ -34,13 +35,16 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
   }
 
   // Fetch required form options
-  let clientQuery = supabase.from('clients').select('id, name, company_name, company_legal_name, workspace_id, contact_type');
-  if (activeWorkspaceId === '11111111-1111-1111-1111-111111111111') {
-    clientQuery = clientQuery.or(`workspace_id.in.(11111111-1111-1111-1111-111111111111,f7262187-2a08-4454-b046-b4fd91f2f642,b9f6425f-ad1f-4911-a182-ab788c5fa0e3),workspace_id.is.null`);
-  } else {
-    clientQuery = clientQuery.or(`workspace_id.eq.${activeWorkspaceId},workspace_id.is.null`);
-  }
-  const { data: clients } = await clientQuery.order('name', { ascending: true });
+  const { data: clients } = await withoutProspects((hide) => {
+    let clientQuery = supabase.from('clients').select('id, name, company_name, company_legal_name, workspace_id, contact_type');
+    if (activeWorkspaceId === '11111111-1111-1111-1111-111111111111') {
+      clientQuery = clientQuery.or(`workspace_id.in.(11111111-1111-1111-1111-111111111111,f7262187-2a08-4454-b046-b4fd91f2f642,b9f6425f-ad1f-4911-a182-ab788c5fa0e3),workspace_id.is.null`);
+    } else {
+      clientQuery = clientQuery.or(`workspace_id.eq.${activeWorkspaceId},workspace_id.is.null`);
+    }
+    if (hide) clientQuery = clientQuery.eq('is_prospect', false);
+    return clientQuery.order('name', { ascending: true });
+  });
   let productQuery = supabase.from('products').select('*');
   if (activeWorkspaceId === '11111111-1111-1111-1111-111111111111') {
     productQuery = productQuery.in('workspace_id', [

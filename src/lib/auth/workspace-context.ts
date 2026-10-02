@@ -6,7 +6,7 @@ import { withSharedCookieOptions } from '@/lib/supabase/cookie-options';
 import { isFounderEmail } from '@/lib/auth/founders';
 
 // 'none' = signed in but not a member of any workspace: no access to anything.
-export type WorkspaceRole = 'founder' | 'superadmin' | 'accounting' | 'admin' | 'advertiser' | 'client' | 'none';
+export type WorkspaceRole = 'founder' | 'superadmin' | 'accounting' | 'admin' | 'advertiser' | 'sales' | 'client' | 'none';
 
 /** Roles that may open finance modules. advertiser / client are limited to Pabrik Sosmed. */
 export const FINANCE_ROLES: WorkspaceRole[] = ['founder', 'superadmin', 'accounting', 'admin'];

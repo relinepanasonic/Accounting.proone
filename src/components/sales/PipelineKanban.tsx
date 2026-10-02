@@ -1,167 +1,256 @@
 'use client';
 
-import React, { useState, useTransition } from 'react';
-import { formatCurrency } from '@/lib/utils/currency';
-import { updateDealStage } from '@/app/actions/sales';
-import { ArrowLeft, ArrowRight, Calendar, User, MoreHorizontal, Plus } from 'lucide-react';
+import React, { useEffect, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import {
-  DndContext,
-  DragOverlay,
-  closestCorners,
-  KeyboardSensor,
-  PointerSensor,
-  TouchSensor,
-  useSensor,
-  useSensors,
-  useDroppable,
-  useDraggable
+  DndContext, DragOverlay, closestCorners, KeyboardSensor, PointerSensor, TouchSensor, useSensor, useSensors, useDroppable, useDraggable,
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-
-const STAGES = ['Contacted', 'Proposal Sent', 'Negotiation', 'Invoice', 'Deal'];
+import { ArrowLeft, ArrowRight, Calendar, CheckCircle2, Clock, Download, FileText, Loader2, MessageCircle, Play, Send, ShieldCheck, User, X } from 'lucide-react';
+import { formatCurrency } from '@/lib/utils/currency';
+import { PIPELINE_STAGES, MANUAL_STAGES, computeProjectTerms, type RequestItem } from '@/lib/sales/flow';
+import { approveWithoutPayment, cancelInvoiceRequest, createInvoiceShare, moveDeal, startProject } from '@/app/actions/sales-flow';
+import { NewLeadModal } from '@/components/sales/NewLeadModal';
+import { RequestInvoiceModal, type CatalogProduct } from '@/components/sales/RequestInvoiceModal';
 
 const STAGE_COLORS: Record<string, string> = {
-  'Contacted': 'bg-blue-400',
+  Lead: 'bg-zinc-400',
+  Contacted: 'bg-blue-400',
   'Proposal Sent': 'bg-purple-400',
-  'Negotiation': 'bg-amber-400',
-  'Invoice': 'bg-zinc-400',
-  'Deal': 'bg-emerald-400'
+  Negotiation: 'bg-amber-400',
+  Invoice: 'bg-sky-400',
+  Deal: 'bg-emerald-400',
 };
 
-function DroppableColumn({ id, title, total, count, children }: any) {
-  const { isOver, setNodeRef } = useDroppable({ id });
-  const style = {
-    backgroundColor: isOver ? 'rgba(212, 175, 55, 0.05)' : undefined,
-    borderColor: isOver ? 'rgba(212, 175, 55, 0.5)' : undefined,
-  };
+interface Deal {
+  id: string;
+  title: string;
+  stage: string;
+  value: number;
+  client_name: string;
+  client_phone: string | null;
+  salesman_id: string | null;
+  salesman_name: string | null;
+  expected_close_date: string | null;
+  invoice_requested_at: string | null;
+  invoice_generated_at: string | null;
+  paid_at: string | null;
+  acc_approved_at: string | null;
+  invoice_number: string | null;
+  invoice_status: string | null;
+  request: { id: string; status: string; items: RequestItem[]; note: string | null } | null;
+  project: { id: string; start_date: string; end_date: string | null; deliverables: { name: string; unit: string; total: number }[]; status: string; handler_assigned_at: string | null } | null;
+}
 
+interface Viewer {
+  role: string;
+  userId: string | null;
+  isFinance: boolean;
+}
+
+const stamp = (iso: string | null) =>
+  iso ? new Date(iso).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+const day = (d: string | null) => (d ? new Date(`${d}T12:00:00Z`).toLocaleDateString('id-ID', { timeZone: 'UTC', day: '2-digit', month: 'short', year: 'numeric' }) : '');
+
+const stopDrag = { onPointerDown: (e: React.PointerEvent) => e.stopPropagation() };
+
+/** 08xx -> 628xx, digits only. */
+const waPhone = (p: string | null) => {
+  const d = (p || '').replace(/\D/g, '');
+  if (!d) return '';
+  return d.startsWith('0') ? `62${d.slice(1)}` : d;
+};
+
+function DroppableColumn({ id, total, count, children }: { id: string; total: number; count: number; children: React.ReactNode }) {
+  const { isOver, setNodeRef } = useDroppable({ id });
   return (
-    <div 
+    <div
       ref={setNodeRef}
-      style={style}
+      style={{ backgroundColor: isOver ? 'rgba(212,175,55,0.05)' : undefined, borderColor: isOver ? 'rgba(212,175,55,0.5)' : undefined }}
       className="flex flex-col w-[320px] shrink-0 bg-[#0e0f14] rounded-2xl border border-zinc-800/60 max-h-full transition-colors duration-200"
     >
-      <div className="p-4 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3">
-          <div className={`w-2.5 h-2.5 rounded-full ${STAGE_COLORS[id] || 'bg-zinc-500'} shadow-[0_0_8px_currentColor] opacity-80`} />
-          <h3 className="font-bold text-[15px] text-zinc-100 tracking-wide">{title}</h3>
-          <span className="text-xs font-medium text-zinc-400 bg-zinc-800/50 px-2 py-0.5 rounded-full ml-1">{count}</span>
-        </div>
-        <button className="text-zinc-500 hover:text-zinc-300 transition-colors p-1 rounded-md hover:bg-zinc-800/50">
-          <MoreHorizontal className="w-5 h-5" />
-        </button>
+      <div className="p-4 flex items-center gap-3 shrink-0">
+        <div className={`w-2.5 h-2.5 rounded-full ${STAGE_COLORS[id] || 'bg-zinc-500'} opacity-80`} />
+        <h3 className="font-bold text-[15px] text-zinc-100 tracking-wide">{id}</h3>
+        <span className="text-xs font-medium text-zinc-400 bg-zinc-800/50 px-2 py-0.5 rounded-full">{count}</span>
       </div>
-
-      <div className="px-4 pb-3 text-xs font-semibold text-[#d4af37]/80 border-b border-zinc-800/50 flex justify-between items-center">
-        <span>Pipeline Value</span>
+      <div className="px-4 pb-3 text-xs font-semibold text-[#d4af37]/80 border-b border-zinc-800/50 flex justify-between">
+        <span>Value</span>
         <span>{formatCurrency(total)}</span>
       </div>
-      
-      <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
-        {children}
-      </div>
-
-      <div className="p-3 border-t border-zinc-800/50 bg-[#0e0f14] rounded-b-2xl mt-auto">
-        <button className="w-full py-2 flex items-center justify-center gap-2 text-xs font-semibold text-zinc-500 hover:text-[#d4af37] hover:bg-zinc-800/40 rounded-lg transition-colors">
-          <Plus className="w-4 h-4" /> Add Deal
-        </button>
-      </div>
+      <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">{children}</div>
     </div>
   );
 }
 
-function DraggableDealCard({ deal, handleMove }: { deal: any, handleMove: any }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: deal.id,
-    data: { deal }
-  });
+function Btn({ children, onClick, tone = 'gold', disabled }: { children: React.ReactNode; onClick: () => void; tone?: 'gold' | 'green' | 'ghost' | 'red'; disabled?: boolean }) {
+  const cls = {
+    gold: 'bg-[#d4af37]/15 text-[#f5d77f] border-[#d4af37]/40 hover:bg-[#d4af37]/25',
+    green: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/25',
+    ghost: 'bg-zinc-900 text-zinc-300 border-zinc-700 hover:border-zinc-500',
+    red: 'bg-red-500/10 text-red-300 border-red-500/30 hover:bg-red-500/20',
+  }[tone];
+  return (
+    <button disabled={disabled} onClick={(e) => { e.stopPropagation(); onClick(); }} {...stopDrag} className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold disabled:opacity-50 ${cls}`}>
+      {children}
+    </button>
+  );
+}
 
-  const style = {
-    transform: CSS.Translate.toString(transform),
-    opacity: isDragging ? 0.4 : 1,
-    zIndex: isDragging ? 50 : 1,
-  };
+function DealCard({
+  deal, viewer, products, onMove, onError,
+}: {
+  deal: Deal; viewer: Viewer; products: CatalogProduct[];
+  onMove?: (id: string, dir: 'left' | 'right') => void; onError: (m: string) => void;
+}) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [requesting, setRequesting] = useState(false);
+  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: deal.id, data: { deal } });
+
+  const manual = MANUAL_STAGES.includes(deal.stage);
+  const waiting = deal.request?.status === 'requested';
+  const hasInvoice = Boolean(deal.invoice_number && deal.invoice_generated_at);
+  const won = deal.stage === 'Deal';
+  const canAct = viewer.isFinance || viewer.role === 'sales';
+
+  const run = (fn: () => Promise<{ success: boolean; error?: string }>, after?: () => void) =>
+    start(async () => {
+      const res = await fn();
+      if (!res.success) return onError(res.error || 'Something went wrong.');
+      after?.();
+      router.refresh();
+    });
+
+  /** Make the share link, then open WhatsApp (or the download page) with it. */
+  const share = (how: 'wa' | 'wab' | 'download') =>
+    start(async () => {
+      const res = await createInvoiceShare(deal.id);
+      if (!res.success) return onError(res.error);
+      const link = `${window.location.origin}/share/invoice/${res.token}`;
+      if (how === 'download') {
+        window.open(`${link}?dl=1`, '_blank');
+        return;
+      }
+      const text = `Halo ${res.clientName}, berikut invoice ${res.invoiceNumber} sebesar Rp ${Math.round(res.total).toLocaleString('id-ID')}.\nBuka dan unduh di sini: ${link}`;
+      const phone = waPhone(res.phone);
+      const web = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+      // WhatsApp Business has its own Android package; elsewhere the phone decides which app opens wa.me.
+      if (how === 'wab' && /Android/i.test(navigator.userAgent)) {
+        window.location.href = `intent://send/?${phone ? `phone=${phone}&` : ''}text=${encodeURIComponent(text)}#Intent;scheme=smsto;package=com.whatsapp.w4b;S.browser_fallback_url=${encodeURIComponent(web)};end`;
+      } else {
+        window.open(web, '_blank');
+      }
+    });
+
+  const preview = deal.request ? computeProjectTerms(deal.request.items, startDate) : { endDate: null, deliverables: [] };
 
   return (
-    <div 
-      ref={setNodeRef} 
-      style={style}
-      className="group relative bg-[#13141a] rounded-xl border border-zinc-800/50 p-4 shadow-md hover:border-[#d4af37]/40 transition-all duration-200 overflow-hidden cursor-grab active:cursor-grabbing"
-      {...listeners}
-      {...attributes}
-    >
-      <div className={`absolute top-0 left-0 right-0 h-1 ${STAGE_COLORS[deal.stage] || 'bg-zinc-700'} opacity-70`} />
+    <>
+      <div
+        ref={setNodeRef}
+        style={{ transform: CSS.Translate.toString(transform), opacity: isDragging ? 0.4 : 1, zIndex: isDragging ? 50 : 1 }}
+        className={`group relative bg-[#13141a] rounded-xl border border-zinc-800/50 p-4 shadow-md hover:border-[#d4af37]/40 transition-all overflow-hidden ${manual ? 'cursor-grab active:cursor-grabbing' : ''}`}
+        {...(manual ? listeners : {})}
+        {...attributes}
+      >
+        <div className={`absolute top-0 left-0 right-0 h-1 ${STAGE_COLORS[deal.stage] || 'bg-zinc-700'} opacity-70`} />
 
-      <div className="flex items-center justify-between mb-3 mt-1">
-        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-[#d4af37]/10 text-[#f5d77f]">
-          <User className="w-3 h-3 mr-1 opacity-70" />
-          <span className="truncate max-w-[120px]">{deal.clients?.name || deal.lead_name}</span>
-        </span>
-        <button className="text-zinc-600 hover:text-zinc-300 transition-colors opacity-0 group-hover:opacity-100">
-          <MoreHorizontal className="w-4 h-4" />
-        </button>
-      </div>
-      
-      <h4 className="text-[15px] font-bold text-zinc-100 leading-snug mb-2 line-clamp-2">
-        {deal.title}
-      </h4>
-
-      <div className="text-[#d4af37] font-semibold text-sm mb-4">
-        {formatCurrency(deal.value)}
-      </div>
-
-      <div className="w-full h-1 bg-zinc-800 rounded-full mb-4 overflow-hidden">
-        <div className="h-full bg-gradient-to-r from-[#d4af37]/40 to-[#d4af37] w-1/3 rounded-full" />
-      </div>
-
-      <div className="flex items-center justify-between text-xs text-zinc-500">
-        <div className="flex items-center gap-3">
-          {deal.expected_close_date && (
-            <div className="flex items-center gap-1.5" title="Expected Close Date">
-              <Calendar className="w-3.5 h-3.5" />
-              <span>{new Date(deal.expected_close_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
+        <div className="flex items-center justify-between mb-3 mt-1">
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-[#d4af37]/10 text-[#f5d77f]">
+            <User className="w-3 h-3 mr-1 opacity-70" />
+            <span className="truncate max-w-[170px]">{deal.client_name}</span>
+          </span>
+          {deal.salesman_name && (
+            <div className="flex items-center justify-center w-6 h-6 rounded-full bg-zinc-800 border border-zinc-700 text-[10px] font-bold text-zinc-300" title={`Salesman: ${deal.salesman_name}`}>
+              {deal.salesman_name.substring(0, 2).toUpperCase()}
             </div>
           )}
         </div>
-        {deal.salesman_name && (
-          <div className="flex items-center justify-center w-6 h-6 rounded-full bg-zinc-800 border border-zinc-700 text-[10px] font-bold text-zinc-300 shadow-sm" title={`Salesman: ${deal.salesman_name}`}>
-            {deal.salesman_name.substring(0, 2).toUpperCase()}
+
+        <h4 className="text-[15px] font-bold text-zinc-100 leading-snug mb-1 line-clamp-2">{deal.title}</h4>
+        <div className="text-[#d4af37] font-semibold text-sm mb-3">{formatCurrency(deal.value)}</div>
+        {deal.expected_close_date && manual && (
+          <div className="flex items-center gap-1.5 text-xs text-zinc-500 mb-2"><Calendar className="w-3.5 h-3.5" /> Close {day(deal.expected_close_date)}</div>
+        )}
+
+        {/* ---- milestones: when it was requested, when the invoice was made ---- */}
+        {(deal.invoice_requested_at || hasInvoice) && (
+          <div className="space-y-1 rounded-lg border border-zinc-800 bg-black/20 p-2.5 text-[11px]">
+            {deal.invoice_requested_at && (
+              <div className="flex items-center gap-1.5 text-zinc-400"><Clock className="w-3 h-3 text-sky-300" /> Requested <span className="text-zinc-200">{stamp(deal.invoice_requested_at)}</span></div>
+            )}
+            {hasInvoice ? (
+              <div className="flex items-center gap-1.5 text-zinc-400"><CheckCircle2 className="w-3 h-3 text-emerald-300" /> Invoice generated <span className="text-zinc-200">{stamp(deal.invoice_generated_at)}</span></div>
+            ) : waiting ? (
+              <div className="flex items-center gap-1.5 text-amber-300"><Loader2 className="w-3 h-3 animate-spin" /> Waiting for Accounting</div>
+            ) : null}
+            {hasInvoice && <div className="font-mono text-[#f5d77f]">{deal.invoice_number}{deal.invoice_status ? <span className="ml-2 font-sans text-zinc-500 uppercase">{deal.invoice_status}</span> : null}</div>}
+            {deal.paid_at && <div className="flex items-center gap-1.5 text-emerald-300"><CheckCircle2 className="w-3 h-3" /> Paid {stamp(deal.paid_at)}</div>}
+            {deal.acc_approved_at && !deal.paid_at && <div className="flex items-center gap-1.5 text-emerald-300"><ShieldCheck className="w-3 h-3" /> Approved by Accounting {stamp(deal.acc_approved_at)}</div>}
+          </div>
+        )}
+
+        {/* ---- actions ---- */}
+        <div className="mt-3 flex flex-wrap gap-2" {...stopDrag}>
+          {canAct && manual && <Btn onClick={() => setRequesting(true)}><FileText className="w-3.5 h-3.5" /> Request invoice</Btn>}
+          {canAct && waiting && !hasInvoice && <Btn tone="red" disabled={pending} onClick={() => run(() => cancelInvoiceRequest(deal.request!.id))}><X className="w-3.5 h-3.5" /> Cancel request</Btn>}
+          {canAct && hasInvoice && (
+            <>
+              <Btn tone="green" disabled={pending} onClick={() => share('wa')}><MessageCircle className="w-3.5 h-3.5" /> WhatsApp</Btn>
+              <Btn tone="green" disabled={pending} onClick={() => share('wab')}><Send className="w-3.5 h-3.5" /> WA Business</Btn>
+              <Btn tone="ghost" disabled={pending} onClick={() => share('download')}><Download className="w-3.5 h-3.5" /> Download</Btn>
+            </>
+          )}
+          {viewer.isFinance && hasInvoice && !won && <Btn tone="ghost" disabled={pending} onClick={() => run(() => approveWithoutPayment(deal.id))}><ShieldCheck className="w-3.5 h-3.5" /> Approve without payment</Btn>}
+        </div>
+
+        {/* ---- deal won: start the project ---- */}
+        {won && !deal.project && canAct && (
+          <div className="mt-3 space-y-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3" {...stopDrag}>
+            <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-300">Start the project</div>
+            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-sm text-zinc-100 [color-scheme:dark]" />
+            <div className="text-[11px] text-zinc-400">
+              {preview.endDate ? <>Ends <b className="text-zinc-100">{day(preview.endDate)}</b></> : 'No end date (no product has a project length)'}
+              {preview.deliverables.length > 0 && <div>{preview.deliverables.map((d) => `${d.total} ${d.unit}`).join(' · ')} to deliver</div>}
+            </div>
+            <Btn tone="green" disabled={pending || !startDate} onClick={() => run(() => startProject(deal.id, startDate))}><Play className="w-3.5 h-3.5" /> Start project</Btn>
+          </div>
+        )}
+        {deal.project && (
+          <div className="mt-3 space-y-1 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 text-[11px]">
+            <div className="font-bold uppercase tracking-wider text-emerald-300">Project {deal.project.status === 'pre_start' ? 'starts soon' : 'running'}</div>
+            <div className="text-zinc-300">{day(deal.project.start_date)}{deal.project.end_date ? ` → ${day(deal.project.end_date)}` : ''}</div>
+            {deal.project.deliverables.length > 0 && <div className="text-zinc-400">{deal.project.deliverables.map((d) => `${d.total} ${d.unit}`).join(' · ')}</div>}
+            <div className={deal.project.handler_assigned_at ? 'text-emerald-300' : 'text-amber-300'}>{deal.project.handler_assigned_at ? 'Handler assigned' : 'Waiting for a handler (superadmin)'}</div>
+          </div>
+        )}
+
+        {/* arrows for phones (no drag) */}
+        {manual && onMove && (
+          <div className="mt-3 flex justify-between lg:hidden" {...stopDrag}>
+            <button onClick={() => onMove(deal.id, 'left')} disabled={PIPELINE_STAGES.indexOf(deal.stage as any) === 0} className="p-1.5 rounded-full border border-zinc-700 text-zinc-300 disabled:opacity-20"><ArrowLeft className="w-4 h-4" /></button>
+            <button onClick={() => onMove(deal.id, 'right')} disabled={deal.stage === 'Negotiation'} className="p-1.5 rounded-full border border-zinc-700 text-zinc-300 disabled:opacity-20"><ArrowRight className="w-4 h-4" /></button>
           </div>
         )}
       </div>
 
-      {/* Mobile Navigation Arrows (Overlay on hover/tap) - Independent of Drag */}
-      <div 
-        className="absolute inset-y-0 left-0 right-0 flex items-center justify-between px-2 opacity-0 lg:group-hover:opacity-100 transition-opacity pointer-events-none"
-      >
-        <button
-          onClick={(e) => { e.stopPropagation(); handleMove(deal.id, 'left'); }}
-          disabled={STAGES.indexOf(deal.stage) === 0}
-          onPointerDown={(e) => e.stopPropagation()} // Prevent drag start when clicking arrow
-          className="pointer-events-auto p-1.5 bg-black/80 text-zinc-300 rounded-full hover:text-[#d4af37] hover:bg-[#d4af37]/20 disabled:opacity-0 transition-all transform -translate-x-2 lg:group-hover:translate-x-0 shadow-lg border border-zinc-700"
-        >
-          <ArrowLeft className="w-4 h-4" />
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); handleMove(deal.id, 'right'); }}
-          disabled={STAGES.indexOf(deal.stage) === STAGES.length - 1}
-          onPointerDown={(e) => e.stopPropagation()}
-          className="pointer-events-auto p-1.5 bg-black/80 text-zinc-300 rounded-full hover:text-[#d4af37] hover:bg-[#d4af37]/20 disabled:opacity-0 transition-all transform translate-x-2 lg:group-hover:translate-x-0 shadow-lg border border-zinc-700"
-        >
-          <ArrowRight className="w-4 h-4" />
-        </button>
-      </div>
-    </div>
+      {requesting && <RequestInvoiceModal dealId={deal.id} clientName={deal.client_name} products={products} onClose={() => setRequesting(false)} />}
+    </>
   );
 }
 
-import { useRouter, useSearchParams } from 'next/navigation';
-
-export function PipelineKanban({ initialDeals, clients, currentMonth }: { initialDeals: any[], clients: any[], currentMonth: string }) {
+export function PipelineKanban({
+  initialDeals, products, salesmen, viewer, currentMonth,
+}: {
+  initialDeals: Deal[]; products: CatalogProduct[]; salesmen: { id: string; name: string }[]; viewer: Viewer; currentMonth: string;
+}) {
   const router = useRouter();
   const [deals, setDeals] = useState(initialDeals);
-  const [isPending, startTransition] = useTransition();
-  const [activeDeal, setActiveDeal] = useState<any>(null);
+  const [error, setError] = useState('');
+  const [activeDeal, setActiveDeal] = useState<Deal | null>(null);
+  useEffect(() => setDeals(initialDeals), [initialDeals]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -169,85 +258,67 @@ export function PipelineKanban({ initialDeals, clients, currentMonth }: { initia
     useSensor(KeyboardSensor)
   );
 
-  const handleDragStart = (event: any) => {
-    setActiveDeal(event.active.data.current.deal);
+  const moveTo = async (dealId: string, stage: string) => {
+    const before = deals;
+    setError('');
+    setDeals((p) => p.map((d) => (d.id === dealId ? { ...d, stage } : d)));
+    const res = await moveDeal(dealId, stage);
+    if (!res.success) {
+      setDeals(before);
+      setError(res.error);
+    } else router.refresh();
   };
 
   const handleDragEnd = (event: any) => {
     setActiveDeal(null);
     const { active, over } = event;
     if (!over) return;
-
-    const dealId = active.id;
-    const newStage = over.id;
-
-    const deal = deals.find(d => d.id === dealId);
-    if (!deal || deal.stage === newStage) return;
-
-    setDeals(prev => prev.map(d => d.id === dealId ? { ...d, stage: newStage } : d));
-
-    startTransition(() => {
-      updateDealStage(dealId, newStage).catch(err => {
-        console.error("Failed to update deal stage", err);
-        setDeals(initialDeals);
-      });
-    });
+    const deal = deals.find((d) => d.id === active.id);
+    if (!deal || deal.stage === over.id) return;
+    moveTo(deal.id, String(over.id));
   };
 
-  const handleMove = (dealId: string, direction: 'left' | 'right') => {
-    const deal = deals.find(d => d.id === dealId);
+  const handleArrow = (dealId: string, dir: 'left' | 'right') => {
+    const deal = deals.find((d) => d.id === dealId);
     if (!deal) return;
-    const currentIndex = STAGES.indexOf(deal.stage);
-    let newIndex = direction === 'left' ? currentIndex - 1 : currentIndex + 1;
-    if (newIndex < 0 || newIndex >= STAGES.length) return;
-    const newStage = STAGES[newIndex];
-
-    setDeals(prev => prev.map(d => d.id === dealId ? { ...d, stage: newStage } : d));
-    startTransition(() => {
-      updateDealStage(dealId, newStage).catch(err => {
-        console.error("Failed to update deal stage", err);
-        setDeals(initialDeals);
-      });
-    });
+    const next = PIPELINE_STAGES[PIPELINE_STAGES.indexOf(deal.stage as any) + (dir === 'left' ? -1 : 1)];
+    if (next) moveTo(dealId, next);
   };
 
   return (
-    <DndContext 
-      sensors={sensors}
-      collisionDetection={closestCorners}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-    >
+    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={(e: any) => setActiveDeal(e.active.data.current.deal)} onDragEnd={handleDragEnd}>
       <div className="flex flex-col h-[calc(100vh-140px)]">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 px-4 lg:px-8 shrink-0 mt-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4 px-4 lg:px-8 shrink-0 mt-4">
           <div>
-            <h1 className="text-2xl font-extrabold text-zinc-100 font-serif">CRM Pipeline</h1>
-            <p className="text-sm text-zinc-400 mt-1">Drag and drop deals, or use arrows to manage opportunities.</p>
+            <h1 className="text-2xl font-extrabold text-zinc-100 font-serif">Sales Pipeline</h1>
+            <p className="text-sm text-zinc-400 mt-1">Leads start here. Drag a card forward, then request its invoice. Won deals become projects.</p>
           </div>
           <div className="flex items-center gap-3">
-            <label className="text-sm font-semibold text-zinc-400">Pipeline Month:</label>
-            <input 
-              type="month" 
+            <label className="text-sm font-semibold text-zinc-400">Won in:</label>
+            <input
+              type="month"
               value={currentMonth}
-              onChange={(e) => {
-                if (e.target.value) {
-                  router.push(`/sales/pipeline?month=${e.target.value}`);
-                }
-              }}
+              onChange={(e) => e.target.value && router.push(`/sales/pipeline?month=${e.target.value}`)}
               className="bg-[#0e0f14] border border-[#d4af37]/30 text-zinc-100 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-[#d4af37] [color-scheme:dark]"
             />
+            <NewLeadModal salesmen={salesmen} canPickSalesman={viewer.role !== 'sales'} />
           </div>
         </div>
 
-        <div className="flex-1 overflow-x-auto overflow-y-hidden px-4 lg:px-8 pb-8 flex gap-5 custom-scrollbar">
-          {STAGES.map(stage => {
-            const stageDeals = deals.filter(d => d.stage === stage);
-            const stageTotal = stageDeals.reduce((sum, d) => sum + Number(d.value || 0), 0);
+        {error && (
+          <div className="mx-4 lg:mx-8 mb-3 flex items-start justify-between rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs text-red-300 shrink-0">
+            <span>{error}</span>
+            <button onClick={() => setError('')} aria-label="Dismiss"><X className="w-3.5 h-3.5" /></button>
+          </div>
+        )}
 
+        <div className="flex-1 overflow-x-auto overflow-y-hidden px-4 lg:px-8 pb-8 flex gap-5 custom-scrollbar">
+          {PIPELINE_STAGES.map((stage) => {
+            const list = deals.filter((d) => d.stage === stage);
             return (
-              <DroppableColumn key={stage} id={stage} title={stage} total={stageTotal} count={stageDeals.length}>
-                {stageDeals.map(deal => (
-                  <DraggableDealCard key={deal.id} deal={deal} handleMove={handleMove} />
+              <DroppableColumn key={stage} id={stage} total={list.reduce((s, d) => s + Number(d.value || 0), 0)} count={list.length}>
+                {list.map((deal) => (
+                  <DealCard key={deal.id} deal={deal} viewer={viewer} products={products} onMove={handleArrow} onError={setError} />
                 ))}
               </DroppableColumn>
             );
@@ -256,8 +327,9 @@ export function PipelineKanban({ initialDeals, clients, currentMonth }: { initia
 
         <DragOverlay>
           {activeDeal ? (
-            <div className="opacity-80 rotate-2 scale-105 transition-transform pointer-events-none">
-              <DraggableDealCard deal={activeDeal} handleMove={() => {}} />
+            <div className="opacity-80 rotate-2 scale-105 pointer-events-none rounded-xl border border-[#d4af37]/40 bg-[#13141a] p-4 w-[290px]">
+              <div className="text-xs text-[#f5d77f] font-bold">{activeDeal.client_name}</div>
+              <div className="text-sm font-bold text-zinc-100">{activeDeal.title}</div>
             </div>
           ) : null}
         </DragOverlay>
@@ -266,7 +338,6 @@ export function PipelineKanban({ initialDeals, clients, currentMonth }: { initia
           .custom-scrollbar::-webkit-scrollbar { height: 8px; width: 6px; }
           .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); border-radius: 4px; }
           .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(212, 175, 55, 0.2); border-radius: 4px; }
-          .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(212, 175, 55, 0.4); }
         `}</style>
       </div>
     </DndContext>

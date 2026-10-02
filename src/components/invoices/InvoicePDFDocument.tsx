@@ -66,6 +66,10 @@ export interface InvoiceDocumentProps {
   pphRate?: number;
   pphAmount?: number;
   dppAmount?: number;
+  /** Public client view: no staff links or payment buttons, only the document and its download. */
+  shareMode?: boolean;
+  /** Start the PDF download as soon as the page has loaded (the Download button on a pipeline card). */
+  autoDownload?: boolean;
 }
 
 export function InvoicePDFDocument({
@@ -99,6 +103,8 @@ export function InvoicePDFDocument({
   pphRate,
   pphAmount,
   dppAmount,
+  shareMode = false,
+  autoDownload = false,
 }: Partial<InvoiceDocumentProps>) {
   const isQuotation = documentType === 'QUOTATION';
   const isReceipt = documentType === 'RECEIPT';
@@ -198,6 +204,13 @@ export function InvoicePDFDocument({
     }
   };
 
+  useEffect(() => {
+    if (!autoDownload) return;
+    const t = setTimeout(() => { void handlePrintPDF(); }, 900);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoDownload]);
+
   const brandName = workspaceBrand?.name || 'Workspace Enterprise';
   const brandTagline = workspaceBrand?.tagline || '';
   const brandAddress = workspaceBrand?.address || '';
@@ -209,16 +222,16 @@ export function InvoicePDFDocument({
     <div className="min-h-screen bg-[#0b0c10] py-8 px-4 sm:px-8 print:p-0 print:bg-white text-zinc-800">
       {/* Top Controls Strip (Hidden in Print/PDF mode) */}
       <div className="max-w-[850px] mx-auto mb-6 flex items-center justify-between no-print">
-        <Link
+        {shareMode ? <span /> : (<Link
           href="/invoices"
           className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-900 border border-[#d4af37]/30 text-[#f5d77f] hover:bg-[#d4af37]/15 text-xs font-bold transition-all"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>BACK TO {isQuotation ? 'QUOTATIONS' : isReceipt ? 'INCOME' : 'INVOICES'}</span>
-        </Link>
+        </Link>)}
 
         <div className="flex items-center gap-3">
-          {!isQuotation && invoiceId && balanceDue > 0 && (
+          {!shareMode && !isQuotation && invoiceId && balanceDue > 0 && (
             <button
               onClick={() => {
                 setPaymentAmount(balanceDue);

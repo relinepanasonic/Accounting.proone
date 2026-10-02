@@ -7,8 +7,8 @@ import { getDashboardTelemetry } from '@/lib/data/dashboard';
 
 import { DashboardTopNumbers } from '@/components/dashboard/center-column/DashboardTopNumbers';
 import { DashboardBottomNumbers } from '@/components/dashboard/center-column/DashboardBottomNumbers';
-import { DashboardChartsRow3 } from '@/components/dashboard/center-column/DashboardChartsRow3';
-import { DashboardChartsRow4 } from '@/components/dashboard/center-column/DashboardChartsRow4';
+import { DashboardChartsRow3Lazy as DashboardChartsRow3 } from '@/components/dashboard/center-column/DashboardChartsRow3Lazy';
+import { DashboardChartsRow4Lazy as DashboardChartsRow4 } from '@/components/dashboard/center-column/DashboardChartsRow4Lazy';
 import { DashboardTablesRow5 } from '@/components/dashboard/center-column/DashboardTablesRow5';
 
 export const dynamic = 'force-dynamic';

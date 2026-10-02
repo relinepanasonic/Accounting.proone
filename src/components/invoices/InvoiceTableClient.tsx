@@ -1,5 +1,6 @@
 'use client';
 import { formatIndoDate } from '@/lib/utils';
+import { NEW_WAVE_WORKSPACE_ID } from '@/lib/workspaces/known';
 
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
@@ -101,25 +102,22 @@ function InvoiceAssignmentDropdown({
     });
   };
 
-  const isPT = activeWorkspaceName.toLowerCase().includes('pt') || activeWorkspaceName.toLowerCase().includes('pintu langit');
-  const isLocked = !isPT;
-
-  const validOptions = availableWorkspaces.filter(w => w.id !== '11111111-1111-1111-1111-111111111111');
-  const displayOptions = isLocked 
-    ? validOptions.filter(w => w.name === activeWorkspaceName)
-    : validOptions;
+  // Workspaces are separate. Only PT Pintu can tag an invoice as a New Wave job (it stays in PT Pintu,
+  // but is sent to New Wave's hour system).
+  const isPT = activeWorkspaceName.toLowerCase().includes('pintu langit');
+  void availableWorkspaces;
+  if (!isPT) return <span className="text-[10px] text-zinc-600">—</span>;
 
   return (
     <select
-      value={currentAssignedId || (isLocked && displayOptions.length > 0 ? displayOptions[0].id : '')}
+      value={currentAssignedId === NEW_WAVE_WORKSPACE_ID ? NEW_WAVE_WORKSPACE_ID : ''}
       onChange={handleAssignmentChange}
       disabled={isPending}
+      title="New Wave job: stays in PT Pintu, sent to New Wave's hour system"
       className={`bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-[10px] text-zinc-400 focus:outline-none focus:border-[#d4af37] cursor-pointer hover:border-[#d4af37]/50 transition-colors max-w-[120px] ${isPending ? 'opacity-50' : ''}`}
     >
-      {!isLocked && <option value="">No Assignment</option>}
-      {displayOptions.map(w => (
-        <option key={w.id} value={w.id}>{w.name}</option>
-      ))}
+      <option value="">—</option>
+      <option value={NEW_WAVE_WORKSPACE_ID}>New Wave job</option>
     </select>
   );
 }
@@ -389,7 +387,7 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
                   <div className="flex items-center justify-end gap-2">Amount Billed {getSortIcon('rawAmount')}</div>
                 </th>
                 <th className="py-3 px-3 cursor-pointer select-none group" onClick={() => handleSort('assignedWorkspaceName')}>
-                  <div className="flex items-center justify-between">Assignment {getSortIcon('assignedWorkspaceName')}</div>
+                  <div className="flex items-center justify-between">New Wave {getSortIcon('assignedWorkspaceName')}</div>
                 </th>
                 <th className="py-3 px-3 cursor-pointer select-none group text-center" onClick={() => handleSort('status')}>
                   <div className="flex items-center justify-center gap-2">Status {getSortIcon('status')}</div>

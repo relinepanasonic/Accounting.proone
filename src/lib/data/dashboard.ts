@@ -62,7 +62,7 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     supabase
       .from('invoices')
       .select('id, invoice_number, status, total_amount, due_date, issue_date, created_at, client_id, assigned_workspace_id, clients(name), invoice_line_items(package_name, description, amount)')
-      .or(`workspace_id.eq.${activeWorkspaceId},assigned_workspace_id.eq.${activeWorkspaceId}`)
+      .eq('workspace_id', activeWorkspaceId)
       .order('created_at', { ascending: false }),
     supabase
       .from('clients')

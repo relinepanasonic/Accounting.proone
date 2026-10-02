@@ -4,6 +4,7 @@ import { Plus } from 'lucide-react';
 import { formatIndoDate } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
+import { NEW_WAVE_WORKSPACE_ID } from '@/lib/workspaces/known';
 import { clientMask, HIDDEN_CLIENT } from '@/lib/auth/client-privacy';
 import { InvoiceStatusToggle, InvoiceActionGroup } from '@/components/invoices/InvoiceRowActions';
 import { InvoiceTableClient } from '@/components/invoices/InvoiceTableClient';
@@ -22,8 +23,8 @@ async function InvoicesTableServer({ activeTab }: { activeTab: string }) {
   ] = await Promise.all([
     supabase
       .from('invoices')
-      .select('id, invoice_number, is_quotation, status, total_amount, amount_paid, issue_date, due_date, notes, client_id, assigned_workspace_id, clients(name, contact_name), invoice_line_items(package_name, description, quantity, scale), assignedWorkspaces:workspaces!invoices_assigned_workspace_id_fkey(name)')
-      .or(`workspace_id.eq.${activeWorkspaceId},assigned_workspace_id.eq.${activeWorkspaceId}`)
+      .select('id, invoice_number, is_quotation, status, total_amount, amount_paid, issue_date, due_date, notes, client_id, assigned_workspace_id, clients(name, contact_name), invoice_line_items(package_name, description, quantity, scale)')
+      .eq('workspace_id', activeWorkspaceId)
       .order('created_at', { ascending: false }),
     supabase
       .from('transactions')
@@ -69,7 +70,7 @@ async function InvoicesTableServer({ activeTab }: { activeTab: string }) {
             isQuotation: inv.is_quotation,
             status: inv.status || 'draft',
             assignedWorkspaceId: inv.assigned_workspace_id,
-            assignedWorkspaceName: inv.assignedWorkspaces ? (Array.isArray(inv.assignedWorkspaces) ? (inv.assignedWorkspaces as any[])[0]?.name : (inv.assignedWorkspaces as any).name) : 'No Assignment',
+            assignedWorkspaceName: inv.assigned_workspace_id === NEW_WAVE_WORKSPACE_ID ? 'New Wave job' : '—',
           };
         })
       : [];
@@ -93,8 +94,8 @@ async function InvoicesTableServer({ activeTab }: { activeTab: string }) {
           packageQtt: '—',
           isQuotation: false,
           status: 'paid',
-          assignedWorkspaceId: activeWorkspaceId,
-          assignedWorkspaceName: activeWorkspaceName,
+          assignedWorkspaceId: null,
+          assignedWorkspaceName: '—',
         }))
       : [];
 
@@ -120,8 +121,8 @@ async function InvoicesTableServer({ activeTab }: { activeTab: string }) {
             packageQtt: '—',
             isQuotation: false,
             status: 'paid',
-            assignedWorkspaceId: activeWorkspaceId,
-            assignedWorkspaceName: activeWorkspaceName,
+            assignedWorkspaceId: null,
+            assignedWorkspaceName: '—',
           };
         })
       : [];

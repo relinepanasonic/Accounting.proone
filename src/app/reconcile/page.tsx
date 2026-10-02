@@ -65,7 +65,7 @@ async function ReconciliationCore() {
     supabase
       .from('invoices')
       .select('id, invoice_number, total_amount, amount_paid, issue_date, clients(name), reconciled, workspace_id, assigned_workspace_id')
-      .or(`workspace_id.eq.${activeWorkspaceId},assigned_workspace_id.eq.${activeWorkspaceId}`)
+      .eq('workspace_id', activeWorkspaceId)
       // Removed reconciled filter so user can match already-reconciled items to bank statement
       .order('issue_date', { ascending: false }),
     supabase
@@ -99,7 +99,7 @@ async function ReconciliationCore() {
     supabase
       .from('invoices')
       .select('bank_reference')
-      .or(`workspace_id.eq.${activeWorkspaceId},assigned_workspace_id.eq.${activeWorkspaceId}`)
+      .eq('workspace_id', activeWorkspaceId)
       .eq('reconciled', true)
       .not('bank_reference', 'is', null),
     supabase

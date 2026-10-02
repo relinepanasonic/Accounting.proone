@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { NEW_WAVE_WORKSPACE_ID } from '@/lib/workspaces/known';
 import { createClient } from '@/lib/supabase/server';
 
 export interface LineItem {
@@ -237,7 +238,7 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
       notes: payload.projectDate ? `[ProjectDate:${payload.projectDate}]\n${payload.notes || ''}`.trim() : (payload.notes || null),
       bank_account_id: payload.bankAccountId || null,
       payment_instructions: payload.paymentInstructions || null,
-      assigned_workspace_id: payload.assignedWorkspaceId || null,
+      assigned_workspace_id: payload.assignedWorkspaceId === NEW_WAVE_WORKSPACE_ID ? NEW_WAVE_WORKSPACE_ID : null,
       updated_at: new Date().toISOString(),
     };
 
@@ -247,7 +248,7 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
       .eq('id', payload.id);
       
     if (workspaceId !== '11111111-1111-1111-1111-111111111111') {
-      updateQuery = updateQuery.or(`workspace_id.eq.${workspaceId},assigned_workspace_id.eq.${workspaceId}`);
+      updateQuery = updateQuery.eq('workspace_id', workspaceId);
     }
     
     let { error: updateError } = await updateQuery;
@@ -269,7 +270,7 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
         .eq('id', payload.id);
         
       if (workspaceId !== '11111111-1111-1111-1111-111111111111') {
-        retryQuery = retryQuery.or(`workspace_id.eq.${workspaceId},assigned_workspace_id.eq.${workspaceId}`);
+        retryQuery = retryQuery.eq('workspace_id', workspaceId);
       }
       
       const retry = await retryQuery;
@@ -347,7 +348,7 @@ export async function updateInvoiceAssignment(invoiceId: string, assignedWorkspa
 
     const { error } = await supabase
       .from('invoices')
-      .update({ assigned_workspace_id: assignedWorkspaceId })
+      .update({ assigned_workspace_id: assignedWorkspaceId === NEW_WAVE_WORKSPACE_ID ? NEW_WAVE_WORKSPACE_ID : null })
       .eq('id', invoiceId)
       .eq('workspace_id', workspaceId);
 
@@ -379,7 +380,7 @@ export async function updateInvoiceProjectDate(invoiceId: string, newDate: strin
     // Fetch existing notes
     let query = supabase.from('invoices').select('notes').eq('id', invoiceId);
     if (workspaceId !== '11111111-1111-1111-1111-111111111111') {
-      query = query.or(`workspace_id.eq.${workspaceId},assigned_workspace_id.eq.${workspaceId}`);
+      query = query.eq('workspace_id', workspaceId);
     }
     
     const { data: inv } = await query.single();
@@ -408,7 +409,7 @@ export async function updateInvoiceProjectDate(invoiceId: string, newDate: strin
       .eq('id', invoiceId);
       
     if (workspaceId !== '11111111-1111-1111-1111-111111111111') {
-      updateQuery = updateQuery.or(`workspace_id.eq.${workspaceId},assigned_workspace_id.eq.${workspaceId}`);
+      updateQuery = updateQuery.eq('workspace_id', workspaceId);
     }
 
     const { error } = await updateQuery;
@@ -542,7 +543,7 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
         dpp_amount: payload.dppAmount || 0,
         notes: payload.projectDate ? `[ProjectDate:${payload.projectDate}]\n${payload.notes || ''}`.trim() : (payload.notes || null),
       };
-      if (payload.assignedWorkspaceId) insertData.assigned_workspace_id = payload.assignedWorkspaceId;
+      if (payload.assignedWorkspaceId === NEW_WAVE_WORKSPACE_ID) insertData.assigned_workspace_id = NEW_WAVE_WORKSPACE_ID;
       if (payload.bankAccountId) insertData.bank_account_id = payload.bankAccountId;
       if (payload.paymentInstructions) insertData.payment_instructions = payload.paymentInstructions;
 
@@ -656,7 +657,7 @@ export async function duplicateInvoice(invoiceId: string) {
 
     let origQuery = supabase.from('invoices').select('*').eq('id', invoiceId);
     if (workspaceId !== '11111111-1111-1111-1111-111111111111') {
-      origQuery = origQuery.or(`workspace_id.eq.${workspaceId},assigned_workspace_id.eq.${workspaceId}`);
+      origQuery = origQuery.eq('workspace_id', workspaceId);
     }
     const { data: orig, error: fetchErr } = await origQuery.single();
 
@@ -693,7 +694,7 @@ export async function duplicateInvoice(invoiceId: string) {
         notes: orig.notes,
         bank_account_id: orig.bank_account_id || null,
         payment_instructions: orig.payment_instructions || null,
-        assigned_workspace_id: orig.assigned_workspace_id || workspaceId,
+        assigned_workspace_id: orig.assigned_workspace_id === NEW_WAVE_WORKSPACE_ID ? NEW_WAVE_WORKSPACE_ID : null,
       })
       .select('id')
       .single();
@@ -745,7 +746,7 @@ export async function toggleInvoiceStatus(invoiceId: string, currentStatus: stri
       .eq('id', invoiceId);
 
     if (workspaceId !== '11111111-1111-1111-1111-111111111111') {
-      updateQuery = updateQuery.or(`workspace_id.eq.${workspaceId},assigned_workspace_id.eq.${workspaceId}`);
+      updateQuery = updateQuery.eq('workspace_id', workspaceId);
     }
 
     const { error } = await updateQuery;
@@ -812,7 +813,7 @@ export async function markInvoiceAsFinalized(invoiceId: string) {
       .eq('id', invoiceId);
 
     if (workspaceId !== '11111111-1111-1111-1111-111111111111') {
-      updateQuery = updateQuery.or(`workspace_id.eq.${workspaceId},assigned_workspace_id.eq.${workspaceId}`);
+      updateQuery = updateQuery.eq('workspace_id', workspaceId);
     }
 
     const { error } = await updateQuery;
@@ -1004,30 +1005,8 @@ export async function recordInvoicePayment(invoiceId: string, amount: number, pa
         { workspace_id: workspaceId, account_code: arAccount, transaction_date: todayStr, debit_amount: 0, credit_amount: amount, description: `Payment for Invoice ${inv.invoice_number}${reference ? ' - ' + reference : ''}`, reference_id: newTxId || invoiceId, reference_type: 'payment_tx' }
       ]);
 
-      // If transferring to another workspace, create Expense here and Direct Income there
-      if (transferToWorkspaceId && transferToWorkspaceId !== workspaceId) {
-        // 1. Expense in current workspace (Transfer Out)
-        await supabase.from('transactions').insert({
-          workspace_id: workspaceId,
-          type: 'expense',
-          category: 'Inter-Company Transfer Out',
-          amount: amount,
-          transaction_date: paymentDate,
-          description: `Auto-transfer out for Invoice ${inv.invoice_number}`,
-          payment_method: paymentMethod
-        });
-
-        // 2. Direct Income in target workspace (Transfer In)
-        await supabase.from('transactions').insert({
-          workspace_id: transferToWorkspaceId,
-          type: 'income',
-          category: 'Direct Income (Inter-Company)',
-          amount: amount,
-          transaction_date: paymentDate,
-          description: `Auto-transfer in from Invoice ${inv.invoice_number}`,
-          payment_method: paymentMethod
-        });
-      }
+      // Workspaces are separate: a payment never creates income in another workspace any more.
+      void transferToWorkspaceId;
     }
 
     // 4. Update Invoice

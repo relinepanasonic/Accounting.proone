@@ -8,9 +8,10 @@
 //
 // Pure module (no next/headers) so any page can import it.
 import { isFounderEmail } from '@/lib/auth/founders';
+import { NEW_WAVE_WORKSPACE_ID } from '@/lib/workspaces/known';
 
 /** New Wave Live Specialist. */
-const PROTECTED_WORKSPACE_IDS = ['b9f6425f-ad1f-4911-a182-ab788c5fa0e3'];
+const PROTECTED_WORKSPACE_IDS = [NEW_WAVE_WORKSPACE_ID];
 
 /** Besides the founder and the workspace's own members. */
 const ALLOWED_VIEWER_EMAILS = ['lucyana.suryaputra@gmail.com'];

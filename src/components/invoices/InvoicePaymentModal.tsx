@@ -32,7 +32,6 @@ export function InvoicePaymentModal({
   const [isPending, startTransition] = useTransition();
   const [paymentAmount, setPaymentAmount] = useState<number | ''>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [autoTransfer, setAutoTransfer] = useState(true);
   const [selectedBankId, setSelectedBankId] = useState<string>('default');
 
   const [payments, setPayments] = useState<any[]>([]);
@@ -97,7 +96,7 @@ export function InvoicePaymentModal({
         today, 
         'Manual Payment', 
         undefined, // reference
-        autoTransfer && assignedWorkspaceId ? assignedWorkspaceId : undefined,
+        undefined, // workspaces are separate: no inter-company transfer
         bankId
       );
       
@@ -226,30 +225,6 @@ export function InvoicePaymentModal({
                 </select>
               </div>
             </div>
-
-            {/* Inter-company transfer toggle */}
-            {assignedWorkspaceId && assignedWorkspaceId !== '11111111-1111-1111-1111-111111111111' && (
-              <div className="pt-2 border-t border-zinc-800/80">
-                <label className="flex items-center gap-3 cursor-pointer group w-max">
-                  <div className="relative flex items-center justify-center">
-                    <input
-                      type="checkbox"
-                      checked={autoTransfer}
-                      onChange={(e) => setAutoTransfer(e.target.checked)}
-                      className="peer sr-only"
-                    />
-                    <div className="w-5 h-5 rounded border-2 border-zinc-600 bg-zinc-900 peer-checked:border-[#d4af37] peer-checked:bg-[#d4af37]/20 transition-all flex items-center justify-center">
-                      <Check className={`w-3.5 h-3.5 text-[#f5d77f] transition-opacity ${autoTransfer ? 'opacity-100' : 'opacity-0'}`} />
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-white uppercase tracking-wider group-hover:text-[#f5d77f] transition-colors">
-                      Auto payment to direct
-                    </div>
-                  </div>
-                </label>
-              </div>
-            )}
 
             {/* Footer Actions */}
             <div className="pt-4 border-t border-zinc-800/80 flex justify-end gap-3">

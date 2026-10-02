@@ -24,9 +24,8 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
     `)
     .eq('id', id);
 
-  if (activeWorkspaceId !== '11111111-1111-1111-1111-111111111111') {
-    invoiceQuery = invoiceQuery.or(`workspace_id.eq.${activeWorkspaceId},assigned_workspace_id.eq.${activeWorkspaceId}`);
-  }
+  // Workspaces are fully separate: an invoice can only be opened in the workspace that owns it.
+  invoiceQuery = invoiceQuery.eq('workspace_id', activeWorkspaceId);
 
   const { data: invoice } = await invoiceQuery.single();
 

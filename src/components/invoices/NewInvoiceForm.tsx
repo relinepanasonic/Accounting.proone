@@ -1,5 +1,6 @@
 'use client';
 import { formatIndoDate } from '@/lib/utils';
+import { NEW_WAVE_WORKSPACE_ID } from '@/lib/workspaces/known';
 
 import React, { useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -110,10 +111,8 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
   const [notes, setNotes] = useState(initialData?.notes || '');
   const [bankAccountId, setBankAccountId] = useState(initialData?.bankAccountId || (bankAccounts && bankAccounts.length > 0 ? bankAccounts[0].id : 'all'));
   const [customPaymentInstructions, setCustomPaymentInstructions] = useState(initialData?.paymentInstructions || '');
-  const [assignedWorkspaceId, setAssignedWorkspaceId] = useState(
-    initialData?.assignedWorkspaceId || 
-    (activeWorkspaceId && activeWorkspaceId !== '11111111-1111-1111-1111-111111111111' ? activeWorkspaceId : '')
-  );
+  // Only a PT Pintu invoice can carry the New Wave job tag; workspaces are otherwise separate.
+  const [assignedWorkspaceId, setAssignedWorkspaceId] = useState(initialData?.assignedWorkspaceId === NEW_WAVE_WORKSPACE_ID ? NEW_WAVE_WORKSPACE_ID : '');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Tax Settings
@@ -417,19 +416,15 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                       <div>
                         <label className="block text-[10px] font-bold uppercase tracking-wider text-orange-400 mb-2 flex items-center gap-1.5">
                           <Building2 className="w-3.5 h-3.5" />
-                          Assign To
+                          New Wave job
                         </label>
                         <select
                           value={assignedWorkspaceId}
                           onChange={(e) => setAssignedWorkspaceId(e.target.value)}
                           className="w-full bg-zinc-950 border border-orange-500/30 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-orange-500"
                         >
-                          <option value="">No Assignment</option>
-                          {availableWorkspaces.filter(w => w.id !== '11111111-1111-1111-1111-111111111111').map(w => (
-                            <option key={w.id} value={w.id}>
-                              {w.name}
-                            </option>
-                          ))}
+                          <option value="">No</option>
+                          <option value={NEW_WAVE_WORKSPACE_ID}>Yes: send to New Wave hour system</option>
                         </select>
                       </div>
                     )}

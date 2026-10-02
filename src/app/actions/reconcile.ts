@@ -284,7 +284,7 @@ export async function unreconcileRecord(recordId: string, recordType: 'invoice' 
       .select('id, workspace_id, assigned_workspace_id, bank_reference, amount_paid, total_amount, status')
       .eq('id', recordId)
       .single();
-    if (!inv || (inv.workspace_id !== ctx.activeWorkspaceId && inv.assigned_workspace_id !== ctx.activeWorkspaceId)) {
+    if (!inv || inv.workspace_id !== ctx.activeWorkspaceId) {
       return { success: false, error: 'Record not found.' };
     }
     bankReference = inv.bank_reference || null;

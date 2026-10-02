@@ -7,7 +7,7 @@ import { isOptimizingPath, isPabrikPath, OPTIMIZING_CHILDREN } from '@/component
 
 const MODULES = {
   accounting: {
-    match: ['/', '/invoices', '/expenses', '/assets', '/ledger', '/reconcile'],
+    match: ['/', '/invoices', '/expenses', '/assets', '/ledger', '/reconcile', '/coa'],
     items: [
       { name: 'Dashboard', href: '/' },
       { name: 'Income', href: '/invoices' },
@@ -16,6 +16,7 @@ const MODULES = {
       { name: 'Assets', href: '/assets' },
       { name: 'Activity Ledger', href: '/ledger' },
       { name: 'Bank Reconcile', href: '/reconcile' },
+      { name: 'COA Mapping', href: '/coa' },
     ]
   },
   sales: {
@@ -49,9 +50,7 @@ const MODULES = {
     match: ['/settings'],
     items: [
       { name: 'Settings Hub', href: '/settings' },
-      { name: 'Team & Roles', href: '/settings/team' },
       { name: 'Workspaces', href: '/settings/workspaces' },
-      { name: 'COA Mapping', href: '/settings/coa' },
       { name: 'Product Catalog', href: '/settings/catalog' },
       { name: 'Contacts DB', href: '/settings/contacts' },
     ]

@@ -21,18 +21,6 @@ export function SettingsNav() {
       icon: Users,
       description: 'Manage clients and vendors',
     },
-    {
-      label: 'COA',
-      href: '/settings/coa',
-      icon: BookOpen,
-      description: 'Global Chart of Accounts master ledger',
-    },
-    {
-      label: 'USER',
-      href: '/settings/team',
-      icon: ShieldAlert,
-      description: 'Superadmin, Accounting & Admin role matrix',
-    },
   ];
 
   return (

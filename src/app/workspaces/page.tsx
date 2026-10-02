@@ -1,7 +1,7 @@
 import React from 'react';
 import Image from 'next/image';
 import { redirect } from 'next/navigation';
-import { ArrowRight, Building2, LogOut } from 'lucide-react';
+import { ArrowRight, Building2, LogOut, LayoutDashboard } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { signOut } from '@/app/actions/auth';
@@ -88,6 +88,18 @@ export default async function WorkspacesLandingPage() {
             </a>
           ))}
         </div>
+
+        {eligible.length > 1 && eligible.some(w => ['founder', 'superadmin', 'accounting', 'admin'].includes(w.role)) && (
+          <div className="mt-8 flex justify-center">
+            <a
+              href="/workspaces/combined-setup"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-[#d4af37]/10 border border-[#d4af37]/40 hover:bg-[#d4af37]/20 hover:border-[#d4af37] hover:shadow-[0_0_20px_rgba(212,175,55,0.3)] text-[#f5d77f] text-sm font-bold uppercase tracking-wider rounded-xl transition-all"
+            >
+              <LayoutDashboard className="w-5 h-5" />
+              Open Combined Dashboard
+            </a>
+          </div>
+        )}
 
         <form action={signOut} className="mt-8 flex justify-center">
           <button

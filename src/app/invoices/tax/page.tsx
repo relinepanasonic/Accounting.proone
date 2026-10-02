@@ -1,6 +1,7 @@
 import React, { Suspense } from 'react';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
+import { clientMask, HIDDEN_CLIENT } from '@/lib/auth/client-privacy';
 import { TaxDocumentManager } from '@/components/invoices/TaxDocumentManager';
 import { redirect } from 'next/navigation';
 
@@ -8,7 +9,8 @@ export const dynamic = 'force-dynamic';
 
 export default async function TaxDocumentsPage() {
   const supabase = await createClient();
-  const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+  const { activeWorkspaceId, userEmail, availableWorkspaces } = await getAuthenticatedWorkspaceContext(supabase);
+  const mask = clientMask({ userEmail, availableWorkspaces });
 
   // Restrict to PT Pintu Langit workspace only
   if (activeWorkspaceId !== '11111111-1111-1111-1111-111111111111') {
@@ -17,7 +19,7 @@ export default async function TaxDocumentsPage() {
 
   const { data: invoices } = await supabase
     .from('invoices')
-    .select('id, invoice_number, total_amount, issue_date, client_id, faktur_pajak_url, bukti_potong_url, clients(name)')
+    .select('id, invoice_number, total_amount, issue_date, client_id, assigned_workspace_id, faktur_pajak_url, bukti_potong_url, clients(name)')
     .eq('workspace_id', activeWorkspaceId)
     .eq('is_quotation', false)
     .order('created_at', { ascending: false });
@@ -26,7 +28,7 @@ export default async function TaxDocumentsPage() {
     id: inv.id,
     invoiceNumber: inv.invoice_number,
     issueDate: inv.issue_date,
-    clientName: Array.isArray(inv.clients) ? (inv.clients[0] as any)?.name : (inv.clients as any)?.name || 'Unknown',
+    clientName: mask.name(Array.isArray(inv.clients) ? (inv.clients[0] as any)?.name : (inv.clients as any)?.name, inv.assigned_workspace_id, 'Unknown'),
     amount: Number(inv.total_amount || 0),
     faktur_pajak_url: inv.faktur_pajak_url || null,
     bukti_potong_url: inv.bukti_potong_url || null,

@@ -1,6 +1,7 @@
 import 'server-only';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
+import { clientMask, HIDDEN_CLIENT } from '@/lib/auth/client-privacy';
 import { formatIndoDate } from '@/lib/utils';
 
 export interface DashboardTelemetry {
@@ -53,13 +54,14 @@ export interface DashboardTelemetryOptions {
 export async function getDashboardTelemetry(options: DashboardTelemetryOptions = {}): Promise<DashboardTelemetry> {
   const { monthFilter = null } = options;
   const supabase = await createClient();
-  const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+  const { activeWorkspaceId, userEmail, availableWorkspaces } = await getAuthenticatedWorkspaceContext(supabase);
+  const mask = clientMask({ userEmail, availableWorkspaces });
 
   // Concurrent Execution via Promise.all (Anti-Waterfall Guardrail)
   const [invoicesRes, clientsRes, billsRes] = await Promise.all([
     supabase
       .from('invoices')
-      .select('id, invoice_number, status, total_amount, due_date, issue_date, created_at, client_id, clients(name), invoice_line_items(package_name, description, amount)')
+      .select('id, invoice_number, status, total_amount, due_date, issue_date, created_at, client_id, assigned_workspace_id, clients(name), invoice_line_items(package_name, description, amount)')
       .or(`workspace_id.eq.${activeWorkspaceId},assigned_workspace_id.eq.${activeWorkspaceId}`)
       .order('created_at', { ascending: false }),
     supabase
@@ -288,7 +290,19 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
   const threeMonthsAgo = new Date();
   threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
 
+  // A client whose invoices are ALL hidden from this viewer is shown as "Hidden client".
+  const hiddenClientIds = new Set<string>();
+  if (mask.active) {
+    const seen = new Map<string, boolean>(); // client -> every invoice so far is hidden
+    for (const inv of invoices) {
+      if (!inv.client_id) continue;
+      seen.set(inv.client_id, (seen.get(inv.client_id) ?? true) && mask.hides(inv.assigned_workspace_id));
+    }
+    seen.forEach((allHidden, id) => allHidden && hiddenClientIds.add(id));
+  }
+
   const clientMetrics = Array.from(clientMetricsMap.values()).map(m => {
+    if (hiddenClientIds.has(m.id)) m.name = HIDDEN_CLIENT;
     const lastActive = clientLastActivity.get(m.id);
     if (!lastActive || lastActive < threeMonthsAgo) {
       m.status = 'Out';

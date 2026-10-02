@@ -4,6 +4,7 @@ import { Plus } from 'lucide-react';
 import { formatIndoDate } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
+import { clientMask, HIDDEN_CLIENT } from '@/lib/auth/client-privacy';
 import { InvoiceStatusToggle, InvoiceActionGroup } from '@/components/invoices/InvoiceRowActions';
 import { InvoiceTableClient } from '@/components/invoices/InvoiceTableClient';
 
@@ -11,7 +12,8 @@ export const dynamic = 'force-dynamic';
 
 async function InvoicesTableServer({ activeTab }: { activeTab: string }) {
   const supabase = await createClient();
-  const { activeWorkspaceId, activeWorkspaceName, availableWorkspaces } = await getAuthenticatedWorkspaceContext(supabase);
+  const { activeWorkspaceId, activeWorkspaceName, availableWorkspaces, userEmail } = await getAuthenticatedWorkspaceContext(supabase);
+  const mask = clientMask({ userEmail, availableWorkspaces });
 
   const [
     { data: invoices },
@@ -55,8 +57,8 @@ async function InvoicesTableServer({ activeTab }: { activeTab: string }) {
             rawProjectDate,
             issueDate: formatIndoDate(inv.issue_date),
             rawIssueDate: inv.issue_date || '',
-            clientName: clientObj?.name || 'Client',
-            clientContact: clientObj?.contact_name || '',
+            clientName: mask.name(clientObj?.name, inv.assigned_workspace_id),
+            clientContact: mask.hides(inv.assigned_workspace_id) ? '' : clientObj?.contact_name || '',
             amount: `Rp ${Math.ceil(Number(inv.total_amount || 0)).toLocaleString('id-ID', {maximumFractionDigits: 0})}`,
             rawAmount: Number(inv.total_amount || 0),
             paidAmount: Number(inv.amount_paid || 0),
@@ -107,7 +109,7 @@ async function InvoicesTableServer({ activeTab }: { activeTab: string }) {
             projectDate: '—',
             issueDate: formatIndoDate(je.transaction_date),
             rawIssueDate: je.transaction_date || '',
-            clientName: clientObj?.name || 'Client Payment',
+            clientName: mask.name(clientObj?.name, inv?.assigned_workspace_id, 'Client Payment'),
             clientContact: '',
             amount: `Rp ${Math.ceil(Number(je.credit_amount || 0)).toLocaleString('id-ID', {maximumFractionDigits: 0})}`,
             rawAmount: Number(je.credit_amount || 0),

@@ -1,13 +1,15 @@
 import React from 'react';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
+import { clientMask, HIDDEN_CLIENT } from '@/lib/auth/client-privacy';
 import { formatCurrency } from '@/lib/utils/currency';
 import { AlertCircle, Clock, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 
 export default async function AccountsReceivablePage() {
   const supabase = await createClient();
-  const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+  const { activeWorkspaceId, userEmail, availableWorkspaces } = await getAuthenticatedWorkspaceContext(supabase);
+  const mask = clientMask({ userEmail, availableWorkspaces });
 
   // Fetch unpaid invoices
   const { data: invoices } = await supabase
@@ -61,7 +63,7 @@ export default async function AccountsReceivablePage() {
                         {inv.invoice_number || 'Draft'}
                       </Link>
                       <div className="text-xs text-zinc-300">
-                        {inv.clients?.name || 'Unknown Client'}
+                        {mask.name(inv.clients?.name, inv.assigned_workspace_id, 'Unknown Client')}
                       </div>
                     </td>
                     <td className="px-6 py-4">

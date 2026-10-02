@@ -6,13 +6,15 @@ import {
   UnreconciledSystemRecord,
 } from '@/components/reconcile/ReconciliationHUD';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
+import { clientMask, HIDDEN_CLIENT } from '@/lib/auth/client-privacy';
 
 export const dynamic = 'force-dynamic';
 
 async function ReconciliationCore() {
   try {
   const supabase = await createClient();
-  const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+  const { activeWorkspaceId, userEmail, availableWorkspaces } = await getAuthenticatedWorkspaceContext(supabase);
+  const mask = clientMask({ userEmail, availableWorkspaces });
 
   const {
     data: { user },
@@ -183,7 +185,7 @@ async function ReconciliationCore() {
   const invoiceIssueDate = new Map<string, string>();
   rawInvoices.forEach((inv) => {
     const clientObj = Array.isArray(inv.clients) ? inv.clients[0] : inv.clients;
-    invoiceClientName.set(inv.id, clientObj?.name || 'Client Payee');
+    invoiceClientName.set(inv.id, mask.name(clientObj?.name, inv.assigned_workspace_id, 'Client Payee'));
     if (inv.issue_date) invoiceIssueDate.set(inv.id, inv.issue_date);
   });
   const invoicesWithPayment = new Set(

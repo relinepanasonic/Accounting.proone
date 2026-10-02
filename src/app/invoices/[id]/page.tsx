@@ -1,5 +1,7 @@
 import React from 'react';
 import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
+import { clientMask, HIDDEN_CLIENT } from '@/lib/auth/client-privacy';
 import { InvoicePDFDocument, InvoiceItemData } from '@/components/invoices/InvoicePDFDocument';
 
 export const dynamic = 'force-dynamic';
@@ -29,7 +31,9 @@ export default async function InvoiceDetailPage({ params, searchParams }: Invoic
       ? [...inv.invoice_line_items].sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0))
       : (await supabase.from('invoice_line_items').select('*').eq('invoice_id', id).order('sort_order', { ascending: true })).data;
 
-  const clientObj = Array.isArray(inv?.clients) ? inv?.clients[0] : inv?.clients;
+  const viewer = await getAuthenticatedWorkspaceContext(supabase);
+  const hideClient = clientMask({ userEmail: viewer.userEmail, availableWorkspaces: viewer.availableWorkspaces }).hides(inv?.assigned_workspace_id);
+  const clientObj = hideClient ? { name: HIDDEN_CLIENT } : Array.isArray(inv?.clients) ? inv?.clients[0] : inv?.clients;
   const wsObjFromJoin = Array.isArray(inv?.workspaces) ? inv?.workspaces[0] : inv?.workspaces;
   const workspaceId = inv?.workspace_id || wsObjFromJoin?.id || '';
 

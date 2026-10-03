@@ -97,10 +97,11 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
         <div className="lg:col-span-4"><MonthGrid month={month} selected={selected} today={today} marked={marked} base="/productivity/me" /></div>
         <div className="lg:col-span-4"><ScheduleWidget items={schedule} dayLabel={dayLabel} /></div>
-        <div className="lg:col-span-4"><WeatherWidget weather={weather} /></div>
+        {/* Weather and the focus timer are for the big screen; the phone layout keeps to the work. */}
+        <div className="hidden lg:col-span-4 lg:block"><WeatherWidget weather={weather} /></div>
 
         <Widget className="lg:col-span-7"><TasksWidget tasks={tasksRes.tasks} today={today} compact /></Widget>
-        <Widget className="lg:col-span-5"><FocusTimer /></Widget>
+        <Widget className="hidden lg:col-span-5 lg:block"><FocusTimer /></Widget>
 
         <Widget title={dutiesTitle} className="lg:col-span-12">
           <div className="mb-4"><StatTiles stats={plan.stats} /></div>

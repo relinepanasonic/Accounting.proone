@@ -83,6 +83,9 @@ export function ModuleSubNav({ role }: { role?: string }) {
 
   if (pathname.startsWith('/productivity/admin') || pathname.startsWith('/productivity/advertiser')) return optimizingSwitcher;
 
+  // Productivity has its own pill tabs on every page.
+  if (pathname.startsWith('/productivity')) return null;
+
   // Only pages that belong to a module get its tab bar; anything else (AI Office, Workspaces, ...) gets none.
   const inModule = (m: { match: string[] }) =>
     m.match.some((p) => (p === '/' ? pathname === '/' : pathname === p || pathname.startsWith(p + '/')));

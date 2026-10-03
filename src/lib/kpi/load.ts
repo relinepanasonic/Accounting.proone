@@ -79,7 +79,7 @@ export interface PersonKpi {
 }
 
 // ---------- who holds what ----------
-async function assignedClients(db: Db, workspaceId: string, userId: string, job: KpiJob): Promise<ClientRef[]> {
+export async function assignedClients(db: Db, workspaceId: string, userId: string, job: KpiJob): Promise<ClientRef[]> {
   let { data, error } = await db
     .from('client_assignments')
     .select('client_id, clients ( id, name )')

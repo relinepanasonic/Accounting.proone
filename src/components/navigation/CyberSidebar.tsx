@@ -44,10 +44,10 @@ const OPTIMIZING_ICONS: Record<string, React.ReactNode> = {
 
 const MAIN_MODULES: NavEntry[] = [
   { type: 'link', name: 'AI Office', href: '/ai-office', icon: <Bot className="w-4 h-4" />, isActive: (p) => p.startsWith('/ai-office') },
+  { type: 'link', name: 'Productivity', href: '/productivity', icon: <CheckSquare className="w-4 h-4" />, isActive: isProductivityPath },
   { type: 'link', name: 'Accounting', href: '/', icon: <LayoutDashboard className="w-4 h-4" />, isActive: isAccountingPath },
   { type: 'group', name: 'Optimizing', icon: <TrendingUp className="w-4 h-4" /> },
   { type: 'link', name: 'Pabrik Sosmed', href: '/productivity/pabrik-sosmed', icon: <Share2 className="w-4 h-4" />, isActive: isPabrikPath },
-  { type: 'link', name: 'Productivity', href: '/productivity', icon: <CheckSquare className="w-4 h-4" />, isActive: isProductivityPath },
   { type: 'link', name: 'HRD', href: '/payroll', icon: <Users className="w-4 h-4" />, isActive: isHrdPath },
   { type: 'link', name: 'System', href: '/settings', icon: <Settings className="w-4 h-4" />, isActive: (p) => p.startsWith('/settings') },
 ];
@@ -98,12 +98,12 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
     activeRole === 'advertiser'
       ? [
           { type: 'group', name: 'Optimizing', icon: <TrendingUp className="w-4 h-4" /> },
-          { type: 'link', name: 'My KPI', href: '/productivity/me', icon: <Activity className="w-4 h-4" />, isActive: (p) => p.startsWith('/productivity/me') },
+          { type: 'link', name: 'Productivity', href: '/productivity/me', icon: <Activity className="w-4 h-4" />, isActive: (p) => p.startsWith('/productivity/me') },
         ]
       : activeRole === 'sales'
         ? [
             { type: 'link', name: 'Sales', href: '/sales', icon: <TrendingUp className="w-4 h-4" />, isActive: (p) => p === '/sales' || p.startsWith('/sales/') },
-            { type: 'link', name: 'My KPI', href: '/productivity/me', icon: <Activity className="w-4 h-4" />, isActive: (p) => p.startsWith('/productivity/me') },
+            { type: 'link', name: 'Productivity', href: '/productivity/me', icon: <Activity className="w-4 h-4" />, isActive: (p) => p.startsWith('/productivity/me') },
           ]
       : limited
         ? [{ type: 'link', name: 'Pabrik Sosmed', href: '/productivity/pabrik-sosmed', icon: <Share2 className="w-4 h-4" />, isActive: isPabrikPath }]

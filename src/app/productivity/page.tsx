@@ -8,6 +8,8 @@ import { loadActivity, loadPeople, parseRange } from '@/lib/productivity/activit
 import { loadKpi } from '@/lib/kpi/load';
 import { KpiScoreboard } from '@/components/kpi/KpiScoreboard';
 import { TeamOverview } from '@/components/productivity/ActivityViews';
+import { PlanHeader } from '@/components/productivity/PlanViews';
+import { ProductivityTabs } from '@/components/productivity/ProductivityTabs';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,17 +28,9 @@ export default async function ProductivityPage({ searchParams }: { searchParams:
   const kpiRows = await Promise.all(staff.map(async (person) => ({ person, kpi: await loadKpi(person, ctx.activeWorkspaceId) })));
 
   return (
-    <div className="p-4 lg:p-8 space-y-8 animate-in fade-in zoom-in-95 duration-300">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-[#d4af37]/10 rounded-xl text-[#d4af37]"><Activity className="w-7 h-7" /></div>
-          <div>
-            <h1 className="text-2xl font-extrabold text-zinc-100 font-serif">Productivity</h1>
-            <p className="text-sm text-zinc-400 mt-0.5">What each person did in {ctx.activeWorkspaceName}.</p>
-          </div>
-        </div>
-        <Link href="/productivity/me" className="text-xs font-bold uppercase tracking-wider text-[#f5d77f] hover:underline">My own page</Link>
-      </div>
+    <div className="mx-auto w-full max-w-6xl space-y-8 px-4 py-6 pb-28 animate-in fade-in duration-300">
+      <PlanHeader name={ctx.userName || 'there'} subtitle={`${ctx.activeWorkspaceName} · what each person did`} />
+      <ProductivityTabs isOwner />
 
       <KpiScoreboard rows={kpiRows} />
 

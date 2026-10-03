@@ -24,11 +24,11 @@ import {
 
 const MOBILE_NAV_ITEMS = [
   { name: 'AI Office', href: '/ai-office', icon: <Bot className="w-5 h-5" />, isActive: (p: string) => p.startsWith('/ai-office') },
+  { name: 'Productivity', href: '/productivity', icon: <CheckSquare className="w-5 h-5" />, isActive: isProductivityPath },
   { name: 'Accounting', href: '/', icon: <LayoutDashboard className="w-5 h-5" />, isActive: isAccountingPath },
   // Optimizing = Admin + Sales + Advertiser; the other two are one tap away in the bar under the page title.
   { name: 'Optimizing', href: '/sales', icon: <TrendingUp className="w-5 h-5" />, isActive: isOptimizingPath },
   { name: 'Pabrik', href: '/productivity/pabrik-sosmed', icon: <Share2 className="w-5 h-5" />, isActive: isPabrikPath },
-  { name: 'Productivity', href: '/productivity', icon: <CheckSquare className="w-5 h-5" />, isActive: isProductivityPath },
   { name: 'HRD', href: '/payroll', icon: <Users className="w-5 h-5" />, isActive: isHrdPath },
   { name: 'System', href: '/settings', icon: <Settings className="w-5 h-5" />, isActive: (p: string) => p.startsWith('/settings') },
 ];
@@ -39,12 +39,12 @@ export function BottomMobileNav({ limited = false, role }: { limited?: boolean; 
     ? role === 'sales'
       ? [
           { name: 'Sales', href: '/sales', icon: <TrendingUp className="w-5 h-5" />, isActive: (p: string) => p === '/sales' || p.startsWith('/sales/') },
-          { name: 'My KPI', href: '/productivity/me', icon: <Activity className="w-5 h-5" />, isActive: (p: string) => p.startsWith('/productivity/me') },
+          { name: 'Productivity', href: '/productivity/me', icon: <Activity className="w-5 h-5" />, isActive: (p: string) => p.startsWith('/productivity/me') },
         ]
       : role === 'advertiser'
       ? [
           { name: 'Advertiser', href: '/productivity/advertiser', icon: <TrendingUp className="w-5 h-5" />, isActive: isOptimizingPath },
-          { name: 'My KPI', href: '/productivity/me', icon: <Activity className="w-5 h-5" />, isActive: (p: string) => p.startsWith('/productivity/me') },
+          { name: 'Productivity', href: '/productivity/me', icon: <Activity className="w-5 h-5" />, isActive: (p: string) => p.startsWith('/productivity/me') },
         ]
       : [{ name: 'Pabrik Sosmed', href: '/productivity/pabrik-sosmed', icon: <Share2 className="w-5 h-5" />, isActive: isPabrikPath }]
     : MOBILE_NAV_ITEMS;

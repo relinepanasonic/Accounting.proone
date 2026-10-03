@@ -4,6 +4,7 @@ import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { founderEmails } from '@/lib/auth/founders';
 import { AssignmentManager } from '@/components/productivity/AssignmentManager';
 import { ProjectQueue } from '@/components/productivity/ProjectQueue';
+import { ProductivityTabs } from '@/components/productivity/ProductivityTabs';
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { ShieldAlert, Users } from 'lucide-react';
 
@@ -106,6 +107,7 @@ export default async function AssignmentsPage() {
 
   return (
     <div className="p-4 lg:p-8 space-y-6 animate-in fade-in zoom-in-95 duration-300">
+      <ProductivityTabs isOwner />
       <div className="flex items-center gap-4">
         <div className="p-3 bg-[#d4af37]/10 rounded-xl text-[#d4af37]">
           <Users className="w-8 h-8" />

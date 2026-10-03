@@ -22,6 +22,14 @@ import {
   Megaphone,
   Share2,
   Activity,
+  FileText,
+  Receipt,
+  CreditCard,
+  Briefcase,
+  BookOpen,
+  RefreshCw,
+  Network,
+  CircleDot
 } from 'lucide-react';
 import {
   isAccountingPath,
@@ -30,11 +38,12 @@ import {
   isProductivityPath,
   isOptimizingPath,
   OPTIMIZING_CHILDREN,
+  ACCOUNTING_CHILDREN,
 } from '@/components/navigation/nav-config';
 
 type NavEntry =
   | { type: 'link'; name: string; href: string; icon: React.ReactNode; isActive: (p: string) => boolean }
-  | { type: 'group'; name: string; icon: React.ReactNode };
+  | { type: 'group'; name: string; icon: React.ReactNode; isActive: (p: string) => boolean; children: ReadonlyArray<{ name: string; href: string; isActive: (p: string) => boolean }> };
 
 const OPTIMIZING_ICONS: Record<string, React.ReactNode> = {
   Admin: <Shield className="w-3.5 h-3.5" />,
@@ -42,11 +51,27 @@ const OPTIMIZING_ICONS: Record<string, React.ReactNode> = {
   Advertiser: <Megaphone className="w-3.5 h-3.5" />,
 };
 
+const ACCOUNTING_ICONS: Record<string, React.ReactNode> = {
+  Dashboard: <LayoutDashboard className="w-3.5 h-3.5" />,
+  Income: <FileText className="w-3.5 h-3.5" />,
+  'Tax / Pajak': <Receipt className="w-3.5 h-3.5" />,
+  Expenses: <CreditCard className="w-3.5 h-3.5" />,
+  Assets: <Briefcase className="w-3.5 h-3.5" />,
+  'Activity Ledger': <BookOpen className="w-3.5 h-3.5" />,
+  'Bank Reconcile': <RefreshCw className="w-3.5 h-3.5" />,
+  'COA Mapping': <Network className="w-3.5 h-3.5" />,
+};
+
+const GROUP_ICONS: Record<string, Record<string, React.ReactNode>> = {
+  Optimizing: OPTIMIZING_ICONS,
+  Accounting: ACCOUNTING_ICONS,
+};
+
 const MAIN_MODULES: NavEntry[] = [
   { type: 'link', name: 'AI Office', href: '/ai-office', icon: <Bot className="w-4 h-4" />, isActive: (p) => p.startsWith('/ai-office') },
   { type: 'link', name: 'Productivity', href: '/productivity', icon: <CheckSquare className="w-4 h-4" />, isActive: isProductivityPath },
-  { type: 'link', name: 'Accounting', href: '/', icon: <LayoutDashboard className="w-4 h-4" />, isActive: isAccountingPath },
-  { type: 'group', name: 'Optimizing', icon: <TrendingUp className="w-4 h-4" /> },
+  { type: 'group', name: 'Accounting', icon: <LayoutDashboard className="w-4 h-4" />, isActive: isAccountingPath, children: ACCOUNTING_CHILDREN },
+  { type: 'group', name: 'Optimizing', icon: <TrendingUp className="w-4 h-4" />, isActive: isOptimizingPath, children: OPTIMIZING_CHILDREN },
   { type: 'link', name: 'Pabrik Sosmed', href: '/productivity/pabrik-sosmed', icon: <Share2 className="w-4 h-4" />, isActive: isPabrikPath },
   { type: 'link', name: 'HRD', href: '/payroll', icon: <Users className="w-4 h-4" />, isActive: isHrdPath },
   { type: 'link', name: 'System', href: '/settings', icon: <Settings className="w-4 h-4" />, isActive: (p) => p.startsWith('/settings') },
@@ -58,46 +83,63 @@ interface CyberSidebarProps {
 
 export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [optimizingOpen, setOptimizingOpen] = useState(true);
+  
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
+    Optimizing: true,
+    Accounting: true,
+  });
+  
   const pathname = usePathname();
 
-  // Remember whether the Optimizing group was left open or closed.
   useEffect(() => {
     try {
-      const saved = window.localStorage.getItem('sidebar-optimizing-open');
-      if (saved === '0') setOptimizingOpen(false);
+      const saved = window.localStorage.getItem('sidebar-open-groups');
+      if (saved) {
+        setOpenGroups(JSON.parse(saved));
+      }
     } catch {
-      // storage unavailable: keep the default
+      // storage unavailable
     }
   }, []);
 
-  // Opening a page inside the group always reveals it.
-  useEffect(() => {
-    if (isOptimizingPath(pathname)) setOptimizingOpen(true);
-  }, [pathname]);
-
-  const toggleOptimizing = () => {
-    setOptimizingOpen((open) => {
+  const toggleGroup = (groupName: string) => {
+    setOpenGroups((prev) => {
+      const next = { ...prev, [groupName]: !prev[groupName] };
       try {
-        window.localStorage.setItem('sidebar-optimizing-open', open ? '0' : '1');
+        window.localStorage.setItem('sidebar-open-groups', JSON.stringify(next));
       } catch {
         // ignore
       }
-      return !open;
+      return next;
     });
   };
+
+  // Opening a page inside a group always reveals it.
+  useEffect(() => {
+    setOpenGroups((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      if (isOptimizingPath(pathname) && !next.Optimizing) { next.Optimizing = true; changed = true; }
+      if (isAccountingPath(pathname) && !next.Accounting) { next.Accounting = true; changed = true; }
+      if (changed) {
+        try { window.localStorage.setItem('sidebar-open-groups', JSON.stringify(next)); } catch {}
+        return next;
+      }
+      return prev;
+    });
+  }, [pathname]);
 
   const activeId = workspaceContext?.activeWorkspaceId || '11111111-1111-1111-1111-111111111111';
   const activeName = workspaceContext?.activeWorkspaceName || 'Professor Toko Online HQ';
   const activeRole = workspaceContext?.role || 'none';
+  
   // advertiser / client see Pabrik Sosmed only, never the finance navigation.
   const limited = activeRole === 'advertiser' || activeRole === 'sales' || activeRole === 'client';
-// advertiser: only Optimizing > Advertiser. client: only Pabrik Sosmed.
-  const optimizingChildren = activeRole === 'advertiser' ? OPTIMIZING_CHILDREN.filter((c) => c.name === 'Advertiser') : OPTIMIZING_CHILDREN;
+
   const modules: NavEntry[] =
     activeRole === 'advertiser'
       ? [
-          { type: 'group', name: 'Optimizing', icon: <TrendingUp className="w-4 h-4" /> },
+          { type: 'group', name: 'Optimizing', icon: <TrendingUp className="w-4 h-4" />, isActive: isOptimizingPath, children: OPTIMIZING_CHILDREN.filter((c) => c.name === 'Advertiser') },
           { type: 'link', name: 'Productivity', href: '/productivity/me', icon: <Activity className="w-4 h-4" />, isActive: (p) => p.startsWith('/productivity/me') },
         ]
       : activeRole === 'sales'
@@ -108,6 +150,7 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
       : limited
         ? [{ type: 'link', name: 'Pabrik Sosmed', href: '/productivity/pabrik-sosmed', icon: <Share2 className="w-4 h-4" />, isActive: isPabrikPath }]
         : MAIN_MODULES;
+        
   const availableWorkspaces = workspaceContext?.availableWorkspaces || [];
 
   return (
@@ -184,12 +227,14 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
         )}
 
         {/* Navigation Menu Links */}
-        <nav className="p-3 space-y-2 mt-2">
+        <nav className="p-3 space-y-2 mt-2 h-[calc(100vh-220px)] overflow-y-auto scrollbar-hide">
           {modules.map((item) => {
             if (item.type === 'group') {
-              const groupActive = isOptimizingPath(pathname);
+              const groupActive = item.isActive(pathname);
+              const isOpen = openGroups[item.name] ?? false;
+              
               const headerClass = `group w-full flex items-center justify-between px-3 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                groupActive && !optimizingOpen
+                groupActive && !isOpen
                   ? 'bg-gradient-to-r from-[#d4af37]/20 to-[#d4af37]/5 text-[#f5d77f] border border-[#d4af37]/40'
                   : groupActive
                     ? 'text-[#f5d77f]'
@@ -199,7 +244,7 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
               // Collapsed sidebar: just the icon, which opens the first page of the group.
               if (isCollapsed) {
                 return (
-                  <Link key={item.name} href={(optimizingChildren.find((c) => c.name === 'Sales') ?? optimizingChildren[0]).href} title={item.name} className={headerClass}>
+                  <Link key={item.name} href={(item.children[0]).href} title={item.name} className={headerClass}>
                     <span className={groupActive ? 'text-[#f5d77f]' : 'text-zinc-500 group-hover:text-[#d4af37]'}>{item.icon}</span>
                   </Link>
                 );
@@ -207,17 +252,18 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
 
               return (
                 <div key={item.name}>
-                  <button type="button" onClick={toggleOptimizing} aria-expanded={optimizingOpen} className={headerClass}>
+                  <button type="button" onClick={() => toggleGroup(item.name)} aria-expanded={isOpen} className={headerClass}>
                     <span className="flex items-center gap-3">
                       <span className={groupActive ? 'text-[#f5d77f]' : 'text-zinc-500 group-hover:text-[#d4af37]'}>{item.icon}</span>
                       <span className="font-sans tracking-wide">{item.name}</span>
                     </span>
-                    <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform duration-200 ${optimizingOpen ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
                   </button>
-                  {optimizingOpen && (
+                  {isOpen && (
                     <div className="mt-1 ml-5 pl-3 border-l border-[#d4af37]/20 space-y-1">
-                      {optimizingChildren.map((child) => {
+                      {item.children.map((child) => {
                         const active = child.isActive(pathname);
+                        const childIcon = (GROUP_ICONS[item.name] && GROUP_ICONS[item.name][child.name]) || <CircleDot className="w-3.5 h-3.5" />;
                         return (
                           <Link
                             key={child.href}
@@ -228,7 +274,7 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
                                 : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900/60'
                             }`}
                           >
-                            <span className={active ? 'text-[#f5d77f]' : 'text-zinc-500'}>{OPTIMIZING_ICONS[child.name]}</span>
+                            <span className={active ? 'text-[#f5d77f]' : 'text-zinc-500'}>{childIcon}</span>
                             <span className="font-sans tracking-wide">{child.name}</span>
                           </Link>
                         );

@@ -31,3 +31,14 @@ export const OPTIMIZING_CHILDREN = [
   { name: 'Sales', href: '/sales', isActive: isOptimizingSalesPath },
   { name: 'Advertiser', href: '/productivity/advertiser', isActive: isOptimizingAdvertiserPath },
 ] as const;
+
+export const ACCOUNTING_CHILDREN = [
+  { name: 'Dashboard', href: '/', isActive: (p: string) => p === '/' },
+  { name: 'Income', href: '/invoices', isActive: (p: string) => p === '/invoices' || p.startsWith('/invoices/') && !p.startsWith('/invoices/tax') },
+  { name: 'Tax / Pajak', href: '/invoices/tax', isActive: (p: string) => p.startsWith('/invoices/tax') },
+  { name: 'Expenses', href: '/expenses', isActive: (p: string) => p === '/expenses' || p.startsWith('/expenses/') },
+  { name: 'Assets', href: '/assets', isActive: (p: string) => p === '/assets' || p.startsWith('/assets/') },
+  { name: 'Activity Ledger', href: '/ledger', isActive: (p: string) => p === '/ledger' || p.startsWith('/ledger/') },
+  { name: 'Bank Reconcile', href: '/reconcile', isActive: (p: string) => p === '/reconcile' || p.startsWith('/reconcile/') },
+  { name: 'COA Mapping', href: '/coa', isActive: (p: string) => p === '/coa' || p.startsWith('/coa/') },
+] as const;

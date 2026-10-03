@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { isOptimizingPath, isPabrikPath, OPTIMIZING_CHILDREN } from '@/components/navigation/nav-config';
+import { isOptimizingPath, isPabrikPath, isAccountingPath, OPTIMIZING_CHILDREN } from '@/components/navigation/nav-config';
 
 const MODULES = {
   accounting: {
@@ -85,6 +85,9 @@ export function ModuleSubNav({ role }: { role?: string }) {
 
   // Productivity has its own pill tabs on every page.
   if (pathname.startsWith('/productivity')) return null;
+
+  // Accounting is now in the sidebar, so it does not need top horizontal tabs.
+  if (isAccountingPath(pathname)) return null;
 
   // Only pages that belong to a module get its tab bar; anything else (AI Office, Workspaces, ...) gets none.
   const inModule = (m: { match: string[] }) =>

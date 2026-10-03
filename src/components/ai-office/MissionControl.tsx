@@ -29,15 +29,16 @@ interface Mission {
   setup: { tables: boolean; teams: boolean; anthropic: boolean; groq: boolean; gemini: boolean; openrouter: boolean; zai: boolean; deepseek: boolean };
   agents: Agent[]; teams: Team[]; skills: Skill[]; goals: Goal[]; events: OfficeEvent[];
   agentStats: Record<string, { done: number; failed: number; active: number; cost: number }>;
+  modelStats: Record<string, { calls: number; cost: number; tokensIn: number; tokensOut: number }>;
   memories: Memory[]; schedules: Schedule[];
   budget: { budget: number; spent: number; left: number; over: boolean; ready: boolean };
   missionReady: boolean; startedSchedules?: number;
 }
 
-type TabKey = 'dashboard' | 'office' | 'team' | 'board' | 'calendar' | 'activity' | 'memory';
+type TabKey = 'office' | 'dashboard' | 'team' | 'board' | 'calendar' | 'activity' | 'memory';
 const TABS: { key: TabKey; label: string; icon: typeof Activity }[] = [
-  { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { key: 'office', label: 'Virtual Office', icon: Building2 },
+  { key: 'dashboard', label: 'Token Balance', icon: LayoutDashboard },
   { key: 'team', label: 'Team Agent', icon: Users },
   { key: 'board', label: 'Task Board', icon: KanbanSquare },
   { key: 'calendar', label: 'Calendar', icon: CalendarDays },
@@ -93,7 +94,7 @@ const btnGhost = `${btn} border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-
 
 // ---------- main ----------
 export function MissionControl() {
-  const [tab, setTab] = useState<TabKey>('dashboard');
+  const [tab, setTab] = useState<TabKey>('office');
   const [data, setData] = useState<Mission | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -252,6 +253,26 @@ function DashboardTab({ d, act, openGoal, teamName }: { d: Mission; act: Act; op
               {Array.from(byTeam.entries()).sort((a, b) => b[1] - a[1]).map(([k, v]) => (
                 <div key={k} className="flex justify-between text-zinc-400"><span>{teamName(k === GENERAL ? null : k)}</span><span className="font-mono text-zinc-200">{fmtUsd(v)}</span></div>
               ))}
+            </div>
+          )}
+
+          {Object.keys(d.modelStats || {}).length > 0 && (
+            <div className="mt-5 border-t border-zinc-800 pt-5">
+              <H>Tokens by Model (This Month)</H>
+              <div className="space-y-3">
+                {Object.entries(d.modelStats).sort((a,b) => b[1].cost - a[1].cost).map(([model, st]) => (
+                  <div key={model} className="text-xs">
+                    <div className="flex justify-between font-bold text-zinc-300 mb-1">
+                      <span>{model}</span>
+                      <span className="text-[#d4af37]">{fmtUsd(st.cost)}</span>
+                    </div>
+                    <div className="flex justify-between text-zinc-500 font-mono text-[10px]">
+                      <span>{st.calls} calls</span>
+                      <span>{Intl.NumberFormat('en-US').format(st.tokensIn)} in / {Intl.NumberFormat('en-US').format(st.tokensOut)} out</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </Card>

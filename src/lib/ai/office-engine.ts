@@ -23,6 +23,7 @@ export interface OfficeAgent {
   provider: Provider;
   model: string;
   enabled: boolean;
+  job_desk?: string | null;
 }
 
 export interface OfficeTeam {
@@ -386,7 +387,7 @@ async function planGoal(db: Db, workspaceId: string, goal: OfficeTask, agents: O
     const memory = await memoryBlock(db, workspaceId, goal.team_id, planner?.id || null);
     const helperLines = agents
       .filter((a) => a.kind !== 'planner' && a.kind !== 'qc' && a.enabled)
-      .map((a) => `- ${a.name}: ${a.title} (floor ${a.floor})`)
+      .map((a) => `- ${a.name}: ${a.title} (floor ${a.floor})${a.job_desk ? `. Job desk: ${a.job_desk.slice(0, 400)}` : ''}`)
       .join('\n');
     const { data, model, tokensIn, tokensOut } = await askBoss<{
       approach: string;
@@ -398,6 +399,7 @@ async function planGoal(db: Db, workspaceId: string, goal: OfficeTask, agents: O
         `${OFFICE_CONTEXT}\n\nYou are the Director. Split the owner's brief into at most ${maxSubtasks} small, independent subtasks for the worker floors. ` +
         'Use "doer" for simple, mechanical work (lists, rewriting, formatting, simple drafts) and "specialist" for work that needs judgment, analysis or research. ' +
         'Prefer fewer subtasks; a simple brief may need only one. Each subtask must be fully self-contained: copy into its instructions every fact from the brief the worker needs.' +
+        (planner?.job_desk ? `\n\nYour own job desk:\n${planner.job_desk}` : '') +
         `\n\nYour helpers (set "agent" to a helper name to give it the subtask):\n${helperLines || '(none)'}` +
         (profile ? `\n\n${profile.plannerGuide}` : '') +
         (memory ? `\n\n${memory}` : ''),
@@ -567,6 +569,7 @@ async function reviewGoal(db: Db, workspaceId: string, goal: OfficeTask, subtask
         '(for example, company data the agents cannot access yet). Do not claim work that was not done. ' +
         'You cannot start or schedule any further work: never write that something "will be rerun", "will be corrected" or "will be delivered". ' +
         'If parts failed, give the best answer you can from what passed, say in one line which parts are missing, and tell the owner to press "Retry failed parts" on this brief.' +
+        (qc?.job_desk ? `\n\nYour job desk as quality control:\n${qc.job_desk}` : '') +
         (profile ? `\n\n${profile.reportGuide}` : '') +
         (memory ? `\n\n${memory}` : ''),
       prompt: `Owner's brief:\n\n${goal.instructions}\n\nWork from the floors:\n\n${work}`,

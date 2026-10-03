@@ -86,8 +86,19 @@ export async function getMissionState(db: Db, workspaceId: string) {
     .gte('created_at', monthStart)
     .limit(5000);
   const agentStats: Record<string, { done: number; failed: number; active: number; cost: number }> = {};
+  const modelStats: Record<string, { calls: number; cost: number; tokensIn: number; tokensOut: number }> = {};
   const bump = (id: string | null | undefined) => (id ? (agentStats[id] ??= { done: 0, failed: 0, active: 0, cost: 0 }) : null);
+  const bumpModel = (model: string | null | undefined) => (model ? (modelStats[model] ??= { calls: 0, cost: 0, tokensIn: 0, tokensOut: 0 }) : null);
+  
   for (const t of monthTasks || []) {
+    const mst = bumpModel(t.model_used);
+    if (mst) {
+      mst.calls++;
+      mst.tokensIn += (t.tokens_in || 0);
+      mst.tokensOut += (t.tokens_out || 0);
+      mst.cost += costUsd(t.model_used, t.tokens_in, t.tokens_out);
+    }
+
     if (t.kind === 'subtask') {
       const st = bump(t.agent_id);
       if (!st) continue;
@@ -111,6 +122,7 @@ export async function getMissionState(db: Db, workspaceId: string) {
     goals,
     events: events || [],
     agentStats,
+    modelStats,
     memories: mem.error ? [] : mem.data || [],
     schedules: sch.error ? [] : sch.data || [],
     budget,

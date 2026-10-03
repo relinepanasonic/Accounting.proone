@@ -6,12 +6,13 @@ import {
   LayoutDashboard, Loader2, Pin, PinOff, Play, Plus, RefreshCw, RotateCcw, Trash2, Users, Wallet, X, XCircle,
 } from 'lucide-react';
 import { OfficeView } from '@/components/ai-office/OfficeView';
+import { BlueprintModal } from '@/components/ai-office/BlueprintModal';
 import { fmtUsd } from '@/lib/ai/costs';
 import { WEEKDAYS, describeRule, jakartaNow, runsOn, type Cadence } from '@/lib/ai/schedule-rules';
 
 // ---------- shapes from /api/ai-office/mission ----------
-interface Agent { id: string; team_id: string | null; name: string; title: string; floor: number; kind: string; provider: string; model: string; enabled: boolean }
-interface Team { id: string; slug: string; name: string; mission: string; enabled: boolean }
+interface Agent { id: string; team_id: string | null; name: string; title: string; floor: number; kind: string; provider: string; model: string; enabled: boolean; job_desk?: string | null }
+interface Team { id: string; slug: string; name: string; mission: string; enabled: boolean; workflow?: string | null; starter_tasks?: { title: string; brief: string; agent: string }[] | null }
 interface Task {
   id: string; team_id: string | null; parent_id: string | null; seq: number; title: string; instructions: string; agent_id: string | null;
   status: 'queued' | 'planning' | 'running' | 'review' | 'reviewing' | 'done' | 'failed';
@@ -100,6 +101,8 @@ export function MissionControl() {
   const [error, setError] = useState<string | null>(null);
   const [loadedAt, setLoadedAt] = useState<string | null>(null);
   const [openGoalId, setOpenGoalId] = useState<string | null>(null);
+  const [buildGoalId, setBuildGoalId] = useState<string | null>(null);
+  const [officeKey, setOfficeKey] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -181,7 +184,7 @@ export function MissionControl() {
 
       {/* The office keeps its own work loop: keep it mounted, only hide it. */}
       <div className={tab === 'office' ? '' : 'hidden'}>
-        <OfficeView />
+        <OfficeView key={officeKey} />
       </div>
 
       {!data && tab !== 'office' && (
@@ -189,13 +192,38 @@ export function MissionControl() {
       )}
 
       {data && tab === 'dashboard' && <DashboardTab d={data} act={act} openGoal={(id) => { setOpenGoalId(id); }} teamName={teamName} />}
-      {data && tab === 'team' && <TeamTab d={data} act={act} teamName={teamName} />}
+      {data && tab === 'team' && <TeamTab d={data} act={act} teamName={teamName} open={setOpenGoalId} />}
       {data && tab === 'board' && <BoardTab d={data} teamName={teamName} open={setOpenGoalId} />}
       {data && tab === 'calendar' && <CalendarTab d={data} act={act} teamName={teamName} />}
       {data && tab === 'activity' && <ActivityTab d={data} agentName={agentName} teamName={teamName} open={setOpenGoalId} />}
       {data && tab === 'memory' && <MemoryTab d={data} act={act} teamName={teamName} agentName={agentName} />}
 
-      {openGoal && <GoalDrawer g={openGoal} teamName={teamName} agentName={agentName} act={act} onClose={() => setOpenGoalId(null)} />}
+      {openGoal && (
+        <GoalDrawer
+          g={openGoal}
+          teamName={teamName}
+          agentName={agentName}
+          act={act}
+          onClose={() => setOpenGoalId(null)}
+          canBuildTeam={data?.teams.find((t) => t.id === openGoal.team_id)?.slug === 'scout-team' && openGoal.status === 'done' && Boolean(openGoal.result)}
+          onBuildTeam={() => setBuildGoalId(openGoal.id)}
+        />
+      )}
+      {buildGoalId && (
+        <BlueprintModal
+          goalId={buildGoalId}
+          onClose={() => setBuildGoalId(null)}
+          onCreated={(name) => {
+            setBuildGoalId(null);
+            setOpenGoalId(null);
+            setTab('team');
+            setOfficeKey((k) => k + 1);
+            setOfficeKey((k) => k + 1);
+            setNotice(`${name} was created. Its hexagon island is in Virtual Office.`);
+            refresh();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -256,25 +284,7 @@ function DashboardTab({ d, act, openGoal, teamName }: { d: Mission; act: Act; op
             </div>
           )}
 
-          {Object.keys(d.modelStats || {}).length > 0 && (
-            <div className="mt-5 border-t border-zinc-800 pt-5">
-              <H>Tokens by Model (This Month)</H>
-              <div className="space-y-3">
-                {Object.entries(d.modelStats).sort((a,b) => b[1].cost - a[1].cost).map(([model, st]) => (
-                  <div key={model} className="text-xs">
-                    <div className="flex justify-between font-bold text-zinc-300 mb-1">
-                      <span>{model}</span>
-                      <span className="text-[#d4af37]">{fmtUsd(st.cost)}</span>
-                    </div>
-                    <div className="flex justify-between text-zinc-500 font-mono text-[10px]">
-                      <span>{st.calls} calls</span>
-                      <span>{Intl.NumberFormat('en-US').format(st.tokensIn)} in / {Intl.NumberFormat('en-US').format(st.tokensOut)} out</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+
         </Card>
 
         <Card className="lg:col-span-2">
@@ -313,6 +323,30 @@ function DashboardTab({ d, act, openGoal, teamName }: { d: Mission; act: Act; op
         </Card>
       </div>
 
+      {Object.keys(d.modelStats || {}).length > 0 && (
+        <div className="space-y-3">
+          <H>Tokens by Model (This Month)</H>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {Object.entries(d.modelStats).sort((a,b) => b[1].cost - a[1].cost).map(([model, st]) => (
+              <Card key={model} className="flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-2 text-xs font-bold text-zinc-100">
+                    <Brain className="w-3.5 h-3.5 text-[#d4af37]" />
+                    {model}
+                  </div>
+                  <div className="mt-3 text-2xl font-extrabold text-[#d4af37]">{fmtUsd(st.cost)}</div>
+                </div>
+                <div className="mt-4 space-y-1 text-[10px] font-mono text-zinc-500">
+                  <div className="flex justify-between"><span>Calls</span><span className="text-zinc-300">{Intl.NumberFormat('en-US').format(st.calls)}</span></div>
+                  <div className="flex justify-between"><span>Input Tokens</span><span className="text-zinc-300">{Intl.NumberFormat('en-US').format(st.tokensIn)}</span></div>
+                  <div className="flex justify-between"><span>Output Tokens</span><span className="text-zinc-300">{Intl.NumberFormat('en-US').format(st.tokensOut)}</span></div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
       <Card>
         <H>Latest reports</H>
         {d.goals.filter((g) => g.status === 'done').length === 0 ? (
@@ -334,7 +368,7 @@ function DashboardTab({ d, act, openGoal, teamName }: { d: Mission; act: Act; op
 }
 
 // ---------- 3. Team Agent ----------
-function TeamTab({ d, act, teamName }: { d: Mission; act: Act; teamName: (id: string | null) => string }) {
+function TeamTab({ d, act, teamName, open }: { d: Mission; act: Act; teamName: (id: string | null) => string; open: (id: string) => void }) {
   const groups = Array.from(new Set(d.agents.map((a) => teamKey(a.team_id))));
   return (
     <div className="space-y-6">
@@ -348,6 +382,12 @@ function TeamTab({ d, act, teamName }: { d: Mission; act: Act; teamName: (id: st
               <h2 className="font-serif text-lg font-extrabold text-zinc-100">{teamName(teamId)}</h2>
               {team?.mission && <p className="text-xs text-zinc-500">{team.mission}</p>}
             </div>
+            {team?.workflow && (
+              <details className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
+                <summary className="cursor-pointer text-xs font-bold text-zinc-300">Workflow</summary>
+                <p className="mt-2 whitespace-pre-wrap text-xs text-zinc-400">{team.workflow}</p>
+              </details>
+            )}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {agents.map((a) => {
                 const st = d.agentStats[a.id] || { done: 0, failed: 0, active: 0, cost: 0 };
@@ -371,6 +411,12 @@ function TeamTab({ d, act, teamName }: { d: Mission; act: Act; teamName: (id: st
                       </button>
                     </div>
                     <div className="mt-3 font-mono text-[10px] text-zinc-500">{a.kind} · {a.model}</div>
+                    {a.job_desk && (
+                      <details className="mt-2 rounded-lg border border-zinc-800 bg-zinc-950/60 p-2">
+                        <summary className="cursor-pointer text-[11px] font-bold text-zinc-300">Job desk</summary>
+                        <p className="mt-1 whitespace-pre-wrap text-[11px] leading-relaxed text-zinc-400">{a.job_desk}</p>
+                      </details>
+                    )}
                     <div className="mt-3 grid grid-cols-4 gap-2 text-center">
                       {[
                         ['Done', st.done, 'text-emerald-300'],
@@ -389,10 +435,63 @@ function TeamTab({ d, act, teamName }: { d: Mission; act: Act; teamName: (id: st
                 );
               })}
             </div>
+            {team && <TeamTasks team={team} goals={d.goals.filter((g) => g.team_id === team.id).slice(0, 6)} act={act} open={open} />}
           </section>
         );
       })}
       <p className="text-[11px] text-zinc-600">Teams are switched on in Virtual Office. A switched-off agent gets no new work.</p>
+    </div>
+  );
+}
+
+/** A team's starter tasks (run with one click) and its latest briefs. */
+function TeamTasks({ team, goals, act, open }: { team: Team; goals: Goal[]; act: Act; open: (id: string) => void }) {
+  const starters = team.starter_tasks || [];
+  const [edit, setEdit] = useState<Record<number, string>>({});
+  if (starters.length === 0 && goals.length === 0) return null;
+  return (
+    <div className="grid gap-3 lg:grid-cols-2">
+      {starters.length > 0 && (
+        <Card>
+          <H>Tasks ({starters.length})</H>
+          <div className="space-y-3">
+            {starters.map((t, i) => {
+              const brief = edit[i] ?? t.brief;
+              return (
+                <details key={i} className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-2.5">
+                  <summary className="flex cursor-pointer items-center justify-between gap-2 text-xs">
+                    <span className="font-semibold text-zinc-200">{t.title}</span>
+                    {t.agent && <span className="shrink-0 text-[10px] text-zinc-500">{t.agent}</span>}
+                  </summary>
+                  <p className="mt-2 text-[10px] text-zinc-500">Fill in the [BRACKETS], then run it.</p>
+                  <textarea rows={5} value={brief} onChange={(e) => setEdit({ ...edit, [i]: e.target.value })} className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-xs text-zinc-100 focus:border-[#d4af37]/50 focus:outline-none" />
+                  <button
+                    className={`${btnGold} mt-2`}
+                    disabled={/\[[A-Z0-9 _-]+\]/.test(brief)}
+                    title={/\[[A-Z0-9 _-]+\]/.test(brief) ? 'Replace the [BRACKETS] first' : undefined}
+                    onClick={() => act(() => call('/api/ai-office/goal', 'POST', { brief: `${t.title}\n\n${brief}`, teamId: team.id }), 'Task queued. Open Virtual Office to let the team run it.')}
+                  >
+                    <Play className="h-3.5 w-3.5" /> Run
+                  </button>
+                </details>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+      {goals.length > 0 && (
+        <Card>
+          <H>Latest briefs</H>
+          <div className="space-y-1.5">
+            {goals.map((g) => (
+              <button key={g.id} onClick={() => open(g.id)} className="flex w-full items-center justify-between gap-2 rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-left text-xs hover:border-zinc-600">
+                <span className="truncate text-zinc-200">{g.title}</span>
+                <Status s={g.status} />
+              </button>
+            ))}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
@@ -446,7 +545,7 @@ function BoardTab({ d, teamName, open }: { d: Mission; teamName: (id: string | n
   );
 }
 
-function GoalDrawer({ g, teamName, agentName, act, onClose }: { g: Goal; teamName: (id: string | null) => string; agentName: (id: string | null) => string | null; act: Act; onClose: () => void }) {
+function GoalDrawer({ g, teamName, agentName, act, onClose, canBuildTeam, onBuildTeam }: { g: Goal; teamName: (id: string | null) => string; agentName: (id: string | null) => string | null; act: Act; onClose: () => void; canBuildTeam: boolean; onBuildTeam: () => void }) {
   const canRetry = g.status === 'failed' || (g.status === 'done' && g.subtasks.some((s) => s.status === 'failed'));
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/60" onClick={onClose}>
@@ -473,7 +572,12 @@ function GoalDrawer({ g, teamName, agentName, act, onClose }: { g: Goal; teamNam
         {g.result && (
           <>
             <H>Report</H>
-            <p className="mb-5 whitespace-pre-wrap rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm text-zinc-200">{g.result}</p>
+            <p className="mb-3 whitespace-pre-wrap rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm text-zinc-200">{g.result}</p>
+            {canBuildTeam && (
+              <button className={`${btnGold} mb-5`} onClick={onBuildTeam}>
+                <Users className="h-3.5 w-3.5" /> Create this team in the app
+              </button>
+            )}
           </>
         )}
         {g.error && <p className="mb-5 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300">{g.error}</p>}

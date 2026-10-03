@@ -18,7 +18,7 @@ export default async function ProductivityPage({ searchParams }: { searchParams:
   const ctx = await getAuthenticatedWorkspaceContext(supabase);
 
   // Only the founder and superadmins see everyone. Everyone else sees only their own page.
-  if (ctx.role !== 'founder' && ctx.role !== 'superadmin') redirect('/productivity/me');
+  if (ctx.role !== 'founder' && ctx.role !== 'superadmin') redirect('/productivity/stats');
 
   const range = parseRange((await searchParams).range);
   const people = await loadPeople(supabase, ctx.activeWorkspaceId);

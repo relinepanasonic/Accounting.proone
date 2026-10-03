@@ -23,6 +23,8 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
   if (!person) person = { userId: ctx.userId, name: ctx.userName || 'Me', email: ctx.userEmail || '', role: ctx.role };
 
   const isOwner = ctx.role === 'founder' || ctx.role === 'superadmin';
+  // Founder and superadmin have no KPI of their own: their Stat KPI is the whole team.
+  if (isOwner) redirect('/productivity');
   const data = await loadActivity(supabase, ctx.activeWorkspaceId, [person], range);
   // The KPI board is for staff. Founder and superadmin have the Team tab instead.
   const kpi = isOwner ? null : await loadKpi(person, ctx.activeWorkspaceId, { chartClient: sp.kc });

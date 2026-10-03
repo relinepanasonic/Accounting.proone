@@ -19,6 +19,8 @@ export const isProductivityPath = (p: string) =>
   p.startsWith('/productivity/assignments/') ||
   p === '/productivity/me' ||
   p.startsWith('/productivity/calendar') ||
+  p.startsWith('/productivity/tasks') ||
+  p.startsWith('/productivity/meetings') ||
   p.startsWith('/productivity/stats') ||
   p.startsWith('/productivity/person/');
 

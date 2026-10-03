@@ -7,6 +7,10 @@ const PRICES: { match: (model: string) => boolean; input: number; output: number
   { match: (m) => m.includes('sonnet'), input: 2, output: 10 },
   { match: (m) => m.includes('haiku'), input: 1, output: 5 },
   { match: (m) => m.startsWith('groq/') || m.includes('gpt-oss'), input: 0.075, output: 0.3 },
+  { match: (m) => m.endsWith(':free'), input: 0, output: 0 },
+  { match: (m) => m.startsWith('zai/') && m.includes('flash'), input: 0, output: 0 },
+  { match: (m) => m.startsWith('zai/') || m.includes('glm'), input: 0.6, output: 2.2 },
+  { match: (m) => m.startsWith('openrouter/'), input: 0.3, output: 1 },
   { match: (m) => m.startsWith('gemini/') || m.includes('gemini'), input: 0.3, output: 2.5 },
 ];
 

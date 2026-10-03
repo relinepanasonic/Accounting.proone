@@ -3,15 +3,20 @@
 // stand-in when that provider's key is not set, so the office works with only ANTHROPIC_API_KEY.
 import Anthropic from '@anthropic-ai/sdk';
 
-export type Provider = 'anthropic' | 'groq' | 'gemini';
+export type Provider = 'anthropic' | 'groq' | 'gemini' | 'openrouter' | 'zai';
+type CheapProvider = Exclude<Provider, 'anthropic'>;
 
 export const BOSS_MODEL = 'claude-sonnet-5-5';
 export const BOSS_DEEP_MODEL = 'claude-opus-5-5';
 export const WORKER_FALLBACK_MODEL = 'claude-haiku-4-5';
 
-const OPENAI_COMPATIBLE: Record<'groq' | 'gemini', { baseUrl: string; keyEnv: string }> = {
+const OPENAI_COMPATIBLE: Record<CheapProvider, { baseUrl: string; keyEnv: string }> = {
   groq: { baseUrl: 'https://api.groq.com/openai/v1', keyEnv: 'GROQ_API_KEY' },
   gemini: { baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', keyEnv: 'GEMINI_API_KEY' },
+  // One key, many models (incl. free ones ending in ":free", e.g. qwen/qwen3.8-27b:free).
+  openrouter: { baseUrl: 'https://openrouter.ai/api/v1', keyEnv: 'OPENROUTER_API_KEY' },
+  // Zhipu GLM (z.ai). Set ZAI_BASE_URL to the coding-plan endpoint if you use that plan.
+  zai: { baseUrl: process.env.ZAI_BASE_URL || 'https://api.z.ai/api/paas/v4', keyEnv: 'ZAI_API_KEY' },
 };
 
 export function providerStatus() {
@@ -19,6 +24,8 @@ export function providerStatus() {
     anthropic: Boolean(process.env.ANTHROPIC_API_KEY),
     groq: Boolean(process.env.GROQ_API_KEY),
     gemini: Boolean(process.env.GEMINI_API_KEY),
+    openrouter: Boolean(process.env.OPENROUTER_API_KEY),
+    zai: Boolean(process.env.ZAI_API_KEY),
   };
 }
 
@@ -81,12 +88,14 @@ export async function askBoss<T>(opts: {
   return { data, model: res.model, tokensIn: res.usage.input_tokens, tokensOut: res.usage.output_tokens };
 }
 
-const CHEAP_DEFAULT_MODEL: Record<'groq' | 'gemini', string> = {
+const CHEAP_DEFAULT_MODEL: Record<CheapProvider, string> = {
   groq: 'openai/gpt-oss-20b',
   gemini: 'gemini-3.8-flash',
+  openrouter: 'qwen/qwen3.8-27b:free',
+  zai: 'glm-4.5-flash',
 };
 
-async function callOpenAiCompatible(provider: 'groq' | 'gemini', model: string, system: string, prompt: string): Promise<{ text: string } & ModelUsage> {
+async function callOpenAiCompatible(provider: CheapProvider, model: string, system: string, prompt: string): Promise<{ text: string } & ModelUsage> {
   const cfg = OPENAI_COMPATIBLE[provider];
   const res = await fetch(`${cfg.baseUrl}/chat/completions`, {
     method: 'POST',
@@ -117,8 +126,8 @@ async function callOpenAiCompatible(provider: 'groq' | 'gemini', model: string, 
 
 /**
  * Worker call: plain text answer. Tries the agent's own provider first; if that provider has no key or is
- * down (busy, rate limited, timed out), tries the other cheap provider, then Claude Haiku. `note` says
- * which stand-in answered, so the activity log shows it.
+ * down (busy, rate limited, timed out), tries the other cheap providers that have a key, then Claude Haiku.
+ * `note` says which stand-in answered, so the activity log shows it.
  */
 export async function askWorker(opts: {
   provider: Provider;
@@ -129,10 +138,10 @@ export async function askWorker(opts: {
   const problems: string[] = [];
 
   if (opts.provider !== 'anthropic') {
-    const other = opts.provider === 'groq' ? 'gemini' : 'groq';
-    const chain: { provider: 'groq' | 'gemini'; model: string }[] = [
+    const others = (Object.keys(CHEAP_DEFAULT_MODEL) as CheapProvider[]).filter((p) => p !== opts.provider);
+    const chain: { provider: CheapProvider; model: string }[] = [
       { provider: opts.provider, model: opts.model },
-      { provider: other, model: CHEAP_DEFAULT_MODEL[other] },
+      ...others.map((p) => ({ provider: p, model: CHEAP_DEFAULT_MODEL[p] })),
     ];
     for (const step of chain) {
       if (!process.env[OPENAI_COMPATIBLE[step.provider].keyEnv]) {

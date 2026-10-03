@@ -38,6 +38,9 @@ export const ALLOWED_MODELS: Record<string, { provider: Provider; model: string 
   'claude-haiku-4-5': { provider: 'anthropic', model: 'claude-haiku-4-5' },
   'gemini-3.8-flash': { provider: 'gemini', model: 'gemini-3.8-flash' },
   'openai/gpt-oss-20b': { provider: 'groq', model: 'openai/gpt-oss-20b' },
+  'qwen/qwen3.8-27b:free': { provider: 'openrouter', model: 'qwen/qwen3.8-27b:free' },
+  'glm-4.5-flash': { provider: 'zai', model: 'glm-4.5-flash' },
+  'deepseek-chat': { provider: 'deepseek', model: 'deepseek-chat' },
 };
 
 const ROLES: BlueprintRole[] = ['lead', 'researcher', 'writer', 'editor', 'worker'];
@@ -135,7 +138,7 @@ export async function proposeBlueprint(brief: string, report: string): Promise<B
     effort: 'low',
     system:
       'You turn an AI team recommendation into a team definition for an AI Office. Keep the agents, names, roles and models from the recommendation; only add what is missing. ' +
-      'Models you may use: claude-opus-5-5 (hard planning only), claude-sonnet-5-5 (leads, writers, editors), claude-haiku-4-5 (the only one with live web search: researchers), gemini-3.8-flash (bulk drafting), openai/gpt-oss-20b (mechanical formatting). ' +
+      'Models you may use: claude-opus-5-5 (hard planning only), claude-sonnet-5-5 (leads, writers, editors), claude-haiku-4-5 (the only one with live web search: researchers), gemini-3.8-flash (bulk drafting), openai/gpt-oss-20b (mechanical formatting), qwen/qwen3.8-27b:free (free, bulk drafting and rewriting), glm-4.5-flash (free GLM, simple drafting), deepseek-chat (very cheap, good writer and coder; servers in China, so no client or financial data). ' +
       "Roles: lead = coordinates and splits the work; researcher = searches the web; writer = produces the main content; editor = checks and improves the others' work (at most one); worker = any other doer. " +
       "Exactly one lead. The editor's job desk is the quality check. Each agent has ONE skill. Write in the language of the recommendation. " +
       "Starter tasks: 2 to 4 ready-to-run briefs that follow the owner's workflow; put placeholders like [KEYWORD LIST] where the owner must provide input, because agents cannot read company data. " +
@@ -176,7 +179,7 @@ export async function createTeamFromBlueprint(db: Db, workspaceId: string, input
     used.add(name);
     const strong = a.provider === 'anthropic' && a.model !== 'claude-haiku-4-5';
     const kind = a.role === 'lead' ? 'planner' : a.role === 'editor' ? 'qc' : a.role === 'researcher' ? 'researcher' : 'worker';
-    const floor = a.role === 'lead' || a.role === 'editor' ? 3 : a.role === 'researcher' || strong ? 2 : 1;
+    const floor = a.role === 'lead' || a.role === 'editor' ? 3 : a.role === 'researcher' || a.role === 'writer' || strong ? 2 : 1;
     return { workspace_id: workspaceId, team_id: team.id, name, title: a.title, floor, kind, provider: a.provider, model: a.model, job_desk: a.job_desk };
   });
   const { data: created, error: agentError } = await db.from('ai_agents').insert(rows).select('id, name');

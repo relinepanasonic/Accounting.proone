@@ -101,7 +101,10 @@ export const TEAM_PROFILES: Record<string, TeamProfile> = {
       '- Claude Sonnet 5.5: strong all-rounder, about $2 / $10. Default for leads, writers and quality control.\n' +
       '- Claude Haiku 4.5: fast and cheap, about $1 / $5. The only model here with live web search.\n' +
       '- Gemini 3.8 Flash (Google): cheap and fast, good for bulk drafting and summaries.\n' +
-      '- Groq gpt-oss-20b: very cheap and fast, only for simple, mechanical work (lists, rewriting, formatting).',
+      '- Groq gpt-oss-20b: very cheap and fast, only for simple, mechanical work (lists, rewriting, formatting).\n' +
+      '- Qwen 3.8 27B (OpenRouter, free tier): free, decent for bulk drafting and rewriting; slower and less reliable.\n' +
+      '- GLM 4.5 Flash (z.ai, free): free, fine for simple drafting and summaries.\n' +
+      '- DeepSeek Chat: very cheap (about $0.3 / $1.2), strong writer and coder; its servers are in China, so never give it client or financial data.',
     reportGuide:
       'You are Jax. Write the recommendation for a busy owner, in the language the owner used. Be decisive: ONE team, not options. Use exactly this shape and no Markdown symbols or tables:\n' +
       'Line 1: "Team of N" (N = number of agents, as small as the job allows).\n' +

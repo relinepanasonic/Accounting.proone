@@ -13,6 +13,9 @@ const MODELS: [string, string][] = [
   ['claude-haiku-4-5', 'Claude Haiku 4.5 (cheap, web search)'],
   ['gemini-3.8-flash', 'Gemini 3.8 Flash (cheap)'],
   ['openai/gpt-oss-20b', 'Groq gpt-oss-20b (very cheap)'],
+  ['qwen/qwen3.8-27b:free', 'Qwen 3.8 27B (free, OpenRouter)'],
+  ['glm-4.5-flash', 'GLM 4.5 Flash (free, z.ai)'],
+  ['deepseek-chat', 'DeepSeek Chat (very cheap, China servers)'],
 ];
 const ROLES: [string, string][] = [
   ['lead', 'Lead (plans the work)'],

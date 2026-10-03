@@ -11,6 +11,7 @@ import { createClientRecord } from '@/app/actions/settings';
 import { RupiahInput } from '@/components/ui/RupiahInput';
 import { BulletTextarea } from '@/components/ui/BulletTextarea';
 import { ClientSelect } from '@/components/ui/ClientSelect';
+import { ProductDropdown } from './ProductDropdown';
 
 
 
@@ -553,24 +554,17 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                   <div className="grid grid-cols-12 gap-3 items-start pr-10">
                     <div className="col-span-12 md:col-span-3 space-y-1.5">
                       {products && products.length > 0 ? (
-                        <select
-                          value={products.find(p => p.name === item.packageName) ? products.find(p => p.name === item.packageName)?.id : 'custom'}
-                          onChange={(e) => {
-                            if (e.target.value === 'custom') {
+                        <ProductDropdown
+                          products={products}
+                          value={products.find(p => p.name === item.packageName) ? products.find(p => p.name === item.packageName)?.id || 'custom' : 'custom'}
+                          onChange={(val) => {
+                            if (val === 'custom') {
                               handleUpdateItem(item.id, 'packageName', '');
                             } else {
-                              handleSelectProduct(item.id, e.target.value);
+                              handleSelectProduct(item.id, val);
                             }
                           }}
-                          className="w-full bg-zinc-900/90 border border-[#d4af37]/40 rounded-lg px-2.5 py-2 text-[11px] font-mono text-[#f5d77f] focus:outline-none focus:border-[#d4af37]"
-                        >
-                          <option value="custom">-- Custom / Manual --</option>
-                          {products.map((prod) => (
-                            <option key={prod.id} value={prod.id}>
-                              {prod.name}
-                            </option>
-                          ))}
-                        </select>
+                        />
                       ) : (
                         <input
                           type="text"

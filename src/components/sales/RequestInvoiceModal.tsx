@@ -4,6 +4,7 @@ import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Trash2, X } from 'lucide-react';
 import { requestInvoice } from '@/app/actions/sales-flow';
+import { ProductDropdown } from '@/components/invoices/ProductDropdown';
 import { describeDuration, requestTotal, type DurationType, type RequestItem } from '@/lib/sales/flow';
 
 export interface CatalogProduct {
@@ -106,11 +107,19 @@ export function RequestInvoiceModal({
             </div>
           ))}
 
-          <select value={pick} onChange={(e) => addProduct(e.target.value)} className={`${field} w-full`}>
-            <option value="">+ Add a product from the catalog</option>
-            {products.map((p) => <option key={p.id} value={p.id}>{p.name} · {rp(Number(p.unit_price || 0))}</option>)}
-            <option value="__custom__">+ Custom item (not in the catalog)</option>
-          </select>
+          <ProductDropdown
+            products={products}
+            value={pick}
+            onChange={(val) => {
+              if (val === 'custom') {
+                addProduct('__custom__');
+              } else {
+                addProduct(val);
+              }
+            }}
+            placeholder="+ Add a product from the catalog"
+            className="w-full"
+          />
           {products.length === 0 && <p className="text-[11px] text-amber-300">The product catalog is empty. Add products under Settings → Product Catalog, or use a custom item.</p>}
 
           <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Note for Accounting (discount, payment terms, anything special)" className={`${field} w-full`} />

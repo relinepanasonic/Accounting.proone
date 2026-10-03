@@ -10,5 +10,5 @@ BEGIN
   END LOOP;
   ALTER TABLE public.ai_agents
     ADD CONSTRAINT ai_agents_provider_check
-    CHECK (provider IN ('anthropic', 'groq', 'gemini', 'openrouter', 'zai'));
+    CHECK (provider IN ('anthropic', 'groq', 'gemini', 'openrouter', 'zai', 'deepseek'));
 END $$;

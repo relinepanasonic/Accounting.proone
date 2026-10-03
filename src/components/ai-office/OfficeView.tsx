@@ -23,7 +23,7 @@ interface Agent {
   floor: number;
   team_id: string | null;
   kind: 'planner' | 'qc' | 'worker' | 'researcher' | 'installer';
-  provider: 'anthropic' | 'groq' | 'gemini' | 'openrouter' | 'zai';
+  provider: 'anthropic' | 'groq' | 'gemini' | 'openrouter' | 'zai' | 'deepseek';
   model: string;
 }
 
@@ -78,7 +78,7 @@ interface Skill {
 }
 
 interface OfficeState {
-  setup: { tables: boolean; teams: boolean; anthropic: boolean; groq: boolean; gemini: boolean; openrouter: boolean; zai: boolean };
+  setup: { tables: boolean; teams: boolean; anthropic: boolean; groq: boolean; gemini: boolean; openrouter: boolean; zai: boolean; deepseek: boolean };
   agents: Agent[];
   teams: Team[];
   skills: Skill[];

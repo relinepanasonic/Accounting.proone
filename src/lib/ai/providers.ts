@@ -3,7 +3,7 @@
 // stand-in when that provider's key is not set, so the office works with only ANTHROPIC_API_KEY.
 import Anthropic from '@anthropic-ai/sdk';
 
-export type Provider = 'anthropic' | 'groq' | 'gemini' | 'openrouter' | 'zai';
+export type Provider = 'anthropic' | 'groq' | 'gemini' | 'openrouter' | 'zai' | 'deepseek';
 type CheapProvider = Exclude<Provider, 'anthropic'>;
 
 export const BOSS_MODEL = 'claude-sonnet-5-5';
@@ -17,6 +17,8 @@ const OPENAI_COMPATIBLE: Record<CheapProvider, { baseUrl: string; keyEnv: string
   openrouter: { baseUrl: 'https://openrouter.ai/api/v1', keyEnv: 'OPENROUTER_API_KEY' },
   // Zhipu GLM (z.ai). Set ZAI_BASE_URL to the coding-plan endpoint if you use that plan.
   zai: { baseUrl: process.env.ZAI_BASE_URL || 'https://api.z.ai/api/paas/v4', keyEnv: 'ZAI_API_KEY' },
+  // DeepSeek direct API (platform.deepseek.com). Servers are in China: keep client/financial data off it.
+  deepseek: { baseUrl: 'https://api.deepseek.com/v1', keyEnv: 'DEEPSEEK_API_KEY' },
 };
 
 export function providerStatus() {
@@ -26,6 +28,7 @@ export function providerStatus() {
     gemini: Boolean(process.env.GEMINI_API_KEY),
     openrouter: Boolean(process.env.OPENROUTER_API_KEY),
     zai: Boolean(process.env.ZAI_API_KEY),
+    deepseek: Boolean(process.env.DEEPSEEK_API_KEY),
   };
 }
 
@@ -93,6 +96,7 @@ const CHEAP_DEFAULT_MODEL: Record<CheapProvider, string> = {
   gemini: 'gemini-3.8-flash',
   openrouter: 'qwen/qwen3.8-27b:free',
   zai: 'glm-4.5-flash',
+  deepseek: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
 };
 
 async function callOpenAiCompatible(provider: CheapProvider, model: string, system: string, prompt: string): Promise<{ text: string } & ModelUsage> {

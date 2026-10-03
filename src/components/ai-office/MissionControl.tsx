@@ -26,7 +26,7 @@ interface Schedule {
 }
 interface Skill { id: string; name: string; agent_ids: string[] }
 interface Mission {
-  setup: { tables: boolean; teams: boolean; anthropic: boolean; groq: boolean; gemini: boolean; openrouter: boolean; zai: boolean };
+  setup: { tables: boolean; teams: boolean; anthropic: boolean; groq: boolean; gemini: boolean; openrouter: boolean; zai: boolean; deepseek: boolean };
   agents: Agent[]; teams: Team[]; skills: Skill[]; goals: Goal[]; events: OfficeEvent[];
   agentStats: Record<string, { done: number; failed: number; active: number; cost: number }>;
   memories: Memory[]; schedules: Schedule[];

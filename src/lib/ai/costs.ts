@@ -11,6 +11,7 @@ const PRICES: { match: (model: string) => boolean; input: number; output: number
   { match: (m) => m.startsWith('zai/') && m.includes('flash'), input: 0, output: 0 },
   { match: (m) => m.startsWith('zai/') || m.includes('glm'), input: 0.6, output: 2.2 },
   { match: (m) => m.startsWith('openrouter/'), input: 0.3, output: 1 },
+  { match: (m) => m.startsWith('deepseek/') || m.includes('deepseek'), input: 0.3, output: 1.2 },
   { match: (m) => m.startsWith('gemini/') || m.includes('gemini'), input: 0.3, output: 2.5 },
 ];
 

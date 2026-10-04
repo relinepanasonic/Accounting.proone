@@ -236,3 +236,31 @@ export async function askResearcher(opts: {
   }
   throw new Error('The research took too many steps and was stopped.');
 }
+
+/**
+ * Reads screenshots and pictures attached to a brief and returns their content as plain text, so every agent
+ * (including cheap models that cannot see images) can use it. Claude Haiku does the reading.
+ */
+export async function readImages(images: { mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'; data: string }[]): Promise<{ texts: string[] } & ModelUsage> {
+  const texts: string[] = [];
+  let tokensIn = 0;
+  let tokensOut = 0;
+  let model: string = WORKER_FALLBACK_MODEL;
+  for (const img of images) {
+    const res = await anthropic().messages.create({
+      model: WORKER_FALLBACK_MODEL,
+      max_tokens: 2500,
+      system:
+        'You read an image that the owner attached to a brief for an AI team. Write down everything useful in it as plain text: copy ALL visible text exactly as written (keep numbers, keywords, names and their order), ' +
+        'render tables as one line per row with " | " between columns, and add one short line describing what the image is. Do not summarize, interpret or add anything that is not visible. No Markdown symbols.',
+      messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.data } }, { type: 'text', text: 'Transcribe this image.' }] }],
+    });
+    tokensIn += res.usage.input_tokens;
+    tokensOut += res.usage.output_tokens;
+    model = res.model;
+    let text = '';
+    for (const block of res.content) if (block.type === 'text') text += block.text;
+    texts.push(text.trim() || '(nothing readable)');
+  }
+  return { texts, model, tokensIn, tokensOut };
+}

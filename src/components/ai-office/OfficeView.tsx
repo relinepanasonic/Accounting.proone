@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Send, Loader2, AlertTriangle, CheckCircle2, XCircle, Brain, ChevronDown, ChevronUp } from 'lucide-react';
+import { Send, Loader2, AlertTriangle, CheckCircle2, XCircle, Brain, ChevronDown, ChevronUp, Paperclip, X as XIcon, FileText } from 'lucide-react';
 import type { RobotView } from '@/components/ai-office/Office3D';
 import { costUsd } from '@/lib/ai/costs';
 
@@ -251,6 +251,54 @@ export function OfficeView() {
     return () => clearInterval(timer);
   }, [state?.active, refresh]);
 
+  // Pictures (screenshots, photos) and small text files attached to the brief.
+  const [images, setImages] = useState<string[]>([]);
+  const [files, setFiles] = useState<{ name: string; text: string }[]>([]);
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  /** Shrinks a picture to at most 1600px and re-encodes it as JPEG, so a screenshot stays small enough to send. */
+  const shrink = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return reject(new Error('This browser cannot read the picture.'));
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(url);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('That file is not a picture this browser can read.')); };
+      img.src = url;
+    });
+
+  const addAttachments = async (list: File[]) => {
+    setFormError(null);
+    try {
+      for (const file of list) {
+        if (file.type.startsWith('image/')) {
+          if (images.length >= 4) throw new Error('Up to 4 pictures per brief.');
+          const url = await shrink(file);
+          setImages((l) => (l.length >= 4 ? l : [...l, url]));
+        } else if (/\.(txt|csv|md|json|tsv)$/i.test(file.name) || file.type.startsWith('text/')) {
+          if (file.size > 200_000) throw new Error(`${file.name} is too big (max 200 KB of text).`);
+          const text = await file.text();
+          setFiles((l) => (l.length >= 3 ? l : [...l, { name: file.name, text }]));
+        } else {
+          throw new Error(`${file.name}: only pictures and text files (txt, csv, md, json) can be attached.`);
+        }
+      }
+    } catch (err: any) {
+      setFormError(err?.message || 'Could not attach that file.');
+    }
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
@@ -259,11 +307,13 @@ export function OfficeView() {
       const res = await fetch('/api/ai-office/goal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brief, deepThink, teamId: activeTeam ? activeTeam.id : null }),
+        body: JSON.stringify({ brief, deepThink, teamId: activeTeam ? activeTeam.id : null, images, files }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Could not send the brief.');
       setBrief('');
+      setImages([]);
+      setFiles([]);
       setOpenGoalId(json.id);
       await refresh();
       runLoop();
@@ -463,11 +513,36 @@ export function OfficeView() {
             <textarea
               value={brief}
               onChange={(e) => setBrief(e.target.value)}
+              onPaste={(e) => {
+                const pics = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith('image/'));
+                if (pics.length) { e.preventDefault(); addAttachments(pics); }
+              }}
               rows={5}
               disabled={!ready || sending}
               placeholder="Describe what you want done. Include every fact the team needs: the robots cannot read ERP data yet."
               className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-[#d4af37] disabled:opacity-50"
             />
+            <div className="flex flex-wrap items-center gap-2">
+              <input ref={fileInput} type="file" multiple accept="image/*,.txt,.csv,.md,.json,.tsv" className="hidden" onChange={(e) => { addAttachments(Array.from(e.target.files || [])); e.target.value = ''; }} />
+              <button type="button" onClick={() => fileInput.current?.click()} disabled={!ready || sending} className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-[11px] font-bold text-zinc-300 hover:border-zinc-500 disabled:opacity-50">
+                <Paperclip className="w-3.5 h-3.5" /> Attach picture or file
+              </button>
+              <span className="text-[10px] text-zinc-600">or paste a screenshot (Ctrl+V) into the box</span>
+              {images.map((src, i) => (
+                <span key={i} className="relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={src} alt={`Attachment ${i + 1}`} className="h-12 w-12 rounded-lg border border-zinc-700 object-cover" />
+                  <button type="button" onClick={() => setImages((l) => l.filter((_, k) => k !== i))} aria-label="Remove picture" className="absolute -right-1.5 -top-1.5 rounded-full bg-zinc-900 p-0.5 text-zinc-300 ring-1 ring-zinc-600 hover:text-white"><XIcon className="w-3 h-3" /></button>
+                </span>
+              ))}
+              {files.map((f, i) => (
+                <span key={i} className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1 text-[11px] text-zinc-300">
+                  <FileText className="w-3 h-3" /> {f.name}
+                  <button type="button" onClick={() => setFiles((l) => l.filter((_, k) => k !== i))} aria-label="Remove file" className="text-zinc-500 hover:text-white"><XIcon className="w-3 h-3" /></button>
+                </span>
+              ))}
+            </div>
+            {images.length > 0 && <p className="text-[10px] text-zinc-500">The text in each picture is read once (a few cents at most) and added to the brief, so every agent can use it.</p>}
             <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
               <input type="checkbox" checked={deepThink} onChange={(e) => setDeepThink(e.target.checked)} className="accent-[#d4af37]" />
               <Brain className="w-3.5 h-3.5 text-[#d4af37]" /> Deep think (boss uses Opus instead of Sonnet; slower, costs more)

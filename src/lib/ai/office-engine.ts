@@ -6,7 +6,7 @@
 //
 // Agents have NO access to ERP data or actions. They work from the text of the brief, the web (researchers only)
 // and the skills installed into them.
-import { askBoss, askResearcher, askWorker, describeModelError, providerStatus, type Provider } from '@/lib/ai/providers';
+import { askBoss, askResearcher, askWorker, describeModelError, providerStatus, type Pic, type Provider } from '@/lib/ai/providers';
 import { budgetBlocks, memoryBlock } from '@/lib/ai/office-extras';
 
 type Db = any; // Supabase client (user session; RLS limits it to founder / superadmin)
@@ -177,6 +177,16 @@ const QC_SCHEMA = {
   required: ['verdicts', 'final_report'],
   additionalProperties: false,
 };
+
+const SEE_NOTE = '\n\n(The owner attached design reference picture(s). You can see them: use them together with the written description in the brief.)';
+
+/** The design-reference pictures of a brief (the table may not exist yet: then there are none). */
+async function loadPics(db: Db, goalId: string | null): Promise<Pic[]> {
+  if (!goalId) return [];
+  const { data, error } = await db.from('ai_task_images').select('media_type, data').eq('task_id', goalId).order('created_at').limit(4);
+  if (error) return [];
+  return (data || []).map((r: { media_type: Pic['mediaType']; data: string }) => ({ mediaType: r.media_type, data: r.data }));
+}
 
 const isMissingTable = (error: any) => error?.code === 'PGRST205' || error?.code === '42P01';
 const sameTeam = (a: { team_id: string | null }, teamId: string | null) => (a.team_id ?? null) === (teamId ?? null);
@@ -388,6 +398,7 @@ async function planGoal(db: Db, workspaceId: string, goal: OfficeTask, agents: O
 
   try {
     const memory = await memoryBlock(db, workspaceId, goal.team_id, planner?.id || null);
+    const pics = await loadPics(db, goal.id);
     const helperLines = agents
       .filter((a) => a.kind !== 'planner' && a.kind !== 'qc' && a.enabled)
       .map((a) => `- ${a.name}: ${a.title} (floor ${a.floor})${a.job_desk ? `. Job desk: ${a.job_desk.slice(0, 400)}` : ''}`)
@@ -406,8 +417,9 @@ async function planGoal(db: Db, workspaceId: string, goal: OfficeTask, agents: O
         `\n\nYour helpers (set "agent" to a helper name to give it the subtask):\n${helperLines || '(none)'}` +
         (profile ? `\n\n${profile.plannerGuide}` : '') +
         (memory ? `\n\n${memory}` : ''),
-      prompt: `Owner's brief:\n\n${goal.instructions}`,
+      prompt: `Owner's brief:\n\n${goal.instructions}${pics.length ? SEE_NOTE : ''}`,
       schema: PLAN_SCHEMA,
+      images: pics,
     });
 
     const subtasks = (data.subtasks || []).slice(0, maxSubtasks);
@@ -523,12 +535,15 @@ async function runSubtask(db: Db, workspaceId: string, task: OfficeTask, agents:
       : '';
     const role = `You are ${agent.name}, ${agent.title}. ` + (profile?.workerGuide[agent.kind] || `Do exactly the one task below and return only the finished work.`);
     const system = `${OFFICE_CONTEXT}\n\n${role}${skillBlock ? `\n\nYour installed skills. Follow them when relevant:\n${skillBlock}` : ''}${memory ? `\n\n${memory}` : ''}`;
-    const prompt = `Task: ${task.title}\n\n${task.instructions}${redo}`;
+    // Only agents whose model can see pictures get them; the rest work from the written description in the instructions.
+    const canSee = agent.kind === 'researcher' || agent.provider === 'anthropic' || agent.provider === 'gemini';
+    const pics = canSee ? await loadPics(db, task.parent_id) : [];
+    const prompt = `Task: ${task.title}\n\n${task.instructions}${redo}${pics.length ? SEE_NOTE : ''}`;
 
     const out =
       agent.kind === 'researcher'
-        ? await askResearcher({ model: agent.provider === 'anthropic' ? agent.model : 'claude-sonnet-5-5', system, prompt })
-        : await askWorker({ provider: agent.provider, model: agent.model, system, prompt });
+        ? await askResearcher({ model: agent.provider === 'anthropic' ? agent.model : 'claude-sonnet-5-5', system, prompt, images: pics })
+        : await askWorker({ provider: agent.provider, model: agent.model, system, prompt, images: pics });
 
     let result = out.text;
     if (agent.kind === 'installer') {
@@ -559,6 +574,7 @@ async function reviewGoal(db: Db, workspaceId: string, goal: OfficeTask, subtask
       .map((s) => `--- Subtask ${s.seq}: ${s.title} [${s.status}]\nInstructions: ${s.instructions}\nResult:\n${s.status === 'failed' ? `(failed: ${s.error || 'no result'})` : s.result || '(empty)'}`)
       .join('\n\n');
     const memory = await memoryBlock(db, workspaceId, goal.team_id, qc?.id || null);
+    const pics = await loadPics(db, goal.id);
 
     const { data, tokensIn, tokensOut } = await askBoss<{
       verdicts: { seq: number; pass: boolean; feedback: string }[];
@@ -575,8 +591,9 @@ async function reviewGoal(db: Db, workspaceId: string, goal: OfficeTask, subtask
         (qc?.job_desk ? `\n\nYour job desk as quality control:\n${qc.job_desk}` : '') +
         (profile ? `\n\n${profile.reportGuide}` : '') +
         (memory ? `\n\n${memory}` : ''),
-      prompt: `Owner's brief:\n\n${goal.instructions}\n\nWork from the floors:\n\n${work}`,
+      prompt: `Owner's brief:\n\n${goal.instructions}${pics.length ? SEE_NOTE : ''}\n\nWork from the floors:\n\n${work}`,
       schema: QC_SCHEMA,
+      images: pics,
     });
 
     let redo = 0;

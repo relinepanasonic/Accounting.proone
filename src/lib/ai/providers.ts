@@ -21,6 +21,20 @@ const OPENAI_COMPATIBLE: Record<CheapProvider, { baseUrl: string; keyEnv: string
   deepseek: { baseUrl: 'https://api.deepseek.com/v1', keyEnv: 'DEEPSEEK_API_KEY' },
 };
 
+export interface Pic {
+  mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
+  data: string;
+}
+
+/** A user message for Claude: the pictures first, then the text. */
+function claudeContent(prompt: string, pics?: Pic[]): string | Anthropic.ContentBlockParam[] {
+  if (!pics || pics.length === 0) return prompt;
+  return [
+    ...pics.map((p): Anthropic.ContentBlockParam => ({ type: 'image', source: { type: 'base64', media_type: p.mediaType, data: p.data } })),
+    { type: 'text', text: prompt },
+  ];
+}
+
 export function providerStatus() {
   return {
     anthropic: Boolean(process.env.ANTHROPIC_API_KEY),
@@ -58,6 +72,7 @@ export async function askBoss<T>(opts: {
   system: string;
   prompt: string;
   schema: Record<string, unknown>;
+  images?: Pic[];
 }): Promise<{ data: T } & ModelUsage> {
   const res = await anthropic().beta.messages.create({
     model: opts.deep ? BOSS_DEEP_MODEL : BOSS_MODEL,
@@ -70,7 +85,7 @@ export async function askBoss<T>(opts: {
       format: { type: 'json_schema', schema: opts.schema },
     },
     system: opts.system,
-    messages: [{ role: 'user', content: opts.prompt }],
+    messages: [{ role: 'user', content: claudeContent(opts.prompt, opts.images) }],
   });
 
   if (res.stop_reason === 'refusal') throw new Error('The boss model declined this request.');
@@ -99,7 +114,7 @@ const CHEAP_DEFAULT_MODEL: Record<CheapProvider, string> = {
   deepseek: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
 };
 
-async function callOpenAiCompatible(provider: CheapProvider, model: string, system: string, prompt: string): Promise<{ text: string } & ModelUsage> {
+async function callOpenAiCompatible(provider: CheapProvider, model: string, system: string, prompt: string, pics?: Pic[]): Promise<{ text: string } & ModelUsage> {
   const cfg = OPENAI_COMPATIBLE[provider];
   const res = await fetch(`${cfg.baseUrl}/chat/completions`, {
     method: 'POST',
@@ -108,7 +123,13 @@ async function callOpenAiCompatible(provider: CheapProvider, model: string, syst
       model,
       messages: [
         { role: 'system', content: system },
-        { role: 'user', content: prompt },
+        {
+          role: 'user',
+          // Only Gemini among the cheap providers takes pictures; the others rely on the written description in the brief.
+          content: provider === 'gemini' && pics && pics.length > 0
+            ? [...pics.map((p) => ({ type: 'image_url', image_url: { url: `data:${p.mediaType};base64,${p.data}` } })), { type: 'text', text: prompt }]
+            : prompt,
+        },
       ],
     }),
     signal: AbortSignal.timeout(60000),
@@ -138,6 +159,7 @@ export async function askWorker(opts: {
   model: string;
   system: string;
   prompt: string;
+  images?: Pic[];
 }): Promise<{ text: string } & ModelUsage> {
   const problems: string[] = [];
 
@@ -153,7 +175,7 @@ export async function askWorker(opts: {
         continue;
       }
       try {
-        const out = await callOpenAiCompatible(step.provider, step.model, opts.system, opts.prompt);
+        const out = await callOpenAiCompatible(step.provider, step.model, opts.system, opts.prompt, opts.images);
         return problems.length ? { ...out, note: `Used ${step.provider} instead (${problems.join('; ')}).` } : out;
       } catch (err) {
         problems.push(err instanceof Error ? (err.name === 'TimeoutError' ? `${step.provider} timed out` : err.message.slice(0, 60)) : `${step.provider} failed`);
@@ -166,7 +188,7 @@ export async function askWorker(opts: {
     model,
     max_tokens: 4000,
     system: opts.system,
-    messages: [{ role: 'user', content: opts.prompt }],
+    messages: [{ role: 'user', content: claudeContent(opts.prompt, opts.images) }],
   });
   let text = '';
   for (const block of res.content) {
@@ -194,9 +216,10 @@ export async function askResearcher(opts: {
   system: string;
   prompt: string;
   maxSearches?: number;
+  images?: Pic[];
 }): Promise<{ text: string } & ModelUsage> {
   const isHaiku = opts.model.includes('haiku');
-  const messages: Anthropic.MessageParam[] = [{ role: 'user', content: opts.prompt }];
+  const messages: Anthropic.MessageParam[] = [{ role: 'user', content: claudeContent(opts.prompt, opts.images) }];
   let tokensIn = 0;
   let tokensOut = 0;
   let model = opts.model;
@@ -237,11 +260,23 @@ export async function askResearcher(opts: {
   throw new Error('The research took too many steps and was stopped.');
 }
 
+export type ImageMode = 'text' | 'design';
+
+const READ_TEXT =
+  'You read an image that the owner attached to a brief for an AI team. Write down everything useful in it as plain text: copy ALL visible text exactly as written (keep numbers, keywords, names and their order), ' +
+  'render tables as one line per row with " | " between columns, and add one short line describing what the image is. Do not summarize, interpret or add anything that is not visible. No Markdown symbols.';
+const READ_DESIGN =
+  'You describe a design reference picture that the owner attached to a brief, for a team member who cannot see it. Describe in plain text, in this order: ' +
+  '1) what it is (page, app screen, poster, logo, ad...) and its overall style and mood; 2) layout: the sections from top to bottom, columns, alignment, spacing; ' +
+  '3) color palette with approximate hex codes and where each color is used; 4) typography: font style (serif, sans, rounded...), sizes and weights of headings and body; ' +
+  '5) components: buttons, cards, icons, images, borders, shadows, corner radius; 6) the visible text, copied exactly. Be specific and concrete so someone could rebuild it. No Markdown symbols.';
+
 /**
- * Reads screenshots and pictures attached to a brief and returns their content as plain text, so every agent
- * (including cheap models that cannot see images) can use it. Claude Haiku does the reading.
+ * Reads the pictures attached to a brief and returns what is in them as plain text, so every agent
+ * (including cheap models that cannot see images) can use it. 'text' copies the words; 'design' describes the look.
+ * Claude Haiku does the reading.
  */
-export async function readImages(images: { mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'; data: string }[]): Promise<{ texts: string[] } & ModelUsage> {
+export async function readImages(images: (Pic & { mode: ImageMode })[]): Promise<{ texts: string[] } & ModelUsage> {
   const texts: string[] = [];
   let tokensIn = 0;
   let tokensOut = 0;
@@ -249,11 +284,9 @@ export async function readImages(images: { mediaType: 'image/jpeg' | 'image/png'
   for (const img of images) {
     const res = await anthropic().messages.create({
       model: WORKER_FALLBACK_MODEL,
-      max_tokens: 2500,
-      system:
-        'You read an image that the owner attached to a brief for an AI team. Write down everything useful in it as plain text: copy ALL visible text exactly as written (keep numbers, keywords, names and their order), ' +
-        'render tables as one line per row with " | " between columns, and add one short line describing what the image is. Do not summarize, interpret or add anything that is not visible. No Markdown symbols.',
-      messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.data } }, { type: 'text', text: 'Transcribe this image.' }] }],
+      max_tokens: img.mode === 'design' ? 2000 : 2500,
+      system: img.mode === 'design' ? READ_DESIGN : READ_TEXT,
+      messages: [{ role: 'user', content: claudeContent(img.mode === 'design' ? 'Describe this design.' : 'Transcribe this image.', [img]) }],
     });
     tokensIn += res.usage.input_tokens;
     tokensOut += res.usage.output_tokens;

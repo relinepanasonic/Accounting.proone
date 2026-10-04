@@ -252,7 +252,7 @@ export function OfficeView() {
   }, [state?.active, refresh]);
 
   // Pictures (screenshots, photos) and small text files attached to the brief.
-  const [images, setImages] = useState<string[]>([]);
+  const [images, setImages] = useState<{ url: string; mode: 'text' | 'design' }[]>([]);
   const [files, setFiles] = useState<{ name: string; text: string }[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -285,7 +285,7 @@ export function OfficeView() {
         if (file.type.startsWith('image/')) {
           if (images.length >= 4) throw new Error('Up to 4 pictures per brief.');
           const url = await shrink(file);
-          setImages((l) => (l.length >= 4 ? l : [...l, url]));
+          setImages((l) => (l.length >= 4 ? l : [...l, { url, mode: 'text' }]));
         } else if (/\.(txt|csv|md|json|tsv)$/i.test(file.name) || file.type.startsWith('text/')) {
           if (file.size > 200_000) throw new Error(`${file.name} is too big (max 200 KB of text).`);
           const text = await file.text();
@@ -528,11 +528,21 @@ export function OfficeView() {
                 <Paperclip className="w-3.5 h-3.5" /> Attach picture or file
               </button>
               <span className="text-[10px] text-zinc-600">or paste a screenshot (Ctrl+V) into the box</span>
-              {images.map((src, i) => (
-                <span key={i} className="relative">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={src} alt={`Attachment ${i + 1}`} className="h-12 w-12 rounded-lg border border-zinc-700 object-cover" />
-                  <button type="button" onClick={() => setImages((l) => l.filter((_, k) => k !== i))} aria-label="Remove picture" className="absolute -right-1.5 -top-1.5 rounded-full bg-zinc-900 p-0.5 text-zinc-300 ring-1 ring-zinc-600 hover:text-white"><XIcon className="w-3 h-3" /></button>
+              {images.map((img, i) => (
+                <span key={i} className="flex flex-col items-center gap-1">
+                  <span className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={img.url} alt={`Attachment ${i + 1}`} className="h-12 w-12 rounded-lg border border-zinc-700 object-cover" />
+                    <button type="button" onClick={() => setImages((l) => l.filter((_, k) => k !== i))} aria-label="Remove picture" className="absolute -right-1.5 -top-1.5 rounded-full bg-zinc-900 p-0.5 text-zinc-300 ring-1 ring-zinc-600 hover:text-white"><XIcon className="w-3 h-3" /></button>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setImages((l) => l.map((x, k) => (k === i ? { ...x, mode: x.mode === 'text' ? 'design' : 'text' } : x)))}
+                    title="Text: the words in the picture are copied. Design: the look is described and the picture itself is shown to agents that can see."
+                    className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${img.mode === 'design' ? 'bg-[#d4af37] text-black' : 'bg-zinc-800 text-zinc-300'}`}
+                  >
+                    {img.mode === 'design' ? 'Design' : 'Text'}
+                  </button>
                 </span>
               ))}
               {files.map((f, i) => (
@@ -542,7 +552,7 @@ export function OfficeView() {
                 </span>
               ))}
             </div>
-            {images.length > 0 && <p className="text-[10px] text-zinc-500">The text in each picture is read once (a few cents at most) and added to the brief, so every agent can use it.</p>}
+            {images.length > 0 && <p className="text-[10px] text-zinc-500">Tap Text / Design under each picture. Text = the words are copied into the brief (keyword lists, tables). Design = the look is described in words for every agent, and the picture itself is shown to agents that can see (Claude and Gemini); use it for design references, up to 3.</p>}
             <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
               <input type="checkbox" checked={deepThink} onChange={(e) => setDeepThink(e.target.checked)} className="accent-[#d4af37]" />
               <Brain className="w-3.5 h-3.5 text-[#d4af37]" /> Deep think (boss uses Opus instead of Sonnet; slower, costs more)

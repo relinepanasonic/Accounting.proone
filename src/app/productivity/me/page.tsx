@@ -6,18 +6,17 @@ import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { clientMask } from '@/lib/auth/client-privacy';
 import { loadPeople, type Person } from '@/lib/productivity/activity';
 import { loadDayPlan, loadMonthEvents } from '@/lib/productivity/plan';
-import { loadDeadlines, loadLeadChoices, loadNotes, loadTasks, loadVisits, loadWeather, visitDay, visitTime } from '@/lib/productivity/planner';
+import { loadDeadlines, loadLeadChoices, loadNotes, loadTasks, loadVisits, visitDay, visitTime } from '@/lib/productivity/planner';
 import { assignedClients } from '@/lib/kpi/load';
 import { addDays, todayJakarta } from '@/lib/kpi/calendar';
 import { MonthGrid, StatTiles } from '@/components/productivity/PlanViews';
 import { PlanList } from '@/components/productivity/PlanList';
 import { ProductivityTabs } from '@/components/productivity/ProductivityTabs';
 import { ClockHeader } from '@/components/productivity/today/ClockHeader';
-import { FocusTimer } from '@/components/productivity/today/FocusTimer';
 import { NotesWidget } from '@/components/productivity/today/NotesWidget';
 import { TasksWidget } from '@/components/productivity/today/TasksWidget';
 import { PictureWithLeads } from '@/components/productivity/today/PictureWithLeads';
-import { DeadlinesWidget, ScheduleWidget, WeatherWidget, Widget, type ScheduleItem } from '@/components/productivity/today/Widgets';
+import { DeadlinesWidget, ScheduleWidget, Widget, type ScheduleItem } from '@/components/productivity/today/Widgets';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,13 +45,12 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const lastDay = `${month}-${String(new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5)), 0)).getUTCDate()).padStart(2, '0')}`;
 
   const db = createAdminClient();
-  const [plan, events, visitsRes, tasksRes, notes, weather, leads, adClients, adminClients] = await Promise.all([
+  const [plan, events, visitsRes, tasksRes, notes, leads, adClients, adminClients] = await Promise.all([
     loadDayPlan(person, ctx.role, ws, selected),
     loadMonthEvents(person, ctx.role, ws, month, (name, assigned) => mask.name(name, assigned)),
     loadVisits(ws, { userId: ctx.role === 'sales' ? ctx.userId : undefined, fromIso: `${month}-01T00:00:00+07:00`, toIso: `${addDays(lastDay, 1)}T00:00:00+07:00`, limit: 300 }),
     loadTasks(ws, { userId: ctx.userId }),
     loadNotes(ws, ctx.userId),
-    loadWeather(),
     canVisit ? loadLeadChoices(ws, { userId: ctx.userId, all: ctx.role !== 'sales' }) : Promise.resolve([]),
     assignedClients(db, ws, ctx.userId, 'advertising'),
     assignedClients(db, ws, ctx.userId, 'admin'),
@@ -97,11 +95,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
         <div className="lg:col-span-4"><MonthGrid month={month} selected={selected} today={today} marked={marked} base="/productivity/me" /></div>
         <div className="lg:col-span-4"><ScheduleWidget items={schedule} dayLabel={dayLabel} /></div>
-        {/* Weather and the focus timer are for the big screen; the phone layout keeps to the work. */}
-        <div className="hidden lg:col-span-4 lg:block"><WeatherWidget weather={weather} /></div>
-
-        <Widget className="lg:col-span-7"><TasksWidget tasks={tasksRes.tasks} today={today} compact /></Widget>
-        <Widget className="hidden lg:col-span-5 lg:block"><FocusTimer /></Widget>
+        <Widget className="lg:col-span-4"><TasksWidget tasks={tasksRes.tasks} today={today} compact /></Widget>
 
         <Widget title={dutiesTitle} className="lg:col-span-12">
           <div className="mb-4"><StatTiles stats={plan.stats} /></div>

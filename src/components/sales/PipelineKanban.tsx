@@ -391,7 +391,7 @@ export function PipelineKanban({
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={(e: any) => setActiveDeal(e.active.data.current.deal)} onDragEnd={handleDragEnd}>
-      <div className="flex flex-col h-[calc(100vh-140px)]">
+      <div className="flex flex-col h-[calc(100dvh-9rem)] lg:h-[calc(100dvh-4.25rem)]">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4 px-4 lg:px-8 shrink-0 mt-4">
           <div>
             <h1 className="text-2xl font-extrabold text-zinc-100 font-serif">Sales Pipeline</h1>
@@ -416,7 +416,7 @@ export function PipelineKanban({
           </div>
         )}
 
-        <div className="flex-1 overflow-x-auto overflow-y-hidden px-4 lg:px-8 pb-8 flex gap-5 custom-scrollbar">
+        <div className="flex-1 overflow-x-auto overflow-y-hidden px-4 lg:px-8 pb-3 flex gap-5 custom-scrollbar">
           {PIPELINE_STAGES.map((stage) => {
             const list = deals.filter((d) => d.stage === stage);
             return (

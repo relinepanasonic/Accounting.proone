@@ -385,7 +385,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
               value={clientId}
               onChange={setClientId}
               options={localClients
-                .filter((c: any) => c.contact_type !== 'vendor')
+                .filter((c: any) => c.contact_type !== 'vendor' || c.id === initialData?.clientId)
                 .map((c: any) => {
                   let sourceStr = '';
                   if (activeWorkspaceId === '11111111-1111-1111-1111-111111111111' && availableWorkspaces) {

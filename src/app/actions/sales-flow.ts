@@ -197,7 +197,8 @@ export async function requestInvoice(dealId: string, items: RequestItem[], note:
   const total = requestTotal(clean);
   // The card stays in Negotiation ("waiting for Accounting") until the invoice exists; then it moves to Waiting Payment.
   await db.from('crm_deals').update({ invoice_requested_at: now, value: total, updated_at: now }).eq('id', dealId);
-  await db.from('clients').update({ is_prospect: false }).eq('id', deal.client_id); // Accounting can see the client from now on
+  // Accounting can see the client from now on, and it is listed as a client (not a vendor) in Contacts.
+  await db.from('clients').update({ is_prospect: false, contact_type: 'client' }).eq('id', deal.client_id);
 
   const { data: client } = await db.from('clients').select('name').eq('id', deal.client_id).maybeSingle();
   await notify(db, {

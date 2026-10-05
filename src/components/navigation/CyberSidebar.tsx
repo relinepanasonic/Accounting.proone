@@ -48,6 +48,7 @@ const OPTIMIZING_ICONS: Record<string, React.ReactNode> = {
   Admin: <Shield className="w-3.5 h-3.5" />,
   Sales: <ArrowUpRight className="w-3.5 h-3.5" />,
   Advertiser: <Megaphone className="w-3.5 h-3.5" />,
+  Clients: <Users className="w-3.5 h-3.5" />,
 };
 
 const ACCOUNTING_ICONS: Record<string, React.ReactNode> = {

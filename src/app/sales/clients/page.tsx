@@ -4,7 +4,6 @@ import { createAdminClient } from '@/lib/api/supabase-admin';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { clientMask } from '@/lib/auth/client-privacy';
 import { loadClientRows } from '@/lib/sales/client-table';
-import { loadHandlers } from '@/lib/sales/people';
 import { ClientProjectsTable } from '@/components/sales/ClientProjectsTable';
 import { ReceivablesSection } from '@/components/sales/ReceivablesSection';
 
@@ -15,13 +14,11 @@ export default async function SalesClientsPage() {
   const { activeWorkspaceId, role, userId, userEmail, availableWorkspaces } = await getAuthenticatedWorkspaceContext(supabase);
   const mask = clientMask({ userEmail, availableWorkspaces });
   const db = createAdminClient();
-  const owner = role === 'superadmin' || role === 'founder';
 
   const rows = await loadClientRows(db, activeWorkspaceId, {
     salesmanId: role === 'sales' ? userId || undefined : undefined,
     maskName: (name, ws) => mask.name(name, ws, 'Client'),
   });
-  const handlers = owner ? await loadHandlers(db, activeWorkspaceId) : null;
   const clients = new Set(rows.map((r) => r.clientId)).size;
 
   return (
@@ -30,7 +27,6 @@ export default async function SalesClientsPage() {
         <h1 className="text-2xl font-extrabold text-zinc-100 font-serif">Clients</h1>
         <p className="text-sm text-zinc-400 mt-1">
           Every product each client took, from the moment its invoice exists. Pick the project start date once the invoice is paid; the end date follows from each product&apos;s length.
-          {owner && ' Choose who handles each client: they will see it under Advertiser or Admin.'}
         </p>
         <p className="mt-2 text-xs text-zinc-500">{clients} client{clients === 1 ? '' : 's'} · {rows.length} product line{rows.length === 1 ? '' : 's'}</p>
       </div>
@@ -40,8 +36,6 @@ export default async function SalesClientsPage() {
         showStatus
         canEditStart
         canEditNames
-        advertisers={handlers?.advertisers}
-        admins={handlers?.admins}
       />
 
       {role !== 'sales' && (

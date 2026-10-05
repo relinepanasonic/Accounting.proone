@@ -62,9 +62,10 @@ export function DescriptionBullets({
       )}
       <ul className="space-y-0.5 mt-0.5 list-none pl-0">
         {bullets.map((line, idx) => (
-          <li key={idx} className={`flex items-start gap-2 text-xs leading-tight ${bulletClassName || subTextColor}`}>
-            <span className={`inline-block mt-1 w-1 h-1 rounded-full flex-shrink-0 ${dotColor}`} />
-            <span>{line}</span>
+          // Block layout with an absolutely placed dot (no flex): wrapped lines keep a reliable height, also when drawn into the PDF picture.
+          <li key={idx} className={`relative block pl-3 text-xs leading-snug break-words ${bulletClassName || subTextColor}`} style={{ whiteSpace: 'normal' }}>
+            <span className={`absolute left-0 top-[0.45em] inline-block w-1 h-1 rounded-full ${dotColor}`} />
+            {line}
           </li>
         ))}
       </ul>

@@ -7,9 +7,9 @@ import { HIDDEN_CLIENT } from '@/lib/auth/client-privacy';
  * so row rules apply) and by the public share link (a service client, restricted to the one invoice by id).
  */
 export async function InvoiceDocumentView({
-  db, id, isReceipt = false, hideClient = false, shareMode = false, autoDownload = false,
+  db, id, isReceipt = false, hideClient = false, shareMode = false, autoDownload = false, embedPdf = false,
 }: {
-  db: any; id: string; isReceipt?: boolean; hideClient?: boolean; shareMode?: boolean; autoDownload?: boolean;
+  db: any; id: string; isReceipt?: boolean; hideClient?: boolean; shareMode?: boolean; autoDownload?: boolean; embedPdf?: boolean;
 }) {
   // 1. Fetch parent invoice with relational joins
   const { data: inv } = await db
@@ -153,6 +153,7 @@ export async function InvoiceDocumentView({
     <InvoicePDFDocument
       shareMode={shareMode}
       autoDownload={autoDownload}
+      embedPdf={embedPdf}
       invoiceId={id}
       amountPaid={Number(inv?.amount_paid || 0)}
       payments={payments}

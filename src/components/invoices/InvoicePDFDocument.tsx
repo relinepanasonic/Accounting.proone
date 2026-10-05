@@ -70,6 +70,8 @@ export interface InvoiceDocumentProps {
   shareMode?: boolean;
   /** Start the PDF download as soon as the page has loaded (the Download button on a pipeline card). */
   autoDownload?: boolean;
+  /** Hand the finished PDF to the page that embeds this one (postMessage) instead of saving it. */
+  embedPdf?: boolean;
 }
 
 export function InvoicePDFDocument({
@@ -105,6 +107,7 @@ export function InvoicePDFDocument({
   dppAmount,
   shareMode = false,
   autoDownload = false,
+  embedPdf = false,
 }: Partial<InvoiceDocumentProps>) {
   const isQuotation = documentType === 'QUOTATION';
   const isReceipt = documentType === 'RECEIPT';
@@ -201,9 +204,17 @@ export function InvoicePDFDocument({
         pdf.addPage();
         pdf.addImage(dataUrl, 'PNG', 0, -shown, pageW, imgH);
       }
+      if (embedPdf) {
+        window.parent.postMessage({ type: 'invoice-pdf', filename: getFormattedFilename(), blob: pdf.output('blob') }, window.location.origin);
+        return;
+      }
       pdf.save(getFormattedFilename());
     } catch (e: any) {
       console.error('Failed to generate PDF, falling back to window.print', e);
+      if (embedPdf) {
+        window.parent.postMessage({ type: 'invoice-pdf-error', message: e?.message || 'Could not make the PDF.' }, window.location.origin);
+        return;
+      }
       alert('PDF direct download failed: ' + (e?.message || 'Unknown error') + '. Falling back to print preview.');
       document.title = getFormattedFilename();
       window.print();

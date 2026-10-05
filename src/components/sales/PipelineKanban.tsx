@@ -144,25 +144,77 @@ function DealCard({
       router.refresh();
     });
 
-  /** Make the share link, then open WhatsApp (or the download page) with it. */
-  const share = (how: 'wa' | 'wab' | 'download') =>
+  const [pdfReady, setPdfReady] = useState<{ file: File; text: string; phone: string } | null>(null);
+  const [preparing, setPreparing] = useState(false);
+
+  /** Opens the invoice page in a hidden frame; it makes the PDF and posts the file back to us. */
+  const fetchPdf = (token: string) =>
+    new Promise<{ blob: Blob; filename: string }>((resolve, reject) => {
+      const frame = document.createElement('iframe');
+      frame.style.cssText = 'position:fixed;left:-10000px;top:0;width:900px;height:1300px;border:0;opacity:0;pointer-events:none';
+      frame.setAttribute('aria-hidden', 'true');
+      const finish = () => {
+        window.removeEventListener('message', onMessage);
+        clearTimeout(timer);
+        frame.remove();
+      };
+      const onMessage = (e: MessageEvent) => {
+        if (e.origin !== window.location.origin) return;
+        if (e.data?.type === 'invoice-pdf') { finish(); resolve({ blob: e.data.blob, filename: e.data.filename }); }
+        else if (e.data?.type === 'invoice-pdf-error') { finish(); reject(new Error(e.data.message || 'Could not make the PDF.')); }
+      };
+      const timer = setTimeout(() => { finish(); reject(new Error('The PDF took too long to prepare. Try again.')); }, 45000);
+      window.addEventListener('message', onMessage);
+      frame.src = `${window.location.origin}/share/invoice/${token}?dl=embed`;
+      document.body.appendChild(frame);
+    });
+
+  /** Share the PDF file itself: the phone's share sheet (WhatsApp, WA Business...). Browsers that cannot share files get the PDF saved plus the chat opened. */
+  const deliver = async (p: { file: File; text: string; phone: string }) => {
+    const nav: any = navigator;
+    if (nav.canShare?.({ files: [p.file] })) {
+      try {
+        await nav.share({ files: [p.file], text: p.text });
+        setPdfReady(null);
+        return;
+      } catch (err: any) {
+        if (err?.name === 'AbortError') return; // the person closed the share sheet
+        if (err?.name === 'NotAllowedError') { setPdfReady(p); return; } // the tap was too long ago: ask for one more tap
+      }
+    }
+    const url = URL.createObjectURL(p.file);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = p.file.name;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    window.open(`https://wa.me/${p.phone}?text=${encodeURIComponent(p.text)}`, '_blank');
+    setPdfReady(null);
+  };
+
+  /** Make the PDF of the invoice and send it (not a link). */
+  const sendPdf = async () => {
+    setPreparing(true);
+    try {
+      const res = await createInvoiceShare(deal.id);
+      if (!res.success) return onError(res.error);
+      const { blob, filename } = await fetchPdf(res.token);
+      const file = new File([blob], filename.endsWith('.pdf') ? filename : `${res.invoiceNumber}.pdf`, { type: 'application/pdf' });
+      const text = `Halo ${res.clientName}, berikut invoice ${res.invoiceNumber} sebesar Rp ${Math.round(res.total).toLocaleString('id-ID')}. File PDF terlampir.`;
+      await deliver({ file, text, phone: waPhone(res.phone) });
+    } catch (err: any) {
+      onError(err?.message || 'Could not prepare the PDF.');
+    } finally {
+      setPreparing(false);
+    }
+  };
+
+  /** The old page with a Download button (a PDF saved on this computer). */
+  const downloadPdf = () =>
     start(async () => {
       const res = await createInvoiceShare(deal.id);
       if (!res.success) return onError(res.error);
-      const link = `${window.location.origin}/share/invoice/${res.token}`;
-      if (how === 'download') {
-        window.open(`${link}?dl=1`, '_blank');
-        return;
-      }
-      const text = `Halo ${res.clientName}, berikut invoice ${res.invoiceNumber} sebesar Rp ${Math.round(res.total).toLocaleString('id-ID')}.\nBuka dan unduh di sini: ${link}`;
-      const phone = waPhone(res.phone);
-      const web = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
-      // WhatsApp Business has its own Android package; elsewhere the phone decides which app opens wa.me.
-      if (how === 'wab' && /Android/i.test(navigator.userAgent)) {
-        window.location.href = `intent://send/?${phone ? `phone=${phone}&` : ''}text=${encodeURIComponent(text)}#Intent;scheme=smsto;package=com.whatsapp.w4b;S.browser_fallback_url=${encodeURIComponent(web)};end`;
-      } else {
-        window.open(web, '_blank');
-      }
+      window.open(`${window.location.origin}/share/invoice/${res.token}?dl=1`, '_blank');
     });
 
   const preview = deal.request ? computeProjectTerms(deal.request.items, startDate) : { endDate: null, deliverables: [] };
@@ -302,9 +354,14 @@ function DealCard({
           {canAct && waiting && !hasInvoice && <Btn tone="red" disabled={pending} onClick={() => run(() => cancelInvoiceRequest(deal.request!.id))}><X className="w-3.5 h-3.5" /> Cancel request</Btn>}
           {canAct && hasInvoice && (
             <>
-              <Btn tone="green" disabled={pending} onClick={() => share('wa')}><MessageCircle className="w-3.5 h-3.5" /> WhatsApp</Btn>
-              <Btn tone="green" disabled={pending} onClick={() => share('wab')}><Send className="w-3.5 h-3.5" /> WA Business</Btn>
-              <Btn tone="ghost" disabled={pending} onClick={() => share('download')}><Download className="w-3.5 h-3.5" /> Download</Btn>
+              {pdfReady ? (
+                <Btn tone="green" onClick={() => deliver(pdfReady)}><Send className="w-3.5 h-3.5" /> PDF ready: tap to send</Btn>
+              ) : (
+                <Btn tone="green" disabled={pending || preparing} onClick={sendPdf}>
+                  {preparing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageCircle className="w-3.5 h-3.5" />} {preparing ? 'Preparing PDF...' : 'Send PDF (WhatsApp)'}
+                </Btn>
+              )}
+              <Btn tone="ghost" disabled={pending || preparing} onClick={downloadPdf}><Download className="w-3.5 h-3.5" /> Download PDF</Btn>
             </>
           )}
           {viewer.isFinance && hasInvoice && !won && <Btn tone="ghost" disabled={pending} onClick={() => run(() => approveWithoutPayment(deal.id))}><ShieldCheck className="w-3.5 h-3.5" /> Approve without payment</Btn>}

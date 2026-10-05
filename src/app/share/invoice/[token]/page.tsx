@@ -31,5 +31,6 @@ export default async function ShareInvoicePage({ params, searchParams }: { param
     );
   }
 
-  return <InvoiceDocumentView db={db} id={share.invoice_id} shareMode autoDownload={dl === '1'} />;
+  // dl=1: download straight away. dl=embed: used by the pipeline card (hidden frame) to get the PDF file for WhatsApp.
+  return <InvoiceDocumentView db={db} id={share.invoice_id} shareMode autoDownload={dl === '1' || dl === 'embed'} embedPdf={dl === 'embed'} />;
 }

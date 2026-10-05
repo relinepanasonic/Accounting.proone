@@ -7,6 +7,7 @@ import { ShopeeReportTracker } from '@/components/productivity/ShopeeReportTrack
 import { AdminUploadLog } from '@/components/productivity/AdminUploadLog';
 import { getDashboardUploadLog } from '@/lib/integrations/dashboard-uploads';
 import { formatCurrency } from '@/lib/utils/currency';
+import { DivisionTabs } from '@/components/productivity/DivisionTabs';
 import { Shield, ExternalLink, Mail, Phone, Clock, CheckCircle } from 'lucide-react';
 
 export default async function AdminDivisionPage() {
@@ -50,6 +51,7 @@ export default async function AdminDivisionPage() {
 
   return (
     <div className="p-4 lg:p-8 space-y-8 animate-in fade-in zoom-in-95 duration-300">
+      <DivisionTabs base="/productivity/admin" active="dashboard" />
       <div className="flex items-center gap-4">
         <div className="p-3 bg-[#d4af37]/10 rounded-xl text-[#d4af37]">
           <Shield className="w-8 h-8" />

@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { assignedClientIds } from '@/lib/assignments/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { AdvertiserManager } from '@/components/productivity/AdvertiserManager';
-import { Megaphone } from 'lucide-react';
+import { DivisionTabs } from '@/components/productivity/DivisionTabs';
 
 export default async function AdvertiserDivisionPage() {
   const supabase = await createClient();
@@ -27,6 +27,7 @@ export default async function AdvertiserDivisionPage() {
 
   return (
     <div className="p-4 lg:p-8 space-y-8 animate-in fade-in zoom-in-95 duration-300">
+      <DivisionTabs base="/productivity/advertiser" active="dashboard" />
       <AdvertiserManager clients={clients || []} />
     </div>
   );

@@ -6,23 +6,33 @@ import {
   DndContext, DragOverlay, closestCorners, KeyboardSensor, PointerSensor, TouchSensor, useSensor, useSensors, useDroppable, useDraggable,
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { ArrowLeft, ArrowRight, Calendar, CheckCircle2, Clock, Download, FileText, Loader2, MessageCircle, Play, Send, ShieldCheck, User, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Calendar, CheckCircle2, Clock, Download, FileText, Loader2, MessageCircle, Play, Send, ShieldCheck, Snowflake, User, X } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils/currency';
-import { PIPELINE_STAGES, MANUAL_STAGES, computeProjectTerms, type RequestItem } from '@/lib/sales/flow';
-import { approveWithoutPayment, cancelInvoiceRequest, createInvoiceShare, moveDeal, startProject } from '@/app/actions/sales-flow';
+import { PIPELINE_STAGES, MANUAL_STAGES, PROPOSAL_STAGES, computeProjectTerms, followUpDueDay, stageLabel, type NegotiationNote, type RequestItem } from '@/lib/sales/flow';
+import { addNegotiationNote, approveWithoutPayment, askAcc, cancelInvoiceRequest, createInvoiceShare, decideAcc, markFollowedUp, markProposalSent, moveDeal, startProject } from '@/app/actions/sales-flow';
 import { NewLeadModal } from '@/components/sales/NewLeadModal';
 import { RequestInvoiceModal, type CatalogProduct } from '@/components/sales/RequestInvoiceModal';
 
 const STAGE_COLORS: Record<string, string> = {
   Lead: 'bg-zinc-400',
   Contacted: 'bg-blue-400',
-  'Proposal Sent': 'bg-purple-400',
   Negotiation: 'bg-amber-400',
   Invoice: 'bg-sky-400',
   Deal: 'bg-emerald-400',
+  'Cold Case': 'bg-slate-500',
 };
 
 interface Deal {
+  created_at: string;
+  stage_changed_at: string | null;
+  last_followup_at: string | null;
+  proposal_sent_at: string | null;
+  negotiation_notes: NegotiationNote[];
+  neg_acc_status: 'requested' | 'approved' | 'rejected' | null;
+  neg_acc_requested_from_name: string | null;
+  neg_acc_by_name: string | null;
+  neg_acc_at: string | null;
+  neg_acc_comment: string | null;
   id: string;
   title: string;
   stage: string;
@@ -46,7 +56,10 @@ interface Viewer {
   role: string;
   userId: string | null;
   isFinance: boolean;
+  isOwner: boolean;
 }
+
+const todayJakarta = () => new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
 
 const stamp = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
@@ -71,7 +84,7 @@ function DroppableColumn({ id, total, count, children }: { id: string; total: nu
     >
       <div className="p-4 flex items-center gap-3 shrink-0">
         <div className={`w-2.5 h-2.5 rounded-full ${STAGE_COLORS[id] || 'bg-zinc-500'} opacity-80`} />
-        <h3 className="font-bold text-[15px] text-zinc-100 tracking-wide">{id}</h3>
+        <h3 className="font-bold text-[15px] text-zinc-100 tracking-wide">{stageLabel(id)}</h3>
         <span className="text-xs font-medium text-zinc-400 bg-zinc-800/50 px-2 py-0.5 rounded-full">{count}</span>
       </div>
       <div className="px-4 pb-3 text-xs font-semibold text-[#d4af37]/80 border-b border-zinc-800/50 flex justify-between">
@@ -98,15 +111,18 @@ function Btn({ children, onClick, tone = 'gold', disabled }: { children: React.R
 }
 
 function DealCard({
-  deal, viewer, products, onMove, onError,
+  deal, viewer, products, approvers, onMove, onError,
 }: {
-  deal: Deal; viewer: Viewer; products: CatalogProduct[];
+  deal: Deal; viewer: Viewer; products: CatalogProduct[]; approvers: { id: string; name: string }[];
   onMove?: (id: string, dir: 'left' | 'right') => void; onError: (m: string) => void;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [requesting, setRequesting] = useState(false);
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [note, setNote] = useState('');
+  const [approver, setApprover] = useState(approvers[0]?.id || '');
+  const [accComment, setAccComment] = useState('');
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: deal.id, data: { deal } });
 
   const manual = MANUAL_STAGES.includes(deal.stage);
@@ -114,6 +130,11 @@ function DealCard({
   const hasInvoice = Boolean(deal.invoice_number && deal.invoice_generated_at);
   const won = deal.stage === 'Deal';
   const canAct = viewer.isFinance || viewer.role === 'sales';
+  const inNegotiation = deal.stage === 'Negotiation';
+  const accOk = deal.neg_acc_status === 'approved';
+  const dueDay = followUpDueDay(deal);
+  const today = todayJakarta();
+  const proposalOpen = PROPOSAL_STAGES.includes(deal.stage) && !deal.proposal_sent_at;
 
   const run = (fn: () => Promise<{ success: boolean; error?: string }>, after?: () => void) =>
     start(async () => {
@@ -175,6 +196,88 @@ function DealCard({
           <div className="flex items-center gap-1.5 text-xs text-zinc-500 mb-2"><Calendar className="w-3.5 h-3.5" /> Close {day(deal.expected_close_date)}</div>
         )}
 
+        {/* ---- tasks while the lead is warming up ---- */}
+        {canAct && dueDay && (
+          <div className="mb-3 space-y-2 rounded-lg border border-zinc-800 bg-black/20 p-2.5 text-[11px]" {...stopDrag}>
+            <div className="flex items-center justify-between gap-2">
+              <span className={dueDay < today ? 'text-red-300' : dueDay === today ? 'text-amber-300' : 'text-zinc-400'}>
+                {dueDay < today ? `Follow-up overdue since ${day(dueDay)}` : dueDay === today ? 'Follow up today' : `Next follow-up ${day(dueDay)}`}
+              </span>
+              <Btn tone="ghost" disabled={pending} onClick={() => run(() => markFollowedUp(deal.id))}><CheckCircle2 className="w-3.5 h-3.5" /> Followed up</Btn>
+            </div>
+            {PROPOSAL_STAGES.includes(deal.stage) && (
+              proposalOpen ? (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-amber-300">Task: send the proposal</span>
+                  <Btn tone="gold" disabled={pending} onClick={() => run(() => markProposalSent(deal.id))}><Send className="w-3.5 h-3.5" /> Proposal sent</Btn>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 text-emerald-300"><CheckCircle2 className="w-3 h-3" /> Proposal sent {stamp(deal.proposal_sent_at)}</div>
+              )
+            )}
+          </div>
+        )}
+        {deal.stage === 'Cold Case' && (
+          <div className="mb-3 flex items-center gap-1.5 rounded-lg border border-slate-600/40 bg-slate-500/10 p-2.5 text-[11px] text-slate-300"><Snowflake className="w-3.5 h-3.5" /> Cold case: no more follow-up tasks. Drag it back to Lead to wake it up.</div>
+        )}
+
+        {/* ---- negotiation: notes and the ACC of a superadmin / the founder ---- */}
+        {inNegotiation && (
+          <div className="mb-3 space-y-2.5 rounded-lg border border-amber-500/20 bg-amber-500/5 p-2.5 text-[11px]" {...stopDrag}>
+            <div className="font-bold uppercase tracking-wider text-amber-300">Negotiation notes</div>
+            {deal.negotiation_notes.length === 0 && <div className="text-zinc-500">No notes yet. Write what the client asked and what was agreed.</div>}
+            {deal.negotiation_notes.slice(-3).map((n, i) => (
+              <div key={i} className="rounded-md bg-black/30 p-2">
+                <div className="mb-0.5 text-[10px] text-zinc-500">{n.by} · {stamp(n.at)}</div>
+                <div className="whitespace-pre-wrap text-zinc-200">{n.text}</div>
+              </div>
+            ))}
+            {deal.negotiation_notes.length > 3 && (
+              <details className="text-zinc-400">
+                <summary className="cursor-pointer">Earlier notes ({deal.negotiation_notes.length - 3})</summary>
+                {deal.negotiation_notes.slice(0, -3).map((n, i) => (
+                  <div key={i} className="mt-1 rounded-md bg-black/30 p-2"><div className="text-[10px] text-zinc-500">{n.by} · {stamp(n.at)}</div><div className="whitespace-pre-wrap text-zinc-300">{n.text}</div></div>
+                ))}
+              </details>
+            )}
+            {canAct && (
+              <div className="flex gap-2">
+                <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Add a negotiation note" className="min-w-0 flex-1 rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-100" />
+                <Btn tone="gold" disabled={pending || note.trim().length < 2} onClick={() => run(() => addNegotiationNote(deal.id, note), () => setNote(''))}>Add</Btn>
+              </div>
+            )}
+
+            <div className="border-t border-amber-500/20 pt-2">
+              <div className="mb-1 font-bold uppercase tracking-wider text-amber-300">ACC (superadmin / founder)</div>
+              {accOk ? (
+                <div className="flex items-center gap-1.5 text-emerald-300"><ShieldCheck className="w-3.5 h-3.5" /> ACC by <b>{deal.neg_acc_by_name}</b> · {stamp(deal.neg_acc_at)}{deal.neg_acc_comment ? <span className="text-zinc-400"> · {deal.neg_acc_comment}</span> : null}</div>
+              ) : (
+                <div className="space-y-1.5">
+                  {deal.neg_acc_status === 'requested' && <div className="text-amber-300">Waiting for ACC from {deal.neg_acc_requested_from_name || 'an owner'}.</div>}
+                  {deal.neg_acc_status === 'rejected' && <div className="text-red-300">Sent back by {deal.neg_acc_by_name}{deal.neg_acc_comment ? `: ${deal.neg_acc_comment}` : ''}</div>}
+                  {canAct && deal.neg_acc_status !== 'requested' && !viewer.isOwner && (
+                    <div className="flex gap-2">
+                      <select value={approver} onChange={(e) => setApprover(e.target.value)} className="min-w-0 flex-1 rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-100">
+                        {approvers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                      <Btn tone="gold" disabled={pending || !approver} onClick={() => run(() => askAcc(deal.id, approver))}>Ask ACC</Btn>
+                    </div>
+                  )}
+                  {viewer.isOwner && (
+                    <div className="space-y-1.5">
+                      <input value={accComment} onChange={(e) => setAccComment(e.target.value)} placeholder="Comment (optional)" className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-100" />
+                      <div className="flex gap-2">
+                        <Btn tone="green" disabled={pending} onClick={() => run(() => decideAcc(deal.id, true, accComment))}><ShieldCheck className="w-3.5 h-3.5" /> ACC</Btn>
+                        <Btn tone="red" disabled={pending} onClick={() => run(() => decideAcc(deal.id, false, accComment))}>Send back</Btn>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* ---- milestones: when it was requested, when the invoice was made ---- */}
         {(deal.invoice_requested_at || hasInvoice) && (
           <div className="space-y-1 rounded-lg border border-zinc-800 bg-black/20 p-2.5 text-[11px]">
@@ -194,7 +297,8 @@ function DealCard({
 
         {/* ---- actions ---- */}
         <div className="mt-3 flex flex-wrap gap-2" {...stopDrag}>
-          {canAct && manual && <Btn onClick={() => setRequesting(true)}><FileText className="w-3.5 h-3.5" /> Request invoice</Btn>}
+          {canAct && inNegotiation && accOk && !waiting && !hasInvoice && <Btn onClick={() => setRequesting(true)}><FileText className="w-3.5 h-3.5" /> Request invoice</Btn>}
+          {canAct && inNegotiation && !accOk && <span className="text-[10px] text-zinc-500">Request invoice opens after ACC.</span>}
           {canAct && waiting && !hasInvoice && <Btn tone="red" disabled={pending} onClick={() => run(() => cancelInvoiceRequest(deal.request!.id))}><X className="w-3.5 h-3.5" /> Cancel request</Btn>}
           {canAct && hasInvoice && (
             <>
@@ -230,8 +334,8 @@ function DealCard({
         {/* arrows for phones (no drag) */}
         {manual && onMove && (
           <div className="mt-3 flex justify-between lg:hidden" {...stopDrag}>
-            <button onClick={() => onMove(deal.id, 'left')} disabled={PIPELINE_STAGES.indexOf(deal.stage as any) === 0} className="p-1.5 rounded-full border border-zinc-700 text-zinc-300 disabled:opacity-20"><ArrowLeft className="w-4 h-4" /></button>
-            <button onClick={() => onMove(deal.id, 'right')} disabled={deal.stage === 'Negotiation'} className="p-1.5 rounded-full border border-zinc-700 text-zinc-300 disabled:opacity-20"><ArrowRight className="w-4 h-4" /></button>
+            <button onClick={() => onMove(deal.id, 'left')} disabled={MANUAL_STAGES.indexOf(deal.stage) <= 0} className="p-1.5 rounded-full border border-zinc-700 text-zinc-300 disabled:opacity-20"><ArrowLeft className="w-4 h-4" /></button>
+            <button onClick={() => onMove(deal.id, 'right')} disabled={MANUAL_STAGES.indexOf(deal.stage) >= MANUAL_STAGES.length - 1} className="p-1.5 rounded-full border border-zinc-700 text-zinc-300 disabled:opacity-20"><ArrowRight className="w-4 h-4" /></button>
           </div>
         )}
       </div>
@@ -242,9 +346,9 @@ function DealCard({
 }
 
 export function PipelineKanban({
-  initialDeals, products, salesmen, viewer, currentMonth,
+  initialDeals, products, salesmen, approvers, viewer, currentMonth,
 }: {
-  initialDeals: Deal[]; products: CatalogProduct[]; salesmen: { id: string; name: string }[]; viewer: Viewer; currentMonth: string;
+  initialDeals: Deal[]; products: CatalogProduct[]; salesmen: { id: string; name: string }[]; approvers: { id: string; name: string }[]; viewer: Viewer; currentMonth: string;
 }) {
   const router = useRouter();
   const [deals, setDeals] = useState(initialDeals);
@@ -281,7 +385,7 @@ export function PipelineKanban({
   const handleArrow = (dealId: string, dir: 'left' | 'right') => {
     const deal = deals.find((d) => d.id === dealId);
     if (!deal) return;
-    const next = PIPELINE_STAGES[PIPELINE_STAGES.indexOf(deal.stage as any) + (dir === 'left' ? -1 : 1)];
+    const next = MANUAL_STAGES[MANUAL_STAGES.indexOf(deal.stage) + (dir === 'left' ? -1 : 1)];
     if (next) moveTo(dealId, next);
   };
 
@@ -291,10 +395,10 @@ export function PipelineKanban({
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4 px-4 lg:px-8 shrink-0 mt-4">
           <div>
             <h1 className="text-2xl font-extrabold text-zinc-100 font-serif">Sales Pipeline</h1>
-            <p className="text-sm text-zinc-400 mt-1">Leads start here. Drag a card forward, then request its invoice. Won deals become projects.</p>
+            <p className="text-sm text-zinc-400 mt-1">Follow up each lead, negotiate, get the ACC, then request the invoice. Paid cards become the Deals of their month; unanswered leads go to Cold Case.</p>
           </div>
           <div className="flex items-center gap-3">
-            <label className="text-sm font-semibold text-zinc-400">Won in:</label>
+            <label className="text-sm font-semibold text-zinc-400">Deal month:</label>
             <input
               type="month"
               value={currentMonth}
@@ -318,7 +422,7 @@ export function PipelineKanban({
             return (
               <DroppableColumn key={stage} id={stage} total={list.reduce((s, d) => s + Number(d.value || 0), 0)} count={list.length}>
                 {list.map((deal) => (
-                  <DealCard key={deal.id} deal={deal} viewer={viewer} products={products} onMove={handleArrow} onError={setError} />
+                  <DealCard key={deal.id} deal={deal} viewer={viewer} products={products} approvers={approvers} onMove={handleArrow} onError={setError} />
                 ))}
               </DroppableColumn>
             );

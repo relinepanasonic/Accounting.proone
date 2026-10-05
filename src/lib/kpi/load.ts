@@ -287,7 +287,7 @@ async function adminKpi(db: Db, workspaceId: string, clients: ClientRef[], today
 }
 
 // ---------- sales ----------
-const WARM = ['Contacted', 'Proposal Sent', 'Negotiation'];
+const WARM = ['Contacted', 'Negotiation'];
 
 async function salesKpi(db: Db, workspaceId: string, assigned: ClientRef[], deals: any[], today: string): Promise<SalesKpi> {
   const month = monthKey(today);
@@ -305,7 +305,7 @@ async function salesKpi(db: Db, workspaceId: string, assigned: ClientRef[], deal
     } else if (d.stage === 'Lost') {
       if (String(d.updated_at || '').slice(0, 7) === month) funnel.lost++;
     }
-    if (d.stage !== 'Lost' && d.stage !== 'Deal' && d.stage !== 'Won') funnel.pipelineValue += v;
+    if (d.stage !== 'Lost' && d.stage !== 'Deal' && d.stage !== 'Won' && d.stage !== 'Cold Case') funnel.pipelineValue += v;
   }
 
   // The clients this person looks after: assigned for Sales, plus the clients of their deals.

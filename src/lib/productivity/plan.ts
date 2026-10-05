@@ -6,6 +6,7 @@ import { hasData, normalizeGroup } from '@/lib/advertiser/report-utils';
 import { adSessionTarget, addDays, daysBetween, monthStart, todayJakarta } from '@/lib/kpi/calendar';
 import { assignedClients, loadKpi } from '@/lib/kpi/load';
 import type { Person } from '@/lib/productivity/activity';
+import { followUpDueDay } from '@/lib/sales/flow';
 
 type Db = any;
 
@@ -107,19 +108,32 @@ async function dealTasks(db: Db, workspaceId: string, userId: string): Promise<P
   const hasProject = new Set((projects || []).map((p: any) => p.deal_id));
   const cName = new Map<string, string>((clients || []).map((c: any) => [c.id, c.name]));
   const inv = new Map<string, any>((invoices || []).map((i: any) => [i.id, i]));
-  const now = Date.now();
   const tasks: PlanTask[] = [];
 
+  const today = todayJakarta();
   for (const d of deals) {
     const client = cName.get(d.client_id) || d.lead_name || 'Client';
-    const idleDays = Math.floor((now - new Date(d.updated_at || d.created_at).getTime()) / 86400000);
     if (d.stage === 'Deal' && !hasProject.has(d.id)) {
-      tasks.push({ id: `d-${d.id}`, title: `Start the project: ${client}`, subtitle: 'Paid. Set the project start date.', category: 'Sales', done: false, urgent: true, href: '/sales/pipeline' });
+      tasks.push({ id: `d-${d.id}`, title: `Start the project: ${client}`, subtitle: 'Paid. Pick the project start date in Clients.', category: 'Sales', done: false, urgent: true, href: '/sales/clients' });
     } else if (d.stage === 'Invoice' && d.invoice_generated_at && !d.paid_at) {
       const i = inv.get(d.invoice_id);
       tasks.push({ id: `d-${d.id}`, title: `Send the invoice to ${client}`, subtitle: i?.invoice_number ? `${i.invoice_number} is ready to share` : 'Invoice is ready to share', category: 'Sales', done: false, urgent: false, href: '/sales/pipeline' });
-    } else if (['Lead', 'Contacted', 'Proposal Sent', 'Negotiation'].includes(d.stage) && idleDays >= 3) {
-      tasks.push({ id: `d-${d.id}`, title: `Follow up: ${client}`, subtitle: `${d.stage} · no change for ${idleDays} days`, category: 'Sales', done: false, urgent: idleDays >= 7, href: '/sales/pipeline', note: `${idleDays} d` });
+    } else if (d.stage === 'Negotiation') {
+      if (d.neg_acc_status === 'approved' && !d.invoice_requested_at && !d.invoice_id) {
+        tasks.push({ id: `d-${d.id}`, title: `Request the invoice: ${client}`, subtitle: `ACC by ${d.neg_acc_by_name || 'an owner'}`, category: 'Sales', done: false, urgent: false, href: '/sales/pipeline' });
+      } else if (d.neg_acc_status === 'rejected') {
+        tasks.push({ id: `d-${d.id}`, title: `Rework the negotiation: ${client}`, subtitle: d.neg_acc_comment ? `Sent back: ${d.neg_acc_comment}` : 'ACC sent it back', category: 'Sales', done: false, urgent: true, href: '/sales/pipeline' });
+      }
+    } else if (d.stage === 'Lead' || d.stage === 'Contacted') {
+      // Follow-up every 2 days in Lead, every week in Contacted, until the card is moved to Cold Case. The proposal is a one-time task.
+      const due = followUpDueDay(d);
+      if (due && due <= today) {
+        const late = Math.round((new Date(`${today}T12:00:00Z`).getTime() - new Date(`${due}T12:00:00Z`).getTime()) / 86400000);
+        tasks.push({ id: `f-${d.id}`, title: `Follow up: ${client}`, subtitle: `${d.stage} · every ${d.stage === 'Lead' ? '2 days' : 'week'}`, category: 'Sales', done: false, urgent: late >= 2, href: '/sales/pipeline', note: late > 0 ? `${late} d late` : 'today' });
+      }
+      if (!d.proposal_sent_at) {
+        tasks.push({ id: `p-${d.id}`, title: `Send the proposal: ${client}`, subtitle: `${d.stage} · one time`, category: 'Sales', done: false, urgent: false, href: '/sales/pipeline' });
+      }
     }
   }
   return tasks;

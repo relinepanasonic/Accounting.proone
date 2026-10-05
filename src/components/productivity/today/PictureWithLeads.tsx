@@ -13,7 +13,7 @@ export interface LeadChoice {
   stage: string;
 }
 
-const STAGES = ['All', 'Lead', 'Contacted', 'Proposal Sent', 'Negotiation', 'Invoice', 'Deal'];
+const STAGES = ['All', 'Lead', 'Contacted', 'Negotiation', 'Invoice', 'Deal', 'Cold Case'];
 const field = 'w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:border-[#d4af37]/60 focus:outline-none';
 const label = 'mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-zinc-400';
 

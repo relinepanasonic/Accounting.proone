@@ -95,7 +95,8 @@ export async function getPipelineDeals(month?: string) {
       .eq('workspace_id', activeWorkspaceId)
       .eq('pipeline_month', prevMonth)
       .neq('stage', 'Deal')
-      .neq('stage', 'Lost');
+      .neq('stage', 'Lost')
+      .neq('stage', 'Cold Case');
 
     if (prevDeals && prevDeals.length > 0) {
       const newDeals = prevDeals.map(d => {

@@ -3,50 +3,37 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { clientMask } from '@/lib/auth/client-privacy';
+import { assignedClientIds } from '@/lib/assignments/server';
 import { loadClientRows } from '@/lib/sales/client-table';
-import { loadHandlers } from '@/lib/sales/people';
 import { ClientProjectsTable } from '@/components/sales/ClientProjectsTable';
-import { ReceivablesSection } from '@/components/sales/ReceivablesSection';
+import { DivisionTabs } from '@/components/productivity/DivisionTabs';
 
-export const dynamic = 'force-dynamic';
-
-export default async function SalesClientsPage() {
+/** The Sales Client table, mirrored for Advertiser / Admin: only the clients a superadmin assigned to this person, up to Product. */
+export async function DivisionClients({ base, job, title }: { base: '/productivity/advertiser' | '/productivity/admin'; job: 'advertising' | 'admin'; title: string }) {
   const supabase = await createClient();
   const { activeWorkspaceId, role, userId, userEmail, availableWorkspaces } = await getAuthenticatedWorkspaceContext(supabase);
   const mask = clientMask({ userEmail, availableWorkspaces });
   const db = createAdminClient();
   const owner = role === 'superadmin' || role === 'founder';
 
+  const mine = owner ? undefined : await assignedClientIds(db, activeWorkspaceId, userId || undefined, job);
   const rows = await loadClientRows(db, activeWorkspaceId, {
-    salesmanId: role === 'sales' ? userId || undefined : undefined,
+    clientIds: mine,
     maskName: (name, ws) => mask.name(name, ws, 'Client'),
   });
-  const handlers = owner ? await loadHandlers(db, activeWorkspaceId) : null;
   const clients = new Set(rows.map((r) => r.clientId)).size;
 
   return (
-    <div className="p-4 lg:p-8 space-y-8 animate-in fade-in zoom-in-95 duration-300">
+    <div className="p-4 lg:p-8 space-y-6 animate-in fade-in zoom-in-95 duration-300">
+      <DivisionTabs base={base} active="client" />
       <div>
-        <h1 className="text-2xl font-extrabold text-zinc-100 font-serif">Clients</h1>
+        <h1 className="text-2xl font-extrabold text-zinc-100 font-serif">{title} · Clients</h1>
         <p className="text-sm text-zinc-400 mt-1">
-          Every product each client took, from the moment its invoice exists. Pick the project start date once the invoice is paid; the end date follows from each product&apos;s length.
-          {owner && ' Choose who handles each client: they will see it under Advertiser or Admin.'}
+          {owner ? 'All clients with an invoice. Assign who handles each one in Sales > Clients.' : 'The clients a superadmin assigned to you.'}
         </p>
         <p className="mt-2 text-xs text-zinc-500">{clients} client{clients === 1 ? '' : 's'} · {rows.length} product line{rows.length === 1 ? '' : 's'}</p>
       </div>
-
-      <ClientProjectsTable
-        rows={rows}
-        showStatus
-        canEditStart
-        canEditNames
-        advertisers={handlers?.advertisers}
-        admins={handlers?.admins}
-      />
-
-      {role !== 'sales' && (
-        <ReceivablesSection supabase={supabase} workspaceId={activeWorkspaceId} userEmail={userEmail} availableWorkspaces={availableWorkspaces} />
-      )}
+      <ClientProjectsTable rows={rows} showStatus={false} canEditStart={false} canEditNames={false} />
     </div>
   );
 }

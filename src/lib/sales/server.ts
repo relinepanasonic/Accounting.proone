@@ -1,3 +1,4 @@
+import type { RequestItem } from '@/lib/sales/flow';
 // Server-only helpers for the sales flow (not server actions: nothing here is callable from the browser).
 // They take a service-role client; the caller has already checked who is asking.
 type Db = any;
@@ -93,4 +94,31 @@ export async function onInvoicePaid(db: Db, invoiceId: string) {
       refId: deal.id,
     });
   }
+}
+
+/** The products sold on a deal: the invoice request, or (invoice made without one) the invoice lines matched to the catalog by name. */
+export async function dealItems(db: any, workspaceId: string, deal: { id: string; invoice_id: string | null }): Promise<RequestItem[]> {
+  let items: RequestItem[] = [];
+  const { data: req } = await db.from('invoice_requests').select('items').eq('deal_id', deal.id).eq('status', 'generated').order('requested_at', { ascending: false }).limit(1);
+  if (req?.[0]?.items?.length) {
+    items = req[0].items as RequestItem[];
+  } else if (deal.invoice_id) {
+    const { data: lines } = await db.from('invoice_line_items').select('package_name, description, quantity').eq('invoice_id', deal.invoice_id);
+    const { data: prods } = await db.from('products').select('*').eq('workspace_id', workspaceId);
+    items = (lines || []).map((l: any) => {
+      const key = String(l.package_name || l.description || '').trim().toLowerCase();
+      const p = (prods || []).find((x: any) => String(x.name).trim().toLowerCase() === key);
+      return {
+        product_id: p?.id || null,
+        name: l.package_name || l.description || 'Item',
+        quantity: Number(l.quantity || 1),
+        unit_price: 0,
+        scale: null,
+        duration_type: p?.duration_type || 'none',
+        duration_value: Number(p?.duration_value || 0),
+        deliverable_unit: p?.deliverable_unit || null,
+      } as RequestItem;
+    });
+  }
+  return items;
 }

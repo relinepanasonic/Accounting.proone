@@ -288,7 +288,7 @@ function SalesSection({ k }: { k: SalesKpi }) {
             </div>
           ))}
         </div>
-        <p className="mt-3 text-[11px] text-zinc-500">Warm = Contacted, Proposal Sent, Negotiation. Closing counts deals won this month. Open pipeline: {rp(f.pipelineValue)}{f.lost ? ` · ${f.lost} lost this month` : ''}.</p>
+        <p className="mt-3 text-[11px] text-zinc-500">Warm = Contacted, Negotiation. Closing counts deals won this month. Open pipeline: {rp(f.pipelineValue)}{f.lost ? ` · ${f.lost} lost this month` : ''}.</p>
       </Card>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

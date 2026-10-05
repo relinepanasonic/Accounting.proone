@@ -30,6 +30,7 @@ export function NewLeadModal({ salesmen, canPickSalesman }: { salesmen: { id: st
         email: g('email'),
         phone: g('phone'),
         company_name: g('company_name'),
+        store_name: g('store_name'),
         company_legal_name: g('company_legal_name'),
         billing_address: g('billing_address'),
         title: g('title'),
@@ -72,7 +73,8 @@ export function NewLeadModal({ salesmen, canPickSalesman }: { salesmen: { id: st
                   <div><label className={label}>Contact person</label><input name="contact_name" className={field} /></div>
                   <div><label className={label}>Phone / WhatsApp</label><input name="phone" className={field} placeholder="08xxxxxxxxxx" /></div>
                   <div><label className={label}>Email</label><input name="email" type="email" className={field} /></div>
-                  <div><label className={label}>Company / brand</label><input name="company_name" className={field} /></div>
+                  <div><label className={label}>Brand name</label><input name="company_name" className={field} /></div>
+                  <div><label className={label}>Store name</label><input name="store_name" className={field} placeholder="Shopee / Tokopedia store" /></div>
                   <div className="sm:col-span-2"><label className={label}>Company legal name</label><input name="company_legal_name" className={field} placeholder="PT ... (for the invoice)" /></div>
                   <div className="sm:col-span-2"><label className={label}>Billing address</label><textarea name="billing_address" rows={2} className={field} /></div>
                 </div>

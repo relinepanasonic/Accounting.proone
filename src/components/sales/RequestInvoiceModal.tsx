@@ -120,7 +120,7 @@ export function RequestInvoiceModal({
             placeholder="+ Add a product from the catalog"
             className="w-full"
           />
-          {products.length === 0 && <p className="text-[11px] text-amber-300">The product catalog is empty. Add products under Settings → Product Catalog, or use a custom item.</p>}
+          {products.length === 0 && <p className="text-[11px] text-amber-300">The product catalog is empty. Add products under Optimizing → Product Catalog, or use a custom item.</p>}
 
           <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Note for Accounting (discount, payment terms, anything special)" className={`${field} w-full`} />
 

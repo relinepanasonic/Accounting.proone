@@ -17,6 +17,7 @@ const MODULES = {
       { name: 'Activity Ledger', href: '/ledger' },
       { name: 'Bank Reconcile', href: '/reconcile' },
       { name: 'COA Mapping', href: '/coa' },
+      { name: 'Vendors', href: '/vendors' },
     ]
   },
   sales: {
@@ -48,7 +49,6 @@ const MODULES = {
     items: [
       { name: 'Settings Hub', href: '/settings' },
       { name: 'Workspaces', href: '/settings/workspaces' },
-      { name: 'Product Catalog', href: '/settings/catalog' },
       { name: 'Contacts DB', href: '/settings/contacts' },
     ]
   }

@@ -21,9 +21,11 @@ interface ContactCrmManagerProps {
   currentUserRole?: string;
   activeWorkspaceId?: string;
   availableWorkspaces?: any[];
+  /** Show only one kind of contact: clients (Settings > Contact) or vendors (Accounting > Vendors). Without it, both tabs show. */
+  mode?: 'client' | 'vendor';
 }
 
-export function ContactCrmManager({ initialClients, currentUserRole, activeWorkspaceId, availableWorkspaces }: ContactCrmManagerProps) {
+export function ContactCrmManager({ initialClients, currentUserRole, activeWorkspaceId, availableWorkspaces, mode }: ContactCrmManagerProps) {
   const [clients, setClients] = useState<ClientRecord[]>(initialClients);
   const [name, setName] = useState('');
   const [companyLegalName, setCompanyLegalName] = useState('');
@@ -32,8 +34,8 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const [activeTab, setActiveTab] = useState<'client' | 'vendor'>('client');
-  const [contactType, setContactType] = useState<'client' | 'vendor'>('client');
+  const [activeTab, setActiveTab] = useState<'client' | 'vendor'>(mode || 'client');
+  const [contactType, setContactType] = useState<'client' | 'vendor'>(mode || 'client');
   const [cloneWorkspaceIds, setCloneWorkspaceIds] = useState<string[]>([]);
 
   // Edit modal state
@@ -283,7 +285,7 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
             />
           </div>
 
-          <div>
+          {!mode && (<div>
             <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300 mb-1">
               ACCOUNT TYPE
             </label>
@@ -295,7 +297,7 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
               <option value="client">Client (Piutang)</option>
               <option value="vendor">Vendor (Hutang)</option>
             </select>
-          </div>
+          </div>)}
         </div>
 
         {availableWorkspaces && availableWorkspaces.length > 1 && (
@@ -343,13 +345,13 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
           <div>
             <h3 className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
               <Users className="w-4 h-4 text-[#d4af37]" />
-              CLIENTS CONTACTS
+              {mode === 'vendor' ? 'VENDOR CONTACTS' : 'CLIENTS CONTACTS'}
             </h3>
             <p className="text-[10px] text-zinc-400 mt-1">
-              Manage your clients and vendors profiles.
+              {mode === 'vendor' ? 'Suppliers and vendors you pay (Hutang).' : mode === 'client' ? 'Your clients (Piutang). Vendors are under Accounting > Vendors.' : 'Manage your clients and vendors profiles.'}
             </p>
           </div>
-          <div className="flex bg-zinc-900 rounded-xl p-1 border border-zinc-800">
+          {!mode && (<div className="flex bg-zinc-900 rounded-xl p-1 border border-zinc-800">
             <button 
               type="button"
               onClick={() => setActiveTab('client')}
@@ -364,7 +366,7 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
             >
               Vendors
             </button>
-          </div>
+          </div>)}
         </div>
 
         {clients.filter(c => (c.contactType || 'client') === activeTab).length === 0 ? (

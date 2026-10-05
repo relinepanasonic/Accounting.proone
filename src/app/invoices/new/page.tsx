@@ -101,7 +101,7 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: P
           </div>
         </div>
         <Link
-          href="/settings/catalog"
+          href="/optimizing/catalog"
           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl gold-glass-panel text-xs font-bold text-[#f5d77f] hover:border-[#d4af37] transition-all"
         >
           <Package className="w-3.5 h-3.5" />

@@ -28,6 +28,8 @@ import {
   BookOpen,
   RefreshCw,
   Network,
+  Package,
+  Truck,
   CircleDot
 } from 'lucide-react';
 import {
@@ -49,6 +51,7 @@ const OPTIMIZING_ICONS: Record<string, React.ReactNode> = {
   Sales: <ArrowUpRight className="w-3.5 h-3.5" />,
   Advertiser: <Megaphone className="w-3.5 h-3.5" />,
   Clients: <Users className="w-3.5 h-3.5" />,
+  'Product Catalog': <Package className="w-3.5 h-3.5" />,
 };
 
 const ACCOUNTING_ICONS: Record<string, React.ReactNode> = {
@@ -60,6 +63,7 @@ const ACCOUNTING_ICONS: Record<string, React.ReactNode> = {
   'Activity Ledger': <BookOpen className="w-3.5 h-3.5" />,
   'Bank Reconcile': <RefreshCw className="w-3.5 h-3.5" />,
   'COA Mapping': <Network className="w-3.5 h-3.5" />,
+  Vendors: <Truck className="w-3.5 h-3.5" />,
 };
 
 const GROUP_ICONS: Record<string, Record<string, React.ReactNode>> = {

@@ -2,14 +2,15 @@
 // so a page can never be "active" under two headers.
 
 export const isAccountingPath = (p: string) =>
-  ['/', '/invoices', '/expenses', '/assets', '/ledger', '/reconcile'].some((x) => p === x || p.startsWith(x + '/'));
+  ['/', '/invoices', '/expenses', '/assets', '/ledger', '/reconcile', '/vendors'].some((x) => p === x || p.startsWith(x + '/'));
 
 // "Optimizing" header = Admin + Sales + Advertiser.
 export const isOptimizingAdminPath = (p: string) => p === '/productivity/admin' || p.startsWith('/productivity/admin/');
 export const isOptimizingSalesPath = (p: string) => p === '/sales' || p.startsWith('/sales/');
 export const isOptimizingAdvertiserPath = (p: string) => p === '/productivity/advertiser' || p.startsWith('/productivity/advertiser/');
 export const isOptimizingClientsPath = (p: string) => p === '/optimizing/clients' || p.startsWith('/optimizing/clients/');
-export const isOptimizingPath = (p: string) => isOptimizingAdminPath(p) || isOptimizingSalesPath(p) || isOptimizingAdvertiserPath(p) || isOptimizingClientsPath(p);
+export const isOptimizingCatalogPath = (p: string) => p === '/optimizing/catalog' || p.startsWith('/optimizing/catalog/');
+export const isOptimizingPath = (p: string) => isOptimizingAdminPath(p) || isOptimizingSalesPath(p) || isOptimizingAdvertiserPath(p) || isOptimizingClientsPath(p) || isOptimizingCatalogPath(p);
 
 export const isPabrikPath = (p: string) => p === '/productivity/pabrik-sosmed' || p.startsWith('/productivity/pabrik-sosmed/');
 
@@ -32,6 +33,7 @@ export const OPTIMIZING_CHILDREN = [
   { name: 'Sales', href: '/sales', isActive: isOptimizingSalesPath },
   { name: 'Advertiser', href: '/productivity/advertiser', isActive: isOptimizingAdvertiserPath },
   { name: 'Clients', href: '/optimizing/clients', isActive: isOptimizingClientsPath },
+  { name: 'Product Catalog', href: '/optimizing/catalog', isActive: isOptimizingCatalogPath },
 ] as const;
 
 export const ACCOUNTING_CHILDREN = [
@@ -43,4 +45,5 @@ export const ACCOUNTING_CHILDREN = [
   { name: 'Activity Ledger', href: '/ledger', isActive: (p: string) => p === '/ledger' || p.startsWith('/ledger/') },
   { name: 'Bank Reconcile', href: '/reconcile', isActive: (p: string) => p === '/reconcile' || p.startsWith('/reconcile/') },
   { name: 'COA Mapping', href: '/coa', isActive: (p: string) => p === '/coa' || p.startsWith('/coa/') },
+  { name: 'Vendors', href: '/vendors', isActive: (p: string) => p === '/vendors' || p.startsWith('/vendors/') },
 ] as const;

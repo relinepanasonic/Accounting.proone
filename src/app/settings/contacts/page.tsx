@@ -33,7 +33,7 @@ export default async function ClientsSettingsPage() {
     return acc;
   }, {} as Record<string, number>);
 
-  const clientList: ClientRecord[] = (clients || []).map((c: any) => ({
+  const clientList: ClientRecord[] = (clients || []).filter((c: any) => (c.contact_type || 'client') !== 'vendor').map((c: any) => ({
     id: c.id,
     name: c.name || 'Client',
     company: c.contact_name || c.company_name || c.company || c.name || '',
@@ -51,6 +51,7 @@ export default async function ClientsSettingsPage() {
       currentUserRole={wsCtx.role} 
       activeWorkspaceId={wsCtx.activeWorkspaceId}
       availableWorkspaces={wsCtx.availableWorkspaces}
+      mode="client"
     />
   );
 }

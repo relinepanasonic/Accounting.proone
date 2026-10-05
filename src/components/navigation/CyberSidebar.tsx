@@ -146,6 +146,7 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
         ? [
             { type: 'link', name: 'Sales', href: '/sales', icon: <TrendingUp className="w-4 h-4" />, isActive: (p) => p === '/sales' || p.startsWith('/sales/') },
             { type: 'link', name: 'Productivity', href: '/productivity/me', icon: <Activity className="w-4 h-4" />, isActive: (p) => p.startsWith('/productivity/me') },
+            { type: 'link', name: 'Absensi', href: '/hrd/absensi', icon: <Users className="w-4 h-4" />, isActive: isHrdPath },
           ]
       : limited
         ? [{ type: 'link', name: 'Pabrik Sosmed', href: '/productivity/pabrik-sosmed', icon: <Share2 className="w-4 h-4" />, isActive: isPabrikPath }]

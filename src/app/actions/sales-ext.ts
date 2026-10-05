@@ -50,7 +50,7 @@ export async function submitCheckIn(photoBase64: string) {
 
     if (error) return { error: error.message };
     
-    revalidatePath('/sales/absensi');
+    revalidatePath('/hrd/absensi');
     return { success: true };
   } catch (err: any) {
     return { error: err.message };
@@ -78,7 +78,7 @@ export async function submitCheckOut(photoBase64: string) {
 
     if (error) return { error: error.message };
     
-    revalidatePath('/sales/absensi');
+    revalidatePath('/hrd/absensi');
     return { success: true };
   } catch (err: any) {
     return { error: err.message };

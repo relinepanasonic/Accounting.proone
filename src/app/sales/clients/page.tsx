@@ -3,11 +3,12 @@ import { createClient } from '@/lib/supabase/server';
 import { withoutProspects } from '@/lib/sales/prospects';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { formatCurrency } from '@/lib/utils/currency';
-import { Mail, Phone, MapPin, CheckCircle, Clock } from 'lucide-react';
+import { Mail, Phone, CheckCircle, Clock } from 'lucide-react';
+import { ReceivablesSection } from '@/components/sales/ReceivablesSection';
 
 export default async function SalesClientsPage() {
   const supabase = await createClient();
-  const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+  const { activeWorkspaceId, role, userEmail, availableWorkspaces } = await getAuthenticatedWorkspaceContext(supabase);
 
   // Fetch clients along with their invoices
   const { data: clients } = await withoutProspects((hide) => {
@@ -100,6 +101,10 @@ export default async function SalesClientsPage() {
           ))
         )}
       </div>
+
+      {role !== 'sales' && (
+        <ReceivablesSection supabase={supabase} workspaceId={activeWorkspaceId} userEmail={userEmail} availableWorkspaces={availableWorkspaces} />
+      )}
     </div>
   );
 }

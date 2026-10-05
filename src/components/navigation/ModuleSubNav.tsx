@@ -23,11 +23,8 @@ const MODULES = {
     match: ['/sales'],
     items: [
       { name: 'Dashboard', href: '/sales' },
-      { name: 'Absensi', href: '/sales/absensi' },
-      { name: 'To-Do', href: '/sales/todo' },
       { name: 'Pipeline', href: '/sales/pipeline' },
       { name: 'Client', href: '/sales/clients' },
-      { name: 'A/R', href: '/sales/ar' },
       { name: 'Reimbursement', href: '/sales/reimbursement' },
     ]
   },
@@ -42,6 +39,7 @@ const MODULES = {
     match: ['/payroll', '/hrd'],
     items: [
       { name: 'Team Payroll', href: '/payroll' },
+      { name: 'Absensi', href: '/hrd/absensi' },
       { name: 'Employee Directory', href: '/hrd/employees' },
     ]
   },
@@ -99,7 +97,9 @@ export function ModuleSubNav({ role }: { role?: string }) {
     <>
     {optimizingSwitcher}
     <div className="w-full bg-[#0e0f14]/90 backdrop-blur-md border-b border-[#d4af37]/20 px-6 py-3 flex items-center gap-6 overflow-x-auto scrollbar-hide sticky top-0 z-30">
-      {activeModule.items.filter((item) => !(role === 'sales' && (item.href === '/sales/ar' || item.href === '/sales/reimbursement'))).map(item => {
+      {activeModule.items.filter((item) => !(role === 'sales' && item.href === '/sales/reimbursement'))
+        // Sales staff only reach the Absensi page of HRD, never payroll.
+        .filter((item) => !(role === 'sales' && activeModule.match.includes('/hrd') && item.href !== '/hrd/absensi')).map(item => {
         let isActive = false;
         if (item.href === '/' || item.href === '/sales') {
           isActive = pathname === item.href;

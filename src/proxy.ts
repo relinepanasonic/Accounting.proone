@@ -13,7 +13,7 @@ const LIMITED_ROLE_HOME: Record<string, string> = {
 };
 const LIMITED_ROLE_ALLOWED: Record<string, string[]> = {
   advertiser: ['/productivity/advertiser', '/productivity/me', '/productivity/calendar', '/productivity/tasks', '/productivity/meetings', '/productivity/stats', '/no-access', '/workspaces'],
-  sales: ['/sales', '/productivity/me', '/productivity/calendar', '/productivity/tasks', '/productivity/meetings', '/productivity/stats', '/no-access', '/workspaces'],
+  sales: ['/sales', '/hrd/absensi', '/productivity/me', '/productivity/calendar', '/productivity/tasks', '/productivity/meetings', '/productivity/stats', '/no-access', '/workspaces'],
   client: ['/productivity/pabrik-sosmed', '/no-access', '/workspaces'],
 };
 

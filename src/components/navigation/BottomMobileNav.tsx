@@ -40,6 +40,7 @@ export function BottomMobileNav({ limited = false, role }: { limited?: boolean; 
       ? [
           { name: 'Sales', href: '/sales', icon: <TrendingUp className="w-5 h-5" />, isActive: (p: string) => p === '/sales' || p.startsWith('/sales/') },
           { name: 'Productivity', href: '/productivity/me', icon: <Activity className="w-5 h-5" />, isActive: (p: string) => p.startsWith('/productivity/me') },
+          { name: 'Absensi', href: '/hrd/absensi', icon: <Users className="w-5 h-5" />, isActive: isHrdPath },
         ]
       : role === 'advertiser'
       ? [

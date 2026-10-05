@@ -182,7 +182,7 @@ export async function loadDayPlan(person: Person, role: string, workspaceId: str
     }
     if (kpi.sales) {
       for (const r of kpi.sales.ar.rows.filter((x) => x.daysLate > 0).slice(0, 5)) {
-        tasks.push({ id: `ar-${r.invoice}`, title: `Chase payment: ${r.client}`, subtitle: `${r.invoice} · Rp ${Math.round(r.outstanding).toLocaleString('id-ID')} unpaid`, category: 'Sales', done: false, urgent: true, href: '/sales/ar', note: `${r.daysLate} d late` });
+        tasks.push({ id: `ar-${r.invoice}`, title: `Chase payment: ${r.client}`, subtitle: `${r.invoice} · Rp ${Math.round(r.outstanding).toLocaleString('id-ID')} unpaid`, category: 'Sales', done: false, urgent: true, href: '/sales/clients#ar', note: `${r.daysLate} d late` });
       }
       for (const c of kpi.sales.churn.filter((x) => x.state !== 'ok' && x.state !== 'unset').slice(0, 5)) {
         tasks.push({ id: `ch-${c.id}`, title: `${c.state === 'churned' ? 'Win back' : 'Renew'}: ${c.name}`, subtitle: c.state === 'churned' ? `Service ended ${Math.abs(c.days!)} days ago` : c.days === 0 ? 'Service ends today' : `Service ends in ${c.days} days`, category: 'Sales', done: false, urgent: c.state === 'churned', href: '/sales/clients' });

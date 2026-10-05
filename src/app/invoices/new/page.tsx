@@ -43,7 +43,7 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: P
   const { data: workspaces } = await supabase.from('workspaces').select('is_tax_registered').eq('id', activeWorkspaceId).single();
   const isTaxRegistered = workspaces?.is_tax_registered || false;
 
-  const clientList = clients || [];
+  const clientList: any[] = [...(clients || [])];
   const productList = products || [];
 
   // Made from a salesman's invoice request: start with the client and the products he picked.
@@ -56,6 +56,15 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: P
       .eq('workspace_id', activeWorkspaceId)
       .maybeSingle();
     if (req && req.status === 'requested') requestData = req;
+  }
+  // The requested client must be in the picker even if the normal list would not show it (workspace, prospect flag...).
+  if (requestData && !clientList.some((c: any) => c.id === requestData.client_id)) {
+    const { data: rc } = await createAdminClient()
+      .from('clients')
+      .select('id, name, company_legal_name, company_name, workspace_id, contact_type')
+      .eq('id', requestData.client_id)
+      .maybeSingle();
+    if (rc) clientList.unshift(rc);
   }
   const requestInitialData = requestData
     ? {

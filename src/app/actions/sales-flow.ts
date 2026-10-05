@@ -206,7 +206,7 @@ export async function requestInvoice(dealId: string, items: RequestItem[], note:
     kind: 'invoice_request',
     title: `New invoice request: ${client?.name || deal.lead_name || 'client'}`,
     body: `${ctx.userName || 'Sales'} · ${clean.length} product${clean.length === 1 ? '' : 's'} · Rp ${Math.round(total).toLocaleString('id-ID')}`,
-    link: '/invoices/requests',
+    link: '/invoices',
     refId: req.id,
   });
 

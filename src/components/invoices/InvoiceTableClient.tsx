@@ -29,6 +29,16 @@ interface InvoiceData {
   paidAmount: number;
 }
 
+export interface InvoiceRequestRow {
+  id: string;
+  clientName: string;
+  requestedAt: string;
+  requestedBy: string;
+  total: number;
+  products: string[];
+  note: string;
+}
+
 type SortField = 'invoiceNumber' | 'rawIssueDate' | 'clientName' | 'rawDueDate' | 'packageName' | 'packageQtt' | 'rawAmount' | 'status' | 'assignedWorkspaceName';
 type SortOrder = 'asc' | 'desc';
 
@@ -122,7 +132,7 @@ function InvoiceAssignmentDropdown({
   );
 }
 
-export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], activeWorkspaceName = '' }: { initialInvoices: InvoiceData[], availableWorkspaces?: any[], activeWorkspaceName?: string }) {
+export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], activeWorkspaceName = '', requests = [] }: { initialInvoices: InvoiceData[], availableWorkspaces?: any[], activeWorkspaceName?: string, requests?: InvoiceRequestRow[] }) {
   const [filterClient, setFilterClient] = useState('');
   const [filterIssueMonth, setFilterIssueMonth] = useState('');
   const [filterDueMonth, setFilterDueMonth] = useState('');
@@ -151,6 +161,7 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
   const uniqueClients = useMemo(() => {
     const clients = new Set<string>();
     initialInvoices.forEach(inv => clients.add(inv.clientName));
+    requests.forEach(r => clients.add(r.clientName));
     return Array.from(clients).sort();
   }, [initialInvoices]);
 
@@ -237,6 +248,17 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
 
     return filtered;
   }, [initialInvoices, filterClient, filterIssueMonth, filterDueMonth, filterAssignment, filterStatus, sortField, sortOrder]);
+
+  const visibleRequests = useMemo(
+    () =>
+      requests.filter((r) => {
+        if (filterStatus !== 'All' && filterStatus !== 'Requested') return false;
+        if (filterClient && !r.clientName.toLowerCase().includes(filterClient.toLowerCase())) return false;
+        if (filterIssueMonth && !r.requestedAt.startsWith(filterIssueMonth)) return false;
+        return true;
+      }),
+    [requests, filterStatus, filterClient, filterIssueMonth]
+  );
 
   const [isSyncing, setIsSyncing] = React.useState(false);
   const [syncResult, setSyncResult] = React.useState<{ synced: number; errors: string[] } | null>(null);
@@ -341,6 +363,7 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
           >
             <option value="All">All</option>
             <option value="Quotation">Quotation</option>
+            <option value="Requested">Requested ({requests.length})</option>
             <option value="Draft">Draft</option>
             <option value="Sent">Sent</option>
             <option value="Paid">Paid</option>
@@ -350,7 +373,7 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
         </div>
       </div>
 
-      {processedInvoices.length === 0 ? (
+      {processedInvoices.length === 0 && visibleRequests.length === 0 ? (
         <div className="py-16 text-center border border-dashed border-zinc-800/80 rounded-2xl my-4 space-y-4">
           <div className="w-12 h-12 rounded-full bg-[#d4af37]/10 border border-[#d4af37]/30 flex items-center justify-center mx-auto text-[#f5d77f]">
             <Plus className="w-6 h-6" />
@@ -396,6 +419,36 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/60">
+              {visibleRequests.map((r) => (
+                <tr key={`req-${r.id}`} className="bg-[#d4af37]/[0.06] hover:bg-[#d4af37]/10 transition-colors">
+                  <td className="py-3 px-3 font-bold text-amber-300">
+                    <div className="flex items-center gap-2"><div className="w-1 h-4 bg-amber-400 rounded-sm"></div>REQUEST</div>
+                  </td>
+                  <td className="py-3 px-3 font-sans text-zinc-600">—</td>
+                  <td className="py-3 px-3 font-sans whitespace-nowrap text-zinc-300">
+                    {new Date(r.requestedAt).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta', day: '2-digit', month: 'short', year: 'numeric' })}
+                    <div className="text-[10px] text-zinc-500">{new Date(r.requestedAt).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' })} · {r.requestedBy}</div>
+                  </td>
+                  <td className="py-3 px-3 font-sans text-zinc-600">—</td>
+                  <td className="py-3 px-3"><div className="font-sans font-semibold text-white max-w-[150px] truncate">{r.clientName}</div></td>
+                  <td className="py-3 px-3 font-sans text-zinc-300 max-w-[220px]" title={r.note ? `Note: ${r.note}` : undefined}>
+                    <div className="truncate">{r.products[0] || '—'}</div>
+                    <div className="text-[10px] text-zinc-500">{r.products.length > 1 ? `+${r.products.length - 1} more product${r.products.length === 2 ? '' : 's'}` : ''}{r.note ? `${r.products.length > 1 ? ' · ' : ''}has a note` : ''}</div>
+                  </td>
+                  <td className="py-3 px-3 text-right whitespace-nowrap">
+                    <div className="text-sm font-extrabold text-[#f5d77f]">{`Rp ${Math.ceil(r.total).toLocaleString('id-ID')}`}</div>
+                  </td>
+                  <td className="py-3 px-3 text-zinc-600 font-sans">—</td>
+                  <td className="py-3 px-3 text-center">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/40 text-amber-300 font-bold text-[10px] tracking-widest uppercase">Requested</span>
+                  </td>
+                  <td className="py-3 px-3 text-center">
+                    <Link href={`/invoices/new?request=${r.id}`} className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-[#d4af37] to-[#f5d77f] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-black hover:opacity-90 whitespace-nowrap">
+                      <Plus className="w-3 h-3" /> Create invoice
+                    </Link>
+                  </td>
+                </tr>
+              ))}
               {processedInvoices.map((inv) => (
                 <tr
                   key={inv.id}

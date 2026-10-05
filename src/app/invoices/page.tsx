@@ -7,13 +7,16 @@ import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { NEW_WAVE_WORKSPACE_ID } from '@/lib/workspaces/known';
 import { clientMask, HIDDEN_CLIENT } from '@/lib/auth/client-privacy';
 import { InvoiceStatusToggle, InvoiceActionGroup } from '@/components/invoices/InvoiceRowActions';
-import { InvoiceTableClient } from '@/components/invoices/InvoiceTableClient';
+import { InvoiceTableClient, type InvoiceRequestRow } from '@/components/invoices/InvoiceTableClient';
+import { createAdminClient } from '@/lib/api/supabase-admin';
+import { FINANCE_ROLES } from '@/lib/auth/workspace-context';
+import { requestTotal, type RequestItem } from '@/lib/sales/flow';
 
 export const dynamic = 'force-dynamic';
 
 async function InvoicesTableServer({ activeTab }: { activeTab: string }) {
   const supabase = await createClient();
-  const { activeWorkspaceId, activeWorkspaceName, availableWorkspaces, userEmail } = await getAuthenticatedWorkspaceContext(supabase);
+  const { activeWorkspaceId, activeWorkspaceName, availableWorkspaces, userEmail, role } = await getAuthenticatedWorkspaceContext(supabase);
   const mask = clientMask({ userEmail, availableWorkspaces });
 
   const [
@@ -136,7 +139,35 @@ async function InvoicesTableServer({ activeTab }: { activeTab: string }) {
     (a, b) => new Date(b.rawIssueDate || 0).getTime() - new Date(a.rawIssueDate || 0).getTime()
   );
 
-  return <InvoiceTableClient initialInvoices={finalInvoices} availableWorkspaces={availableWorkspaces} activeWorkspaceName={activeWorkspaceName} />;
+  // Invoice requests from the salesmen that Accounting has not turned into an invoice yet: they sit at the top of the table.
+  let requests: InvoiceRequestRow[] = [];
+  if (activeTab === 'invoices' && FINANCE_ROLES.includes(role)) {
+    const db = createAdminClient();
+    const { data: reqs } = await db
+      .from('invoice_requests')
+      .select('id, client_id, requested_by_name, items, note, requested_at')
+      .eq('workspace_id', activeWorkspaceId)
+      .eq('status', 'requested')
+      .order('requested_at', { ascending: false })
+      .limit(50);
+    const ids = Array.from(new Set((reqs || []).map((r: any) => r.client_id)));
+    const { data: cl } = ids.length ? await db.from('clients').select('id, name').in('id', ids) : { data: [] as any[] };
+    const names = new Map<string, string>((cl || []).map((c: any) => [c.id, c.name]));
+    requests = (reqs || []).map((r: any) => {
+      const items = (r.items || []) as RequestItem[];
+      return {
+        id: r.id,
+        clientName: mask.name(names.get(r.client_id), null, 'Client'),
+        requestedAt: r.requested_at,
+        requestedBy: r.requested_by_name || 'Sales',
+        total: requestTotal(items),
+        products: items.map((i) => i.name),
+        note: r.note || '',
+      };
+    });
+  }
+
+  return <InvoiceTableClient requests={requests} initialInvoices={finalInvoices} availableWorkspaces={availableWorkspaces} activeWorkspaceName={activeWorkspaceName} />;
 }
 
 export default async function InvoicesPage({ searchParams }: { searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {

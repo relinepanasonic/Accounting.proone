@@ -30,7 +30,6 @@ const MOBILE_NAV_ITEMS = [
   { name: 'Optimizing', href: '/sales', icon: <TrendingUp className="w-5 h-5" />, isActive: isOptimizingPath },
   { name: 'Pabrik', href: '/productivity/pabrik-sosmed', icon: <Share2 className="w-5 h-5" />, isActive: isPabrikPath },
   { name: 'HRD', href: '/payroll', icon: <Users className="w-5 h-5" />, isActive: isHrdPath },
-  { name: 'System', href: '/settings', icon: <Settings className="w-5 h-5" />, isActive: (p: string) => p.startsWith('/settings') },
 ];
 
 export function BottomMobileNav({ limited = false, role }: { limited?: boolean; role?: string }) {

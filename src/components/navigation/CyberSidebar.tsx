@@ -64,6 +64,7 @@ const ACCOUNTING_ICONS: Record<string, React.ReactNode> = {
   'Bank Reconcile': <RefreshCw className="w-3.5 h-3.5" />,
   'COA Mapping': <Network className="w-3.5 h-3.5" />,
   Vendors: <Truck className="w-3.5 h-3.5" />,
+  'Settings Hub': <Settings className="w-3.5 h-3.5" />,
 };
 
 const GROUP_ICONS: Record<string, Record<string, React.ReactNode>> = {
@@ -78,7 +79,6 @@ const MAIN_MODULES: NavEntry[] = [
   { type: 'group', name: 'Optimizing', icon: <TrendingUp className="w-4 h-4" />, isActive: isOptimizingPath, children: OPTIMIZING_CHILDREN },
   { type: 'link', name: 'Pabrik Sosmed', href: '/productivity/pabrik-sosmed', icon: <Share2 className="w-4 h-4" />, isActive: isPabrikPath },
   { type: 'link', name: 'HRD', href: '/payroll', icon: <Users className="w-4 h-4" />, isActive: isHrdPath },
-  { type: 'link', name: 'System', href: '/settings', icon: <Settings className="w-4 h-4" />, isActive: (p) => p.startsWith('/settings') },
 ];
 
 interface CyberSidebarProps {

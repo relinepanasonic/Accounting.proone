@@ -2,7 +2,7 @@
 // so a page can never be "active" under two headers.
 
 export const isAccountingPath = (p: string) =>
-  ['/', '/invoices', '/expenses', '/assets', '/ledger', '/reconcile', '/vendors'].some((x) => p === x || p.startsWith(x + '/'));
+  ['/', '/invoices', '/expenses', '/assets', '/ledger', '/reconcile', '/vendors', '/settings'].some((x) => p === x || p.startsWith(x + '/'));
 
 // "Optimizing" header = Admin + Sales + Advertiser.
 export const isOptimizingAdminPath = (p: string) => p === '/productivity/admin' || p.startsWith('/productivity/admin/');
@@ -46,4 +46,5 @@ export const ACCOUNTING_CHILDREN = [
   { name: 'Bank Reconcile', href: '/reconcile', isActive: (p: string) => p === '/reconcile' || p.startsWith('/reconcile/') },
   { name: 'COA Mapping', href: '/coa', isActive: (p: string) => p === '/coa' || p.startsWith('/coa/') },
   { name: 'Vendors', href: '/vendors', isActive: (p: string) => p === '/vendors' || p.startsWith('/vendors/') },
+  { name: 'Settings Hub', href: '/settings', isActive: (p: string) => p === '/settings' || p.startsWith('/settings/') },
 ] as const;

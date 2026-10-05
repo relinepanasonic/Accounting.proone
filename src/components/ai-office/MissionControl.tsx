@@ -3,10 +3,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Activity, Bot, Brain, Building2, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock, KanbanSquare,
-  LayoutDashboard, Loader2, Pin, PinOff, Play, Plus, RefreshCw, RotateCcw, Trash2, Users, Wallet, X, XCircle,
+  LayoutDashboard, Loader2, Palette, Pin, PinOff, Play, Plus, RefreshCw, RotateCcw, Trash2, Users, Wallet, X, XCircle,
 } from 'lucide-react';
 import { OfficeView } from '@/components/ai-office/OfficeView';
 import { BlueprintModal } from '@/components/ai-office/BlueprintModal';
+import { StudioView } from '@/components/ai-office/StudioView';
 import { fmtUsd } from '@/lib/ai/costs';
 import { WEEKDAYS, describeRule, jakartaNow, runsOn, type Cadence } from '@/lib/ai/schedule-rules';
 
@@ -36,9 +37,10 @@ interface Mission {
   missionReady: boolean; startedSchedules?: number;
 }
 
-type TabKey = 'office' | 'dashboard' | 'team' | 'board' | 'calendar' | 'activity' | 'memory';
+type TabKey = 'office' | 'studio' | 'dashboard' | 'team' | 'board' | 'calendar' | 'activity' | 'memory';
 const TABS: { key: TabKey; label: string; icon: typeof Activity }[] = [
   { key: 'office', label: 'Virtual Office', icon: Building2 },
+  { key: 'studio', label: 'Studio', icon: Palette },
   { key: 'dashboard', label: 'Token Balance', icon: LayoutDashboard },
   { key: 'team', label: 'Team Agent', icon: Users },
   { key: 'board', label: 'Task Board', icon: KanbanSquare },
@@ -96,6 +98,12 @@ const btnGhost = `${btn} border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-
 // ---------- main ----------
 export function MissionControl() {
   const [tab, setTab] = useState<TabKey>('office');
+  // Google sends the owner back to /ai-office?tab=studio after signing in.
+  useEffect(() => {
+    try {
+      if (new URLSearchParams(window.location.search).get('tab') === 'studio') setTab('studio');
+    } catch { /* ignore */ }
+  }, []);
   const [data, setData] = useState<Mission | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -187,9 +195,11 @@ export function MissionControl() {
         <OfficeView key={officeKey} />
       </div>
 
-      {!data && tab !== 'office' && (
+      {!data && tab !== 'office' && tab !== 'studio' && (
         <div className="flex justify-center p-16 text-zinc-500"><Loader2 className="h-6 w-6 animate-spin" /></div>
       )}
+
+      {tab === 'studio' && <StudioView />}
 
       {data && tab === 'dashboard' && <DashboardTab d={data} act={act} openGoal={(id) => { setOpenGoalId(id); }} teamName={teamName} />}
       {data && tab === 'team' && <TeamTab d={data} act={act} teamName={teamName} open={setOpenGoalId} />}

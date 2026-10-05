@@ -14,7 +14,6 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  ShieldCheck,
   Bot,
   TrendingUp,
   ChevronDown,
@@ -174,7 +173,7 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
               />
               <div className="flex flex-col">
                 <span className="text-sm font-extrabold tracking-wide text-white font-serif">
-                  Commerce Center
+                  Command Center
                 </span>
                 <span className="text-[9px] font-mono text-[#d4af37] tracking-wider uppercase">
                   PROFESSOR TOKO
@@ -312,25 +311,6 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
           })}
         </nav>
       </div>
-
-      {/* Bottom Security Telemetry Footer */}
-      {!isCollapsed && (
-        <div className="p-4 border-t border-[#d4af37]/20 bg-black/40">
-          <div className="flex items-center gap-2.5">
-            <div className="w-6 h-6 rounded-md bg-[#d4af37]/10 border border-[#d4af37]/30 flex items-center justify-center text-[#d4af37]">
-              <ShieldCheck className="w-3.5 h-3.5" />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-[10px] font-bold text-zinc-300">
-                RLS SECURITY VAULT
-              </span>
-              <span className="text-[9px] font-mono text-[#d4af37]">
-                ZERO JARGON ENFORCED
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
     </aside>
   );
 }

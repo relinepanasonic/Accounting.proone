@@ -164,35 +164,43 @@ export function InvoicePDFDocument({
     }
     
     setIsDownloading(true);
-    
+
     try {
       const domtoimage = (await import('dom-to-image-more')).default;
       const { jsPDF } = await import('jspdf');
+      // Fonts must be ready, or the picture is laid out with stand-in fonts and the text wraps differently.
+      try { await (document as any).fonts?.ready; } catch { /* ignore */ }
 
+      const width = element.offsetWidth;
+      const height = element.offsetHeight;
       const scale = 2;
       const dataUrl = await domtoimage.toPng(element, {
         quality: 1,
         bgcolor: '#ffffff',
-        width: element.offsetWidth * scale,
-        height: element.offsetHeight * scale,
+        cacheBust: true,
+        width: width * scale,
+        height: height * scale,
         style: {
           transform: `scale(${scale})`,
           transformOrigin: 'top left',
-          width: `${element.offsetWidth}px`,
-          height: `${element.offsetHeight}px`
+          width: `${width}px`,
+          height: `${height}px`,
+          margin: '0',
+          boxShadow: 'none'
         }
       });
 
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      });
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const imgH = (height * pageW) / width;
 
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (element.offsetHeight * pdfWidth) / element.offsetWidth;
-
-      pdf.addImage(dataUrl, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      // One A4 page when it fits; otherwise the same picture is shifted up page by page.
+      pdf.addImage(dataUrl, 'PNG', 0, 0, pageW, imgH);
+      for (let shown = pageH; shown < imgH - 1; shown += pageH) {
+        pdf.addPage();
+        pdf.addImage(dataUrl, 'PNG', 0, -shown, pageW, imgH);
+      }
       pdf.save(getFormattedFilename());
     } catch (e: any) {
       console.error('Failed to generate PDF, falling back to window.print', e);
@@ -319,9 +327,10 @@ export function InvoicePDFDocument({
       )}
 
       {/* A4/Letter Document Container */}
-      <div id="invoice-pdf-container" className="max-w-[850px] mx-auto bg-white shadow-2xl overflow-hidden print:shadow-none print:max-w-none print:w-full font-sans text-[#2d3748]">
+      <div className="overflow-x-auto pb-2 print:overflow-visible">
+      <div id="invoice-pdf-container" className="w-[800px] mx-auto bg-white shadow-2xl overflow-hidden print:shadow-none print:w-full font-sans text-[#2d3748]">
         {/* HEADER SECTION (Dark Navy/Charcoal #1e2536 with Left Gold Accent Strip) */}
-        <header className="relative bg-[#1e2536] text-white px-8 sm:px-12 py-4 flex items-center justify-between">
+        <header className="relative bg-[#1e2536] text-white px-12 py-4 flex items-center justify-between">
           {/* Vertical Beige/Gold Accent Strip on Far Left Edge */}
           <div className="absolute top-0 left-0 bottom-0 w-3 bg-[#c5a059]" />
 
@@ -358,9 +367,9 @@ export function InvoicePDFDocument({
         <div className="w-3 h-8 bg-[#e2d5ba]" />
 
         {/* BODY CONTAINER */}
-        <div className="px-8 sm:px-12 pt-1 pb-4 space-y-4">
+        <div className="px-12 pt-1 pb-4 space-y-4">
           {/* META SECTION: Bill To (Left) & Document Title + Details (Right) */}
-          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-8">
+          <div className="flex flex-row items-start justify-between gap-8">
             {/* Left: Bill To */}
             <div className="space-y-1.5 text-xs">
               <span className="block text-[10px] font-bold text-[#c5a059] tracking-widest uppercase mb-1">
@@ -373,7 +382,7 @@ export function InvoicePDFDocument({
               {clientContact && clientContact !== clientName && (
                 <div className="text-xs text-[#1e2536] font-medium mt-1">{clientContact}</div>
               )}
-              <div className="text-zinc-600 mt-1 leading-relaxed max-w-[200px]">
+              <div className="text-zinc-600 mt-1 leading-relaxed max-w-[300px]">
                 {clientAddress && <div>{clientAddress}</div>}
                 {clientPhone && <div>{clientPhone}</div>}
                 {clientEmail && <div className="text-[#1e2536] font-medium">{clientEmail}</div>}
@@ -381,11 +390,11 @@ export function InvoicePDFDocument({
             </div>
 
             {/* Right: Title & 3-Column Meta Table */}
-            <div className="sm:text-right flex flex-col sm:items-end">
+            <div className="text-right flex flex-col items-end">
               <h2 className="text-3xl font-serif tracking-[0.25em] text-[#1e2536] font-normal mb-2">
                 {isQuotation ? 'QUOTATION' : isReceipt ? 'PAYMENT RECEIPT' : 'INVOICE'}
               </h2>
-              <div className="w-full sm:w-80 border-t border-[#1e2536] pt-2 grid grid-cols-3 gap-3 text-center sm:text-left text-[11px]">
+              <div className="w-80 border-t border-[#1e2536] pt-2 grid grid-cols-3 gap-3 text-left text-[11px]">
                 <div>
                   <span className="block text-[10px] text-zinc-400 uppercase font-mono">
                     {isQuotation ? 'Quote Ref' : isReceipt ? 'Receipt No' : 'Invoice No'}
@@ -416,13 +425,13 @@ export function InvoicePDFDocument({
 
           {/* LINE ITEMS TABLE */}
           <div className="pt-2">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full table-fixed text-left border-collapse">
               <thead>
                 <tr className="border-y-2 border-[#1e2536] text-[#1e2536] uppercase text-[10px] tracking-wider font-bold font-serif">
                   <th className="py-1.5 px-2">{isQuotation ? 'DELIVERABLE / SERVICE PITCH' : 'PACKAGE & DESCRIPTION'}</th>
-                  <th className="py-1.5 px-2 text-right">{isQuotation ? 'UNIT INVESTMENT' : 'UNIT PRICE'}</th>
-                  <th className="py-1.5 px-2 text-center w-16">QTY</th>
-                  <th className="py-1.5 px-2 text-right">TOTAL</th>
+                  <th className="py-1.5 px-2 text-right w-[150px] whitespace-nowrap">{isQuotation ? 'UNIT INVESTMENT' : 'UNIT PRICE'}</th>
+                  <th className="py-1.5 px-2 text-center w-[84px]">QTY</th>
+                  <th className="py-1.5 px-2 text-right w-[150px]">TOTAL</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-200 text-xs">
@@ -431,7 +440,7 @@ export function InvoicePDFDocument({
                   return (
                     <React.Fragment key={item.id || idx}>
                       <tr className="text-zinc-700">
-                        <td className="py-1 px-2 font-medium text-[#1e2536]">
+                        <td className="py-1.5 px-2 font-medium text-[#1e2536] align-top">
                           {item.packageName && (
                             <div className="font-bold text-[#c5a059] uppercase tracking-wider text-[10px] mb-0.5">
                               {item.packageName}
@@ -443,13 +452,13 @@ export function InvoicePDFDocument({
                             className="text-[10px]"
                           />
                         </td>
-                        <td className="py-1 px-2 text-right font-mono font-semibold text-[#1e2536] align-top text-[11px]">
+                        <td className="py-1.5 px-2 text-right font-mono font-semibold text-[#1e2536] align-top text-[11px] whitespace-nowrap">
                           Rp {(item.unitPrice || 0).toLocaleString('id-ID', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                         </td>
-                        <td className="py-1 px-2 text-center font-mono font-semibold align-top text-[11px]">
+                        <td className="py-1.5 px-2 text-center font-mono font-semibold align-top text-[11px] whitespace-nowrap">
                           {item.quantity} <span className="text-[9px] text-zinc-400 font-sans ml-0.5">{item.scale || 'pc'}</span>
                         </td>
-                        <td className="py-1 px-2 text-right font-mono font-bold text-[#1e2536] align-top text-[11px]">
+                        <td className="py-1.5 px-2 text-right font-mono font-bold text-[#1e2536] align-top text-[11px] whitespace-nowrap">
                           Rp {((hasDiscount ? (item.unitPrice * item.quantity - (item.discountAmount ?? 0)) : item.total) || 0).toLocaleString('id-ID', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                         </td>
                       </tr>
@@ -481,15 +490,15 @@ export function InvoicePDFDocument({
           {/* CALCULATIONS & FOOTER (Only shown for INVOICE mode) */}
           {!isQuotation ? (
             <div className="flex justify-end pt-2">
-              <div className="w-full sm:w-72 space-y-2 text-xs">
-                <div className="flex justify-between py-1 px-2 text-zinc-600">
+              <div className="w-[320px] space-y-1.5 text-xs">
+                <div className="flex justify-between gap-4 whitespace-nowrap py-1 px-2 text-zinc-600">
                   <span className="font-serif">Sub-Total</span>
                   <span className="font-mono font-semibold text-[#1e2536]">
                     Rp {Math.round(subtotal || 0).toLocaleString('id-ID')}
                   </span>
                 </div>
                 {globalDiscount > 0 && (
-                  <div className="flex justify-between py-1 px-2 text-red-600">
+                  <div className="flex justify-between gap-4 whitespace-nowrap py-1 px-2 text-red-600">
                     <span className="font-serif">Global Discount</span>
                     <span className="font-mono font-semibold">
                       -Rp {Math.round(globalDiscount || 0).toLocaleString('id-ID')}
@@ -498,7 +507,7 @@ export function InvoicePDFDocument({
                 )}
                 
                 {taxCalculationType && taxCalculationType !== 'none' && (
-                  <div className="flex justify-between py-1 px-2 text-zinc-600">
+                  <div className="flex justify-between gap-4 whitespace-nowrap py-1 px-2 text-zinc-600">
                     <span className="font-serif tracking-widest text-[10px] uppercase">DPP (Base)</span>
                     <span className="font-mono font-semibold text-[#1e2536]">
                       Rp {Math.round(dppAmount || 0).toLocaleString('id-ID')}
@@ -506,7 +515,7 @@ export function InvoicePDFDocument({
                   </div>
                 )}
                 {(hasPpn || (taxAmount && taxAmount > 0 && taxCalculationType && taxCalculationType !== 'none')) && (
-                  <div className="flex justify-between py-1 px-2 text-[#c5a059]">
+                  <div className="flex justify-between gap-4 whitespace-nowrap py-1 px-2 text-[#c5a059]">
                     <span className="font-serif">
                       Tax: PPN (11%)
                     </span>
@@ -516,7 +525,7 @@ export function InvoicePDFDocument({
                   </div>
                 )}
                 {(hasPph || (pphAmount && pphAmount > 0)) && (
-                  <div className="flex justify-between py-1 px-2 text-red-600">
+                  <div className="flex justify-between gap-4 whitespace-nowrap py-1 px-2 text-red-600">
                     <span className="font-serif">
                       PPH ({pphRate || 2}%)
                     </span>
@@ -527,7 +536,7 @@ export function InvoicePDFDocument({
                 )}
                 
                 {(!taxCalculationType || taxCalculationType === 'none') && taxAmount > 0 && (
-                  <div className="flex justify-between py-1 px-2 text-[#c5a059]">
+                  <div className="flex justify-between gap-4 whitespace-nowrap py-1 px-2 text-[#c5a059]">
                     <span className="font-serif">
                       Tax: PPN ({workspaceBrand?.taxRatePercent || 11}%)
                     </span>
@@ -537,7 +546,7 @@ export function InvoicePDFDocument({
                   </div>
                 )}
                 {/* GRAND TOTAL ROW */}
-                <div className="flex justify-between items-center bg-[#c5a059] text-white font-bold py-2.5 px-4 text-sm mt-2 shadow-sm">
+                <div className="flex justify-between items-center gap-4 whitespace-nowrap bg-[#c5a059] text-white font-bold py-2.5 px-4 text-sm mt-2 shadow-sm">
                   <span className="font-serif tracking-wider uppercase">
                     GRAND TOTAL
                   </span>
@@ -551,7 +560,7 @@ export function InvoicePDFDocument({
                   <div className="pt-3 pb-2 border-b border-zinc-200 border-dashed">
                     <span className="font-serif text-[#c5a059] uppercase tracking-widest text-[10px] block mb-2 font-bold">Payment History</span>
                     
-                    <div className="flex justify-between py-1 px-2 text-[9px] text-zinc-400 font-bold uppercase tracking-wider border-b border-zinc-100 mb-1">
+                    <div className="flex justify-between gap-4 whitespace-nowrap py-1 px-2 text-[9px] text-zinc-400 font-bold uppercase tracking-wider border-b border-zinc-100 mb-1">
                       <span className="w-1/3">Date</span>
                       <span className="w-1/3 text-right">Amount Payment</span>
                       <span className="w-1/3 text-right">Remaining Balance</span>
@@ -562,7 +571,7 @@ export function InvoicePDFDocument({
                       return payments.map((p, i) => {
                         runningBalance -= Number(p.amount);
                         return (
-                          <div key={i} className="flex justify-between py-1 px-2 text-zinc-600 text-[11px] items-center">
+                          <div key={i} className="flex justify-between gap-4 whitespace-nowrap py-1 px-2 text-zinc-600 text-[11px] items-center">
                             <span className="w-1/3 text-zinc-500">{formatIndoDate(p.transaction_date)}</span>
                             <span className="w-1/3 text-right font-mono text-[#1e2536] font-bold">Rp {Number(p.amount).toLocaleString('id-ID')}</span>
                             <span className="w-1/3 text-right font-mono text-zinc-500">Rp {runningBalance.toLocaleString('id-ID')}</span>
@@ -573,7 +582,7 @@ export function InvoicePDFDocument({
                   </div>
                 )}
                 {amountPaid > 0 && (
-                  <div className="flex justify-between items-center bg-[#1e2536] text-white font-bold py-2.5 px-4 text-sm mt-2 shadow-sm">
+                  <div className="flex justify-between items-center gap-4 whitespace-nowrap bg-[#1e2536] text-white font-bold py-2.5 px-4 text-sm mt-2 shadow-sm">
                     <span className="font-serif tracking-wider uppercase">
                       BALANCE DUE
                     </span>
@@ -600,12 +609,12 @@ export function InvoicePDFDocument({
           )}
 
           {/* BOTTOM AREA: Payment Method & Signature Line */}
-          <div className="pt-2 grid grid-cols-1 sm:grid-cols-2 gap-8 items-end">
+          <div className="pt-2 grid grid-cols-2 gap-8 items-end">
             {/* Left: Payment Method & Terms */}
             <div className="space-y-4 text-xs">
               {!isQuotation && (
                 <div>
-                  <h4 className="text-xs font-serif uppercase tracking-wider font-bold text-[#1e2536] pb-1 border-b border-zinc-300 inline-block">
+                  <h4 className="text-[11px] font-serif uppercase tracking-wider font-bold text-[#1e2536] pb-1 border-b border-zinc-300 whitespace-nowrap">
                     PAYMENT & DISBURSEMENT INSTRUCTIONS
                   </h4>
                   <div className="mt-2 text-zinc-600 space-y-1">
@@ -642,7 +651,7 @@ export function InvoicePDFDocument({
               <div className="h-8 mb-2 pr-4 select-none" />
               <div className="w-56 border-b-2 border-[#1e2536] pb-1" />
               <div className="mt-2 text-right">
-                <div className="font-bold text-[#1e2536] text-xs uppercase tracking-wider">
+                <div className="font-bold text-[#1e2536] text-xs uppercase tracking-wider whitespace-nowrap">
                   {brandName}
                 </div>
                 <div className="text-[11px] text-zinc-500">Finance & Executive Department</div>
@@ -679,9 +688,18 @@ export function InvoicePDFDocument({
           </div>
         </div>
       </div>
+      </div>
 
       {/* Print CSS to guarantee true PDF vector layout */}
       <style jsx global>{`
+        #invoice-pdf-container, #invoice-pdf-container * {
+          font-family: Arial, 'Segoe UI', Helvetica, sans-serif !important;
+          -webkit-font-smoothing: antialiased;
+        }
+        #invoice-pdf-container .font-serif { font-family: Georgia, 'Times New Roman', serif !important; }
+        #invoice-pdf-container .font-mono { font-family: Consolas, 'Courier New', monospace !important; font-variant-numeric: tabular-nums; }
+        #invoice-pdf-container li, #invoice-pdf-container td, #invoice-pdf-container th { line-height: 1.45 !important; }
+        #invoice-pdf-container ul { margin: 0; padding: 0; }
         @media print {
           body {
             background-color: white !important;

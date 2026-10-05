@@ -15,12 +15,6 @@ export function SettingsNav() {
       icon: Building2,
       description: 'Active enterprise tenant details & settings',
     },
-    {
-      label: 'CONTACT',
-      href: '/settings/contacts',
-      icon: Users,
-      description: 'Manage clients and vendors',
-    },
   ];
 
   return (

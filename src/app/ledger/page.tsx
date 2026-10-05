@@ -192,6 +192,8 @@ async function ActivityLedgerTimeline() {
   );
 }
 
+import { LedgerTabs } from '@/components/ledger/LedgerTabs';
+
 export default function LedgerPage() {
   return (
     <div className="max-w-[1200px] mx-auto px-6 py-8 space-y-6">
@@ -205,14 +207,13 @@ export default function LedgerPage() {
             GLOBAL FINANCIAL TELEMETRY • IMMUTABLE AUDIT TRAIL
           </p>
         </div>
-        <Link href="/ledger/check" className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-black bg-gradient-to-r from-[#d4af37] to-[#f5d77f] px-4 py-2 rounded-full hover:brightness-110">
-          <ScanSearch className="w-3.5 h-3.5" /> Ledger Check
-        </Link>
         <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-400 uppercase tracking-wider bg-zinc-900 px-4 py-2 rounded-full border border-zinc-800">
           <CheckCircle2 className="w-3 h-3 text-[#d4af37]" />
           LEDGER SYNCHRONIZED
         </div>
       </div>
+
+      <LedgerTabs active="ledger" />
 
       <Suspense
         fallback={

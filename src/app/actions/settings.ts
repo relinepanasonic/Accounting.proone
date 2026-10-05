@@ -427,6 +427,7 @@ export async function updateGeneralSettings(payload: {
     revalidatePath('/settings');
     revalidatePath('/settings/contacts');
     revalidatePath('/vendors');
+    revalidatePath('/optimizing/clients');
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Failed to save general settings.' };
@@ -681,6 +682,7 @@ export async function createClientRecord(payload: {
     revalidatePath('/settings');
     revalidatePath('/settings/contacts');
     revalidatePath('/vendors');
+    revalidatePath('/optimizing/clients');
     revalidatePath('/invoices/new');
 
     // Return the specific client record for the active workspace so UI can update
@@ -795,6 +797,7 @@ export async function updateClientRecord(payload: {
     revalidatePath('/settings');
     revalidatePath('/settings/contacts');
     revalidatePath('/vendors');
+    revalidatePath('/optimizing/clients');
     revalidatePath('/invoices/new');
     return { success: true };
   } catch (err: any) {
@@ -829,6 +832,7 @@ export async function deleteClientRecord(clientId: string) {
     revalidatePath('/settings');
     revalidatePath('/settings/contacts');
     revalidatePath('/vendors');
+    revalidatePath('/optimizing/clients');
     revalidatePath('/invoices/new');
     return { success: true };
   } catch (err: any) {

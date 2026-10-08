@@ -65,7 +65,7 @@ function StartCell({ row, canEdit }: { row: ClientRow; canEdit: boolean }) {
           if (!v) return;
           setError('');
           start(async () => {
-            const res = await setProjectStart(row.dealId, v);
+            const res = await setProjectStart(row.invoiceId, v);
             if (!res.success) setError(res.error);
             router.refresh();
           });
@@ -114,13 +114,31 @@ export function ClientProjectsTable({
   admins?: Person[];
 }) {
   const assign = Boolean(advertisers && admins);
-  const groups: ClientRow[][] = [];
+  const [search, setSearch] = useState('');
+  const [onlyOpen, setOnlyOpen] = useState(false);
+  const all: ClientRow[][] = [];
   for (const r of rows) {
-    if (r.groupIndex === 0) groups.push([r]);
-    else groups[groups.length - 1]?.push(r);
+    if (r.groupIndex === 0) all.push([r]);
+    else all[all.length - 1]?.push(r);
   }
+  const q = search.trim().toLowerCase();
+  const groups = all.filter((g) => {
+    if (onlyOpen && g[0].advertiserId && g[0].adminId) return false;
+    if (!q) return true;
+    return g.some((r) => [r.clientName, r.brand, r.store, r.product, r.invoiceNumber || ''].some((t) => t.toLowerCase().includes(q)));
+  });
 
   return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search client, brand, store, product or invoice" className={`${field} w-full max-w-sm py-1.5`} />
+        {assign && (
+          <label className="flex cursor-pointer items-center gap-2 text-xs text-zinc-400">
+            <input type="checkbox" checked={onlyOpen} onChange={(e) => setOnlyOpen(e.target.checked)} className="accent-[#d4af37]" /> Only clients missing an advertiser or admin
+          </label>
+        )}
+        <span className="text-[11px] text-zinc-500">{groups.length} invoice{groups.length === 1 ? '' : 's'}</span>
+      </div>
     <div className="overflow-x-auto rounded-xl border border-[#d4af37]/20 bg-[#0e0f14] shadow-xl">
       <table className="w-full text-left text-sm">
         <thead className="border-b border-[#d4af37]/10 bg-zinc-900/50 text-[11px] uppercase tracking-wider text-zinc-400">
@@ -138,10 +156,10 @@ export function ClientProjectsTable({
           </tr>
         </thead>
         {groups.length === 0 && (
-          <tbody><tr><td colSpan={12} className="p-8 text-center text-zinc-500">No clients with an invoice yet.</td></tr></tbody>
+          <tbody><tr><td colSpan={12} className="p-8 text-center text-zinc-500">No invoices match.</td></tr></tbody>
         )}
         {groups.map((g) => (
-          <tbody key={g[0].dealId} className="divide-y divide-zinc-800/40 border-t border-zinc-800/70">
+          <tbody key={g[0].invoiceId} className="divide-y divide-zinc-800/40 border-t border-zinc-800/70">
             {g.map((row, i) => (
               <tr key={row.key} className="hover:bg-zinc-900/30">
                 {i === 0 && (
@@ -179,6 +197,7 @@ export function ClientProjectsTable({
           </tbody>
         ))}
       </table>
+    </div>
     </div>
   );
 }

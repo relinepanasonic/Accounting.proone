@@ -97,9 +97,9 @@ export async function onInvoicePaid(db: Db, invoiceId: string) {
 }
 
 /** The products sold on a deal: the invoice request, or (invoice made without one) the invoice lines matched to the catalog by name. */
-export async function dealItems(db: any, workspaceId: string, deal: { id: string; invoice_id: string | null }): Promise<RequestItem[]> {
+export async function dealItems(db: any, workspaceId: string, deal: { id: string | null; invoice_id: string | null }): Promise<RequestItem[]> {
   let items: RequestItem[] = [];
-  const { data: req } = await db.from('invoice_requests').select('items').eq('deal_id', deal.id).eq('status', 'generated').order('requested_at', { ascending: false }).limit(1);
+  const { data: req } = deal.id ? await db.from('invoice_requests').select('items').eq('deal_id', deal.id).eq('status', 'generated').order('requested_at', { ascending: false }).limit(1) : { data: null };
   if (req?.[0]?.items?.length) {
     items = req[0].items as RequestItem[];
   } else if (deal.invoice_id) {

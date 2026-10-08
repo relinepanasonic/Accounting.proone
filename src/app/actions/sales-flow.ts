@@ -555,29 +555,51 @@ export async function decideAcc(dealId: string, approve: boolean, comment: strin
 }
 
 // ------------------------------------------------------------------------------------------------ 8. client table
-/** Picks (or changes) the project start date. The end date follows from each product length. */
-export async function setProjectStart(dealId: string, startDate: string): Promise<Result> {
+/** Picks (or changes) the project start date of an invoice. The end date follows from each product length. */
+export async function setProjectStart(invoiceId: string, startDate: string): Promise<Result> {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) return { success: false, error: 'Choose the start date.' };
-  const r = await ownDeal(dealId);
-  if (!r.a || !r.deal) return { success: false, error: r.error || 'Not allowed.' };
-  const { a, deal } = r;
-  if (deal.stage !== 'Deal') return { success: false, error: 'The project can start once the invoice is paid or approved.' };
+  const a = await actor();
+  if (!a || !SALES_ROLES.includes(a.ctx.role)) return { success: false, error: 'Not allowed.' };
+  const { ctx, db } = a;
 
-  const { data: project } = await a.db.from('projects').select('id').eq('deal_id', dealId).maybeSingle();
-  if (!project) {
-    const res = await startProject(dealId, startDate);
-    revalidatePath('/sales/clients');
-    return res.success ? { success: true } : res;
-  }
+  const { data: inv } = await db.from('invoices').select('id, invoice_number, client_id, status').eq('id', invoiceId).eq('workspace_id', ctx.activeWorkspaceId).maybeSingle();
+  if (!inv) return { success: false, error: 'Invoice not found.' };
+  const { data: deal } = await db.from('crm_deals').select('*').eq('invoice_id', invoiceId).eq('workspace_id', ctx.activeWorkspaceId).maybeSingle();
+  if (deal ? !mayTouch(ctx, deal) : !FINANCE.includes(ctx.role)) return { success: false, error: 'This client belongs to another salesman.' };
+  if (String(inv.status).toLowerCase() !== 'paid' && deal?.stage !== 'Deal') return { success: false, error: 'The project can start once the invoice is paid or approved.' };
 
-  const items = await dealItems(a.db, a.ctx.activeWorkspaceId, deal);
+  const items = await dealItems(db, ctx.activeWorkspaceId, { id: deal?.id || null, invoice_id: invoiceId });
   const { endDate, deliverables } = computeProjectTerms(items, startDate);
   const today = new Date().toISOString().slice(0, 10);
-  const { error } = await a.db.from('projects').update({ start_date: startDate, end_date: endDate, deliverables, status: startDate > today ? 'pre_start' : 'active' }).eq('id', project.id);
-  if (error) return fail(error);
-  if (endDate) await a.db.from('clients').update({ service_end_date: endDate }).eq('id', deal.client_id);
+  const status = startDate > today ? 'pre_start' : 'active';
+
+  const { data: project } = await db.from('projects').select('id').eq('invoice_id', invoiceId).maybeSingle();
+  if (project) {
+    const { error } = await db.from('projects').update({ start_date: startDate, end_date: endDate, deliverables, status }).eq('id', project.id);
+    if (error) return fail(error);
+  } else {
+    const { data: client } = await db.from('clients').select('name').eq('id', inv.client_id).maybeSingle();
+    const { data: made, error } = await db
+      .from('projects')
+      .insert({
+        workspace_id: ctx.activeWorkspaceId, client_id: inv.client_id, deal_id: deal?.id || null, invoice_id: invoiceId,
+        name: deal?.title || client?.name || inv.invoice_number || 'Project', start_date: startDate, end_date: endDate, deliverables, status, created_by: ctx.userId,
+      })
+      .select('id')
+      .single();
+    if (error || !made) return fail(error);
+    await notify(db, {
+      workspaceId: ctx.activeWorkspaceId, audience: 'owners', kind: 'project_needs_handler',
+      title: `New project: ${client?.name || inv.invoice_number}`,
+      body: `Starts ${startDate}${endDate ? `, ends ${endDate}` : ''}. Choose the advertiser and admin.`,
+      link: '/optimizing/clients', refId: made.id,
+    });
+    if (deal) await resolveNotifications(db, ctx.activeWorkspaceId, 'deal_paid', deal.id);
+  }
+  if (endDate) await db.from('clients').update({ service_end_date: endDate }).eq('id', inv.client_id);
   revalidatePath('/sales/clients');
   revalidatePath('/sales/pipeline');
+  revalidatePath('/optimizing/clients');
   return { success: true };
 }
 

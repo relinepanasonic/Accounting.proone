@@ -476,10 +476,10 @@ export async function createProduct(payload: {
       scale: payload.scale || 'pc',
     };
     const wanted = lengthColumns(payload);
-    let { error } = await supabase.from('products').insert(wanted.duration_type === 'none' ? row : { ...row, ...wanted });
+    let { data: created, error } = await supabase.from('products').insert(wanted.duration_type === 'none' ? row : { ...row, ...wanted }).select('*').single();
     if (error && isMissingLengthColumn(error)) {
       if (wanted.duration_type !== 'none') return { success: false, error: 'Run supabase/migrations/20261003_sales_flow.sql in Supabase to save project lengths.' };
-      ({ error } = await supabase.from('products').insert(row));
+      ({ data: created, error } = await supabase.from('products').insert(row).select('*').single());
     }
 
     if (error) {
@@ -491,7 +491,8 @@ export async function createProduct(payload: {
       revalidatePath(`/settings/workspaces/${payload.targetWorkspaceId}`);
     }
     revalidatePath('/invoices/new');
-    return { success: true };
+    revalidatePath('/optimizing/catalog');
+    return { success: true, product: created };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Failed to save catalog item.' };
   }

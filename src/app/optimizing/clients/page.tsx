@@ -118,7 +118,7 @@ export default async function OptimizingClientsPage({ searchParams }: { searchPa
         <p className="mt-2 text-xs text-zinc-500">{clients} client{clients === 1 ? '' : 's'} · {rows.length} product line{rows.length === 1 ? '' : 's'}</p>
       </div>
       {TabBar}
-      <ClientProjectsTable rows={rows} showStatus canEditStart={false} canEditNames={false} advertisers={handlers?.advertisers} admins={handlers?.admins} />
+      <ClientProjectsTable rows={rows} showStatus canEditStart canEditNames canEditPaid advertisers={handlers?.advertisers} admins={handlers?.admins} />
     </div>
   );
 }

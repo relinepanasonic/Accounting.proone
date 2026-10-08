@@ -368,7 +368,7 @@ function DealCard({
         </div>
 
         {/* ---- deal won: start the project ---- */}
-        {won && !deal.project && canAct && (
+        {won && !deal.project && viewer.isFinance && (
           <div className="mt-3 space-y-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3" {...stopDrag}>
             <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-300">Start the project</div>
             <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-sm text-zinc-100 [color-scheme:dark]" />

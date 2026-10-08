@@ -309,7 +309,7 @@ export async function approveWithoutPayment(dealId: string): Promise<Result> {
 // ------------------------------------------------------------------------------------------------ 4. project
 export async function startProject(dealId: string, startDate: string): Promise<Result<{ endDate: string | null }>> {
   const a = await actor();
-  if (!a || !SALES_ROLES.includes(a.ctx.role)) return { success: false, error: 'Not allowed.' };
+  if (!a || !FINANCE.includes(a.ctx.role)) return { success: false, error: 'Only Accounting, Admin and the owners can start a project.' };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) return { success: false, error: 'Choose the start date.' };
   const { ctx, db } = a;
 
@@ -559,13 +559,12 @@ export async function decideAcc(dealId: string, approve: boolean, comment: strin
 export async function setProjectStart(invoiceId: string, startDate: string): Promise<Result> {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) return { success: false, error: 'Choose the start date.' };
   const a = await actor();
-  if (!a || !SALES_ROLES.includes(a.ctx.role)) return { success: false, error: 'Not allowed.' };
+  if (!a || !FINANCE.includes(a.ctx.role)) return { success: false, error: 'Only Accounting, Admin and the owners can change the project dates.' };
   const { ctx, db } = a;
 
   const { data: inv } = await db.from('invoices').select('id, invoice_number, client_id, status').eq('id', invoiceId).eq('workspace_id', ctx.activeWorkspaceId).maybeSingle();
   if (!inv) return { success: false, error: 'Invoice not found.' };
   const { data: deal } = await db.from('crm_deals').select('*').eq('invoice_id', invoiceId).eq('workspace_id', ctx.activeWorkspaceId).maybeSingle();
-  if (deal ? !mayTouch(ctx, deal) : !FINANCE.includes(ctx.role)) return { success: false, error: 'This client belongs to another salesman.' };
   if (String(inv.status).toLowerCase() !== 'paid' && deal?.stage !== 'Deal') return { success: false, error: 'The project can start once the invoice is paid or approved.' };
 
   const items = await dealItems(db, ctx.activeWorkspaceId, { id: deal?.id || null, invoice_id: invoiceId });
@@ -606,12 +605,8 @@ export async function setProjectStart(invoiceId: string, startDate: string): Pro
 /** Brand and store name of a client, edited in the Client table. */
 export async function updateClientNames(clientId: string, brand: string, store: string): Promise<Result> {
   const a = await actor();
-  if (!a || !SALES_ROLES.includes(a.ctx.role)) return { success: false, error: 'Not allowed.' };
+  if (!a || !FINANCE.includes(a.ctx.role)) return { success: false, error: 'Only Accounting, Admin and the owners can change client names.' };
   const { ctx, db } = a;
-  if (ctx.role === 'sales') {
-    const { data: own } = await db.from('crm_deals').select('id').eq('client_id', clientId).eq('salesman_id', ctx.userId).limit(1);
-    if (!own?.length) return { success: false, error: 'This client belongs to another salesman.' };
-  }
   const { error } = await db.from('clients').update({ company_name: str(brand) || null, store_name: str(store) || null }).eq('id', clientId).eq('workspace_id', ctx.activeWorkspaceId);
   if (error) return fail(error);
   revalidatePath('/sales/clients');
@@ -638,5 +633,17 @@ export async function setClientHandler(clientId: string, job: 'advertising' | 'a
   revalidatePath('/productivity/advertiser/clients');
   revalidatePath('/productivity/admin/clients');
   revalidatePath('/productivity/assignments');
+  return { success: true };
+}
+
+/** Accounting types the paid date of an invoice by hand. Empty = back to the automatic date. */
+export async function setPaidDate(invoiceId: string, date: string): Promise<Result> {
+  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return { success: false, error: 'Choose a valid date.' };
+  const a = await actor();
+  if (!a || !FINANCE.includes(a.ctx.role)) return { success: false, error: 'Only Accounting, Admin and the owners can set the paid date.' };
+  const { error } = await a.db.from('invoices').update({ client_paid_date: date || null }).eq('id', invoiceId).eq('workspace_id', a.ctx.activeWorkspaceId);
+  if (error) return { success: false, error: error.code === '42703' || /client_paid_date/.test(error.message) ? 'Run supabase/migrations/20261009_client_paid_date.sql in Supabase first.' : error.message };
+  revalidatePath('/sales/clients');
+  revalidatePath('/optimizing/clients');
   return { success: true };
 }

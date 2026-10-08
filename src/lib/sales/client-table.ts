@@ -18,6 +18,8 @@ export interface ClientRow {
   quantity: number;
   /** ISO time the invoice was paid (or Accounting approved the deal without payment). */
   paidAt: string | null;
+  /** The paid date Accounting typed in by hand (YYYY-MM-DD); empty = use the automatic one. */
+  paidManual: string | null;
   accApprovedOnly: boolean;
   start: string | null;
   /** End date from this product's length, or a deliverable text such as "30 videos". */
@@ -41,19 +43,23 @@ export async function loadClientRows(
   workspaceId: string,
   opts: { salesmanId?: string; clientIds?: Set<string>; maskName: (name: string | null | undefined, assignedWorkspaceId?: string | null) => string }
 ): Promise<ClientRow[]> {
-  let q = db
-    .from('invoices')
-    .select('id, invoice_number, status, client_id, issue_date, created_at, assigned_workspace_id')
-    .eq('workspace_id', workspaceId)
-    .eq('is_quotation', false)
-    .not('client_id', 'is', null)
-    .order('issue_date', { ascending: false })
-    .limit(600);
-  if (opts.clientIds) {
-    if (opts.clientIds.size === 0) return [];
-    q = q.in('client_id', Array.from(opts.clientIds));
-  }
-  const { data: allInvoices, error } = await q;
+  // client_paid_date needs one migration; without it the table still works with the automatic paid date.
+  const invoiceQuery = (cols: string) => {
+    let b = db
+      .from('invoices')
+      .select(cols)
+      .eq('workspace_id', workspaceId)
+      .eq('is_quotation', false)
+      .not('client_id', 'is', null)
+      .order('issue_date', { ascending: false })
+      .limit(600);
+    if (opts.clientIds) b = b.in('client_id', Array.from(opts.clientIds));
+    return b;
+  };
+  if (opts.clientIds && opts.clientIds.size === 0) return [];
+  const base = 'id, invoice_number, status, client_id, issue_date, created_at, assigned_workspace_id';
+  let { data: allInvoices, error } = await invoiceQuery(`${base}, client_paid_date`);
+  if (error) ({ data: allInvoices, error } = await invoiceQuery(base));
   if (error || !allInvoices?.length) return [];
   let invoices: any[] = allInvoices.filter((i: any) => !HIDDEN_STATUS.includes(String(i.status || '').toLowerCase()));
   if (!invoices.length) return [];
@@ -129,7 +135,8 @@ export async function loadClientRows(
     const status = String(inv.status || '').toLowerCase();
     const paid = status === 'paid';
     const isDeal = paid || deal?.stage === 'Deal';
-    const paidAt: string | null = deal?.paid_at || deal?.acc_approved_at || (paid ? lastPayment.get(inv.id) || null : null);
+    const paidManual: string | null = inv.client_paid_date || null;
+    const paidAt: string | null = paidManual || deal?.paid_at || deal?.acc_approved_at || (paid ? lastPayment.get(inv.id) || null : null);
     const items = itemsOf(inv, deal);
     const lines = items.length ? items : [NO_LINES];
     const start: string | null = projectByInvoice.get(inv.id)?.start_date || null;
@@ -146,6 +153,7 @@ export async function loadClientRows(
         product: it.name,
         quantity: Number(it.quantity || 1),
         paidAt,
+        paidManual,
         accApprovedOnly: Boolean(deal && !deal.paid_at && deal.acc_approved_at && !paid),
         start,
         end: terms.endDate,

@@ -2,7 +2,7 @@
 
 import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { setClientHandler, setProjectStart, updateClientNames } from '@/app/actions/sales-flow';
+import { setClientHandler, setPaidDate, setProjectStart, updateClientNames } from '@/app/actions/sales-flow';
 import type { ClientRow } from '@/lib/sales/client-table';
 
 const field = 'rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-100 focus:border-[#d4af37]/50 focus:outline-none [color-scheme:dark]';
@@ -43,6 +43,40 @@ function NameCells({ row, canEdit }: { row: ClientRow; canEdit: boolean }) {
         {canEdit ? <input value={store} onChange={(e) => setStore(e.target.value)} onBlur={save} placeholder="Store name" className={cls} /> : <span className="text-zinc-200">{row.store || '-'}</span>}
       </td>
     </>
+  );
+}
+
+function PaidCell({ row, canEdit }: { row: ClientRow; canEdit: boolean }) {
+  const router = useRouter();
+  const auto = row.paidAt ? row.paidAt.slice(0, 10) : '';
+  const [value, setValue] = useState(row.paidManual || auto);
+  const [error, setError] = useState('');
+  const [pending, start] = useTransition();
+  if (!canEdit) {
+    return row.paidAt ? <><span className="text-emerald-300">{stamp(row.paidAt)}</span>{row.accApprovedOnly && <div className="text-[10px] text-sky-300">ACC, unpaid</div>}</> : <span className="text-zinc-600">-</span>;
+  }
+  return (
+    <div>
+      <input
+        type="date"
+        value={value}
+        disabled={pending}
+        onChange={(e) => {
+          const v = e.target.value;
+          setValue(v);
+          setError('');
+          start(async () => {
+            const res = await setPaidDate(row.invoiceId, v);
+            if (!res.success) setError(res.error);
+            router.refresh();
+          });
+        }}
+        className={`${field} ${row.paidManual ? 'border-emerald-500/40' : ''}`}
+      />
+      <div className="mt-1 text-[10px] text-zinc-500">{row.paidManual ? 'typed by Accounting' : row.paidAt ? 'automatic' : 'type the date'}</div>
+      {row.accApprovedOnly && <div className="text-[10px] text-sky-300">ACC, unpaid</div>}
+      {error && <div className="mt-1 text-[10px] text-red-400">{error}</div>}
+    </div>
   );
 }
 
@@ -103,12 +137,14 @@ function HandlerSelect({ clientId, job, current, people }: { clientId: string; j
 }
 
 export function ClientProjectsTable({
-  rows, showStatus, canEditStart, canEditNames, advertisers, admins,
+  rows, showStatus, canEditStart, canEditNames, canEditPaid = false, advertisers, admins,
 }: {
   rows: ClientRow[];
   showStatus: boolean;
   canEditStart: boolean;
   canEditNames: boolean;
+  /** Accounting types the paid date by hand. */
+  canEditPaid?: boolean;
   /** Superadmin / founder only: dropdowns to assign who handles each client. */
   advertisers?: Person[];
   admins?: Person[];
@@ -164,8 +200,7 @@ export function ClientProjectsTable({
               <tr key={row.key} className="hover:bg-zinc-900/30">
                 {i === 0 && (
                   <td rowSpan={g.length} className="px-3 py-3 align-top whitespace-nowrap">
-                    {row.paidAt ? <span className="text-emerald-300">{stamp(row.paidAt)}</span> : <span className="text-zinc-600">-</span>}
-                    {row.accApprovedOnly && <div className="text-[10px] text-sky-300">ACC, unpaid</div>}
+                    <PaidCell row={row} canEdit={canEditPaid} />
                   </td>
                 )}
                 {i === 0 && <td rowSpan={g.length} className="px-3 py-3 align-top whitespace-nowrap"><StartCell row={row} canEdit={canEditStart} /></td>}

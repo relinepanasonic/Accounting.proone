@@ -114,7 +114,7 @@ async function dealTasks(db: Db, workspaceId: string, userId: string): Promise<P
   for (const d of deals) {
     const client = cName.get(d.client_id) || d.lead_name || 'Client';
     if (d.stage === 'Deal' && !hasProject.has(d.id)) {
-      tasks.push({ id: `d-${d.id}`, title: `Start the project: ${client}`, subtitle: 'Paid. Pick the project start date in Clients.', category: 'Sales', done: false, urgent: true, href: '/sales/clients' });
+      tasks.push({ id: `d-${d.id}`, title: `Paid: ${client}`, subtitle: 'Accounting sets the project start date.', category: 'Sales', done: false, urgent: false, href: '/sales/clients' });
     } else if (d.stage === 'Invoice' && d.invoice_generated_at && !d.paid_at) {
       const i = inv.get(d.invoice_id);
       tasks.push({ id: `d-${d.id}`, title: `Send the invoice to ${client}`, subtitle: i?.invoice_number ? `${i.invoice_number} is ready to share` : 'Invoice is ready to share', category: 'Sales', done: false, urgent: false, href: '/sales/pipeline' });

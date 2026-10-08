@@ -1,13 +1,15 @@
 import React from 'react';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
-import { CatalogManager, type CatalogProduct } from '@/components/settings/CatalogManager';
+import { CatalogTable } from '@/components/settings/CatalogTable';
+import type { CatalogProduct } from '@/components/settings/CatalogManager';
+import { FINANCE_ROLES } from '@/lib/auth/workspace-context';
 
 export const dynamic = 'force-dynamic';
 
 export default async function OptimizingCatalogPage() {
   const supabase = await createClient();
-  const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+  const { activeWorkspaceId, role } = await getAuthenticatedWorkspaceContext(supabase);
   let query = supabase.from('products').select('*');
   if (activeWorkspaceId === '11111111-1111-1111-1111-111111111111') {
     query = query.in('workspace_id', [
@@ -45,7 +47,7 @@ export default async function OptimizingCatalogPage() {
 
   return (
     <div className="max-w-[1500px] mx-auto px-6 py-8">
-      <CatalogManager initialProducts={productList} />
+      <CatalogTable initialProducts={productList} canEdit={FINANCE_ROLES.includes(role)} />
     </div>
   );
 }

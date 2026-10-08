@@ -2,21 +2,20 @@
 
 import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { setClientHandler, setPaidDate, setProjectStart, updateClientNames } from '@/app/actions/sales-flow';
+import { setClientHandler, setClientStatus, setPaidDate, setProjectStart, updateClientNames } from '@/app/actions/sales-flow';
 import type { ClientRow } from '@/lib/sales/client-table';
 
 const field = 'rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-100 focus:border-[#d4af37]/50 focus:outline-none [color-scheme:dark]';
 const dmy = (d: string | null) => (d ? new Date(`${d}T12:00:00Z`).toLocaleDateString('id-ID', { timeZone: 'UTC', day: '2-digit', month: 'short', year: 'numeric' }) : '');
 const stamp = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta', day: '2-digit', month: 'short', year: 'numeric' }) : '');
 
-const STATUS_STYLE: Record<string, string> = {
-  paid: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
-  partial_paid: 'bg-blue-500/10 text-blue-300 border-blue-500/30',
-  invoiced: 'bg-amber-500/10 text-amber-300 border-amber-500/30',
-  sent: 'bg-amber-500/10 text-amber-300 border-amber-500/30',
-  overdue: 'bg-red-500/10 text-red-300 border-red-500/30',
-  draft: 'bg-zinc-500/10 text-zinc-300 border-zinc-500/30',
+const LIFE_STYLE: Record<string, string> = {
+  active: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
+  scheduled: 'bg-sky-500/10 text-sky-300 border-sky-500/30',
+  freeze: 'bg-cyan-500/10 text-cyan-200 border-cyan-400/40',
+  churn: 'bg-red-500/10 text-red-300 border-red-500/30',
 };
+const LIFE_LABEL: Record<string, string> = { active: 'Active', scheduled: 'Scheduled', freeze: 'Freeze', churn: 'Churn' };
 
 interface Person { id: string; name: string }
 
@@ -80,6 +79,39 @@ function PaidCell({ row, canEdit }: { row: ClientRow; canEdit: boolean }) {
   );
 }
 
+function StatusCell({ row, canEdit }: { row: ClientRow; canEdit: boolean }) {
+  const router = useRouter();
+  const [error, setError] = useState('');
+  const [pending, start] = useTransition();
+  return (
+    <div className="space-y-1.5">
+      <span className={`inline-flex rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${LIFE_STYLE[row.lifecycle]}`}>{LIFE_LABEL[row.lifecycle]}</span>
+      {row.lifecycle === 'churn' && row.churnDate && <div className="text-[10px] text-zinc-500">since {dmy(row.churnDate)}</div>}
+      {canEdit && (
+        <select
+          value={row.override || 'auto'}
+          disabled={pending}
+          onChange={(e) => {
+            setError('');
+            start(async () => {
+              const res = await setClientStatus(row.invoiceId, e.target.value as 'auto' | 'freeze' | 'churn');
+              if (!res.success) setError(res.error);
+              router.refresh();
+            });
+          }}
+          className={`${field} block`}
+          title="Auto: Active or Scheduled from the dates. Freeze when something happened. Churn to end it by hand."
+        >
+          <option value="auto">Auto</option>
+          <option value="freeze">Freeze</option>
+          <option value="churn">Churn</option>
+        </select>
+      )}
+      {error && <div className="text-[10px] text-red-400">{error}</div>}
+    </div>
+  );
+}
+
 function StartCell({ row, canEdit }: { row: ClientRow; canEdit: boolean }) {
   const router = useRouter();
   const [value, setValue] = useState(row.start || '');
@@ -107,6 +139,7 @@ function StartCell({ row, canEdit }: { row: ClientRow; canEdit: boolean }) {
         className={`${field} ${row.start ? '' : 'border-amber-500/50'}`}
       />
       {!row.start && <div className="mt-1 text-[10px] text-amber-300">Pick the start date</div>}
+      {row.start && row.startAuto && <div className="mt-1 text-[10px] text-zinc-500">from the invoice project date</div>}
       {error && <div className="mt-1 text-[10px] text-red-400">{error}</div>}
     </div>
   );
@@ -137,7 +170,7 @@ function HandlerSelect({ clientId, job, current, people }: { clientId: string; j
 }
 
 export function ClientProjectsTable({
-  rows, showStatus, canEditStart, canEditNames, canEditPaid = false, advertisers, admins,
+  rows, showStatus, canEditStart, canEditNames, canEditPaid = false, canEditStatus = false, advertisers, admins,
 }: {
   rows: ClientRow[];
   showStatus: boolean;
@@ -145,6 +178,8 @@ export function ClientProjectsTable({
   canEditNames: boolean;
   /** Accounting types the paid date by hand. */
   canEditPaid?: boolean;
+  /** Accounting sets Freeze / Churn by hand. */
+  canEditStatus?: boolean;
   /** Superadmin / founder only: dropdowns to assign who handles each client. */
   advertisers?: Person[];
   admins?: Person[];
@@ -220,9 +255,7 @@ export function ClientProjectsTable({
                 </td>
                 {showStatus && i === 0 && (
                   <td rowSpan={g.length} className="px-3 py-3 align-top">
-                    <span className={`inline-flex rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${STATUS_STYLE[String(row.status).toLowerCase()] || STATUS_STYLE.draft}`}>
-                      {String(row.status || '-').replace('_', ' ')}
-                    </span>
+                    <StatusCell row={row} canEdit={canEditStatus} />
                   </td>
                 )}
                 {assign && i === 0 && <td rowSpan={g.length} className="px-3 py-3 align-top"><HandlerSelect clientId={row.clientId} job="advertising" current={row.advertiserId} people={advertisers!} /></td>}

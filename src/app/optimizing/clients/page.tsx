@@ -21,7 +21,8 @@ export const dynamic = 'force-dynamic';
 export default async function OptimizingClientsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const supabase = await createClient();
   const ctx = await getAuthenticatedWorkspaceContext(supabase);
-  const tab = (await searchParams).tab === 'contacts' ? 'contacts' : 'assign';
+  const tabParam = (await searchParams).tab;
+  const tab = tabParam === 'contacts' ? 'contacts' : tabParam === 'churn' ? 'churn' : 'assign';
 
   if (!FINANCE_ROLES.includes(ctx.role)) {
     return (
@@ -35,6 +36,7 @@ export default async function OptimizingClientsPage({ searchParams }: { searchPa
 
   const tabs = [
     { key: 'assign', label: 'Assign & Projects', href: '/optimizing/clients' },
+    { key: 'churn', label: 'Churn', href: '/optimizing/clients?tab=churn' },
     { key: 'contacts', label: 'Contacts', href: '/optimizing/clients?tab=contacts' },
   ] as const;
   const TabBar = (
@@ -102,7 +104,7 @@ export default async function OptimizingClientsPage({ searchParams }: { searchPa
 
   const mask = clientMask({ userEmail: ctx.userEmail, availableWorkspaces: ctx.availableWorkspaces });
   const db = createAdminClient();
-  const rows = await loadClientRows(db, ctx.activeWorkspaceId, { maskName: (name, ws) => mask.name(name, ws, 'Client') });
+  const rows = await loadClientRows(db, ctx.activeWorkspaceId, { archived: tab === 'churn' ? 'only' : 'hide', maskName: (name, ws) => mask.name(name, ws, 'Client') });
   const handlers = owner ? await loadHandlers(db, ctx.activeWorkspaceId) : null;
   const clients = new Set(rows.map((r) => r.clientId)).size;
 
@@ -118,7 +120,7 @@ export default async function OptimizingClientsPage({ searchParams }: { searchPa
         <p className="mt-2 text-xs text-zinc-500">{clients} client{clients === 1 ? '' : 's'} · {rows.length} product line{rows.length === 1 ? '' : 's'}</p>
       </div>
       {TabBar}
-      <ClientProjectsTable rows={rows} showStatus canEditStart canEditNames canEditPaid advertisers={handlers?.advertisers} admins={handlers?.admins} />
+      <ClientProjectsTable rows={rows} showStatus canEditStart canEditNames canEditPaid canEditStatus advertisers={handlers?.advertisers} admins={handlers?.admins} />
     </div>
   );
 }

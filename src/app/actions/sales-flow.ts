@@ -647,3 +647,21 @@ export async function setPaidDate(invoiceId: string, date: string): Promise<Resu
   revalidatePath('/optimizing/clients');
   return { success: true };
 }
+
+/** Accounting sets a client's status by hand: Freeze (something happened), Churn, or back to Auto (Active / Scheduled by the dates). */
+export async function setClientStatus(invoiceId: string, status: 'auto' | 'freeze' | 'churn'): Promise<Result> {
+  if (!['auto', 'freeze', 'churn'].includes(status)) return { success: false, error: 'Unknown status.' };
+  const a = await actor();
+  if (!a || !FINANCE.includes(a.ctx.role)) return { success: false, error: 'Only Accounting, Admin and the owners can change the status.' };
+  const today = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
+  const { error } = await a.db
+    .from('invoices')
+    .update({ client_status: status === 'auto' ? null : status, client_status_at: status === 'auto' ? null : today })
+    .eq('id', invoiceId)
+    .eq('workspace_id', a.ctx.activeWorkspaceId);
+  if (error) return { success: false, error: error.code === '42703' || /client_status/.test(error.message) ? 'Run supabase/migrations/20261010_client_status.sql in Supabase first.' : error.message };
+  revalidatePath('/sales/clients');
+  revalidatePath('/sales/churn');
+  revalidatePath('/optimizing/clients');
+  return { success: true };
+}

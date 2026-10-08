@@ -3,6 +3,9 @@
 // pipeline card or was made by Accounting directly), joined with the pipeline card (paid / approved date) and the project (start).
 // Used by Sales > Client, Optimizing > Clients (with handler assignment) and mirrored in Advertiser / Admin (up to Product).
 import { computeProjectTerms, type RequestItem } from '@/lib/sales/flow';
+import { todayJakarta } from '@/lib/kpi/calendar';
+
+export type Lifecycle = 'active' | 'scheduled' | 'freeze' | 'churn';
 
 type Db = any;
 
@@ -22,6 +25,16 @@ export interface ClientRow {
   paidManual: string | null;
   accApprovedOnly: boolean;
   start: string | null;
+  /** The start comes from the invoice's project date, nobody has picked one yet. */
+  startAuto: boolean;
+  /** Active / Scheduled (project not started) / Freeze (set by hand) / Churn (project ended). */
+  lifecycle: Lifecycle;
+  /** Freeze or Churn set by hand; null = automatic. */
+  override: 'freeze' | 'churn' | null;
+  /** Day the project ended (or was marked churn). */
+  churnDate: string | null;
+  /** Churned in an earlier month: lives on the Churn page, not in Client. */
+  archived: boolean;
   /** End date from this product's length, or a deliverable text such as "30 videos". */
   end: string | null;
   endText: string | null;
@@ -41,7 +54,7 @@ const NO_LINES: RequestItem = { product_id: null, name: '(no product lines)', qu
 export async function loadClientRows(
   db: Db,
   workspaceId: string,
-  opts: { salesmanId?: string; clientIds?: Set<string>; maskName: (name: string | null | undefined, assignedWorkspaceId?: string | null) => string }
+  opts: { salesmanId?: string; clientIds?: Set<string>; archived?: 'hide' | 'only'; maskName: (name: string | null | undefined, assignedWorkspaceId?: string | null) => string }
 ): Promise<ClientRow[]> {
   // client_paid_date needs one migration; without it the table still works with the automatic paid date.
   const invoiceQuery = (cols: string) => {
@@ -57,8 +70,9 @@ export async function loadClientRows(
     return b;
   };
   if (opts.clientIds && opts.clientIds.size === 0) return [];
-  const base = 'id, invoice_number, status, client_id, issue_date, created_at, assigned_workspace_id';
-  let { data: allInvoices, error } = await invoiceQuery(`${base}, client_paid_date`);
+  const base = 'id, invoice_number, status, client_id, issue_date, created_at, assigned_workspace_id, notes';
+  let { data: allInvoices, error } = await invoiceQuery(`${base}, client_paid_date, client_status, client_status_at`);
+  if (error) ({ data: allInvoices, error } = await invoiceQuery(`${base}, client_paid_date`));
   if (error) ({ data: allInvoices, error } = await invoiceQuery(base));
   if (error || !allInvoices?.length) return [];
   let invoices: any[] = allInvoices.filter((i: any) => !HIDDEN_STATUS.includes(String(i.status || '').toLowerCase()));
@@ -127,6 +141,7 @@ export async function loadClientRows(
     });
   };
 
+  const today = todayJakarta();
   const rows: ClientRow[] = [];
   for (const inv of invoices) {
     const client = clientById.get(inv.client_id);
@@ -139,7 +154,22 @@ export async function loadClientRows(
     const paidAt: string | null = paidManual || deal?.paid_at || deal?.acc_approved_at || (paid ? lastPayment.get(inv.id) || null : null);
     const items = itemsOf(inv, deal);
     const lines = items.length ? items : [NO_LINES];
-    const start: string | null = projectByInvoice.get(inv.id)?.start_date || null;
+    const projectDate = /\[ProjectDate:(\d{4}-\d{2}-\d{2})\]/.exec(inv.notes || '')?.[1] || null;
+    const pickedStart: string | null = projectByInvoice.get(inv.id)?.start_date || null;
+    const start: string | null = pickedStart || (isDeal ? projectDate : null);
+    const override: 'freeze' | 'churn' | null = inv.client_status === 'freeze' || inv.client_status === 'churn' ? inv.client_status : null;
+    const ends = lines.map((it) => (start ? computeProjectTerms([it], start).endDate : null)).filter(Boolean) as string[];
+    const projectEnd = ends.length ? ends.sort()[ends.length - 1] : null;
+    let lifecycle: Lifecycle;
+    let churnDate: string | null = null;
+    if (override === 'churn') { lifecycle = 'churn'; churnDate = inv.client_status_at || today; }
+    else if (override === 'freeze') lifecycle = 'freeze';
+    else if (!isDeal || !start || start > today) lifecycle = 'scheduled';
+    else if (projectEnd && projectEnd < today) { lifecycle = 'churn'; churnDate = projectEnd; }
+    else lifecycle = 'active';
+    // A churned client stays in Client until the end of that month, then moves to the Churn page.
+    const archived = lifecycle === 'churn' && !!churnDate && churnDate.slice(0, 7) < today.slice(0, 7);
+    if (opts.archived === 'only' ? !archived : archived) continue;
     lines.forEach((it, i) => {
       const terms = start ? computeProjectTerms([it], start) : { endDate: null, deliverables: [] };
       rows.push({
@@ -156,6 +186,11 @@ export async function loadClientRows(
         paidManual,
         accApprovedOnly: Boolean(deal && !deal.paid_at && deal.acc_approved_at && !paid),
         start,
+        startAuto: !pickedStart && !!start,
+        lifecycle,
+        override,
+        churnDate,
+        archived,
         end: terms.endDate,
         endText: terms.deliverables.length ? terms.deliverables.map((x) => `${x.total} ${x.unit}`).join(' · ') : null,
         invoiceNumber: inv.invoice_number || null,

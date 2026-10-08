@@ -39,7 +39,7 @@ export function CatalogTable({ initialProducts, canEdit }: { initialProducts: Ca
       const res = await updateProduct({
         id: row.id, name: row.name.trim(), description: row.description || '', unitPrice: Number(row.unit_price) || 0,
         quantity: Number(row.quantity) || 1, scale: row.scale || 'pc',
-        durationType: (row.duration_type || 'none') as DurType, durationValue: Number(row.duration_value) || 0, deliverableUnit: row.deliverable_unit || 'video',
+        durationType: (row.duration_type || 'none') as DurType, durationValue: Number(row.duration_value) || 0, deliverableUnit: row.deliverable_unit || 'pc',
       });
       if (!res.success) setError(res.error || 'Could not save.');
       setBusy(null);
@@ -48,7 +48,7 @@ export function CatalogTable({ initialProducts, canEdit }: { initialProducts: Ca
 
   /** Length drop-down: type change saves at once; the number and unit save when you leave them. */
   const changeType = (row: Row, type: DurType) => {
-    const next: Row = { ...row, duration_type: type, duration_value: type === 'none' ? 0 : row.duration_value && Number(row.duration_value) > 0 ? row.duration_value : 1, deliverable_unit: type === 'deliverable' ? row.deliverable_unit || 'video' : null };
+    const next: Row = { ...row, duration_type: type, duration_value: type === 'none' ? 0 : row.duration_value && Number(row.duration_value) > 0 ? row.duration_value : 1, deliverable_unit: type === 'deliverable' ? row.deliverable_unit || 'pc' : null };
     if (row._new) setRows((l) => l.map((r) => (r.id === row.id ? next : r)));
     else { patchLocal(row.id, next); save(next); }
   };
@@ -65,7 +65,7 @@ export function CatalogTable({ initialProducts, canEdit }: { initialProducts: Ca
     start(async () => {
       const res: any = await createProduct({
         name: row.name.trim(), description: row.description || '', unitPrice: Number(row.unit_price) || 0, quantity: Number(row.quantity) || 1, scale: row.scale || 'pc',
-        durationType: (row.duration_type || 'none') as DurType, durationValue: Number(row.duration_value) || 0, deliverableUnit: row.deliverable_unit || 'video',
+        durationType: (row.duration_type || 'none') as DurType, durationValue: Number(row.duration_value) || 0, deliverableUnit: row.deliverable_unit || 'pc',
       });
       if (res.success && res.product) setRows((l) => l.map((r) => (r.id === row.id ? { ...res.product } : r)));
       else setError(res.error || 'Could not add the product.');
@@ -98,12 +98,12 @@ export function CatalogTable({ initialProducts, canEdit }: { initialProducts: Ca
   const LengthCell = ({ row }: { row: Row }) => {
     const type = (row.duration_type || 'none') as DurType;
     return (
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className="flex flex-nowrap items-center gap-2">
         <select value={type} disabled={!canEdit} onChange={(e) => changeType(row, e.target.value as DurType)} className={box}>
           <option value="none">No length</option>
           <option value="day">Days</option>
           <option value="month">Months</option>
-          <option value="deliverable">Videos / photos</option>
+          <option value="deliverable">Pc</option>
         </select>
         {type !== 'none' && (
           <input
@@ -115,10 +115,10 @@ export function CatalogTable({ initialProducts, canEdit }: { initialProducts: Ca
         )}
         {type === 'deliverable' && (
           <input
-            value={row.deliverable_unit || ''} disabled={!canEdit} placeholder="video" aria-label="Unit"
+            value={row.deliverable_unit || ''} disabled={!canEdit} placeholder="pc" aria-label="Unit"
             onChange={(e) => patchLocal(row.id, { deliverable_unit: e.target.value })}
             onBlur={() => save(row)}
-            className={`${box} w-20`}
+            className={`${box} w-24`}
           />
         )}
       </div>
@@ -145,7 +145,16 @@ export function CatalogTable({ initialProducts, canEdit }: { initialProducts: Ca
       {error && <p className="flex items-center justify-between rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">{error}<button onClick={() => setError('')} aria-label="Dismiss"><X className="h-3.5 w-3.5" /></button></p>}
 
       <div className="overflow-x-auto rounded-xl border border-[#d4af37]/20 bg-[#0e0f14] shadow-xl">
-        <table className="w-full min-w-[980px] text-left">
+        <table className="w-full min-w-[1000px] table-fixed text-left">
+          <colgroup>
+            <col style={{ width: '15%' }} />
+            <col style={{ width: '20%' }} />
+            <col style={{ width: '11%' }} />
+            <col style={{ width: '6%' }} />
+            <col style={{ width: '7%' }} />
+            <col style={{ width: '33%' }} />
+            {canEdit && <col style={{ width: '8%' }} />}
+          </colgroup>
           <thead className="border-b border-[#d4af37]/10 bg-zinc-900/50 text-[11px] uppercase tracking-wider text-zinc-400">
             <tr>
               <th className="px-3 py-3 font-bold">Product</th>
@@ -161,10 +170,10 @@ export function CatalogTable({ initialProducts, canEdit }: { initialProducts: Ca
             {shown.length === 0 && <tr><td colSpan={7} className="p-8 text-center text-sm text-zinc-500">No products. {canEdit ? 'Press "Add new product".' : ''}</td></tr>}
             {shown.map((row) => (
               <tr key={row.id} className={row._new ? 'bg-[#d4af37]/[0.06]' : 'hover:bg-zinc-900/30'}>
-                <td className="px-2 py-2 align-top w-[22%]">
+                <td className="px-2 py-2 align-top">
                   <input className={`${cell} font-semibold`} value={row.name} disabled={!canEdit} placeholder="Product name" onChange={(e) => patchLocal(row.id, { name: e.target.value })} onBlur={() => save(row)} />
                 </td>
-                <td className="px-2 py-2 align-top w-[26%]">
+                <td className="px-2 py-2 align-top">
                   {descOpen === row.id || row._new ? (
                     <textarea
                       className={`${cell} min-h-[70px]`} rows={3} value={row.description || ''} disabled={!canEdit} placeholder="One line per bullet"
@@ -178,7 +187,7 @@ export function CatalogTable({ initialProducts, canEdit }: { initialProducts: Ca
                     </button>
                   )}
                 </td>
-                <td className="px-2 py-2 align-top w-[12%]">
+                <td className="px-2 py-2 align-top">
                   <input
                     className={`${cell} text-right font-mono`} inputMode="numeric" disabled={!canEdit}
                     value={row.unit_price ? String(row.unit_price) : ''} placeholder="0" title={rp(Number(row.unit_price))}
@@ -187,13 +196,13 @@ export function CatalogTable({ initialProducts, canEdit }: { initialProducts: Ca
                   />
                   <div className="px-2 text-right text-[10px] text-zinc-600">{rp(Number(row.unit_price))}</div>
                 </td>
-                <td className="px-2 py-2 align-top w-[6%]">
+                <td className="px-2 py-2 align-top">
                   <input className={`${cell} text-center`} type="number" min={1} disabled={!canEdit} value={row.quantity ?? 1} onChange={(e) => patchLocal(row.id, { quantity: Number(e.target.value) })} onBlur={() => save(row)} />
                 </td>
-                <td className="px-2 py-2 align-top w-[7%]">
+                <td className="px-2 py-2 align-top">
                   <input className={cell} disabled={!canEdit} value={row.scale || ''} placeholder="pc" onChange={(e) => patchLocal(row.id, { scale: e.target.value })} onBlur={() => save(row)} />
                 </td>
-                <td className="px-2 py-2 align-top"><LengthCell row={row} /></td>
+                <td className="px-2 py-2 align-top whitespace-nowrap"><LengthCell row={row} /></td>
                 {canEdit && (
                   <td className="px-2 py-2 align-top text-right whitespace-nowrap">
                     {busy === row.id ? <Loader2 className="ml-auto h-4 w-4 animate-spin text-zinc-500" /> : row._new ? (

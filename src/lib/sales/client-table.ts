@@ -4,6 +4,15 @@
 // Used by Sales > Client, Optimizing > Clients (with handler assignment) and mirrored in Advertiser / Admin (up to Product).
 import { computeProjectTerms, type RequestItem } from '@/lib/sales/flow';
 import { todayJakarta } from '@/lib/kpi/calendar';
+import { PT_WORKSPACE_ID } from '@/lib/workspaces/known';
+
+/**
+ * Which invoices belong to a workspace's Client table: its own, plus (for a workspace other than PT Pintu) the PT Pintu invoices
+ * tagged with that workspace. PT issues and collects the money; the job and the client stay in the tagged workspace.
+ * Only the payment is connected. Use as a PostgREST .or() filter.
+ */
+export const invoiceScope = (workspaceId: string) =>
+  workspaceId === PT_WORKSPACE_ID ? `workspace_id.eq.${workspaceId}` : `workspace_id.eq.${workspaceId},and(workspace_id.eq.${PT_WORKSPACE_ID},assigned_workspace_id.eq.${workspaceId})`;
 
 export type Lifecycle = 'active' | 'scheduled' | 'freeze' | 'churn';
 
@@ -59,7 +68,7 @@ async function loadInvoiceRows(db: Db, workspaceId: string, opts: LoadOpts): Pro
     let b = db
       .from('invoices')
       .select(cols)
-      .eq('workspace_id', workspaceId)
+      .or(invoiceScope(workspaceId))
       .eq('is_quotation', false)
       .not('client_id', 'is', null)
       .order('issue_date', { ascending: false })
@@ -86,7 +95,7 @@ async function loadInvoiceRows(db: Db, workspaceId: string, opts: LoadOpts): Pro
     db.from('invoice_line_items').select('invoice_id, package_name, description, quantity').in('invoice_id', invoiceIds),
     db.from('products').select('id, name, duration_type, duration_value, deliverable_unit').eq('workspace_id', workspaceId),
     db.from('client_assignments').select('client_id, user_id, job').eq('workspace_id', workspaceId).in('client_id', clientIds).in('job', ['advertising', 'admin']),
-    db.from('journal_entries').select('reference_id, transaction_date').eq('workspace_id', workspaceId).in('reference_id', invoiceIds).in('reference_type', ['bank_match', 'payment', 'payment_tx', 'invoice_payment']).gt('credit_amount', 0),
+    db.from('journal_entries').select('reference_id, transaction_date').in('reference_id', invoiceIds).in('reference_type', ['bank_match', 'payment', 'payment_tx', 'invoice_payment']).gt('credit_amount', 0),
   ]);
 
   const dealByInvoice = new Map<string, any>((dealsRes.data || []).map((d: any) => [d.invoice_id, d]));
@@ -213,7 +222,7 @@ export async function loadClientRows(db: Db, workspaceId: string, opts: LoadOpts
   if (!opts.includeAll || opts.archived === 'only' || opts.salesmanId) return rows;
 
   // Clients that already have an issued invoice are covered above (or archived in Churn).
-  const { data: used } = await db.from('invoices').select('client_id, status').eq('workspace_id', workspaceId).eq('is_quotation', false).not('client_id', 'is', null).limit(3000);
+  const { data: used } = await db.from('invoices').select('client_id, status').or(invoiceScope(workspaceId)).eq('is_quotation', false).not('client_id', 'is', null).limit(3000);
   const hasInvoice = new Set<string>((used || []).filter((i: any) => !HIDDEN_STATUS.includes(String(i.status || '').toLowerCase())).map((i: any) => i.client_id));
 
   const build = (hide: boolean) => {

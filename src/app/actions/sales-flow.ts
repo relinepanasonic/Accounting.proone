@@ -8,6 +8,7 @@ import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { clientMask } from '@/lib/auth/client-privacy';
 import { MANUAL_STAGES, PIPELINE_STAGES, PROPOSAL_STAGES, computeProjectTerms, requestTotal, type NegotiationNote, type RequestItem } from '@/lib/sales/flow';
 import { dealItems, notify, resolveNotifications } from '@/lib/sales/server';
+import { invoiceScope } from '@/lib/sales/client-table';
 
 type Result<T = {}> = ({ success: true } & T) | { success: false; error: string };
 
@@ -562,7 +563,7 @@ export async function setProjectStart(invoiceId: string, startDate: string): Pro
   if (!a || !FINANCE.includes(a.ctx.role)) return { success: false, error: 'Only Accounting, Admin and the owners can change the project dates.' };
   const { ctx, db } = a;
 
-  const { data: inv } = await db.from('invoices').select('id, invoice_number, client_id, status').eq('id', invoiceId).eq('workspace_id', ctx.activeWorkspaceId).maybeSingle();
+  const { data: inv } = await db.from('invoices').select('id, invoice_number, client_id, status').eq('id', invoiceId).or(invoiceScope(ctx.activeWorkspaceId)).maybeSingle();
   if (!inv) return { success: false, error: 'Invoice not found.' };
   const { data: deal } = await db.from('crm_deals').select('*').eq('invoice_id', invoiceId).eq('workspace_id', ctx.activeWorkspaceId).maybeSingle();
   if (String(inv.status).toLowerCase() !== 'paid' && deal?.stage !== 'Deal') return { success: false, error: 'The project can start once the invoice is paid or approved.' };
@@ -641,7 +642,7 @@ export async function setPaidDate(invoiceId: string, date: string): Promise<Resu
   if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return { success: false, error: 'Choose a valid date.' };
   const a = await actor();
   if (!a || !FINANCE.includes(a.ctx.role)) return { success: false, error: 'Only Accounting, Admin and the owners can set the paid date.' };
-  const { error } = await a.db.from('invoices').update({ client_paid_date: date || null }).eq('id', invoiceId).eq('workspace_id', a.ctx.activeWorkspaceId);
+  const { error } = await a.db.from('invoices').update({ client_paid_date: date || null }).eq('id', invoiceId).or(invoiceScope(a.ctx.activeWorkspaceId));
   if (error) return { success: false, error: error.code === '42703' || /client_paid_date/.test(error.message) ? 'Run supabase/migrations/20261009_client_paid_date.sql in Supabase first.' : error.message };
   revalidatePath('/sales/clients');
   revalidatePath('/optimizing/clients');
@@ -658,7 +659,7 @@ export async function setClientStatus(invoiceId: string, status: 'auto' | 'freez
     .from('invoices')
     .update({ client_status: status === 'auto' ? null : status, client_status_at: status === 'auto' ? null : today })
     .eq('id', invoiceId)
-    .eq('workspace_id', a.ctx.activeWorkspaceId);
+    .or(invoiceScope(a.ctx.activeWorkspaceId));
   if (error) return { success: false, error: error.code === '42703' || /client_status/.test(error.message) ? 'Run supabase/migrations/20261010_client_status.sql in Supabase first.' : error.message };
   revalidatePath('/sales/clients');
   revalidatePath('/sales/churn');

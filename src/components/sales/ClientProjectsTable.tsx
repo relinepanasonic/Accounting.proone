@@ -82,31 +82,46 @@ function PaidCell({ row, canEdit }: { row: ClientRow; canEdit: boolean }) {
 
 function StatusCell({ row, canEdit }: { row: ClientRow; canEdit: boolean }) {
   const router = useRouter();
+  const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
   const [pending, start] = useTransition();
+  const editable = canEdit && Boolean(row.invoiceId);
+  const badge = `inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${LIFE_STYLE[row.lifecycle]}`;
+
+  const choose = (status: 'auto' | 'freeze' | 'churn') => {
+    setError('');
+    start(async () => {
+      const res = await setClientStatus(row.invoiceId, status);
+      if (!res.success) setError(res.error);
+      else setOpen(false);
+      router.refresh();
+    });
+  };
+
   return (
     <div className="space-y-1.5">
-      <span className={`inline-flex rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${LIFE_STYLE[row.lifecycle]}`}>{LIFE_LABEL[row.lifecycle]}</span>
+      {editable ? (
+        <button type="button" onClick={() => setOpen((o) => !o)} disabled={pending} className={`${badge} cursor-pointer hover:brightness-125`} title="Click to change the status">
+          {LIFE_LABEL[row.lifecycle]} <span className="text-[8px] opacity-70">{open ? '▲' : '▼'}</span>
+        </button>
+      ) : (
+        <span className={badge}>{LIFE_LABEL[row.lifecycle]}</span>
+      )}
       {row.lifecycle === 'churn' && row.churnDate && <div className="text-[10px] text-zinc-500">since {dmy(row.churnDate)}</div>}
-      {canEdit && row.invoiceId && (
-        <select
-          value={row.override || 'auto'}
-          disabled={pending}
-          onChange={(e) => {
-            setError('');
-            start(async () => {
-              const res = await setClientStatus(row.invoiceId, e.target.value as 'auto' | 'freeze' | 'churn');
-              if (!res.success) setError(res.error);
-              router.refresh();
-            });
-          }}
-          className={`${field} block`}
-          title="Auto: Active or Scheduled from the dates. Freeze when something happened. Churn to end it by hand."
-        >
-          <option value="auto">Auto</option>
-          <option value="freeze">Freeze</option>
-          <option value="churn">Churn</option>
-        </select>
+      {editable && open && (
+        <div className="flex flex-col items-start gap-1 rounded-lg border border-zinc-800 bg-zinc-950 p-1.5">
+          {([['auto', 'Auto (by dates)'], ['freeze', 'Freeze'], ['churn', 'Churn']] as const).map(([k, label]) => (
+            <button
+              key={k}
+              type="button"
+              disabled={pending}
+              onClick={() => choose(k)}
+              className={`w-full rounded-md px-2 py-1 text-left text-[11px] font-semibold hover:bg-zinc-800 ${(row.override || 'auto') === k ? 'text-[#f5d77f]' : 'text-zinc-300'}`}
+            >
+              {(row.override || 'auto') === k ? '✓ ' : ''}{label}
+            </button>
+          ))}
+        </div>
       )}
       {error && <div className="text-[10px] text-red-400">{error}</div>}
     </div>
@@ -251,7 +266,7 @@ export function ClientProjectsTable({
                   </td>
                 )}
                 {i === 0 && <NameCells row={row} canEdit={canEditNames} />}
-                <td className="px-3 py-3 text-zinc-200">
+                <td className="min-w-[260px] px-3 py-3 text-zinc-200">
                   {row.product}
                   {row.quantity > 1 && <span className="ml-1 text-xs text-zinc-500">x{row.quantity}</span>}
                 </td>

@@ -104,7 +104,7 @@ export default async function OptimizingClientsPage({ searchParams }: { searchPa
 
   const mask = clientMask({ userEmail: ctx.userEmail, availableWorkspaces: ctx.availableWorkspaces });
   const db = createAdminClient();
-  const rows = await loadClientRows(db, ctx.activeWorkspaceId, { archived: tab === 'churn' ? 'only' : 'hide', maskName: (name, ws) => mask.name(name, ws, 'Client') });
+  const rows = await loadClientRows(db, ctx.activeWorkspaceId, { archived: tab === 'churn' ? 'only' : 'hide', includeAll: true, maskName: (name, ws) => mask.name(name, ws, 'Client') });
   const handlers = owner ? await loadHandlers(db, ctx.activeWorkspaceId) : null;
   const clients = new Set(rows.map((r) => r.clientId)).size;
 
@@ -114,7 +114,7 @@ export default async function OptimizingClientsPage({ searchParams }: { searchPa
         <h1 className="text-2xl font-extrabold text-zinc-100 font-serif">Optimizing · Clients</h1>
         <p className="text-sm text-zinc-400 mt-1">
           {owner
-            ? 'Choose who handles each client. The advertiser sees it under Advertiser > Client, the admin under Admin > Client. Only assigned clients show there.'
+            ? 'All our clients are here, also the ones without an invoice yet. Choose who handles each client: the advertiser sees it under Advertiser > Client, the admin under Admin > Client. Only assigned clients show there.'
             : 'Every client product line with its project dates and payment status. Only a superadmin or the founder assigns the advertiser and admin.'}
         </p>
         <p className="mt-2 text-xs text-zinc-500">{clients} client{clients === 1 ? '' : 's'} · {rows.length} product line{rows.length === 1 ? '' : 's'}</p>

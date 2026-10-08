@@ -49,6 +49,7 @@ function PaidCell({ row, canEdit }: { row: ClientRow; canEdit: boolean }) {
   const router = useRouter();
   const auto = row.paidAt ? row.paidAt.slice(0, 10) : '';
   const [value, setValue] = useState(row.paidManual || auto);
+  if (!row.invoiceId) return <span className="text-zinc-600">-</span>;
   const [error, setError] = useState('');
   const [pending, start] = useTransition();
   if (!canEdit) {
@@ -87,7 +88,7 @@ function StatusCell({ row, canEdit }: { row: ClientRow; canEdit: boolean }) {
     <div className="space-y-1.5">
       <span className={`inline-flex rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${LIFE_STYLE[row.lifecycle]}`}>{LIFE_LABEL[row.lifecycle]}</span>
       {row.lifecycle === 'churn' && row.churnDate && <div className="text-[10px] text-zinc-500">since {dmy(row.churnDate)}</div>}
-      {canEdit && (
+      {canEdit && row.invoiceId && (
         <select
           value={row.override || 'auto'}
           disabled={pending}
@@ -117,6 +118,7 @@ function StartCell({ row, canEdit }: { row: ClientRow; canEdit: boolean }) {
   const [value, setValue] = useState(row.start || '');
   const [error, setError] = useState('');
   const [pending, start] = useTransition();
+  if (!row.invoiceId) return <span className="text-zinc-600">-</span>;
   if (!row.isDeal) return <span className="text-[11px] text-zinc-600">after payment</span>;
   if (!canEdit) return <span className="text-zinc-300">{dmy(row.start) || '-'}</span>;
   return (
@@ -208,7 +210,7 @@ export function ClientProjectsTable({
             <input type="checkbox" checked={onlyOpen} onChange={(e) => setOnlyOpen(e.target.checked)} className="accent-[#d4af37]" /> Only clients missing an advertiser or admin
           </label>
         )}
-        <span className="text-[11px] text-zinc-500">{groups.length} invoice{groups.length === 1 ? '' : 's'}</span>
+        <span className="text-[11px] text-zinc-500">{groups.length} row{groups.length === 1 ? '' : 's'}</span>
       </div>
     <div className="overflow-x-auto rounded-xl border border-[#d4af37]/20 bg-[#0e0f14] shadow-xl">
       <table className="w-full text-left text-sm">
@@ -230,7 +232,7 @@ export function ClientProjectsTable({
           <tbody><tr><td colSpan={12} className="p-8 text-center text-zinc-500">No invoices match.</td></tr></tbody>
         )}
         {groups.map((g) => (
-          <tbody key={g[0].invoiceId} className="divide-y divide-zinc-800/40 border-t border-zinc-800/70">
+          <tbody key={g[0].key} className="divide-y divide-zinc-800/40 border-t border-zinc-800/70">
             {g.map((row, i) => (
               <tr key={row.key} className="hover:bg-zinc-900/30">
                 {i === 0 && (

@@ -19,6 +19,7 @@ export async function DivisionClients({ base, job, title }: { base: '/productivi
   const mine = owner ? undefined : await assignedClientIds(db, activeWorkspaceId, userId || undefined, job);
   const rows = await loadClientRows(db, activeWorkspaceId, {
     clientIds: mine,
+    includeAll: true,
     maskName: (name, ws) => mask.name(name, ws, 'Client'),
   });
   const clients = new Set(rows.map((r) => r.clientId)).size;

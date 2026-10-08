@@ -51,11 +51,9 @@ export interface ClientRow {
 const HIDDEN_STATUS = ['draft', 'void', 'cancelled', 'canceled'];
 const NO_LINES: RequestItem = { product_id: null, name: '(no product lines)', quantity: 1, unit_price: 0, scale: null, duration_type: 'none', duration_value: 0, deliverable_unit: null };
 
-export async function loadClientRows(
-  db: Db,
-  workspaceId: string,
-  opts: { salesmanId?: string; clientIds?: Set<string>; archived?: 'hide' | 'only'; maskName: (name: string | null | undefined, assignedWorkspaceId?: string | null) => string }
-): Promise<ClientRow[]> {
+type LoadOpts = { salesmanId?: string; clientIds?: Set<string>; archived?: 'hide' | 'only'; maskName: (name: string | null | undefined, assignedWorkspaceId?: string | null) => string };
+
+async function loadInvoiceRows(db: Db, workspaceId: string, opts: LoadOpts): Promise<ClientRow[]> {
   // client_paid_date needs one migration; without it the table still works with the automatic paid date.
   const invoiceQuery = (cols: string) => {
     let b = db
@@ -204,4 +202,61 @@ export async function loadClientRows(
     });
   }
   return rows;
+}
+
+/**
+ * The Client table. With includeAll, every client of the contact book is listed too, also the ones that have no invoice yet
+ * (one row, product "No invoice yet"), so each client can be handed to an advertiser and an admin.
+ */
+export async function loadClientRows(db: Db, workspaceId: string, opts: LoadOpts & { includeAll?: boolean }): Promise<ClientRow[]> {
+  const rows = await loadInvoiceRows(db, workspaceId, opts);
+  if (!opts.includeAll || opts.archived === 'only' || opts.salesmanId) return rows;
+
+  // Clients that already have an issued invoice are covered above (or archived in Churn).
+  const { data: used } = await db.from('invoices').select('client_id, status').eq('workspace_id', workspaceId).eq('is_quotation', false).not('client_id', 'is', null).limit(3000);
+  const hasInvoice = new Set<string>((used || []).filter((i: any) => !HIDDEN_STATUS.includes(String(i.status || '').toLowerCase())).map((i: any) => i.client_id));
+
+  const build = (hide: boolean) => {
+    let q = db.from('clients').select('id, name, company_name, store_name, contact_type').eq('workspace_id', workspaceId).neq('contact_type', 'vendor').order('name').limit(1000);
+    if (hide) q = q.eq('is_prospect', false);
+    return q;
+  };
+  let { data: clients, error } = await build(true);
+  if (error) ({ data: clients, error } = await build(false));
+  const list: any[] = (clients || []).filter((c: any) => !hasInvoice.has(c.id) && (!opts.clientIds || opts.clientIds.has(c.id)));
+  if (!list.length) return rows;
+
+  const { data: assigns } = await db.from('client_assignments').select('client_id, user_id, job').eq('workspace_id', workspaceId).in('client_id', list.map((c) => c.id)).in('job', ['advertising', 'admin']);
+  const handler = (id: string, job: string) => (assigns || []).find((a: any) => a.client_id === id && a.job === job)?.user_id || null;
+
+  const extra: ClientRow[] = list.map((c) => ({
+    key: `client-${c.id}`,
+    invoiceId: '',
+    dealId: null,
+    clientId: c.id,
+    clientName: opts.maskName(c.name, null),
+    brand: c.company_name || '',
+    store: c.store_name || '',
+    product: 'No invoice yet',
+    quantity: 1,
+    paidAt: null,
+    paidManual: null,
+    accApprovedOnly: false,
+    start: null,
+    startAuto: false,
+    lifecycle: 'scheduled' as Lifecycle,
+    override: null,
+    churnDate: null,
+    archived: false,
+    end: null,
+    endText: null,
+    invoiceNumber: null,
+    status: null,
+    isDeal: false,
+    advertiserId: handler(c.id, 'advertising'),
+    adminId: handler(c.id, 'admin'),
+    groupSize: 1,
+    groupIndex: 0,
+  }));
+  return [...rows, ...extra];
 }

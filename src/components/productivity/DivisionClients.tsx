@@ -16,7 +16,14 @@ export async function DivisionClients({ base, job, title }: { base: '/productivi
   const db = createAdminClient();
   const owner = role === 'superadmin' || role === 'founder';
 
-  const mine = owner ? undefined : await assignedClientIds(db, activeWorkspaceId, userId || undefined, job);
+  // Only clients that are already assigned: a person sees the ones given to them; an owner sees every client that has someone on this job.
+  let mine: Set<string>;
+  if (owner) {
+    const { data: given } = await db.from('client_assignments').select('client_id').eq('workspace_id', activeWorkspaceId).eq('job', job);
+    mine = new Set<string>((given || []).map((a: any) => a.client_id));
+  } else {
+    mine = await assignedClientIds(db, activeWorkspaceId, userId || undefined, job);
+  }
   const rows = await loadClientRows(db, activeWorkspaceId, {
     clientIds: mine,
     includeAll: true,
@@ -30,7 +37,7 @@ export async function DivisionClients({ base, job, title }: { base: '/productivi
       <div>
         <h1 className="text-2xl font-extrabold text-zinc-100 font-serif">{title} · Clients</h1>
         <p className="text-sm text-zinc-400 mt-1">
-          {owner ? 'All clients with an invoice. Assign who handles each one in Optimizing > Clients.' : 'The clients a superadmin assigned to you.'}
+          {owner ? 'Every client that already has someone on this job. Assign who handles each one in Optimizing > Clients.' : 'The clients a superadmin assigned to you.'}
         </p>
         <p className="mt-2 text-xs text-zinc-500">{clients} client{clients === 1 ? '' : 's'} · {rows.length} product line{rows.length === 1 ? '' : 's'}</p>
       </div>

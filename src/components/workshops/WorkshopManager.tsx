@@ -92,7 +92,7 @@ export function WorkshopManager() {
     setBusy(false);
     if (error) return setMsg(`✗ ${error.message}`);
     // Row rules hide a row you may not write: nothing changed and there is no error.
-    if (!data || data.length === 0) return setMsg('✗ Nothing was saved. Only the founder and superadmins can change workshops.');
+    if (!data || data.length === 0) return setMsg('✗ Nothing was saved. Only sales, superadmins and the founder can change workshops.');
     setMsg(form.id ? '✓ Event updated. The website shows it now.' : '✓ Event created. The website shows it now.');
     setForm(blank());
     load();
@@ -109,7 +109,7 @@ export function WorkshopManager() {
     if (!window.confirm(`Delete "${e.title}" on ${fmtLong(e.starts_at)}? This cannot be undone.`)) return;
     const { data, error } = await supabase.from('workshop_events').delete().eq('id', e.id).select('id');
     if (error) setMsg(`✗ ${error.message}`);
-    else if (!data || data.length === 0) setMsg('✗ Nothing was deleted. Only the founder and superadmins can change workshops.');
+    else if (!data || data.length === 0) setMsg('✗ Nothing was deleted. Only sales, superadmins and the founder can change workshops.');
     else { if (form.id === e.id) setForm(blank()); load(); }
   }
 

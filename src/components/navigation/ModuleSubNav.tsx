@@ -27,6 +27,7 @@ const MODULES = {
       { name: 'Pipeline', href: '/sales/pipeline' },
       { name: 'Client', href: '/sales/clients' },
       { name: 'Churn', href: '/sales/churn' },
+      { name: 'Workshops', href: '/sales/workshops' },
       { name: 'Reimbursement', href: '/sales/reimbursement' },
     ]
   },

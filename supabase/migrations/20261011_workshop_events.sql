@@ -1,17 +1,17 @@
--- Kampus Online workshop schedule, managed from /workshops in the ERP (founder + superadmins) and read by the public
+-- Kampus Online workshop schedule, managed from Sales > Workshops in the ERP (sales, superadmins, founder) and read by the public
 -- marketing site (profesoronline.id/kampus/ and /kampus/workshop/) with the anon key.
 -- Only published events are visible to the public; nothing sensitive is stored here (it is the same info shown on the landing page).
 -- Run in the Supabase SQL editor of the ERP project (htokejxhuwodgxlmadpr). Idempotent.
 
 BEGIN;
 
--- Who may manage workshops: the founder, or a superadmin of any workspace. SECURITY DEFINER so the policy can read
+-- Who may manage workshops (a sales jobdesk): the founder, or a superadmin or sales member of any workspace. SECURITY DEFINER so the policy can read
 -- workspace_members without recursing into its own row rules.
 CREATE OR REPLACE FUNCTION public.can_manage_workshops()
 RETURNS BOOLEAN LANGUAGE sql SECURITY DEFINER SET search_path = public STABLE AS $$
   SELECT public.is_founder() OR EXISTS (
     SELECT 1 FROM public.workspace_members wm
-    WHERE wm.role = 'superadmin'
+    WHERE wm.role IN ('superadmin', 'sales')
       AND (wm.user_id = auth.uid()
            OR (wm.email IS NOT NULL AND lower(wm.email) = lower(auth.jwt() ->> 'email')))
   );

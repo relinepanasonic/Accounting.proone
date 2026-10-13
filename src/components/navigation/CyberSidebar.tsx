@@ -28,6 +28,7 @@ import {
   BookOpen,
   RefreshCw,
   Network,
+  CalendarDays,
   Package,
   Truck,
   CircleDot
@@ -154,7 +155,13 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
           ]
       : limited
         ? [{ type: 'link', name: 'Pabrik Sosmed', href: '/productivity/pabrik-sosmed', icon: <Share2 className="w-4 h-4" />, isActive: isPabrikPath }]
-        : MAIN_MODULES;
+        : [
+            ...MAIN_MODULES,
+            // Kampus Online workshop schedule: founder and superadmins only.
+            ...(activeRole === 'founder' || activeRole === 'superadmin'
+              ? [{ type: 'link' as const, name: 'Workshops', href: '/workshops', icon: <CalendarDays className="w-4 h-4" />, isActive: (p: string) => p === '/workshops' || p.startsWith('/workshops/') }]
+              : []),
+          ];
         
   const availableWorkspaces = workspaceContext?.availableWorkspaces || [];
 

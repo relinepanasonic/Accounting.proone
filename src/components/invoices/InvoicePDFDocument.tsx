@@ -196,14 +196,52 @@ export function InvoicePDFDocument({
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       const pageW = pdf.internal.pageSize.getWidth();
       const pageH = pdf.internal.pageSize.getHeight();
-      const imgH = (height * pageW) / width;
 
-      // One A4 page when it fits; otherwise the same picture is shifted up page by page.
-      pdf.addImage(dataUrl, 'PNG', 0, 0, pageW, imgH);
-      for (let shown = pageH; shown < imgH - 1; shown += pageH) {
-        pdf.addPage();
-        pdf.addImage(dataUrl, 'PNG', 0, -shown, pageW, imgH);
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const im = new window.Image();
+        im.onload = () => resolve(im);
+        im.onerror = () => reject(new Error('Could not read the invoice picture.'));
+        im.src = dataUrl;
+      });
+      const ratio = img.width / width; // picture pixels per CSS pixel
+
+      // Where a page may end: just before a table row or a whole block (totals, notes, payment box, footer), never through one.
+      const top0 = element.getBoundingClientRect().top;
+      const breaks = Array.from(element.querySelectorAll('header, tbody tr, [data-pdf-block]'))
+        .map((el) => Math.round(el.getBoundingClientRect().top - top0))
+        .filter((y) => y > 0 && y < height)
+        .sort((x, y) => x - y);
+
+      // Page 1 is full-bleed (the dark header starts at the edge); later pages keep a top and bottom margin.
+      const MARGIN_TOP = 12, MARGIN_BOTTOM = 8;
+      const capFirst = (pageH / pageW) * width;
+      const capNext = ((pageH - MARGIN_TOP - MARGIN_BOTTOM) / pageW) * width;
+      const slices: [number, number][] = [];
+      let y = 0;
+      while (y < height - 1) {
+        const limit = y + (slices.length === 0 ? capFirst : capNext);
+        let end: number;
+        if (limit >= height - 0.5) end = height;
+        else {
+          const fits = breaks.filter((c) => c > y + 40 && c <= limit);
+          end = fits.length ? fits[fits.length - 1] : limit; // a block taller than a page has to be cut
+        }
+        slices.push([y, end]);
+        y = end;
       }
+
+      slices.forEach(([from, to], i) => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = Math.max(1, Math.round((to - from) * ratio));
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('This browser cannot cut the invoice into pages.');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, Math.round(from * ratio), img.width, canvas.height, 0, 0, img.width, canvas.height);
+        if (i > 0) pdf.addPage();
+        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, i === 0 ? 0 : MARGIN_TOP, pageW, ((to - from) * pageW) / width);
+      });
       if (embedPdf) {
         window.parent.postMessage({ type: 'invoice-pdf', filename: getFormattedFilename(), blob: pdf.output('blob') }, window.location.origin);
         return;
@@ -380,7 +418,7 @@ export function InvoicePDFDocument({
         {/* BODY CONTAINER */}
         <div className="px-12 pt-1 pb-4 space-y-4">
           {/* META SECTION: Bill To (Left) & Document Title + Details (Right) */}
-          <div className="flex flex-row items-start justify-between gap-8">
+          <div data-pdf-block className="flex flex-row items-start justify-between gap-8">
             {/* Left: Bill To */}
             <div className="space-y-1.5 text-xs">
               <span className="block text-[10px] font-bold text-[#c5a059] tracking-widest uppercase mb-1">
@@ -500,7 +538,7 @@ export function InvoicePDFDocument({
 
           {/* CALCULATIONS & FOOTER (Only shown for INVOICE mode) */}
           {!isQuotation ? (
-            <div className="flex justify-end pt-2">
+            <div data-pdf-block className="flex justify-end pt-2">
               <div className="w-[320px] space-y-1.5 text-xs">
                 <div className="flex justify-between gap-4 whitespace-nowrap py-1 px-2 text-zinc-600">
                   <span className="font-serif">Sub-Total</span>
@@ -605,7 +643,7 @@ export function InvoicePDFDocument({
               </div>
             </div>
           ) : (
-            <div className="p-4 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-600 font-sans leading-relaxed">
+            <div data-pdf-block className="p-4 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-600 font-sans leading-relaxed">
               <strong className="text-[#1e2536] block mb-1">PROPOSAL & PITCH TERMS:</strong>
               <div className="whitespace-pre-wrap">{notes || `This quotation is formally issued on ${invoiceDate} and remains valid until ${issueDate}.`}</div>
             </div>
@@ -613,14 +651,14 @@ export function InvoicePDFDocument({
 
           {/* NOTES FOR INVOICES */}
           {!isQuotation && notes && (
-            <div className="mt-4 p-4 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-600 font-sans leading-relaxed whitespace-pre-wrap">
+            <div data-pdf-block className="mt-4 p-4 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-600 font-sans leading-relaxed whitespace-pre-wrap">
               <strong className="text-[#1e2536] block mb-1">ADDITIONAL NOTES & TERMS:</strong>
               {notes}
             </div>
           )}
 
           {/* BOTTOM AREA: Payment Method & Signature Line */}
-          <div className="pt-2 grid grid-cols-2 gap-8 items-end">
+          <div data-pdf-block className="pt-2 grid grid-cols-2 gap-8 items-end">
             {/* Left: Payment Method & Terms */}
             <div className="space-y-4 text-xs">
               {!isQuotation && (
@@ -672,7 +710,7 @@ export function InvoicePDFDocument({
         </div>
 
         {/* PIC 4 STYLE FOOTER */}
-        <div className="mt-4 flex h-24 border-t border-zinc-200">
+        <div data-pdf-block className="mt-4 flex h-24 border-t border-zinc-200">
           {/* Dark Left Block */}
           <div className="w-1/3 bg-[#333333] text-white flex flex-col justify-center px-8">
             <div className="text-sm tracking-wide font-sans leading-tight">THANK YOU</div>

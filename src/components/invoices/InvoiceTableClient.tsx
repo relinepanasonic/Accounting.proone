@@ -1,6 +1,5 @@
 'use client';
 import { formatIndoDate } from '@/lib/utils';
-import { NEW_WAVE_WORKSPACE_ID } from '@/lib/workspaces/known';
 
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
@@ -42,7 +41,7 @@ export interface InvoiceRequestRow {
 type SortField = 'invoiceNumber' | 'rawIssueDate' | 'clientName' | 'rawDueDate' | 'packageName' | 'packageQtt' | 'rawAmount' | 'status' | 'assignedWorkspaceName';
 type SortOrder = 'asc' | 'desc';
 
-import { updateInvoiceAssignment, updateInvoiceProjectDate, bulkResyncToNewWave } from '@/app/actions/invoices';
+import { updateInvoiceProjectDate } from '@/app/actions/invoices';
 
 function InvoiceProjectDateDropdown({
   invoiceId,
@@ -88,55 +87,10 @@ function InvoiceProjectDateDropdown({
   );
 }
 
-function InvoiceAssignmentDropdown({ 
-  invoiceId, 
-  currentAssignedId, 
-  availableWorkspaces,
-  activeWorkspaceName
-}: { 
-  invoiceId: string; 
-  currentAssignedId: string | null; 
-  availableWorkspaces: any[];
-  activeWorkspaceName: string;
-}) {
-  const [isPending, startTransition] = React.useTransition();
-
-  const handleAssignmentChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newAssignedId = e.target.value || null;
-    startTransition(async () => {
-      try {
-        await updateInvoiceAssignment(invoiceId, newAssignedId);
-      } catch (err) {
-        console.error(err);
-      }
-    });
-  };
-
-  // Workspaces are separate. Only PT Pintu can tag an invoice as a New Wave job (it stays in PT Pintu,
-  // but is sent to New Wave's hour system).
-  const isPT = activeWorkspaceName.toLowerCase().includes('pintu langit');
-  void availableWorkspaces;
-  if (!isPT) return <span className="text-[10px] text-zinc-600">—</span>;
-
-  return (
-    <select
-      value={currentAssignedId === NEW_WAVE_WORKSPACE_ID ? NEW_WAVE_WORKSPACE_ID : ''}
-      onChange={handleAssignmentChange}
-      disabled={isPending}
-      title="New Wave job: stays in PT Pintu, sent to New Wave's hour system"
-      className={`bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-[10px] text-zinc-400 focus:outline-none focus:border-[#d4af37] cursor-pointer hover:border-[#d4af37]/50 transition-colors max-w-[120px] ${isPending ? 'opacity-50' : ''}`}
-    >
-      <option value="">—</option>
-      <option value={NEW_WAVE_WORKSPACE_ID}>New Wave job</option>
-    </select>
-  );
-}
-
 export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], activeWorkspaceName = '', requests = [] }: { initialInvoices: InvoiceData[], availableWorkspaces?: any[], activeWorkspaceName?: string, requests?: InvoiceRequestRow[] }) {
   const [filterClient, setFilterClient] = useState('');
   const [filterIssueMonth, setFilterIssueMonth] = useState('');
   const [filterDueMonth, setFilterDueMonth] = useState('');
-  const [filterAssignment, setFilterAssignment] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
 
   const [sortField, setSortField] = useState<SortField>('rawIssueDate');
@@ -181,12 +135,6 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
     return Array.from(months).sort(); // Oldest first (Jan -> Dec)
   }, [initialInvoices]);
 
-  const uniqueAssignments = useMemo(() => {
-    const assignments = new Set<string>();
-    initialInvoices.forEach(inv => assignments.add(inv.assignedWorkspaceName || 'No Assignment'));
-    return Array.from(assignments).sort();
-  }, [initialInvoices]);
-
   const formatMonth = (yyyyMm: string) => {
     if (!yyyyMm) return '';
     const [year, month] = yyyyMm.split('-');
@@ -216,11 +164,6 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
         return false;
       }
 
-      // 5. Filter by Assignment
-      if (filterAssignment && inv.assignedWorkspaceName !== filterAssignment) {
-        return false;
-      }
-
       // 6. Filter by Status
       if (filterStatus !== 'All') {
         if (filterStatus === 'Quotation' && !inv.isQuotation) return false;
@@ -247,7 +190,7 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
     });
 
     return filtered;
-  }, [initialInvoices, filterClient, filterIssueMonth, filterDueMonth, filterAssignment, filterStatus, sortField, sortOrder]);
+  }, [initialInvoices, filterClient, filterIssueMonth, filterDueMonth, filterStatus, sortField, sortOrder]);
 
   const visibleRequests = useMemo(
     () =>
@@ -260,48 +203,11 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
     [requests, filterStatus, filterClient, filterIssueMonth]
   );
 
-  const [isSyncing, setIsSyncing] = React.useState(false);
-  const [syncResult, setSyncResult] = React.useState<{ synced: number; errors: string[] } | null>(null);
-
-  const handleBulkResync = async () => {
-    setIsSyncing(true);
-    setSyncResult(null);
-    try {
-      const res = await bulkResyncToNewWave();
-      setSyncResult({ synced: res.synced, errors: res.errors });
-    } catch (e: any) {
-      setSyncResult({ synced: 0, errors: [e?.message || 'Unknown error'] });
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
   return (
     <div className="gold-glass-panel rounded-2xl p-6">
       
-      {/* Re-sync banner */}
-      <div className="flex items-center justify-between mb-4 px-1">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleBulkResync}
-            disabled={isSyncing}
-            className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 hover:text-white transition-all disabled:opacity-50 disabled:cursor-wait"
-          >
-            <svg className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            {isSyncing ? 'Syncing to New Wave...' : 'Re-sync All → New Wave'}
-          </button>
-          {syncResult && (
-            <span className={`text-xs ${syncResult.errors.length > 0 ? 'text-yellow-400' : 'text-green-400'}`}>
-              ✓ {syncResult.synced} synced{syncResult.errors.length > 0 ? ` · ${syncResult.errors.length} errors` : ''}
-            </span>
-          )}
-        </div>
-      </div>
-
       {/* Filters Bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6 p-3 rounded-xl bg-zinc-900/50 border border-zinc-800">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6 p-3 rounded-xl bg-zinc-900/50 border border-zinc-800">
         <div>
           <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Search Client</label>
           <select 
@@ -338,19 +244,6 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
             <option value="">All Months</option>
             {uniqueDueMonths.map(month => (
               <option key={month} value={month}>{formatMonth(month)}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Assignment</label>
-          <select 
-            value={filterAssignment}
-            onChange={(e) => setFilterAssignment(e.target.value)}
-            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[#d4af37]"
-          >
-            <option value="">All Workspaces</option>
-            {uniqueAssignments.map(a => (
-              <option key={a} value={a}>{a}</option>
             ))}
           </select>
         </div>
@@ -409,9 +302,6 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
                 <th className="py-3 px-3 cursor-pointer select-none group" onClick={() => handleSort('rawAmount')}>
                   <div className="flex items-center justify-end gap-2">Amount Billed {getSortIcon('rawAmount')}</div>
                 </th>
-                <th className="py-3 px-3 cursor-pointer select-none group" onClick={() => handleSort('assignedWorkspaceName')}>
-                  <div className="flex items-center justify-between">New Wave {getSortIcon('assignedWorkspaceName')}</div>
-                </th>
                 <th className="py-3 px-3 cursor-pointer select-none group text-center" onClick={() => handleSort('status')}>
                   <div className="flex items-center justify-center gap-2">Status {getSortIcon('status')}</div>
                 </th>
@@ -438,7 +328,6 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
                   <td className="py-3 px-3 text-right whitespace-nowrap">
                     <div className="text-sm font-extrabold text-[#f5d77f]">{`Rp ${Math.ceil(r.total).toLocaleString('id-ID')}`}</div>
                   </td>
-                  <td className="py-3 px-3 text-zinc-600 font-sans">—</td>
                   <td className="py-3 px-3 text-center">
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/40 text-amber-300 font-bold text-[10px] tracking-widest uppercase">Requested</span>
                   </td>
@@ -499,15 +388,6 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
                         <span className="text-zinc-300">Remaining: {`Rp ${Math.ceil(inv.rawAmount - inv.paidAmount).toLocaleString('id-ID')}`}</span>
                       </div>
                     )}
-                  </td>
-                  {/* Assignment */}
-                  <td className="py-3 px-3 text-zinc-400 font-sans">
-                    <InvoiceAssignmentDropdown 
-                      invoiceId={inv.id} 
-                      currentAssignedId={inv.assignedWorkspaceId} 
-                      availableWorkspaces={availableWorkspaces} 
-                      activeWorkspaceName={activeWorkspaceName}
-                    />
                   </td>
                   {/* Status */}
                   <td className="py-3 px-3 text-center">

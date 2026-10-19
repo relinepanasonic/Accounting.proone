@@ -41,51 +41,7 @@ export interface InvoiceRequestRow {
 type SortField = 'invoiceNumber' | 'rawIssueDate' | 'clientName' | 'rawDueDate' | 'packageName' | 'packageQtt' | 'rawAmount' | 'status' | 'assignedWorkspaceName';
 type SortOrder = 'asc' | 'desc';
 
-import { updateInvoiceAssignment, updateInvoiceProjectDate } from '@/app/actions/invoices';
-
-function InvoiceProjectDateDropdown({
-  invoiceId,
-  currentRawDate,
-}: {
-  invoiceId: string;
-  currentRawDate: string;
-}) {
-  const [visualDate, setVisualDate] = React.useState(currentRawDate);
-  const debounceRef = React.useRef<NodeJS.Timeout | null>(null);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newDate = e.target.value;
-    setVisualDate(newDate);
-    
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    
-    debounceRef.current = setTimeout(() => {
-      // Intentionally not using startTransition to prevent React from 
-      // doing any concurrent rendering that might touch the DOM node.
-      updateInvoiceProjectDate(invoiceId, newDate).catch(err => {
-        console.error('Failed to save date silently:', err);
-      });
-    }, 800);
-  };
-
-  return (
-    <div className="relative group inline-flex items-center gap-1 cursor-pointer w-full min-w-[100px] h-full py-1">
-      <div className="text-zinc-400 group-hover:text-zinc-200 transition-colors pointer-events-none">
-        {visualDate ? (
-           <span className="border-b border-dashed border-zinc-700 pb-0.5">{formatIndoDate(visualDate)}</span>
-        ) : (
-           <span className="border-b border-dashed border-zinc-700 pb-0.5 text-zinc-600 italic">Set date...</span>
-        )}
-      </div>
-      <input
-        type="date"
-        defaultValue={currentRawDate || ''}
-        onChange={handleChange}
-        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
-      />
-    </div>
-  );
-}
+import { updateInvoiceAssignment } from '@/app/actions/invoices';
 
 /** PT Pintu only: which workspace this invoice belongs to (the job is done there; PT collects the payment). */
 function InvoiceWorkspaceDropdown({ invoiceId, current, workspaces, activeWorkspaceName }: { invoiceId: string; current: string | null; workspaces: any[]; activeWorkspaceName: string }) {
@@ -317,9 +273,6 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
                   <div className="flex items-center justify-between">No. Invoice {getSortIcon('invoiceNumber')}</div>
                 </th>
                 <th className="py-3 px-3 cursor-pointer select-none group" onClick={() => handleSort('rawIssueDate')}>
-                  <div className="flex items-center justify-between">Tgl Project {getSortIcon('rawIssueDate')}</div>
-                </th>
-                <th className="py-3 px-3 cursor-pointer select-none group" onClick={() => handleSort('rawIssueDate')}>
                   <div className="flex items-center justify-between">Tgl Invoice {getSortIcon('rawIssueDate')}</div>
                 </th>
                 <th className="py-3 px-3 cursor-pointer select-none group" onClick={() => handleSort('rawDueDate')}>
@@ -347,7 +300,6 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
                   <td className="py-3 px-3 font-bold text-amber-300">
                     <div className="flex items-center gap-2"><div className="w-1 h-4 bg-amber-400 rounded-sm"></div>REQUEST</div>
                   </td>
-                  <td className="py-3 px-3 font-sans text-zinc-600">—</td>
                   <td className="py-3 px-3 font-sans whitespace-nowrap text-zinc-300">
                     {new Date(r.requestedAt).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta', day: '2-digit', month: 'short', year: 'numeric' })}
                     <div className="text-[10px] text-zinc-500">{new Date(r.requestedAt).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' })} · {r.requestedBy}</div>
@@ -383,13 +335,6 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
                       <div className="w-1 h-4 bg-[#d4af37] rounded-sm"></div>
                       {inv.invoiceNumber}
                     </div>
-                  </td>
-                  {/* Tanggal Project */}
-                  <td className={`py-3 px-3 font-sans`}>
-                    <InvoiceProjectDateDropdown 
-                      invoiceId={inv.id}
-                      currentRawDate={inv.rawProjectDate}
-                    />
                   </td>
                   {/* Tanggal Invoice */}
                   <td className={`py-3 px-3 font-sans whitespace-nowrap ${inv.isQuotation ? 'text-white' : 'text-zinc-400'}`}>

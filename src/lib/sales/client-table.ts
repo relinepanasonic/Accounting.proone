@@ -157,8 +157,8 @@ async function loadInvoiceRows(db: Db, workspaceId: string, opts: LoadOpts): Pro
     const status = String(inv.status || '').toLowerCase();
     const paid = status === 'paid';
     const isDeal = paid || deal?.stage === 'Deal';
-    const paidManual: string | null = inv.client_paid_date || null;
-    const paidAt: string | null = paidManual || deal?.paid_at || deal?.acc_approved_at || (paid ? lastPayment.get(inv.id) || null : null);
+    const paidManual: string | null = null; // the paid date is automatic (invoice payment); nothing is typed by hand
+    const paidAt: string | null = deal?.paid_at || deal?.acc_approved_at || (paid ? lastPayment.get(inv.id) || null : null);
     const items = itemsOf(inv, deal);
     const lines = items.length ? items : [NO_LINES];
     const projectDate = /\[ProjectDate:(\d{4}-\d{2}-\d{2})\]/.exec(inv.notes || '')?.[1] || null;

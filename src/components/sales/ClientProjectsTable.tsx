@@ -2,7 +2,7 @@
 
 import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { setClientHandler, setClientStatus, setPaidDate, setProjectStart, updateClientNames } from '@/app/actions/sales-flow';
+import { setClientHandler, setClientStatus, setProjectStart, updateClientNames } from '@/app/actions/sales-flow';
 import type { ClientRow } from '@/lib/sales/client-table';
 
 const field = 'rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-100 focus:border-[#d4af37]/50 focus:outline-none [color-scheme:dark]';
@@ -45,38 +45,15 @@ function NameCells({ row, canEdit }: { row: ClientRow; canEdit: boolean }) {
   );
 }
 
-function PaidCell({ row, canEdit }: { row: ClientRow; canEdit: boolean }) {
-  const router = useRouter();
-  const auto = row.paidAt ? row.paidAt.slice(0, 10) : '';
-  const [value, setValue] = useState(row.paidManual || auto);
-  if (!row.invoiceId) return <span className="text-zinc-600">-</span>;
-  const [error, setError] = useState('');
-  const [pending, start] = useTransition();
-  if (!canEdit) {
-    return row.paidAt ? <><span className="text-emerald-300">{stamp(row.paidAt)}</span>{row.accApprovedOnly && <div className="text-[10px] text-sky-300">ACC, unpaid</div>}</> : <span className="text-zinc-600">-</span>;
-  }
-  return (
-    <div>
-      <input
-        type="date"
-        value={value}
-        disabled={pending}
-        onChange={(e) => {
-          const v = e.target.value;
-          setValue(v);
-          setError('');
-          start(async () => {
-            const res = await setPaidDate(row.invoiceId, v);
-            if (!res.success) setError(res.error);
-            router.refresh();
-          });
-        }}
-        className={`${field} ${row.paidManual ? 'border-emerald-500/40' : ''}`}
-      />
-      <div className="mt-1 text-[10px] text-zinc-500">{row.paidManual ? 'typed by Accounting' : row.paidAt ? 'automatic' : 'type the date'}</div>
+/** The paid date comes from the payment recorded on the invoice. Nobody types it here. */
+function PaidCell({ row }: { row: ClientRow; canEdit?: boolean }) {
+  return row.paidAt ? (
+    <>
+      <span className="text-emerald-300">{stamp(row.paidAt)}</span>
       {row.accApprovedOnly && <div className="text-[10px] text-sky-300">ACC, unpaid</div>}
-      {error && <div className="mt-1 text-[10px] text-red-400">{error}</div>}
-    </div>
+    </>
+  ) : (
+    <span className="text-zinc-600">-</span>
   );
 }
 

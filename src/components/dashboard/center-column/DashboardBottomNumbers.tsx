@@ -33,7 +33,7 @@ export function DashboardBottomNumbers({ telemetry }: { telemetry: DashboardTele
         </div>
         <div>
           <div className="text-xl font-bold font-serif text-white">{formatRupiah(telemetry.totalCost)}</div>
-          <div className="text-xs text-rose-500/50 font-mono mt-1">All Expenses</div>
+          <div className="text-xs text-rose-500/50 font-mono mt-1">COGS + Expenses (ledger)</div>
         </div>
       </div>
 
@@ -47,7 +47,7 @@ export function DashboardBottomNumbers({ telemetry }: { telemetry: DashboardTele
         </div>
         <div>
           <div className="text-xl font-bold font-serif text-white">{formatRupiah(telemetry.totalSalary)}</div>
-          <div className="text-xs text-cyan-500/50 font-mono mt-1">Payroll & Wages</div>
+          <div className="text-xs text-cyan-500/50 font-mono mt-1">Acc. 5020 + 6001 · inside COGS/Exp.</div>
         </div>
       </div>
 

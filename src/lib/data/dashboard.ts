@@ -4,6 +4,15 @@ import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { withoutProspects } from '@/lib/sales/prospects';
 import { clientMask } from '@/lib/auth/client-privacy';
 
+/**
+ * The accounts that hold salaries. Salary is NOT a separate cost: these lines are already inside COGS (5020 Direct Labor)
+ * and Expenses (6001), so they are shown on their own card but never subtracted a second time from the profit.
+ */
+export const SALARY_ACCOUNT_CODES = ['5020', '6001'];
+
+/** Expense-side accounts of the ledger: 5xxx COGS and 6xxx-9xxx expenses (assets, liabilities, equity and income are not costs). */
+const isCostAccount = (code: string) => /^[5-9]/.test(code);
+
 export interface DashboardTelemetry {
   totalRevenue: number;
   paidRevenue: number;
@@ -65,7 +74,29 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
 
   const queryWorkspaceIds = workspaceIds && workspaceIds.length > 0 ? workspaceIds : [activeWorkspaceId];
 
-  const [invoicesRes, clientsRes, txRes] = await Promise.all([
+  const yearForCosts = options.year ?? new Date().getFullYear();
+  // Costs come from the LEDGER (journal entries of the expense accounts), the same numbers as the accounting pages.
+  // A bank transaction list also holds loans, taxes payable and equity, which are not costs. Paged: one request returns at most 1000 rows.
+  const fetchCostLines = async () => {
+    if (clientName) return [] as any[]; // costs are not tied to clients
+    const out: any[] = [];
+    for (let from = 0; from < 20000; from += 1000) {
+      const { data, error } = await supabase
+        .from('journal_entries')
+        .select('account_code, debit_amount, credit_amount, transaction_date')
+        .in('workspace_id', queryWorkspaceIds)
+        .gte('transaction_date', `${yearForCosts}-01-01`)
+        .lte('transaction_date', `${yearForCosts}-12-31`)
+        .or('account_code.like.5%,account_code.like.6%,account_code.like.7%,account_code.like.8%,account_code.like.9%')
+        .range(from, from + 999);
+      if (error || !data) break;
+      out.push(...data);
+      if (data.length < 1000) break;
+    }
+    return out;
+  };
+
+  const [invoicesRes, clientsRes, txRes, costLines, coaRes] = await Promise.all([
     supabase
       .from('invoices')
       .select('id, status, total_amount, issue_date, created_at, client_id, assigned_workspace_id, clients(name), invoice_line_items(package_name, description, amount, quantity)')
@@ -78,7 +109,9 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     supabase
       .from('transactions')
       .select('id, description, amount, due_date, category, reconciled')
-      .in('workspace_id', queryWorkspaceIds)
+      .in('workspace_id', queryWorkspaceIds),
+    fetchCostLines(),
+    supabase.from('global_chart_of_accounts').select('account_code, account_name, account_type').in('workspace_id', queryWorkspaceIds),
   ]);
 
   console.log(`[combined-dashboard] queries ${Date.now() - startedAt} ms (invoices ${invoicesRes.data?.length ?? 0}, transactions ${txRes.data?.length ?? 0})`);
@@ -198,38 +231,42 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     }
   }
 
-  // Expenses & Cash Out
+  // Cash out: bank transactions that were reconciled (cash view only; costs below come from the ledger).
+  for (const tx of transactions) {
+    if (!isTargetPeriod(tx.due_date) || !tx.reconciled) continue;
+    const bIdx = getBucketIndex(tx.due_date);
+    if (bIdx !== -1) bucketCashFlow[bIdx] -= Number(tx.amount || 0);
+  }
+
+  // Costs from the ledger, per account.
+  const coaByCode = new Map<string, { name: string; type: string }>();
+  for (const a of coaRes.data || []) if (!coaByCode.has(a.account_code)) coaByCode.set(a.account_code, { name: a.account_name, type: String(a.account_type || '') });
+
   let totalCogs = 0;
   let totalCost = 0;
   let totalSalary = 0;
   const expenseCoaMap = new Map<string, number>();
 
-  for (const tx of transactions) {
-    const amt = Number(tx.amount || 0);
-    const cat = (tx.category || '').toLowerCase();
-    const d = tx.due_date;
-
-    if (!isTargetPeriod(d)) continue;
+  for (const line of costLines) {
+    const code = String(line.account_code || '');
+    if (!isCostAccount(code) || !isTargetPeriod(line.transaction_date)) continue;
+    const amt = Number(line.debit_amount || 0) - Number(line.credit_amount || 0);
+    if (!amt) continue;
 
     totalCost += amt;
-    const bIdx = getBucketIndex(d);
+    const bIdx = getBucketIndex(line.transaction_date);
     if (bIdx !== -1) {
       bucketCost[bIdx] += amt;
-      bucketProfit[bIdx] -= amt; // Subtract cost from profit
+      bucketProfit[bIdx] -= amt;
     }
 
-    if (tx.reconciled) {
-      if (bIdx !== -1) bucketCashFlow[bIdx] -= amt; // Cash out
-    }
+    const coa = coaByCode.get(code);
+    const isCogs = coa ? /cogs|cost of goods|cost of sales/i.test(coa.type) : code.startsWith('5');
+    if (isCogs) totalCogs += amt;
+    if (SALARY_ACCOUNT_CODES.includes(code)) totalSalary += amt; // already inside COGS / expenses: informational
 
-    if (cat.includes('cogs') || cat.includes('cost of goods') || cat.includes('inventory')) {
-      totalCogs += amt;
-    } else if (cat.includes('salary') || cat.includes('payroll') || cat.includes('wages')) {
-      totalSalary += amt;
-    }
-
-    const coaName = tx.category || 'Uncategorized';
-    expenseCoaMap.set(coaName, (expenseCoaMap.get(coaName) || 0) + amt);
+    const label = `${code} - ${coa?.name || 'Account'}`;
+    expenseCoaMap.set(label, (expenseCoaMap.get(label) || 0) + amt);
   }
 
   const avgOrderValue = invoiceCount > 0 ? totalRevenue / invoiceCount : 0;

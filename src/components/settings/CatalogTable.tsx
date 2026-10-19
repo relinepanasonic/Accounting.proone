@@ -11,10 +11,14 @@ const cell = 'w-full rounded-md border border-transparent bg-transparent px-2 py
 const box = 'rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100 focus:border-[#d4af37]/60 focus:outline-none disabled:opacity-60';
 const rp = (n: number) => `Rp ${Math.round(n || 0).toLocaleString('id-ID')}`;
 
-interface Row extends CatalogProduct { _new?: boolean }
+interface Row extends CatalogProduct { _new?: boolean; workspace_id?: string | null }
+export interface CatalogWorkspace { id: string; name: string }
 
 /** The product catalog as ONE table. Every cell is editable (saved when you leave it); Length is a drop-down. */
-export function CatalogTable({ initialProducts, canEdit }: { initialProducts: CatalogProduct[]; canEdit: boolean }) {
+export function CatalogTable({ initialProducts, canEdit, workspaces, activeWorkspaceId }: { initialProducts: CatalogProduct[]; canEdit: boolean; /** PT Pintu: the catalogs of all workspaces, one table. A product belongs to exactly one workspace. */ workspaces?: CatalogWorkspace[]; activeWorkspaceId?: string }) {
+  const showWorkspace = Boolean(workspaces && workspaces.length > 1);
+  const wsName = (id?: string | null) => workspaces?.find((w) => w.id === id)?.name || '-';
+  const pickable = (workspaces || []).filter((w) => w.id !== activeWorkspaceId);
   const [rows, setRows] = useState<Row[]>(initialProducts);
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
@@ -55,15 +59,17 @@ export function CatalogTable({ initialProducts, canEdit }: { initialProducts: Ca
 
   const addRow = () => {
     if (rows.some((r) => r._new)) return;
-    setRows((l) => [{ id: `new-${Date.now()}`, name: '', description: '', unit_price: 0, quantity: 1, scale: 'pc', duration_type: 'none', duration_value: 0, deliverable_unit: null, _new: true }, ...l]);
+    setRows((l) => [{ id: `new-${Date.now()}`, name: '', description: '', unit_price: 0, quantity: 1, scale: 'pc', duration_type: 'none', duration_value: 0, deliverable_unit: null, _new: true, workspace_id: showWorkspace ? pickable[0]?.id || null : null }, ...l]);
   };
 
   const saveNew = (row: Row) => {
     if (!row.name.trim()) { setError('Write the product name first.'); return; }
+    if (showWorkspace && !row.workspace_id) { setError('Choose the workspace this product belongs to.'); return; }
     setError('');
     setBusy(row.id);
     start(async () => {
       const res: any = await createProduct({
+        targetWorkspaceId: showWorkspace ? row.workspace_id || undefined : undefined,
         name: row.name.trim(), description: row.description || '', unitPrice: Number(row.unit_price) || 0, quantity: Number(row.quantity) || 1, scale: row.scale || 'pc',
         durationType: (row.duration_type || 'none') as DurType, durationValue: Number(row.duration_value) || 0, deliverableUnit: row.deliverable_unit || 'pc',
       });
@@ -147,6 +153,7 @@ export function CatalogTable({ initialProducts, canEdit }: { initialProducts: Ca
       <div className="overflow-x-auto rounded-xl border border-[#d4af37]/20 bg-[#0e0f14] shadow-xl">
         <table className="w-full min-w-[1000px] table-fixed text-left">
           <colgroup>
+            {showWorkspace && <col style={{ width: '11%' }} />}
             <col style={{ width: '15%' }} />
             <col style={{ width: '20%' }} />
             <col style={{ width: '11%' }} />
@@ -157,6 +164,7 @@ export function CatalogTable({ initialProducts, canEdit }: { initialProducts: Ca
           </colgroup>
           <thead className="border-b border-[#d4af37]/10 bg-zinc-900/50 text-[11px] uppercase tracking-wider text-zinc-400">
             <tr>
+              {showWorkspace && <th className="px-3 py-3 font-bold">Workspace</th>}
               <th className="px-3 py-3 font-bold">Product</th>
               <th className="px-3 py-3 font-bold">Description</th>
               <th className="px-3 py-3 font-bold text-right">Price</th>
@@ -167,9 +175,20 @@ export function CatalogTable({ initialProducts, canEdit }: { initialProducts: Ca
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800/50">
-            {shown.length === 0 && <tr><td colSpan={7} className="p-8 text-center text-sm text-zinc-500">No products. {canEdit ? 'Press "Add new product".' : ''}</td></tr>}
+            {shown.length === 0 && <tr><td colSpan={8} className="p-8 text-center text-sm text-zinc-500">No products. {canEdit ? 'Press "Add new product".' : ''}</td></tr>}
             {shown.map((row) => (
               <tr key={row.id} className={row._new ? 'bg-[#d4af37]/[0.06]' : 'hover:bg-zinc-900/30'}>
+                {showWorkspace && (
+                  <td className="px-2 py-2 align-top">
+                    {row._new ? (
+                      <select className={box} value={row.workspace_id || ''} onChange={(e) => patchLocal(row.id, { workspace_id: e.target.value })}>
+                        {pickable.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+                      </select>
+                    ) : (
+                      <span className="block px-2 py-1.5 text-[11px] text-zinc-300">{wsName(row.workspace_id)}</span>
+                    )}
+                  </td>
+                )}
                 <td className="px-2 py-2 align-top">
                   <input className={`${cell} font-semibold`} value={row.name} disabled={!canEdit} placeholder="Product name" onChange={(e) => patchLocal(row.id, { name: e.target.value })} onBlur={() => save(row)} />
                 </td>

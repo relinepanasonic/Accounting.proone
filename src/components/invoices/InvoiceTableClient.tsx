@@ -48,7 +48,8 @@ function InvoiceWorkspaceDropdown({ invoiceId, current, workspaces, activeWorksp
   const [value, setValue] = React.useState(current || '');
   const [error, setError] = React.useState('');
   const [pending, start] = React.useTransition();
-  if (!activeWorkspaceName.toLowerCase().includes('pintu langit')) return <span className="text-[10px] text-zinc-600">—</span>;
+  // Other workspaces: every invoice here belongs to this workspace.
+  if (!activeWorkspaceName.toLowerCase().includes('pintu langit')) return <span className="text-[11px] text-zinc-300">{activeWorkspaceName}</span>;
   const options = workspaces.filter((w) => !String(w.name).toLowerCase().includes('pintu langit'));
   return (
     <div>

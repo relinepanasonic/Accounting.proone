@@ -53,6 +53,7 @@ import { getWorkspaceMappings } from './mappings';
 import { resolveArAccount } from '@/lib/accounting/accounts';
 import { createAdminClient as createServiceClient } from '@/lib/api/supabase-admin';
 import { completeInvoiceRequest, onInvoicePaid } from '@/lib/sales/server';
+import { autoAssignFromCatalog } from '@/lib/invoices/catalog-workspace';
 
 /**
  * Helper: Retrieve Authenticated User ID and their active workspace_id (respecting multi-tenant cookie)
@@ -281,9 +282,14 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
       notes: payload.projectDate ? `[ProjectDate:${payload.projectDate}]\n${payload.notes || ''}`.trim() : (payload.notes || null),
       bank_account_id: payload.bankAccountId || null,
       payment_instructions: payload.paymentInstructions || null,
-      assigned_workspace_id: payload.assignedWorkspaceId === NEW_WAVE_WORKSPACE_ID ? NEW_WAVE_WORKSPACE_ID : null,
       updated_at: new Date().toISOString(),
     };
+    // The workspace tag (set by hand or from the catalog) is kept; the form only turns the New Wave tag on or off.
+    {
+      const { data: cur } = await supabase.from('invoices').select('assigned_workspace_id').eq('id', payload.id).maybeSingle();
+      if (payload.assignedWorkspaceId === NEW_WAVE_WORKSPACE_ID) updateData.assigned_workspace_id = NEW_WAVE_WORKSPACE_ID;
+      else if (cur?.assigned_workspace_id === NEW_WAVE_WORKSPACE_ID) updateData.assigned_workspace_id = null;
+    }
 
     let updateQuery = supabase
       .from('invoices')
@@ -350,6 +356,7 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
 
     // Ledger follows the invoice: posted only when issued (a draft stays out of the books).
     await syncInvoicePosting(supabase, workspaceId, payload.id);
+    await autoAssignFromCatalog(supabase, payload.id, workspaceId);
 
     const syncRes = await syncInvoiceToNewWave(payload.id, supabase);
 
@@ -649,6 +656,7 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
 
     // A new invoice starts as a draft: it goes into the ledger when it is finalized (sent).
     await syncInvoicePosting(supabase, workspaceId, invoice.id);
+    await autoAssignFromCatalog(supabase, invoice.id, workspaceId);
 
     // Made from a salesman's request: stamp the card, tell the salesman.
     if (payload.requestId) {
@@ -719,7 +727,7 @@ export async function duplicateInvoice(invoiceId: string) {
         notes: orig.notes,
         bank_account_id: orig.bank_account_id || null,
         payment_instructions: orig.payment_instructions || null,
-        assigned_workspace_id: orig.assigned_workspace_id === NEW_WAVE_WORKSPACE_ID ? NEW_WAVE_WORKSPACE_ID : null,
+        assigned_workspace_id: orig.assigned_workspace_id || null,
       })
       .select('id')
       .single();

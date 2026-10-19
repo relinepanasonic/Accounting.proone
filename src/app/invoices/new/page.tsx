@@ -29,11 +29,7 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: P
   });
   let productQuery = supabase.from('products').select('*');
   if (activeWorkspaceId === '11111111-1111-1111-1111-111111111111') {
-    productQuery = productQuery.in('workspace_id', [
-      '11111111-1111-1111-1111-111111111111',
-      'f7262187-2a08-4454-b046-b4fd91f2f642',
-      'b9f6425f-ad1f-4911-a182-ab788c5fa0e3',
-    ]);
+    productQuery = productQuery.in('workspace_id', availableWorkspaces.map((w) => w.id)); // PT sees every workspace's catalog
   } else {
     productQuery = productQuery.eq('workspace_id', activeWorkspaceId);
   }

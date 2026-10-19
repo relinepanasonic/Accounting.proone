@@ -9,14 +9,11 @@ export const dynamic = 'force-dynamic';
 
 export default async function OptimizingCatalogPage() {
   const supabase = await createClient();
-  const { activeWorkspaceId, role } = await getAuthenticatedWorkspaceContext(supabase);
+  const { activeWorkspaceId, role, availableWorkspaces } = await getAuthenticatedWorkspaceContext(supabase);
   let query = supabase.from('products').select('*');
   if (activeWorkspaceId === '11111111-1111-1111-1111-111111111111') {
-    query = query.in('workspace_id', [
-      '11111111-1111-1111-1111-111111111111', // PT Pintu Langit
-      'f7262187-2a08-4454-b046-b4fd91f2f642', // Prof Toko Online
-      'b9f6425f-ad1f-4911-a182-ab788c5fa0e3', // New Wave
-    ]);
+    // PT Pintu has no catalog of its own: it sees the catalog of every workspace.
+    query = query.in('workspace_id', availableWorkspaces.map((w) => w.id));
   } else {
     query = query.eq('workspace_id', activeWorkspaceId);
   }
@@ -47,7 +44,12 @@ export default async function OptimizingCatalogPage() {
 
   return (
     <div className="max-w-[1500px] mx-auto px-6 py-8">
-      <CatalogTable initialProducts={productList} canEdit={FINANCE_ROLES.includes(role)} />
+      <CatalogTable
+        initialProducts={productList}
+        canEdit={FINANCE_ROLES.includes(role)}
+        workspaces={activeWorkspaceId === '11111111-1111-1111-1111-111111111111' ? availableWorkspaces.map((w) => ({ id: w.id, name: w.name })) : undefined}
+        activeWorkspaceId={activeWorkspaceId}
+      />
     </div>
   );
 }

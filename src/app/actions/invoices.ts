@@ -368,11 +368,20 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
 export async function updateInvoiceAssignment(invoiceId: string, assignedWorkspaceId: string | null): Promise<InvoiceActionResult> {
   try {
     const supabase = await createClient();
-    const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+    const ctx = await getCanonicalWorkspaceContext(supabase);
+    const workspaceId = ctx.activeWorkspaceId;
+
+    // PT Pintu collects the money for the group: it may hand an invoice to any workspace the person can enter (not itself).
+    let target: string | null = null;
+    if (assignedWorkspaceId) {
+      const allowed = ctx.availableWorkspaces.some((w) => w.id === assignedWorkspaceId) && assignedWorkspaceId !== workspaceId;
+      if (!allowed) return { success: false, error: 'You cannot assign an invoice to that workspace.' };
+      target = assignedWorkspaceId;
+    }
 
     const { error } = await supabase
       .from('invoices')
-      .update({ assigned_workspace_id: assignedWorkspaceId === NEW_WAVE_WORKSPACE_ID ? NEW_WAVE_WORKSPACE_ID : null })
+      .update({ assigned_workspace_id: target })
       .eq('id', invoiceId)
       .eq('workspace_id', workspaceId);
 
@@ -380,14 +389,17 @@ export async function updateInvoiceAssignment(invoiceId: string, assignedWorkspa
       return { success: false, error: error.message };
     }
 
-    // Attempt to sync to New Wave API in case it was just assigned to New Wave
-    const syncRes = await syncInvoiceToNewWave(invoiceId, supabase);
-
     revalidatePath('/invoices');
     revalidatePath(`/invoices/${invoiceId}`);
-    
-    if (syncRes && !syncRes.success) {
-      return { success: true, invoiceId, error: `Assigned successfully, but New Wave sync failed: ${syncRes.error}` };
+    revalidatePath('/sales/clients');
+    revalidatePath('/optimizing/clients');
+
+    // Only a New Wave job is sent on to the New Wave hour system.
+    if (target === NEW_WAVE_WORKSPACE_ID) {
+      const syncRes = await syncInvoiceToNewWave(invoiceId, supabase);
+      if (syncRes && !syncRes.success) {
+        return { success: true, invoiceId, error: `Assigned successfully, but New Wave sync failed: ${syncRes.error}` };
+      }
     }
 
     return { success: true, invoiceId };

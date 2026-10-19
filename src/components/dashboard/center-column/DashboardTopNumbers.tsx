@@ -2,15 +2,18 @@
 
 import React from 'react';
 import type { DashboardTelemetry } from '@/lib/data/dashboard';
+import { useDetailDrawer } from '@/components/dashboard/DetailDrawer';
 import { formatRupiah } from '@/lib/utils';
 import { Target, TrendingUp, BarChart3, Receipt, Users } from 'lucide-react';
 
 export function DashboardTopNumbers({ telemetry }: { telemetry: DashboardTelemetry }) {
+  const [open, drawer] = useDetailDrawer(telemetry.details);
   return (
+    <>
     <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
       
       {/* Total Revenue */}
-      <div className="gold-glass-panel rounded-2xl p-5 flex flex-col justify-between group">
+      <div onClick={() => open('revenue')} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') open('revenue'); }} title="Click for the details" className="cursor-pointer gold-glass-panel rounded-2xl p-5 flex flex-col justify-between group">
         <div className="flex items-center gap-3 text-[#d4af37] mb-3">
           <div className="p-2 rounded-xl bg-[#d4af37]/10 border border-[#d4af37]/20 group-hover:bg-[#d4af37]/20 transition-colors">
             <Target className="w-5 h-5" />
@@ -24,7 +27,7 @@ export function DashboardTopNumbers({ telemetry }: { telemetry: DashboardTelemet
       </div>
 
       {/* Paid Revenue */}
-      <div className="gold-glass-panel rounded-2xl p-5 flex flex-col justify-between group border-[#10b981]/20 hover:border-[#10b981]/40">
+      <div onClick={() => open('paid')} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') open('paid'); }} title="Click for the details" className="cursor-pointer gold-glass-panel rounded-2xl p-5 flex flex-col justify-between group border-[#10b981]/20 hover:border-[#10b981]/40">
         <div className="flex items-center gap-3 text-emerald-500 mb-3">
           <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 group-hover:bg-emerald-500/20 transition-colors">
             <TrendingUp className="w-5 h-5" />
@@ -38,7 +41,7 @@ export function DashboardTopNumbers({ telemetry }: { telemetry: DashboardTelemet
       </div>
 
       {/* AVG Monthly Revenue */}
-      <div className="gold-glass-panel rounded-2xl p-5 flex flex-col justify-between group">
+      <div onClick={() => open('avgMonthly')} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') open('avgMonthly'); }} title="Click for the details" className="cursor-pointer gold-glass-panel rounded-2xl p-5 flex flex-col justify-between group">
         <div className="flex items-center gap-3 text-blue-400 mb-3">
           <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 group-hover:bg-blue-500/20 transition-colors">
             <BarChart3 className="w-5 h-5" />
@@ -52,7 +55,7 @@ export function DashboardTopNumbers({ telemetry }: { telemetry: DashboardTelemet
       </div>
 
       {/* AOV */}
-      <div className="gold-glass-panel rounded-2xl p-5 flex flex-col justify-between group">
+      <div onClick={() => open('avgOrder')} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') open('avgOrder'); }} title="Click for the details" className="cursor-pointer gold-glass-panel rounded-2xl p-5 flex flex-col justify-between group">
         <div className="flex items-center gap-3 text-purple-400 mb-3">
           <div className="p-2 rounded-xl bg-purple-500/10 border border-purple-500/20 group-hover:bg-purple-500/20 transition-colors">
             <Receipt className="w-5 h-5" />
@@ -66,7 +69,7 @@ export function DashboardTopNumbers({ telemetry }: { telemetry: DashboardTelemet
       </div>
 
       {/* Active & New Client */}
-      <div className="gold-glass-panel rounded-2xl p-5 flex flex-col justify-between group">
+      <div onClick={() => open('clients')} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') open('clients'); }} title="Click for the details" className="cursor-pointer gold-glass-panel rounded-2xl p-5 flex flex-col justify-between group">
         <div className="flex items-center gap-3 text-orange-400 mb-3">
           <div className="p-2 rounded-xl bg-orange-500/10 border border-orange-500/20 group-hover:bg-orange-500/20 transition-colors">
             <Users className="w-5 h-5" />
@@ -86,5 +89,7 @@ export function DashboardTopNumbers({ telemetry }: { telemetry: DashboardTelemet
       </div>
 
     </div>
+    {drawer}
+    </>
   );
 }

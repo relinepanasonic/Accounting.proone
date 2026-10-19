@@ -2,15 +2,18 @@
 
 import React from 'react';
 import type { DashboardTelemetry } from '@/lib/data/dashboard';
+import { useDetailDrawer } from '@/components/dashboard/DetailDrawer';
 import { formatRupiah } from '@/lib/utils';
 import { Package, Briefcase, Users, Wallet, Clock } from 'lucide-react';
 
 export function DashboardBottomNumbers({ telemetry }: { telemetry: DashboardTelemetry }) {
+  const [open, drawer] = useDetailDrawer(telemetry.details);
   return (
+    <>
     <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
       
       {/* Total COGS */}
-      <div className="gold-glass-panel rounded-2xl p-5 flex flex-col justify-between group">
+      <div onClick={() => open('cogs')} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') open('cogs'); }} title="Click for the details" className="cursor-pointer gold-glass-panel rounded-2xl p-5 flex flex-col justify-between group">
         <div className="flex items-center gap-3 text-red-400 mb-3">
           <div className="p-2 rounded-xl bg-red-500/10 border border-red-500/20 group-hover:bg-red-500/20 transition-colors">
             <Package className="w-5 h-5" />
@@ -24,7 +27,7 @@ export function DashboardBottomNumbers({ telemetry }: { telemetry: DashboardTele
       </div>
 
       {/* Total Cost */}
-      <div className="gold-glass-panel rounded-2xl p-5 flex flex-col justify-between group">
+      <div onClick={() => open('cost')} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') open('cost'); }} title="Click for the details" className="cursor-pointer gold-glass-panel rounded-2xl p-5 flex flex-col justify-between group">
         <div className="flex items-center gap-3 text-rose-400 mb-3">
           <div className="p-2 rounded-xl bg-rose-500/10 border border-rose-500/20 group-hover:bg-rose-500/20 transition-colors">
             <Briefcase className="w-5 h-5" />
@@ -38,7 +41,7 @@ export function DashboardBottomNumbers({ telemetry }: { telemetry: DashboardTele
       </div>
 
       {/* Total Salary */}
-      <div className="gold-glass-panel rounded-2xl p-5 flex flex-col justify-between group">
+      <div onClick={() => open('salary')} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') open('salary'); }} title="Click for the details" className="cursor-pointer gold-glass-panel rounded-2xl p-5 flex flex-col justify-between group">
         <div className="flex items-center gap-3 text-cyan-400 mb-3">
           <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20 group-hover:bg-cyan-500/20 transition-colors">
             <Users className="w-5 h-5" />
@@ -52,7 +55,7 @@ export function DashboardBottomNumbers({ telemetry }: { telemetry: DashboardTele
       </div>
 
       {/* Total Cash Flow */}
-      <div className="gold-glass-panel rounded-2xl p-5 flex flex-col justify-between group border-[#d4af37]/20 hover:border-[#d4af37]/50">
+      <div onClick={() => open('cash')} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') open('cash'); }} title="Click for the details" className="cursor-pointer gold-glass-panel rounded-2xl p-5 flex flex-col justify-between group border-[#d4af37]/20 hover:border-[#d4af37]/50">
         <div className="flex items-center gap-3 text-[#f5d77f] mb-3">
           <div className="p-2 rounded-xl bg-[#d4af37]/20 border border-[#d4af37]/30 group-hover:bg-[#d4af37]/30 transition-colors">
             <Wallet className="w-5 h-5" />
@@ -66,7 +69,7 @@ export function DashboardBottomNumbers({ telemetry }: { telemetry: DashboardTele
       </div>
 
       {/* Total A/R */}
-      <div className="gold-glass-panel rounded-2xl p-5 flex flex-col justify-between group border-amber-500/20">
+      <div onClick={() => open('ar')} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') open('ar'); }} title="Click for the details" className="cursor-pointer gold-glass-panel rounded-2xl p-5 flex flex-col justify-between group border-amber-500/20">
         <div className="flex items-center gap-3 text-amber-500 mb-3">
           <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 group-hover:bg-amber-500/20 transition-colors">
             <Clock className="w-5 h-5" />
@@ -80,5 +83,7 @@ export function DashboardBottomNumbers({ telemetry }: { telemetry: DashboardTele
       </div>
 
     </div>
+    {drawer}
+    </>
   );
 }

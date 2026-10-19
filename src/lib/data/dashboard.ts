@@ -3,15 +3,25 @@ import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { withoutProspects } from '@/lib/sales/prospects';
 import { clientMask } from '@/lib/auth/client-privacy';
+import { PT_WORKSPACE_ID } from '@/lib/workspaces/known';
+import { SALARY_ACCOUNT_CODES_PUBLIC } from '@/lib/data/dashboard-constants';
 
 /**
  * The accounts that hold salaries. Salary is NOT a separate cost: these lines are already inside COGS (5020 Direct Labor)
  * and Expenses (6001), so they are shown on their own card but never subtracted a second time from the profit.
  */
-export const SALARY_ACCOUNT_CODES = ['5020', '6001'];
+export const SALARY_ACCOUNT_CODES = SALARY_ACCOUNT_CODES_PUBLIC;
 
 /** Expense-side accounts of the ledger: 5xxx COGS and 6xxx-9xxx expenses (assets, liabilities, equity and income are not costs). */
 const isCostAccount = (code: string) => /^[5-9]/.test(code);
+
+/** The rows behind the cards: click a card on the dashboard to see them. */
+export interface DashboardDetails {
+  invoices: Array<{ id: string; number: string | null; client: string; date: string | null; status: string; total: number; paid: number }>;
+  ar: Array<{ id: string; number: string | null; client: string; date: string | null; due: string | null; status: string; balance: number }>;
+  costs: Array<{ date: string; code: string; account: string; amount: number; cogs: boolean }>;
+  cash: Array<{ date: string | null; label: string; amount: number }>;
+}
 
 export interface DashboardTelemetry {
   totalRevenue: number;
@@ -52,6 +62,7 @@ export interface DashboardTelemetry {
   clientNames?: string[];
   /** The year the numbers are for. */
   year?: number;
+  details?: DashboardDetails;
 }
 
 export interface DashboardTelemetryOptions {
@@ -99,7 +110,8 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
   const [invoicesRes, clientsRes, txRes, costLines, coaRes] = await Promise.all([
     supabase
       .from('invoices')
-      .select('id, status, total_amount, issue_date, created_at, client_id, assigned_workspace_id, clients(name), invoice_line_items(package_name, description, amount, quantity)')
+      .select('id, invoice_number, status, total_amount, amount_paid, issue_date, due_date, created_at, client_id, workspace_id, assigned_workspace_id, clients(name), invoice_line_items(package_name, description, amount, quantity)')
+      .eq('is_quotation', false)
       .in('workspace_id', queryWorkspaceIds),
     withoutProspects((hide) => {
       let q = supabase.from('clients').select('id, name, created_at').in('workspace_id', queryWorkspaceIds);
@@ -115,7 +127,9 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
   ]);
 
   console.log(`[combined-dashboard] queries ${Date.now() - startedAt} ms (invoices ${invoicesRes.data?.length ?? 0}, transactions ${txRes.data?.length ?? 0})`);
-  const invoices = invoicesRes.data || [];
+  // Combined view: a PT Pintu invoice that belongs to a workspace you did not pick (for example a New Wave job) stays out.
+  const combined = Boolean(workspaceIds && workspaceIds.length);
+  const invoices = (invoicesRes.data || []).filter((inv: any) => !(combined && inv.workspace_id === PT_WORKSPACE_ID && inv.assigned_workspace_id && !queryWorkspaceIds.includes(inv.assigned_workspace_id)));
   const clients = clientsRes.data || [];
   // Costs belong to vendors, not clients: with a client chosen they are left out of the numbers.
   const transactions = clientName ? [] : txRes.data || [];
@@ -179,6 +193,8 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
   const activeClients = new Set<string>();
   const productMap = new Map<string, { sold: number; revenue: number }>();
 
+  const details: DashboardDetails = { invoices: [], ar: [], costs: [], cash: [] };
+
   // Process Invoices
   for (const inv of invoices) {
     const d = inv.issue_date || inv.created_at;
@@ -186,14 +202,17 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     const st = (inv.status || 'draft').toLowerCase();
     if (clientName && nameOf(inv) !== clientName) continue;
 
-    // AR is all-time outstanding (pending, overdue, draft)
-    if (['pending', 'overdue', 'draft'].includes(st)) {
-      totalAR += amt;
+    // AR is all-time money still owed on issued invoices: the unpaid balance (drafts are not issued yet).
+    if (['pending', 'overdue', 'sent', 'invoiced', 'partial_paid'].includes(st)) {
+      const balance = Math.max(0, amt - Number(inv.amount_paid || 0));
+      totalAR += balance;
+      if (balance > 0) details.ar.push({ id: inv.id, number: inv.invoice_number, client: nameOf(inv), date: d, due: inv.due_date, status: st, balance });
     }
 
     if (!isTargetPeriod(d)) continue;
     if (st === 'cancelled') continue;
 
+    details.invoices.push({ id: inv.id, number: inv.invoice_number, client: nameOf(inv), date: d, status: st, total: amt, paid: Number(inv.amount_paid || 0) });
     totalRevenue += amt;
     invoiceCount++;
     const bIdx = getBucketIndex(d);
@@ -203,6 +222,7 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     }
 
     if (st === 'paid') {
+      details.cash.push({ date: d, label: `${inv.invoice_number || 'Invoice'} · ${nameOf(inv)}`, amount: amt });
       paidRevenue += amt;
       if (bIdx !== -1) bucketCashFlow[bIdx] += amt; // Cash in
     }
@@ -236,6 +256,7 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     if (!isTargetPeriod(tx.due_date) || !tx.reconciled) continue;
     const bIdx = getBucketIndex(tx.due_date);
     if (bIdx !== -1) bucketCashFlow[bIdx] -= Number(tx.amount || 0);
+    details.cash.push({ date: tx.due_date, label: tx.description || tx.category || 'Expense', amount: -Number(tx.amount || 0) });
   }
 
   // Costs from the ledger, per account.
@@ -265,6 +286,7 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     if (isCogs) totalCogs += amt;
     if (SALARY_ACCOUNT_CODES.includes(code)) totalSalary += amt; // already inside COGS / expenses: informational
 
+    details.costs.push({ date: String(line.transaction_date).slice(0, 10), code, account: coa?.name || 'Account', amount: amt, cogs: isCogs });
     const label = `${code} - ${coa?.name || 'Account'}`;
     expenseCoaMap.set(label, (expenseCoaMap.get(label) || 0) + amt);
   }
@@ -337,5 +359,6 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     availableYears: Array.from(yearsSeen).sort((a, b) => b - a),
     clientNames,
     year: currentYear,
+    details,
   };
 }

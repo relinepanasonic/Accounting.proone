@@ -41,7 +41,7 @@ export interface InvoiceRequestRow {
 type SortField = 'invoiceNumber' | 'rawIssueDate' | 'clientName' | 'rawDueDate' | 'packageName' | 'packageQtt' | 'rawAmount' | 'status' | 'assignedWorkspaceName';
 type SortOrder = 'asc' | 'desc';
 
-import { updateInvoiceProjectDate } from '@/app/actions/invoices';
+import { updateInvoiceAssignment, updateInvoiceProjectDate } from '@/app/actions/invoices';
 
 function InvoiceProjectDateDropdown({
   invoiceId,
@@ -83,6 +83,38 @@ function InvoiceProjectDateDropdown({
         onChange={handleChange}
         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
       />
+    </div>
+  );
+}
+
+/** PT Pintu only: which workspace this invoice belongs to (the job is done there; PT collects the payment). */
+function InvoiceWorkspaceDropdown({ invoiceId, current, workspaces, activeWorkspaceName }: { invoiceId: string; current: string | null; workspaces: any[]; activeWorkspaceName: string }) {
+  const [value, setValue] = React.useState(current || '');
+  const [error, setError] = React.useState('');
+  const [pending, start] = React.useTransition();
+  if (!activeWorkspaceName.toLowerCase().includes('pintu langit')) return <span className="text-[10px] text-zinc-600">—</span>;
+  const options = workspaces.filter((w) => !String(w.name).toLowerCase().includes('pintu langit'));
+  return (
+    <div>
+      <select
+        value={value}
+        disabled={pending}
+        onChange={(e) => {
+          const v = e.target.value;
+          setValue(v);
+          setError('');
+          start(async () => {
+            const res = await updateInvoiceAssignment(invoiceId, v || null);
+            if (!res.success) { setValue(current || ''); setError(res.error || 'Could not assign.'); }
+          });
+        }}
+        title="The workspace this invoice belongs to"
+        className={`bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-[10px] text-zinc-300 focus:outline-none focus:border-[#d4af37] cursor-pointer hover:border-[#d4af37]/50 transition-colors max-w-[150px] ${pending ? 'opacity-50' : ''}`}
+      >
+        <option value="">PT Pintu (own)</option>
+        {options.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+      </select>
+      {error && <div className="text-[10px] text-red-400 mt-1 max-w-[150px]">{error}</div>}
     </div>
   );
 }
@@ -302,6 +334,7 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
                 <th className="py-3 px-3 cursor-pointer select-none group" onClick={() => handleSort('rawAmount')}>
                   <div className="flex items-center justify-end gap-2">Amount Billed {getSortIcon('rawAmount')}</div>
                 </th>
+                <th className="py-3 px-3">Workspace</th>
                 <th className="py-3 px-3 cursor-pointer select-none group text-center" onClick={() => handleSort('status')}>
                   <div className="flex items-center justify-center gap-2">Status {getSortIcon('status')}</div>
                 </th>
@@ -328,6 +361,7 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
                   <td className="py-3 px-3 text-right whitespace-nowrap">
                     <div className="text-sm font-extrabold text-[#f5d77f]">{`Rp ${Math.ceil(r.total).toLocaleString('id-ID')}`}</div>
                   </td>
+                  <td className="py-3 px-3 text-zinc-600 font-sans">—</td>
                   <td className="py-3 px-3 text-center">
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/40 text-amber-300 font-bold text-[10px] tracking-widest uppercase">Requested</span>
                   </td>
@@ -388,6 +422,10 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
                         <span className="text-zinc-300">Remaining: {`Rp ${Math.ceil(inv.rawAmount - inv.paidAmount).toLocaleString('id-ID')}`}</span>
                       </div>
                     )}
+                  </td>
+                  {/* Workspace */}
+                  <td className="py-3 px-3 font-sans">
+                    <InvoiceWorkspaceDropdown invoiceId={inv.id} current={inv.assignedWorkspaceId} workspaces={availableWorkspaces} activeWorkspaceName={activeWorkspaceName} />
                   </td>
                   {/* Status */}
                   <td className="py-3 px-3 text-center">

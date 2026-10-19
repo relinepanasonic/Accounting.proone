@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2, LayoutDashboard, ArrowLeft, CheckCircle2, Circle, ArrowRight } from 'lucide-react';
+import { Building2, LayoutDashboard, ArrowLeft, CheckCircle2, Circle, ArrowRight, Loader2 } from 'lucide-react';
 import Image from 'next/image';
 
 interface Workspace {
@@ -19,6 +19,7 @@ interface SelectorClientProps {
 
 export function SelectorClient({ workspaces, firstName }: SelectorClientProps) {
   const router = useRouter();
+  const [opening, startOpening] = useTransition();
   // By default, select all
   const [selectedIds, setSelectedIds] = useState<string[]>(workspaces.map(w => w.id));
 
@@ -34,7 +35,7 @@ export function SelectorClient({ workspaces, firstName }: SelectorClientProps) {
     if (selectedIds.length === 0) return;
     const query = new URLSearchParams();
     query.set('w', selectedIds.join(','));
-    router.push(`/workspaces/combined-dashboard?${query.toString()}`);
+    startOpening(() => router.push(`/workspaces/combined-dashboard?${query.toString()}`));
   };
 
   return (
@@ -64,6 +65,7 @@ export function SelectorClient({ workspaces, firstName }: SelectorClientProps) {
               <button
                 key={ws.id}
                 onClick={() => toggle(ws.id)}
+                disabled={opening}
                 className={`w-full text-left group relative rounded-2xl border p-4 flex items-center gap-4 transition-all ${
                   isSelected 
                     ? 'bg-[#d4af37]/10 border-[#d4af37] shadow-[0_0_20px_rgba(212,175,55,0.1)]' 
@@ -102,11 +104,11 @@ export function SelectorClient({ workspaces, firstName }: SelectorClientProps) {
         <div className="flex justify-center">
           <button
             onClick={handleProceed}
-            disabled={selectedIds.length === 0}
+            disabled={selectedIds.length === 0 || opening}
             className="inline-flex items-center gap-2 px-8 py-4 bg-[#d4af37] hover:bg-[#f5d77f] text-black text-sm font-extrabold uppercase tracking-wider rounded-xl transition-all shadow-[0_0_20px_rgba(212,175,55,0.4)] disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Generate Dashboard
-            <ArrowRight className="w-5 h-5" />
+            {opening ? 'Opening dashboard...' : 'Generate Dashboard'}
+            {opening ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowRight className="w-5 h-5" />}
           </button>
         </div>
       </div>

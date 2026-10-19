@@ -10,6 +10,7 @@ import { DashboardBottomNumbers } from '@/components/dashboard/center-column/Das
 import { DashboardChartsRow3Lazy as DashboardChartsRow3 } from '@/components/dashboard/center-column/DashboardChartsRow3Lazy';
 import { DashboardChartsRow4Lazy as DashboardChartsRow4 } from '@/components/dashboard/center-column/DashboardChartsRow4Lazy';
 import { DashboardTablesRow5 } from '@/components/dashboard/center-column/DashboardTablesRow5';
+import { DashboardFilters } from './DashboardFilters';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,14 +25,14 @@ const ColumnSkeleton = () => (
 export default async function CombinedDashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ w?: string; month?: string }>;
+  searchParams: Promise<{ w?: string; month?: string; year?: string; client?: string }>;
 }) {
   const supabase = await createClient();
   const ctx = await getAuthenticatedWorkspaceContext(supabase);
 
   if (!ctx.userId) redirect('/login');
 
-  const { w, month } = await searchParams;
+  const { w, month, year: yearParam, client: clientParam } = await searchParams;
   if (!w) redirect('/workspaces/combined-setup');
 
   const requestedIds = w.split(',').filter(Boolean);
@@ -44,16 +45,16 @@ export default async function CombinedDashboardPage({
     redirect('/workspaces/combined-setup');
   }
 
-  // Fetch names of the combined workspaces
-  const { data: workspaces } = await supabase
-    .from('workspaces')
-    .select('id, name')
-    .in('id', validIds);
+  const monthNum = month !== undefined && month !== '' ? parseInt(month, 10) : NaN;
+  const monthFilter = Number.isFinite(monthNum) && monthNum >= 0 && monthNum <= 11 ? monthNum : null;
+  const yearNum = yearParam ? parseInt(yearParam, 10) : new Date().getFullYear();
+  const year = Number.isFinite(yearNum) && yearNum > 2000 && yearNum < 2100 ? yearNum : new Date().getFullYear();
+  const client = (clientParam || '').slice(0, 200);
 
-  const workspaceNames = (workspaces || []).map(ws => ws.name).join(' + ');
-
-  const monthFilter = month ? parseInt(month, 10) : null;
-  const telemetry = await getDashboardTelemetry({ monthFilter, workspaceIds: validIds });
+  // The names and the numbers load side by side; the numbers are streamed in below the header.
+  const { data: workspaces } = await supabase.from('workspaces').select('id, name').in('id', validIds);
+  const workspaceNames = (workspaces || []).map((ws) => ws.name).join(' + ');
+  const telemetryPromise = getDashboardTelemetry({ monthFilter, workspaceIds: validIds, year, clientName: client || null, ctx });
 
   return (
     <div className="min-h-screen bg-[#0b0c10] text-zinc-100 flex flex-col">
@@ -81,24 +82,36 @@ export default async function CombinedDashboardPage({
       </div>
 
       <div className="flex-1 p-4 lg:p-8 max-w-[1600px] mx-auto w-full">
-        {/* V2 DASHBOARD LAYOUT */}
-        <Suspense fallback={<ColumnSkeleton />}>
-          {/* ROW 1 */}
-          <DashboardTopNumbers telemetry={telemetry} />
-          
-          {/* ROW 2 */}
-          <DashboardBottomNumbers telemetry={telemetry} />
-          
-          {/* ROW 3 */}
-          <DashboardChartsRow3 telemetry={telemetry} />
-          
-          {/* ROW 4 */}
-          <DashboardChartsRow4 telemetry={telemetry} />
-          
-          {/* ROW 5 */}
-          <DashboardTablesRow5 telemetry={telemetry} />
+        <Suspense key={`${validIds.join(',')}-${year}-${monthFilter}-${client}`} fallback={<ColumnSkeleton />}>
+          <DashboardBody telemetryPromise={telemetryPromise} workspaces={validIds.join(',')} year={year} month={monthFilter} client={client} />
         </Suspense>
       </div>
     </div>
+  );
+}
+
+/** Filters + every row of numbers. Waits for the telemetry here, so the page header is on screen straight away. */
+async function DashboardBody({
+  telemetryPromise, workspaces, year, month, client,
+}: {
+  telemetryPromise: ReturnType<typeof getDashboardTelemetry>; workspaces: string; year: number; month: number | null; client: string;
+}) {
+  const telemetry = await telemetryPromise;
+  return (
+    <>
+      <div className="mb-6">
+        <DashboardFilters workspaces={workspaces} year={year} month={month} client={client} years={telemetry.availableYears || [year]} clients={telemetry.clientNames || []} />
+      </div>
+      {/* ROW 1 */}
+      <DashboardTopNumbers telemetry={telemetry} />
+      {/* ROW 2 */}
+      <DashboardBottomNumbers telemetry={telemetry} />
+      {/* ROW 3 */}
+      <DashboardChartsRow3 telemetry={telemetry} />
+      {/* ROW 4 */}
+      <DashboardChartsRow4 telemetry={telemetry} />
+      {/* ROW 5 */}
+      <DashboardTablesRow5 telemetry={telemetry} />
+    </>
   );
 }

@@ -37,17 +37,30 @@ export interface DashboardTelemetry {
   topExpenses: Array<{ name: string; amount: number }>;
   topClients: Array<{ name: string; revenue: number }>;
   topProducts: Array<{ name: string; sold: number; revenue: number }>;
+
+  /** For the filter bar: years that have data, and the client names (masked) of these workspaces. */
+  availableYears?: number[];
+  clientNames?: string[];
+  /** The year the numbers are for. */
+  year?: number;
 }
 
 export interface DashboardTelemetryOptions {
   monthFilter?: number | null;
   workspaceIds?: string[];
+  /** Calendar year of the numbers (default: this year). */
+  year?: number;
+  /** Only this client (masked name as shown in the filter). Costs are not tied to clients, so they drop out. */
+  clientName?: string | null;
+  /** Pass the page's own context so it is not fetched a second time. */
+  ctx?: Awaited<ReturnType<typeof getAuthenticatedWorkspaceContext>>;
 }
 
 export async function getDashboardTelemetry(options: DashboardTelemetryOptions = {}): Promise<DashboardTelemetry> {
-  const { monthFilter = null, workspaceIds } = options;
+  const { monthFilter = null, workspaceIds, clientName = null } = options;
+  const startedAt = Date.now();
   const supabase = await createClient();
-  const { activeWorkspaceId, userEmail, availableWorkspaces } = await getAuthenticatedWorkspaceContext(supabase);
+  const { activeWorkspaceId, userEmail, availableWorkspaces } = options.ctx || (await getAuthenticatedWorkspaceContext(supabase));
   const mask = clientMask({ userEmail, availableWorkspaces });
 
   const queryWorkspaceIds = workspaceIds && workspaceIds.length > 0 ? workspaceIds : [activeWorkspaceId];
@@ -55,7 +68,7 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
   const [invoicesRes, clientsRes, txRes] = await Promise.all([
     supabase
       .from('invoices')
-      .select('id, status, total_amount, issue_date, created_at, client_id, clients(name), invoice_line_items(package_name, description, amount, quantity)')
+      .select('id, status, total_amount, issue_date, created_at, client_id, assigned_workspace_id, clients(name), invoice_line_items(package_name, description, amount, quantity)')
       .in('workspace_id', queryWorkspaceIds),
     withoutProspects((hide) => {
       let q = supabase.from('clients').select('id, name, created_at').in('workspace_id', queryWorkspaceIds);
@@ -68,11 +81,29 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
       .in('workspace_id', queryWorkspaceIds)
   ]);
 
+  console.log(`[combined-dashboard] queries ${Date.now() - startedAt} ms (invoices ${invoicesRes.data?.length ?? 0}, transactions ${txRes.data?.length ?? 0})`);
   const invoices = invoicesRes.data || [];
   const clients = clientsRes.data || [];
-  const transactions = txRes.data || [];
+  // Costs belong to vendors, not clients: with a client chosen they are left out of the numbers.
+  const transactions = clientName ? [] : txRes.data || [];
 
-  const currentYear = new Date().getFullYear();
+  const currentYear = options.year ?? new Date().getFullYear();
+
+  // Filter bar data: years with data and the client names, before any filter is applied.
+  const yearsSeen = new Set<number>([new Date().getFullYear()]);
+  for (const inv of invoices) {
+    const y = new Date(inv.issue_date || inv.created_at).getFullYear();
+    if (Number.isFinite(y)) yearsSeen.add(y);
+  }
+  for (const tx of txRes.data || []) {
+    const y = new Date(tx.due_date || '').getFullYear();
+    if (Number.isFinite(y)) yearsSeen.add(y);
+  }
+  const nameOf = (inv: any) => {
+    const clientObj = Array.isArray(inv.clients) ? inv.clients[0] : inv.clients;
+    return mask.name(clientObj?.name, inv.assigned_workspace_id, 'Unknown Client');
+  };
+  const clientNames = Array.from(new Set(invoices.filter((i: any) => i.client_id).map(nameOf))).sort((a, b) => a.localeCompare(b));
 
   // Helper to determine bucket index (0-11 for months, 0-4 for weeks if month filtered)
   const isTargetPeriod = (dateStr: string | null) => {
@@ -120,6 +151,7 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     const d = inv.issue_date || inv.created_at;
     const amt = Number(inv.total_amount || 0);
     const st = (inv.status || 'draft').toLowerCase();
+    if (clientName && nameOf(inv) !== clientName) continue;
 
     // AR is all-time outstanding (pending, overdue, draft)
     if (['pending', 'overdue', 'draft'].includes(st)) {
@@ -144,8 +176,7 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
 
     if (inv.client_id) {
       activeClients.add(inv.client_id);
-      const clientObj = Array.isArray(inv.clients) ? inv.clients[0] : inv.clients;
-      const cName = mask.name(clientObj?.name, (inv as any).assigned_workspace_id, 'Unknown Client');
+      const cName = nameOf(inv);
       clientRevenueMap.set(cName, (clientRevenueMap.get(cName) || 0) + amt);
     }
 
@@ -161,7 +192,7 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
   }
 
   let newClientCount = 0;
-  for (const c of clients) {
+  for (const c of clientName ? [] : clients) {
     if (isTargetPeriod(c.created_at)) {
       newClientCount++;
     }
@@ -266,5 +297,8 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     topExpenses,
     topClients,
     topProducts,
+    availableYears: Array.from(yearsSeen).sort((a, b) => b - a),
+    clientNames,
+    year: currentYear,
   };
 }

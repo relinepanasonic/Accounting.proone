@@ -5,13 +5,13 @@ import type { DashboardTelemetry } from '@/lib/data/dashboard';
 import { useDetailDrawer } from '@/components/dashboard/DetailDrawer';
 import { CardExtras } from '@/components/dashboard/CardExtras';
 import { formatRupiah } from '@/lib/utils';
-import { Package, Briefcase, Users, Wallet, Clock } from 'lucide-react';
+import { Package, Briefcase, Receipt, Users, Wallet, Clock } from 'lucide-react';
 
 export function DashboardBottomNumbers({ telemetry }: { telemetry: DashboardTelemetry }) {
   const [open, drawer] = useDetailDrawer(telemetry.details);
   return (
     <>
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
       
       {/* Total COGS */}
       <div onClick={() => open('cogs')} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') open('cogs'); }} title="Click for the details" className="cursor-pointer gold-glass-panel rounded-2xl p-5 flex flex-col justify-between group">
@@ -28,17 +28,32 @@ export function DashboardBottomNumbers({ telemetry }: { telemetry: DashboardTele
         <CardExtras extra={telemetry.cards?.cogs} color="#f87171" />
       </div>
 
-      {/* Total Cost */}
+      {/* Expenses: costs that are not COGS */}
+      <div onClick={() => open('cost')} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') open('cost'); }} title="Click for the details" className="cursor-pointer gold-glass-panel rounded-2xl p-5 flex flex-col justify-between group">
+        <div className="flex items-center gap-3 text-orange-400 mb-3">
+          <div className="p-2 rounded-xl bg-orange-500/10 border border-orange-500/20 group-hover:bg-orange-500/20 transition-colors">
+            <Receipt className="w-5 h-5" />
+          </div>
+          <span className="text-[10px] font-extrabold tracking-widest uppercase text-orange-300">Expenses</span>
+        </div>
+        <div>
+          <div className="text-xl font-bold font-serif text-white">{formatRupiah(telemetry.totalExpenses)}</div>
+          <div className="text-xs text-orange-500/50 font-mono mt-1">Operating expenses</div>
+        </div>
+        <CardExtras extra={telemetry.cards?.expenses} color="#fb923c" />
+      </div>
+
+      {/* Overhead = COGS + Expenses */}
       <div onClick={() => open('cost')} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') open('cost'); }} title="Click for the details" className="cursor-pointer gold-glass-panel rounded-2xl p-5 flex flex-col justify-between group">
         <div className="flex items-center gap-3 text-rose-400 mb-3">
           <div className="p-2 rounded-xl bg-rose-500/10 border border-rose-500/20 group-hover:bg-rose-500/20 transition-colors">
             <Briefcase className="w-5 h-5" />
           </div>
-          <span className="text-[10px] font-extrabold tracking-widest uppercase text-rose-300">Total Cost</span>
+          <span className="text-[10px] font-extrabold tracking-widest uppercase text-rose-300">Overhead</span>
         </div>
         <div>
           <div className="text-xl font-bold font-serif text-white">{formatRupiah(telemetry.totalCost)}</div>
-          <div className="text-xs text-rose-500/50 font-mono mt-1">COGS + Expenses (ledger)</div>
+          <div className="text-xs text-rose-500/50 font-mono mt-1">COGS + Expenses</div>
         </div>
         <CardExtras extra={telemetry.cards?.cost} color="#fb7185" />
       </div>

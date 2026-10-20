@@ -24,7 +24,7 @@ export interface DashboardDetails {
   cash: Array<{ date: string | null; label: string; amount: number }>;
 }
 
-export type CardKey = 'revenue' | 'paid' | 'avgMonthly' | 'avgOrder' | 'clients' | 'cogs' | 'cost' | 'salary' | 'cash' | 'ar' | 'coverage';
+export type CardKey = 'revenue' | 'paid' | 'avgMonthly' | 'avgOrder' | 'clients' | 'cogs' | 'cost' | 'salary' | 'cash' | 'ar' | 'coverage' | 'expenses';
 /** The mini chart of a card and its small per-company numbers (ProOne, PLIG...). */
 export interface CardExtra { series: number[]; labels: string[]; split: Array<{ code: string; value: number }> }
 
@@ -41,6 +41,8 @@ export interface DashboardTelemetry {
 
   totalCogs: number;
   totalCost: number;
+  /** Costs that are not COGS. Overhead (totalCost) = COGS + Expenses. */
+  totalExpenses: number;
   totalSalary: number;
   totalCashFlow: number;
   totalAR: number;
@@ -245,7 +247,7 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
   const bucketAr = new Array(numBuckets).fill(0);
   const bucketCount = new Array(numBuckets).fill(0);
   const bucketClients: Array<Set<string>> = Array.from({ length: numBuckets }, () => new Set<string>());
-  const split: Record<CardKey, Map<string, number>> = { revenue: new Map(), paid: new Map(), avgMonthly: new Map(), avgOrder: new Map(), clients: new Map(), cogs: new Map(), cost: new Map(), salary: new Map(), cash: new Map(), ar: new Map(), coverage: new Map() };
+  const split: Record<CardKey, Map<string, number>> = { revenue: new Map(), paid: new Map(), avgMonthly: new Map(), avgOrder: new Map(), clients: new Map(), cogs: new Map(), cost: new Map(), salary: new Map(), cash: new Map(), ar: new Map(), coverage: new Map(), expenses: new Map() };
   const addSplit = (k: CardKey, workspaceId: string, v: number) => split[k].set(codeOf(workspaceId), (split[k].get(codeOf(workspaceId)) || 0) + v);
   const countByCode = new Map<string, number>();
   const clientsByCode = new Map<string, Set<string>>();
@@ -365,6 +367,7 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
   let totalCost = 0;
   let totalSalary = 0;
   const expenseCoaMap = new Map<string, number>();
+  const bucketExpenses = new Array(numBuckets).fill(0);
 
   for (const line of costLines) {
     const code = String(line.account_code || '');
@@ -382,6 +385,7 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
 
     const coa = coaByCode.get(code);
     const isCogs = coa ? /cogs|cost of goods|cost of sales/i.test(coa.type) : code.startsWith('5');
+    if (!isCogs) { addSplit('expenses', line.workspace_id, amt); if (bIdx !== -1) bucketExpenses[bIdx] += amt; }
     if (isCogs) { totalCogs += amt; addSplit('cogs', line.workspace_id, amt); if (bIdx !== -1) bucketCogs[bIdx] += amt; }
     if (SALARY_ACCOUNT_CODES.includes(code)) { totalSalary += amt; addSplit('salary', line.workspace_id, amt); if (bIdx !== -1) bucketSalary[bIdx] += amt; } // already inside COGS / expenses: informational
 
@@ -460,6 +464,7 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     newClientCount,
     totalCogs,
     totalCost,
+    totalExpenses: totalCost - totalCogs,
     totalSalary,
     totalCashFlow,
     totalAR,
@@ -504,6 +509,7 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
       salary: { series: bucketSalary, labels, split: toSplit(split.salary) },
       cash: { series: liveCashBalance, labels, split: toSplit(split.cash) },
       ar: { series: bucketAr, labels, split: toSplit(split.ar) },
+      expenses: { series: bucketExpenses, labels, split: toSplit(split.expenses) },
       coverage: { series: monthFilter === null ? recognized.map((v: number, i: number) => (bucketCost[i] > 0 ? v / bucketCost[i] : 0)) : [], labels, split: [] },
     };
   }

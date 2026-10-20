@@ -44,7 +44,7 @@ type SortField = 'invoiceNumber' | 'rawIssueDate' | 'clientName' | 'rawDueDate' 
 type SortOrder = 'asc' | 'desc';
 
 import { updateInvoiceAssignment } from '@/app/actions/invoices';
-import { workspaceCode } from '@/lib/workspaces/known';
+import { workspaceCode, PT_WORKSPACE_ID } from '@/lib/workspaces/known';
 
 /** PT Pintu only: which workspace this invoice belongs to (the job is done there; PT collects the payment). */
 function InvoiceWorkspaceDropdown({ invoiceId, current, workspaces, activeWorkspaceName, readOnly }: { invoiceId: string; current: string | null; workspaces: any[]; activeWorkspaceName: string; readOnly?: boolean }) {
@@ -83,11 +83,17 @@ function InvoiceWorkspaceDropdown({ invoiceId, current, workspaces, activeWorksp
   );
 }
 
-export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], activeWorkspaceName = '', requests = [] }: { initialInvoices: InvoiceData[], availableWorkspaces?: any[], activeWorkspaceName?: string, requests?: InvoiceRequestRow[] }) {
+export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], activeWorkspaceName = '', activeWorkspaceId = '', requests = [] }: { initialInvoices: InvoiceData[], availableWorkspaces?: any[], activeWorkspaceName?: string, activeWorkspaceId?: string, requests?: InvoiceRequestRow[] }) {
   const [filterClient, setFilterClient] = useState('');
   const [filterIssueMonth, setFilterIssueMonth] = useState('');
   const [filterDueMonth, setFilterDueMonth] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
+  const [filterCompany, setFilterCompany] = useState('');
+
+  // The company an invoice belongs to is what the Workspace column shows: in PT Pintu its assigned workspace (PT itself when none),
+  // elsewhere PT Pintu for an invoice PT issued, otherwise this workspace.
+  const companyIdOf = (inv: InvoiceData) => (activeWorkspaceId === PT_WORKSPACE_ID ? inv.assignedWorkspaceId || PT_WORKSPACE_ID : inv.readOnly ? PT_WORKSPACE_ID : activeWorkspaceId);
+  const companyName = (id: string) => availableWorkspaces.find((w: any) => w.id === id)?.name || (id === PT_WORKSPACE_ID ? 'PT Pintu Langit Inovasi Global' : id === activeWorkspaceId ? activeWorkspaceName : 'Other');
 
   const [sortField, setSortField] = useState<SortField>('rawIssueDate');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
@@ -131,6 +137,13 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
     return Array.from(months).sort(); // Oldest first (Jan -> Dec)
   }, [initialInvoices]);
 
+  const uniqueCompanies = useMemo(() => {
+    const ids = new Set<string>();
+    initialInvoices.forEach((inv) => ids.add(companyIdOf(inv)));
+    return Array.from(ids).map((id) => ({ id, name: companyName(id) })).sort((a, b) => a.name.localeCompare(b.name));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialInvoices, availableWorkspaces, activeWorkspaceId]);
+
   const formatMonth = (yyyyMm: string) => {
     if (!yyyyMm) return '';
     const [year, month] = yyyyMm.split('-');
@@ -160,6 +173,11 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
         return false;
       }
 
+      // 5. Filter by company
+      if (filterCompany && companyIdOf(inv) !== filterCompany) {
+        return false;
+      }
+
       // 6. Filter by Status
       if (filterStatus !== 'All') {
         if (filterStatus === 'Quotation' && !inv.isQuotation) return false;
@@ -186,7 +204,7 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
     });
 
     return filtered;
-  }, [initialInvoices, filterClient, filterIssueMonth, filterDueMonth, filterStatus, sortField, sortOrder]);
+  }, [initialInvoices, filterClient, filterIssueMonth, filterDueMonth, filterCompany, filterStatus, sortField, sortOrder, activeWorkspaceId]);
 
   const visibleRequests = useMemo(
     () =>
@@ -203,7 +221,7 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
     <div className="gold-glass-panel rounded-2xl p-6">
       
       {/* Filters Bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6 p-3 rounded-xl bg-zinc-900/50 border border-zinc-800">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-6 p-3 rounded-xl bg-zinc-900/50 border border-zinc-800">
         <div>
           <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Search Client</label>
           <select 
@@ -241,6 +259,17 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
             {uniqueDueMonths.map(month => (
               <option key={month} value={month}>{formatMonth(month)}</option>
             ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Company</label>
+          <select
+            value={filterCompany}
+            onChange={(e) => setFilterCompany(e.target.value)}
+            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[#d4af37]"
+          >
+            <option value="">All Companies</option>
+            {uniqueCompanies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
         <div>

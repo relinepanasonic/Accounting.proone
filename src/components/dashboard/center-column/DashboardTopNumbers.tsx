@@ -53,7 +53,7 @@ export function DashboardTopNumbers({ telemetry }: { telemetry: DashboardTelemet
         </div>
         <div>
           <div className="text-xl font-bold font-serif text-white">{formatRupiah(telemetry.avgMonthlyRevenue)}</div>
-          <div className="text-xs text-blue-500/50 font-mono mt-1">Per active month</div>
+          <div className="text-xs text-blue-500/50 font-mono mt-1">Spread over project length</div>
         </div>
         <CardExtras extra={telemetry.cards?.avgMonthly} color="#60a5fa" />
       </div>

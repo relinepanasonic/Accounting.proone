@@ -1,4 +1,5 @@
 import 'server-only';
+import { lengthFromQuantity } from '@/lib/sales/flow';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { withoutProspects } from '@/lib/sales/prospects';
@@ -144,7 +145,7 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
   const [invoicesRes, clientsRes, txRes, rawCostLines, coaRes] = await Promise.all([
     supabase
       .from('invoices')
-      .select('id, invoice_number, status, total_amount, amount_paid, issue_date, due_date, created_at, client_id, workspace_id, assigned_workspace_id, clients(name), invoice_line_items(package_name, description, amount, quantity)')
+      .select('id, invoice_number, status, total_amount, amount_paid, issue_date, due_date, created_at, client_id, workspace_id, assigned_workspace_id, clients(name), invoice_line_items(package_name, description, amount, quantity, scale)')
       .eq('is_quotation', false)
       .in('workspace_id', queryWorkspaceIds),
     withoutProspects((hide) => {
@@ -308,6 +309,35 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     }
   }
 
+  // Monthly revenue (recognized): an invoice for a 3 month project counts 1/3 in each of its 3 months, a 2 week job by its days,
+  // anything with no length (pc, video...) in the month it was issued. Shows what each month really carries, against the monthly overhead.
+  const recognized = new Array(12).fill(0);
+  const recognizedSplit = new Map<string, number[]>();
+  const spread = (workspaceId: string, start: Date, amount: number, len: ReturnType<typeof lengthFromQuantity>) => {
+    const code = codeOf(workspaceId);
+    const arr = recognizedSplit.get(code) || new Array(12).fill(0);
+    recognizedSplit.set(code, arr);
+    const put = (y: number, m: number, v: number) => { if (y === currentYear) { recognized[m] += v; arr[m] += v; } };
+    const y0 = start.getUTCFullYear(), m0 = start.getUTCMonth();
+    if (len.duration_type === 'month' && len.duration_value > 1) {
+      for (let k = 0; k < len.duration_value; k++) { const t = m0 + k; put(y0 + Math.floor(t / 12), t % 12, amount / len.duration_value); }
+    } else if (len.duration_type === 'day' && len.duration_value > 1) {
+      for (let k = 0; k < len.duration_value; k++) { const dt = new Date(start.getTime() + k * 86400000); put(dt.getUTCFullYear(), dt.getUTCMonth(), amount / len.duration_value); }
+    } else put(y0, m0, amount);
+  };
+  for (const inv of invoices) {
+    if (clientName && nameOf(inv) !== clientName) continue;
+    const st = (inv.status || 'draft').toLowerCase();
+    if (st === 'cancelled') continue;
+    const total = Number(inv.total_amount || 0);
+    const start = new Date(String(inv.issue_date || inv.created_at).slice(0, 10) + 'T12:00:00Z');
+    if (Number.isNaN(start.getTime())) continue;
+    const lines: any[] = Array.isArray(inv.invoice_line_items) ? inv.invoice_line_items : [];
+    const sum = lines.reduce((a, l) => a + Number(l.amount || 0), 0);
+    if (!lines.length || sum <= 0) { spread(inv.workspace_id, start, total, lengthFromQuantity(0)); continue; }
+    for (const l of lines) spread(inv.workspace_id, start, (Number(l.amount || 0) / sum) * total, lengthFromQuantity(Number(l.quantity || 0), l.scale));
+  }
+
   let newClientCount = 0;
   for (const c of clientName ? [] : clients) {
     if (isTargetPeriod(c.created_at)) {
@@ -365,9 +395,10 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
       if (bucketRevenue[i] > 0) monthsWithData++;
     }
   }
-  const avgMonthlyRevenue = monthFilter === null 
-    ? (monthsWithData > 0 ? totalRevenue / monthsWithData : 0)
-    : totalRevenue; // If 1 month selected, avg monthly is just that month's revenue
+  const recognizedMonths = recognized.filter((v) => v > 0.5).length;
+  const avgMonthlyRevenue = monthFilter === null
+    ? (recognizedMonths > 0 ? recognized.reduce((a, b) => a + b, 0) / recognizedMonths : 0)
+    : recognized[monthFilter] || 0;
 
   // Cash = what was already there when the period began + cash in - cash out. (Cash in: paid invoices. Cash out: reconciled bank transactions.)
   const periodStart = monthFilter === null ? `${currentYear}-01-01` : `${currentYear}-${String(monthFilter + 1).padStart(2, '0')}-01`;
@@ -449,12 +480,13 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
   function buildCards(): Record<CardKey, CardExtra> {
     const toSplit = (m: Map<string, number>, f: (code: string, v: number) => number = (_c, v) => v) =>
       Array.from(m.entries()).map(([code, v]) => ({ code, value: f(code, v) })).sort((a, b) => b.value - a.value);
-    const months = monthFilter === null ? Math.max(1, monthsWithData) : 1;
+    const months = monthFilter === null ? Math.max(1, recognizedMonths) : 1;
+    const recSplit = Array.from(recognizedSplit.entries()).map(([code, arr]) => ({ code, value: monthFilter === null ? arr.reduce((a, b) => a + b, 0) / months : arr[monthFilter] || 0 })).filter((x) => x.value > 0.5).sort((a, b) => b.value - a.value);
     const orderSeries = bucketRevenue.map((v: number, i: number) => (bucketCount[i] ? v / bucketCount[i] : 0));
     return {
       revenue: { series: bucketRevenue, labels, split: toSplit(split.revenue) },
       paid: { series: bucketPaid, labels, split: toSplit(split.paid) },
-      avgMonthly: { series: bucketRevenue, labels, split: toSplit(split.revenue, (_c, v) => v / months) },
+      avgMonthly: { series: monthFilter === null ? recognized : bucketRevenue, labels, split: recSplit },
       avgOrder: { series: orderSeries, labels, split: toSplit(split.revenue, (c, v) => (countByCode.get(c) ? v / (countByCode.get(c) as number) : 0)) },
       clients: { series: bucketClients.map((x) => x.size), labels, split: Array.from(clientsByCode.entries()).map(([code, set]) => ({ code, value: set.size })).sort((a, b) => b.value - a.value) },
       cogs: { series: bucketCogs, labels, split: toSplit(split.cogs) },

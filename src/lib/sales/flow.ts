@@ -108,3 +108,25 @@ export function describeDuration(type: DurationType, value: number, unit?: strin
   if (type === 'deliverable' && value > 0) return `${value} ${unit || 'item'}${value === 1 ? '' : 's'}`;
   return 'No project length';
 }
+
+/**
+ * The project length comes from what was SOLD: the quantity and the unit of the invoice line (or of the catalog product).
+ * 3 month = 3 months, 10 days = 10 days, 2 weeks = 14 days, 1 year = 12 months. Any other unit (pc, video, photo...) is a number of
+ * deliverables: no end date, "30 pc to deliver".
+ */
+export function lengthFromQuantity(quantity: number, unit?: string | null): { duration_type: DurationType; duration_value: number; deliverable_unit: string | null } {
+  const q = Math.max(0, Math.round(Number(quantity) || 0));
+  const u = String(unit || '').trim().toLowerCase();
+  if (q <= 0) return { duration_type: 'none', duration_value: 0, deliverable_unit: null };
+  if (/^(month|months|mo|bulan|bln)$/.test(u)) return { duration_type: 'month', duration_value: q, deliverable_unit: null };
+  if (/^(year|years|tahun|thn)$/.test(u)) return { duration_type: 'month', duration_value: q * 12, deliverable_unit: null };
+  if (/^(week|weeks|minggu|mgg)$/.test(u)) return { duration_type: 'day', duration_value: q * 7, deliverable_unit: null };
+  if (/^(day|days|hari)$/.test(u)) return { duration_type: 'day', duration_value: q, deliverable_unit: null };
+  // deliverable: computeProjectTerms multiplies value by the item quantity, so the value is 1 and the quantity is the amount
+  return { duration_type: 'deliverable', duration_value: 1, deliverable_unit: u || 'pc' };
+}
+
+/** The item with its length taken from its own quantity and unit. */
+export function withLengthFromQuantity<T extends { quantity: number; scale: string | null }>(item: T): T & { duration_type: DurationType; duration_value: number; deliverable_unit: string | null } {
+  return { ...item, ...lengthFromQuantity(item.quantity, item.scale) };
+}

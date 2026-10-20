@@ -2,7 +2,7 @@
 // Built from the INVOICES of the workspace (so every client with an issued invoice shows, whether the invoice came from a
 // pipeline card or was made by Accounting directly), joined with the pipeline card (paid / approved date) and the project (start).
 // Used by Sales > Client, Optimizing > Clients (with handler assignment) and mirrored in Advertiser / Admin (up to Product).
-import { computeProjectTerms, type RequestItem } from '@/lib/sales/flow';
+import { computeProjectTerms, withLengthFromQuantity, type RequestItem } from '@/lib/sales/flow';
 import { todayJakarta } from '@/lib/kpi/calendar';
 import { PT_WORKSPACE_ID } from '@/lib/workspaces/known';
 
@@ -88,14 +88,16 @@ async function loadInvoiceRows(db: Db, workspaceId: string, opts: LoadOpts): Pro
   const invoiceIds = invoices.map((i) => i.id);
   const clientIds = Array.from(new Set(invoices.map((i) => i.client_id)));
 
-  const [dealsRes, clientsRes, projectsRes, linesRes, productsRes, assignRes, payRes] = await Promise.all([
+  const [dealsRes, clientsRes, projectsRes, linesRes, productsRes, assignRes, payRes, txPayRes] = await Promise.all([
     db.from('crm_deals').select('id, invoice_id, stage, salesman_id, paid_at, acc_approved_at').eq('workspace_id', workspaceId).in('invoice_id', invoiceIds),
     db.from('clients').select('id, name, company_name, store_name').in('id', clientIds),
     db.from('projects').select('invoice_id, deal_id, start_date').eq('workspace_id', workspaceId).in('invoice_id', invoiceIds),
-    db.from('invoice_line_items').select('invoice_id, package_name, description, quantity').in('invoice_id', invoiceIds),
+    db.from('invoice_line_items').select('invoice_id, package_name, description, quantity, scale').in('invoice_id', invoiceIds),
     db.from('products').select('id, name, duration_type, duration_value, deliverable_unit').eq('workspace_id', workspaceId),
     db.from('client_assignments').select('client_id, user_id, job').eq('workspace_id', workspaceId).in('client_id', clientIds).in('job', ['advertising', 'admin']),
     db.from('journal_entries').select('reference_id, transaction_date').in('reference_id', invoiceIds).in('reference_type', ['bank_match', 'payment', 'payment_tx', 'invoice_payment']).gt('credit_amount', 0),
+    // Income booked against the invoice (a recorded payment, a matched bank line).
+    db.from('transactions').select('invoice_id, transaction_date').in('invoice_id', invoiceIds).eq('type', 'income'),
   ]);
 
   const dealByInvoice = new Map<string, any>((dealsRes.data || []).map((d: any) => [d.invoice_id, d]));
@@ -127,10 +129,15 @@ async function loadInvoiceRows(db: Db, workspaceId: string, opts: LoadOpts): Pro
     if (!cur || String(p.transaction_date) > cur) lastPayment.set(p.reference_id, String(p.transaction_date));
   }
 
+  for (const p of txPayRes.data || []) {
+    const cur = lastPayment.get(p.invoice_id);
+    if (p.transaction_date && (!cur || String(p.transaction_date) > cur)) lastPayment.set(p.invoice_id, String(p.transaction_date));
+  }
+
   /** The products of one invoice: the salesman's request when there is one, else the invoice lines matched to the catalog by name. */
   const itemsOf = (inv: any, deal: any): RequestItem[] => {
     const fromRequest = deal ? requestItems.get(deal.id) : undefined;
-    if (fromRequest?.length) return fromRequest;
+    if (fromRequest?.length) return fromRequest.map((i) => withLengthFromQuantity(i));
     return (linesByInvoice.get(inv.id) || []).map((l: any) => {
       const label = String(l.package_name || l.description || '').trim();
       const key = label.toLowerCase();
@@ -140,12 +147,12 @@ async function loadInvoiceRows(db: Db, workspaceId: string, opts: LoadOpts): Pro
         name: label.split('\n')[0] || 'Item',
         quantity: Number(l.quantity || 1),
         unit_price: 0,
-        scale: null,
-        duration_type: p?.duration_type || 'none',
-        duration_value: Number(p?.duration_value || 0),
-        deliverable_unit: p?.deliverable_unit || null,
+        scale: l.scale || p?.scale || null,
+        duration_type: 'none',
+        duration_value: 0,
+        deliverable_unit: null,
       } as RequestItem;
-    });
+    }).map((i: RequestItem) => withLengthFromQuantity(i));
   };
 
   const today = todayJakarta();

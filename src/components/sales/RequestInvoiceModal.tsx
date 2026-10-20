@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Plus, Trash2, X } from 'lucide-react';
 import { requestInvoice } from '@/app/actions/sales-flow';
 import { ProductDropdown } from '@/components/invoices/ProductDropdown';
-import { describeDuration, requestTotal, type DurationType, type RequestItem } from '@/lib/sales/flow';
+import { describeDuration, lengthFromQuantity, requestTotal, type DurationType, type RequestItem } from '@/lib/sales/flow';
 
 export interface CatalogProduct {
   id: string;
@@ -99,7 +99,7 @@ export function RequestInvoiceModal({
                   <input type="number" min={0} className={`${field} w-full`} value={it.unit_price} onChange={(e) => update(i, { unit_price: Number(e.target.value) })} />
                 </label>
                 <div className="space-y-1"><span className="text-zinc-500 uppercase tracking-wider">Project length</span>
-                  <div className="py-1.5 text-zinc-300">{describeDuration(it.duration_type, it.duration_value, it.deliverable_unit)}</div>
+                  <div className="py-1.5 text-zinc-300">{(() => { const l = lengthFromQuantity(it.quantity, it.scale); return l.duration_type === 'deliverable' ? `${Math.max(0, Number(it.quantity) || 0)} ${l.deliverable_unit || 'pc'} to deliver` : describeDuration(l.duration_type, l.duration_value, l.deliverable_unit); })()}</div>
                 </div>
               </div>
             </div>

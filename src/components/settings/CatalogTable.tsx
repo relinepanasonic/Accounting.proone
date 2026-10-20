@@ -14,7 +14,7 @@ const rp = (n: number) => `Rp ${Math.round(n || 0).toLocaleString('id-ID')}`;
 interface Row extends CatalogProduct { _new?: boolean; workspace_id?: string | null }
 export interface CatalogWorkspace { id: string; name: string }
 
-/** The product catalog as ONE table. Every cell is editable (saved when you leave it); Length is a drop-down. */
+/** The product catalog as ONE table. Every cell is editable (saved when you leave it). Qty and Unit also set the project length: 3 month = 3 months. */
 export function CatalogTable({ initialProducts, canEdit, workspaces, activeWorkspaceId }: { initialProducts: CatalogProduct[]; canEdit: boolean; /** PT Pintu: the catalogs of all workspaces, one table. A product belongs to exactly one workspace. */ workspaces?: CatalogWorkspace[]; activeWorkspaceId?: string }) {
   const showWorkspace = Boolean(workspaces && workspaces.length > 1);
   const wsName = (id?: string | null) => workspaces?.find((w) => w.id === id)?.name || '-';
@@ -50,13 +50,6 @@ export function CatalogTable({ initialProducts, canEdit, workspaces, activeWorks
       else if (res.renamedLines > 0) setNotice(`Renamed in ${res.renamedLines} invoice line${res.renamedLines === 1 ? '' : 's'}: every invoice that used this product now shows the new name.`);
       setBusy(null);
     });
-  };
-
-  /** Length drop-down: type change saves at once; the number and unit save when you leave them. */
-  const changeType = (row: Row, type: DurType) => {
-    const next: Row = { ...row, duration_type: type, duration_value: type === 'none' ? 0 : row.duration_value && Number(row.duration_value) > 0 ? row.duration_value : 1, deliverable_unit: type === 'deliverable' ? row.deliverable_unit || 'pc' : null };
-    if (row._new) setRows((l) => l.map((r) => (r.id === row.id ? next : r)));
-    else { patchLocal(row.id, next); save(next); }
   };
 
   const addRow = () => {
@@ -103,36 +96,6 @@ export function CatalogTable({ initialProducts, canEdit, workspaces, activeWorks
     });
   };
 
-  const LengthCell = ({ row }: { row: Row }) => {
-    const type = (row.duration_type || 'none') as DurType;
-    return (
-      <div className="flex flex-nowrap items-center gap-2">
-        <select value={type} disabled={!canEdit} onChange={(e) => changeType(row, e.target.value as DurType)} className={box}>
-          <option value="none">No length</option>
-          <option value="day">Days</option>
-          <option value="month">Months</option>
-          <option value="deliverable">Pc</option>
-        </select>
-        {type !== 'none' && (
-          <input
-            type="number" min={1} disabled={!canEdit} value={row.duration_value ?? ''} aria-label="Length"
-            onChange={(e) => patchLocal(row.id, { duration_value: Number(e.target.value) })}
-            onBlur={() => save(row)}
-            className={`${box} w-16 text-center`}
-          />
-        )}
-        {type === 'deliverable' && (
-          <input
-            value={row.deliverable_unit || ''} disabled={!canEdit} placeholder="pc" aria-label="Unit"
-            onChange={(e) => patchLocal(row.id, { deliverable_unit: e.target.value })}
-            onBlur={() => save(row)}
-            className={`${box} w-24`}
-          />
-        )}
-      </div>
-    );
-  };
-
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -154,16 +117,15 @@ export function CatalogTable({ initialProducts, canEdit, workspaces, activeWorks
       {error && <p className="flex items-center justify-between rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">{error}<button onClick={() => setError('')} aria-label="Dismiss"><X className="h-3.5 w-3.5" /></button></p>}
 
       <div className="overflow-x-auto rounded-xl border border-[#d4af37]/20 bg-[#0e0f14] shadow-xl">
-        <table className="w-full min-w-[1000px] table-fixed text-left">
+        <table className="w-full min-w-[900px] table-fixed text-left">
           <colgroup>
-            {showWorkspace && <col style={{ width: '11%' }} />}
-            <col style={{ width: '15%' }} />
-            <col style={{ width: '20%' }} />
-            <col style={{ width: '11%' }} />
-            <col style={{ width: '6%' }} />
-            <col style={{ width: '7%' }} />
-            <col style={{ width: '33%' }} />
-            {canEdit && <col style={{ width: '8%' }} />}
+            {showWorkspace && <col style={{ width: '10%' }} />}
+            <col style={{ width: '24%' }} />
+            <col style={{ width: '32%' }} />
+            <col style={{ width: '14%' }} />
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '12%' }} />
+            {canEdit && <col style={{ width: '10%' }} />}
           </colgroup>
           <thead className="border-b border-[#d4af37]/10 bg-zinc-900/50 text-[11px] uppercase tracking-wider text-zinc-400">
             <tr>
@@ -172,13 +134,12 @@ export function CatalogTable({ initialProducts, canEdit, workspaces, activeWorks
               <th className="px-3 py-3 font-bold">Description</th>
               <th className="px-3 py-3 font-bold text-right">Price</th>
               <th className="px-3 py-3 font-bold">Qty</th>
-              <th className="px-3 py-3 font-bold">Unit</th>
-              <th className="px-3 py-3 font-bold">Length</th>
+              <th className="px-3 py-3 font-bold" title="month / day / week / year give the project length; pc, video... are amounts to deliver">Unit (length)</th>
               {canEdit && <th className="px-3 py-3 font-bold text-right">Actions</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800/50">
-            {shown.length === 0 && <tr><td colSpan={8} className="p-8 text-center text-sm text-zinc-500">No products. {canEdit ? 'Press "Add new product".' : ''}</td></tr>}
+            {shown.length === 0 && <tr><td colSpan={7} className="p-8 text-center text-sm text-zinc-500">No products. {canEdit ? 'Press "Add new product".' : ''}</td></tr>}
             {shown.map((row) => (
               <tr key={row.id} className={row._new ? 'bg-[#d4af37]/[0.06]' : 'hover:bg-zinc-900/30'}>
                 {showWorkspace && (
@@ -224,7 +185,6 @@ export function CatalogTable({ initialProducts, canEdit, workspaces, activeWorks
                 <td className="px-2 py-2 align-top">
                   <input className={cell} disabled={!canEdit} value={row.scale || ''} placeholder="pc" onChange={(e) => patchLocal(row.id, { scale: e.target.value })} onBlur={() => save(row)} />
                 </td>
-                <td className="px-2 py-2 align-top whitespace-nowrap"><LengthCell row={row} /></td>
                 {canEdit && (
                   <td className="px-2 py-2 align-top text-right whitespace-nowrap">
                     {busy === row.id ? <Loader2 className="ml-auto h-4 w-4 animate-spin text-zinc-500" /> : row._new ? (

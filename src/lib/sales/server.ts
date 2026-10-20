@@ -1,4 +1,4 @@
-import type { RequestItem } from '@/lib/sales/flow';
+import { withLengthFromQuantity, type RequestItem } from '@/lib/sales/flow';
 // Server-only helpers for the sales flow (not server actions: nothing here is callable from the browser).
 // They take a service-role client; the caller has already checked who is asking.
 type Db = any;
@@ -101,9 +101,9 @@ export async function dealItems(db: any, workspaceId: string, deal: { id: string
   let items: RequestItem[] = [];
   const { data: req } = deal.id ? await db.from('invoice_requests').select('items').eq('deal_id', deal.id).eq('status', 'generated').order('requested_at', { ascending: false }).limit(1) : { data: null };
   if (req?.[0]?.items?.length) {
-    items = req[0].items as RequestItem[];
+    items = (req[0].items as RequestItem[]).map((i) => withLengthFromQuantity(i));
   } else if (deal.invoice_id) {
-    const { data: lines } = await db.from('invoice_line_items').select('package_name, description, quantity').eq('invoice_id', deal.invoice_id);
+    const { data: lines } = await db.from('invoice_line_items').select('package_name, description, quantity, scale').eq('invoice_id', deal.invoice_id);
     const { data: prods } = await db.from('products').select('*').eq('workspace_id', workspaceId);
     items = (lines || []).map((l: any) => {
       const key = String(l.package_name || l.description || '').trim().toLowerCase();
@@ -113,12 +113,12 @@ export async function dealItems(db: any, workspaceId: string, deal: { id: string
         name: l.package_name || l.description || 'Item',
         quantity: Number(l.quantity || 1),
         unit_price: 0,
-        scale: null,
-        duration_type: p?.duration_type || 'none',
-        duration_value: Number(p?.duration_value || 0),
-        deliverable_unit: p?.deliverable_unit || null,
+        scale: l.scale || p?.scale || null,
+        duration_type: 'none',
+        duration_value: 0,
+        deliverable_unit: null,
       } as RequestItem;
-    });
+    }).map((i: RequestItem) => withLengthFromQuantity(i));
   }
   return items;
 }

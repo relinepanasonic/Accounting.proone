@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { withoutProspects } from '@/lib/sales/prospects';
 import { clientMask } from '@/lib/auth/client-privacy';
-import { PT_WORKSPACE_ID } from '@/lib/workspaces/known';
+import { PT_WORKSPACE_ID, workspaceCode } from '@/lib/workspaces/known';
 import { SALARY_ACCOUNT_CODES_PUBLIC } from '@/lib/data/dashboard-constants';
 
 /**
@@ -22,6 +22,10 @@ export interface DashboardDetails {
   costs: Array<{ date: string; code: string; account: string; amount: number; cogs: boolean }>;
   cash: Array<{ date: string | null; label: string; amount: number }>;
 }
+
+export type CardKey = 'revenue' | 'paid' | 'avgMonthly' | 'avgOrder' | 'clients' | 'cogs' | 'cost' | 'salary' | 'cash' | 'ar';
+/** The mini chart of a card and its small per-company numbers (ProOne, PLIG...). */
+export interface CardExtra { series: number[]; labels: string[]; split: Array<{ code: string; value: number }> }
 
 export interface DashboardTelemetry {
   totalRevenue: number;
@@ -63,6 +67,7 @@ export interface DashboardTelemetry {
   /** The year the numbers are for. */
   year?: number;
   details?: DashboardDetails;
+  cards?: Record<CardKey, CardExtra>;
   /** The Company filter of a single-company dashboard: where the numbers can come from. */
   companyOptions?: Array<{ id: string; name: string }>;
 }
@@ -227,6 +232,19 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
 
   const details: DashboardDetails = { invoices: [], ar: [], costs: [], cash: [] };
 
+  // Mini charts and per-company numbers for the cards. The company is the workspace that holds the books (PT Pintu for what it holds for another company).
+  const codeOf = (workspaceId: string) => workspaceCode(workspaceId, availableWorkspaces.find((w: any) => w.id === workspaceId)?.name);
+  const bucketPaid = new Array(numBuckets).fill(0);
+  const bucketCogs = new Array(numBuckets).fill(0);
+  const bucketSalary = new Array(numBuckets).fill(0);
+  const bucketAr = new Array(numBuckets).fill(0);
+  const bucketCount = new Array(numBuckets).fill(0);
+  const bucketClients: Array<Set<string>> = Array.from({ length: numBuckets }, () => new Set<string>());
+  const split: Record<CardKey, Map<string, number>> = { revenue: new Map(), paid: new Map(), avgMonthly: new Map(), avgOrder: new Map(), clients: new Map(), cogs: new Map(), cost: new Map(), salary: new Map(), cash: new Map(), ar: new Map() };
+  const addSplit = (k: CardKey, workspaceId: string, v: number) => split[k].set(codeOf(workspaceId), (split[k].get(codeOf(workspaceId)) || 0) + v);
+  const countByCode = new Map<string, number>();
+  const clientsByCode = new Map<string, Set<string>>();
+
   // Process Invoices
   for (const inv of invoices) {
     const d = inv.issue_date || inv.created_at;
@@ -238,6 +256,11 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     if (['pending', 'overdue', 'sent', 'invoiced', 'partial_paid'].includes(st)) {
       const balance = Math.max(0, amt - Number(inv.amount_paid || 0));
       totalAR += balance;
+      if (balance > 0) {
+        addSplit('ar', inv.workspace_id, balance);
+        const ab = getBucketIndex(d);
+        if (ab !== -1) bucketAr[ab] += balance;
+      }
       if (balance > 0) details.ar.push({ id: inv.id, number: inv.invoice_number, client: nameOf(inv), date: d, due: inv.due_date, status: st, balance });
     }
 
@@ -248,7 +271,10 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     totalRevenue += amt;
     invoiceCount++;
     const bIdx = getBucketIndex(d);
+    addSplit('revenue', inv.workspace_id, amt);
+    countByCode.set(codeOf(inv.workspace_id), (countByCode.get(codeOf(inv.workspace_id)) || 0) + 1);
     if (bIdx !== -1) {
+      bucketCount[bIdx]++;
       bucketRevenue[bIdx] += amt;
       bucketProfit[bIdx] += amt; // Add revenue to profit
     }
@@ -256,11 +282,16 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     if (st === 'paid') {
       details.cash.push({ date: d, label: `${inv.invoice_number || 'Invoice'} · ${nameOf(inv)}`, amount: amt });
       paidRevenue += amt;
-      if (bIdx !== -1) bucketCashFlow[bIdx] += amt; // Cash in
+      addSplit('paid', inv.workspace_id, amt);
+      addSplit('cash', inv.workspace_id, amt);
+      if (bIdx !== -1) { bucketCashFlow[bIdx] += amt; bucketPaid[bIdx] += amt; } // Cash in
     }
 
     if (inv.client_id) {
       activeClients.add(inv.client_id);
+      if (bIdx !== -1) bucketClients[bIdx].add(inv.client_id);
+      if (!clientsByCode.has(codeOf(inv.workspace_id))) clientsByCode.set(codeOf(inv.workspace_id), new Set());
+      clientsByCode.get(codeOf(inv.workspace_id))!.add(inv.client_id);
       const cName = nameOf(inv);
       clientRevenueMap.set(cName, (clientRevenueMap.get(cName) || 0) + amt);
     }
@@ -288,6 +319,7 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     if (!isTargetPeriod(tx.due_date) || !tx.reconciled) continue;
     const bIdx = getBucketIndex(tx.due_date);
     if (bIdx !== -1) bucketCashFlow[bIdx] -= Number(tx.amount || 0);
+    addSplit('cash', tx.workspace_id, -Number(tx.amount || 0));
     details.cash.push({ date: tx.due_date, label: tx.description || tx.category || 'Expense', amount: -Number(tx.amount || 0) });
   }
 
@@ -308,6 +340,7 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
 
     totalCost += amt;
     const bIdx = getBucketIndex(line.transaction_date);
+    addSplit('cost', line.workspace_id, amt);
     if (bIdx !== -1) {
       bucketCost[bIdx] += amt;
       bucketProfit[bIdx] -= amt;
@@ -315,8 +348,8 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
 
     const coa = coaByCode.get(code);
     const isCogs = coa ? /cogs|cost of goods|cost of sales/i.test(coa.type) : code.startsWith('5');
-    if (isCogs) totalCogs += amt;
-    if (SALARY_ACCOUNT_CODES.includes(code)) totalSalary += amt; // already inside COGS / expenses: informational
+    if (isCogs) { totalCogs += amt; addSplit('cogs', line.workspace_id, amt); if (bIdx !== -1) bucketCogs[bIdx] += amt; }
+    if (SALARY_ACCOUNT_CODES.includes(code)) { totalSalary += amt; addSplit('salary', line.workspace_id, amt); if (bIdx !== -1) bucketSalary[bIdx] += amt; } // already inside COGS / expenses: informational
 
     details.costs.push({ date: String(line.transaction_date).slice(0, 10), code, account: coa?.name || 'Account', amount: amt, cogs: isCogs });
     const label = `${code} - ${coa?.name || 'Account'}`;
@@ -392,8 +425,28 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     clientNames,
     year: currentYear,
     details,
+    cards: buildCards(),
     companyOptions: combined ? undefined : companyOptions(),
   };
+
+  function buildCards(): Record<CardKey, CardExtra> {
+    const toSplit = (m: Map<string, number>, f: (code: string, v: number) => number = (_c, v) => v) =>
+      Array.from(m.entries()).map(([code, v]) => ({ code, value: f(code, v) })).sort((a, b) => b.value - a.value);
+    const months = monthFilter === null ? Math.max(1, monthsWithData) : 1;
+    const orderSeries = bucketRevenue.map((v: number, i: number) => (bucketCount[i] ? v / bucketCount[i] : 0));
+    return {
+      revenue: { series: bucketRevenue, labels, split: toSplit(split.revenue) },
+      paid: { series: bucketPaid, labels, split: toSplit(split.paid) },
+      avgMonthly: { series: bucketRevenue, labels, split: toSplit(split.revenue, (_c, v) => v / months) },
+      avgOrder: { series: orderSeries, labels, split: toSplit(split.revenue, (c, v) => (countByCode.get(c) ? v / (countByCode.get(c) as number) : 0)) },
+      clients: { series: bucketClients.map((x) => x.size), labels, split: Array.from(clientsByCode.entries()).map(([code, set]) => ({ code, value: set.size })).sort((a, b) => b.value - a.value) },
+      cogs: { series: bucketCogs, labels, split: toSplit(split.cogs) },
+      cost: { series: bucketCost, labels, split: toSplit(split.cost) },
+      salary: { series: bucketSalary, labels, split: toSplit(split.salary) },
+      cash: { series: liveCashBalance, labels, split: toSplit(split.cash) },
+      ar: { series: bucketAr, labels, split: toSplit(split.ar) },
+    };
+  }
 
   /** The Company filter: this company's own books and the other source(s) behind it. */
   function companyOptions() {

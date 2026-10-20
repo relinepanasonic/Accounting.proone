@@ -3,6 +3,7 @@
 import React from 'react';
 import type { DashboardTelemetry } from '@/lib/data/dashboard';
 import { useDetailDrawer } from '@/components/dashboard/DetailDrawer';
+import { CardExtras } from '@/components/dashboard/CardExtras';
 import { formatRupiah } from '@/lib/utils';
 import { Target, TrendingUp, BarChart3, Receipt, Users } from 'lucide-react';
 
@@ -24,6 +25,7 @@ export function DashboardTopNumbers({ telemetry }: { telemetry: DashboardTelemet
           <div className="text-xl font-bold font-serif text-white">{formatRupiah(telemetry.totalRevenue)}</div>
           <div className="text-xs text-zinc-500 font-mono mt-1">Billed amount</div>
         </div>
+        <CardExtras extra={telemetry.cards?.revenue} color="#d4af37" />
       </div>
 
       {/* Paid Revenue */}
@@ -38,6 +40,7 @@ export function DashboardTopNumbers({ telemetry }: { telemetry: DashboardTelemet
           <div className="text-xl font-bold font-serif text-white">{formatRupiah(telemetry.paidRevenue)}</div>
           <div className="text-xs text-emerald-500/50 font-mono mt-1">Collected</div>
         </div>
+        <CardExtras extra={telemetry.cards?.paid} color="#10b981" />
       </div>
 
       {/* AVG Monthly Revenue */}
@@ -52,6 +55,7 @@ export function DashboardTopNumbers({ telemetry }: { telemetry: DashboardTelemet
           <div className="text-xl font-bold font-serif text-white">{formatRupiah(telemetry.avgMonthlyRevenue)}</div>
           <div className="text-xs text-blue-500/50 font-mono mt-1">Per active month</div>
         </div>
+        <CardExtras extra={telemetry.cards?.avgMonthly} color="#60a5fa" />
       </div>
 
       {/* AOV */}
@@ -66,6 +70,7 @@ export function DashboardTopNumbers({ telemetry }: { telemetry: DashboardTelemet
           <div className="text-xl font-bold font-serif text-white">{formatRupiah(telemetry.avgOrderValue)}</div>
           <div className="text-xs text-purple-500/50 font-mono mt-1">Per invoice</div>
         </div>
+        <CardExtras extra={telemetry.cards?.avgOrder} color="#c084fc" />
       </div>
 
       {/* Active & New Client */}
@@ -86,6 +91,7 @@ export function DashboardTopNumbers({ telemetry }: { telemetry: DashboardTelemet
             <div className="text-[10px] text-zinc-500 font-mono mt-1 uppercase tracking-wider">New</div>
           </div>
         </div>
+        <CardExtras extra={telemetry.cards?.clients} color="#fb923c" count />
       </div>
 
     </div>

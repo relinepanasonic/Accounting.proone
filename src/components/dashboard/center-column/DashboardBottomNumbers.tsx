@@ -3,6 +3,7 @@
 import React from 'react';
 import type { DashboardTelemetry } from '@/lib/data/dashboard';
 import { useDetailDrawer } from '@/components/dashboard/DetailDrawer';
+import { CardExtras } from '@/components/dashboard/CardExtras';
 import { formatRupiah } from '@/lib/utils';
 import { Package, Briefcase, Users, Wallet, Clock } from 'lucide-react';
 
@@ -24,6 +25,7 @@ export function DashboardBottomNumbers({ telemetry }: { telemetry: DashboardTele
           <div className="text-xl font-bold font-serif text-white">{formatRupiah(telemetry.totalCogs)}</div>
           <div className="text-xs text-red-500/50 font-mono mt-1">Cost of Goods Sold</div>
         </div>
+        <CardExtras extra={telemetry.cards?.cogs} color="#f87171" />
       </div>
 
       {/* Total Cost */}
@@ -38,6 +40,7 @@ export function DashboardBottomNumbers({ telemetry }: { telemetry: DashboardTele
           <div className="text-xl font-bold font-serif text-white">{formatRupiah(telemetry.totalCost)}</div>
           <div className="text-xs text-rose-500/50 font-mono mt-1">COGS + Expenses (ledger)</div>
         </div>
+        <CardExtras extra={telemetry.cards?.cost} color="#fb7185" />
       </div>
 
       {/* Total Salary */}
@@ -52,6 +55,7 @@ export function DashboardBottomNumbers({ telemetry }: { telemetry: DashboardTele
           <div className="text-xl font-bold font-serif text-white">{formatRupiah(telemetry.totalSalary)}</div>
           <div className="text-xs text-cyan-500/50 font-mono mt-1">Acc. 5020 + 6001 · inside COGS/Exp.</div>
         </div>
+        <CardExtras extra={telemetry.cards?.salary} color="#22d3ee" />
       </div>
 
       {/* Total Cash Flow */}
@@ -66,6 +70,7 @@ export function DashboardBottomNumbers({ telemetry }: { telemetry: DashboardTele
           <div className="text-xl font-bold font-serif text-white">{formatRupiah(telemetry.totalCashFlow)}</div>
           <div className="text-xs text-[#d4af37]/60 font-mono mt-1">Cash In - Cash Out</div>
         </div>
+        <CardExtras extra={telemetry.cards?.cash} color="#f5d77f" />
       </div>
 
       {/* Total A/R */}
@@ -80,6 +85,7 @@ export function DashboardBottomNumbers({ telemetry }: { telemetry: DashboardTele
           <div className="text-xl font-bold font-serif text-white">{formatRupiah(telemetry.totalAR)}</div>
           <div className="text-xs text-amber-500/50 font-mono mt-1">Accounts Receivable</div>
         </div>
+        <CardExtras extra={telemetry.cards?.ar} color="#f59e0b" />
       </div>
 
     </div>

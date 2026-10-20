@@ -10,14 +10,14 @@ const LIMITED_ROLE_HOME: Record<string, string> = {
   advertiser: '/productivity/advertiser',
   sales: '/sales',
   client: '/productivity/pabrik-sosmed',
-  // Admin staff run clients and reports. The company books (dashboard, income, expenses, assets, ledger, reconcile, COA, vendors, settings) are not theirs.
+  // Admin staff: the Admin page (reports, assigned clients) and their own Productivity. Nothing else: no Accounting, no Sales, no payroll.
   admin: '/productivity/admin',
 };
 const LIMITED_ROLE_ALLOWED: Record<string, string[]> = {
   advertiser: ['/productivity/advertiser', '/productivity/me', '/productivity/calendar', '/productivity/tasks', '/productivity/meetings', '/productivity/stats', '/no-access', '/workspaces'],
   sales: ['/sales', '/hrd/absensi', '/productivity/me', '/productivity/calendar', '/productivity/tasks', '/productivity/meetings', '/productivity/stats', '/no-access', '/workspaces'],
   client: ['/productivity/pabrik-sosmed', '/no-access', '/workspaces'],
-  admin: ['/productivity', '/optimizing', '/sales', '/hrd', '/no-access', '/workspaces'],
+  admin: ['/productivity/admin', '/productivity/me', '/productivity/tasks', '/productivity/meetings', '/productivity/stats', '/productivity/calendar', '/no-access', '/workspaces'],
 };
 
 export async function proxy(request: NextRequest) {

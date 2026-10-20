@@ -82,6 +82,12 @@ const UNPOSTED_STATUSES = new Set(['draft', 'cancelled']);
  * (not a draft / cancelled / quotation, amount > 0), writes exactly one receivable + sales pair.
  * Called after every create, edit and status change, so postings can never stack up.
  */
+/** Invoices are made and changed by Accounting, the superadmins and the founder: never by an Admin. */
+async function adminBlocked(supabase: any): Promise<string | null> {
+  const ctx = await getCanonicalWorkspaceContext(supabase);
+  return ctx.role === 'admin' ? 'Admins cannot create or change invoices. Ask Accounting.' : null;
+}
+
 async function syncInvoicePosting(supabase: any, workspaceId: string, invoiceId: string): Promise<string | null> {
   const { data: inv } = await supabase
     .from('invoices')
@@ -238,6 +244,10 @@ export async function syncInvoiceToNewWave(invoiceId: string, supabase: any): Pr
 export async function updateInvoice(payload: UpdateInvoicePayload): Promise<InvoiceActionResult> {
   try {
     const supabase = await createClient();
+    {
+      const blocked = await adminBlocked(supabase);
+      if (blocked) return { success: false, error: blocked } as any;
+    }
     const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
     if (!payload.id) {
@@ -530,6 +540,10 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
   try {
     // 1. Authenticated Server Client reading Next.js cookie store
     const supabase = await createClient();
+    {
+      const blocked = await adminBlocked(supabase);
+      if (blocked) return { success: false, error: blocked } as any;
+    }
 
     // 2 & 3. Fetch Auth UID & Workspace ID from workspace_members
     const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
@@ -692,6 +706,10 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
 export async function duplicateInvoice(invoiceId: string) {
   try {
     const supabase = await createClient();
+    {
+      const blocked = await adminBlocked(supabase);
+      if (blocked) return { success: false, error: blocked } as any;
+    }
     const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
     let origQuery = supabase.from('invoices').select('*').eq('id', invoiceId);
@@ -882,6 +900,10 @@ export async function markInvoiceAsFinalized(invoiceId: string) {
 export async function deleteInvoice(invoiceId: string) {
   try {
     const supabase = await createClient();
+    {
+      const blocked = await adminBlocked(supabase);
+      if (blocked) return { success: false, error: blocked } as any;
+    }
     const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
     const { createAdminClient } = await import('@/lib/api/supabase-admin');
@@ -961,6 +983,10 @@ export async function deleteInvoice(invoiceId: string) {
 export async function recordInvoicePayment(invoiceId: string, amount: number, paymentDate: string, paymentMethod: string, reference?: string, transferToWorkspaceId?: string, bankAccountId?: string) {
   try {
     const supabase = await createClient();
+    {
+      const blocked = await adminBlocked(supabase);
+      if (blocked) return { success: false, error: blocked } as any;
+    }
     const { workspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
     // 1. Fetch current invoice state

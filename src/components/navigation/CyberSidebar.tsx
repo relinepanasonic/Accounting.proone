@@ -154,10 +154,9 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
           ]
       : activeRole === 'admin'
         ? [
-            // Admin staff: their own work. No Accounting (dashboard, income, expenses, ledger...) and no payroll.
-            { type: 'link', name: 'Productivity', href: '/productivity/me', icon: <Activity className="w-4 h-4" />, isActive: isProductivityPath },
-            { type: 'group', name: 'Optimizing', icon: <TrendingUp className="w-4 h-4" />, isActive: isOptimizingPath, children: OPTIMIZING_CHILDREN },
-            { type: 'link', name: 'Absensi', href: '/hrd/absensi', icon: <Users className="w-4 h-4" />, isActive: isHrdPath },
+            // Admin staff: the Admin page and their own Productivity. Nothing else.
+            { type: 'group', name: 'Optimizing', icon: <TrendingUp className="w-4 h-4" />, isActive: isOptimizingPath, children: OPTIMIZING_CHILDREN.filter((c) => c.name === 'Admin') },
+            { type: 'link', name: 'Productivity', href: '/productivity/me', icon: <Activity className="w-4 h-4" />, isActive: (p) => p.startsWith('/productivity/me') || p.startsWith('/productivity/tasks') || p.startsWith('/productivity/meetings') || p.startsWith('/productivity/stats') },
           ]
       : limited
         ? [{ type: 'link', name: 'Pabrik Sosmed', href: '/productivity/pabrik-sosmed', icon: <Share2 className="w-4 h-4" />, isActive: isPabrikPath }]

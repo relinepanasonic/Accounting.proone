@@ -5,13 +5,13 @@ import type { DashboardTelemetry } from '@/lib/data/dashboard';
 import { useDetailDrawer } from '@/components/dashboard/DetailDrawer';
 import { CardExtras } from '@/components/dashboard/CardExtras';
 import { formatRupiah } from '@/lib/utils';
-import { Target, TrendingUp, BarChart3, Receipt, Users } from 'lucide-react';
+import { Target, TrendingUp, BarChart3, Receipt, Users, Gauge } from 'lucide-react';
 
 export function DashboardTopNumbers({ telemetry }: { telemetry: DashboardTelemetry }) {
   const [open, drawer] = useDetailDrawer(telemetry.details);
   return (
     <>
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
       
       {/* Total Revenue */}
       <div onClick={() => open('revenue')} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') open('revenue'); }} title="Click for the details" className="cursor-pointer gold-glass-panel rounded-2xl p-5 flex flex-col justify-between group">
@@ -43,20 +43,41 @@ export function DashboardTopNumbers({ telemetry }: { telemetry: DashboardTelemet
         <CardExtras extra={telemetry.cards?.paid} color="#10b981" />
       </div>
 
-      {/* AVG Monthly Revenue */}
+      {/* MRR */}
       <div onClick={() => open('avgMonthly')} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') open('avgMonthly'); }} title="Click for the details" className="cursor-pointer gold-glass-panel rounded-2xl p-5 flex flex-col justify-between group">
         <div className="flex items-center gap-3 text-blue-400 mb-3">
           <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 group-hover:bg-blue-500/20 transition-colors">
             <BarChart3 className="w-5 h-5" />
           </div>
-          <span className="text-[10px] font-extrabold tracking-widest uppercase text-blue-300">AVG Monthly</span>
+          <span className="text-[10px] font-extrabold tracking-widest uppercase text-blue-300">MRR</span>
         </div>
         <div>
           <div className="text-xl font-bold font-serif text-white">{formatRupiah(telemetry.avgMonthlyRevenue)}</div>
-          <div className="text-xs text-blue-500/50 font-mono mt-1">Spread over project length</div>
+          <div className="text-xs text-blue-500/50 font-mono mt-1">Monthly Recurring Revenue</div>
         </div>
         <CardExtras extra={telemetry.cards?.avgMonthly} color="#60a5fa" />
       </div>
+
+      {/* Coverage: MRR against the monthly overhead */}
+      {(() => {
+        const r = telemetry.coverageRatio;
+        const tone = telemetry.monthlyCost <= 0 ? 'text-zinc-400' : r >= 1.5 ? 'text-emerald-400' : r >= 1 ? 'text-yellow-400' : 'text-red-400';
+        const note = telemetry.monthlyCost <= 0 ? 'No costs yet' : r >= 1.5 ? 'Comfortable' : r >= 1 ? 'Covered, thin margin' : 'MRR below overhead';
+        return (
+          <div className="gold-glass-panel rounded-2xl p-5 flex flex-col justify-between group" title="MRR divided by the monthly overhead (total costs per month). 1.0 = break-even">
+            <div className="flex items-center gap-3 text-cyan-400 mb-3">
+              <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20"><Gauge className="w-5 h-5" /></div>
+              <span className="text-[10px] font-extrabold tracking-widest uppercase text-cyan-300">Coverage</span>
+            </div>
+            <div>
+              <div className={`text-xl font-bold font-serif ${tone}`}>{telemetry.monthlyCost > 0 ? `${r.toFixed(2)}x` : '-'}</div>
+              <div className="text-xs text-cyan-500/60 font-mono mt-1">{note}</div>
+              <div className="text-[10.5px] text-zinc-500 font-mono mt-1">Overhead {formatRupiah(telemetry.monthlyCost)} / month</div>
+            </div>
+            <CardExtras extra={telemetry.cards?.coverage} color="#22d3ee" />
+          </div>
+        );
+      })()}
 
       {/* AOV */}
       <div onClick={() => open('avgOrder')} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') open('avgOrder'); }} title="Click for the details" className="cursor-pointer gold-glass-panel rounded-2xl p-5 flex flex-col justify-between group">

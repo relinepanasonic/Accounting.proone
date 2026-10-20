@@ -10,7 +10,7 @@ export type DetailKind = 'revenue' | 'paid' | 'avgMonthly' | 'avgOrder' | 'clien
 const rp = (n: number) => `${n < 0 ? '-' : ''}Rp ${Math.round(Math.abs(n)).toLocaleString('id-ID')}`;
 const day = (d: string | null) => (d ? new Date(d).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta', day: '2-digit', month: 'short', year: 'numeric' }) : '-');
 const TITLE: Record<DetailKind, string> = {
-  revenue: 'Total Revenue: billed invoices', paid: 'Paid Revenue: paid invoices', avgMonthly: 'Avg Monthly: invoices by month', avgOrder: 'Avg Order Value: invoices',
+  revenue: 'Total Revenue: billed invoices', paid: 'Paid Revenue: paid invoices', avgMonthly: 'MRR: invoices by month', avgOrder: 'Avg Order Value: invoices',
   clients: 'Clients with invoices', cogs: 'Total COGS: ledger lines', cost: 'Total Cost: ledger lines', salary: 'Total Salary: accounts 5020 + 6001', cash: 'Total Cash: money in and out', ar: 'Total A/R: unpaid balances',
 };
 

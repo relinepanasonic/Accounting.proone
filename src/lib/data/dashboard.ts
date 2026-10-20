@@ -24,7 +24,7 @@ export interface DashboardDetails {
   cash: Array<{ date: string | null; label: string; amount: number }>;
 }
 
-export type CardKey = 'revenue' | 'paid' | 'avgMonthly' | 'avgOrder' | 'clients' | 'cogs' | 'cost' | 'salary' | 'cash' | 'ar';
+export type CardKey = 'revenue' | 'paid' | 'avgMonthly' | 'avgOrder' | 'clients' | 'cogs' | 'cost' | 'salary' | 'cash' | 'ar' | 'coverage';
 /** The mini chart of a card and its small per-company numbers (ProOne, PLIG...). */
 export interface CardExtra { series: number[]; labels: string[]; split: Array<{ code: string; value: number }> }
 
@@ -32,6 +32,9 @@ export interface DashboardTelemetry {
   totalRevenue: number;
   paidRevenue: number;
   avgMonthlyRevenue: number;
+  /** Monthly overhead: total costs (COGS + expenses) per month, and MRR divided by it. */
+  monthlyCost: number;
+  coverageRatio: number;
   avgOrderValue: number;
   activeClientCount: number;
   newClientCount: number;
@@ -242,7 +245,7 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
   const bucketAr = new Array(numBuckets).fill(0);
   const bucketCount = new Array(numBuckets).fill(0);
   const bucketClients: Array<Set<string>> = Array.from({ length: numBuckets }, () => new Set<string>());
-  const split: Record<CardKey, Map<string, number>> = { revenue: new Map(), paid: new Map(), avgMonthly: new Map(), avgOrder: new Map(), clients: new Map(), cogs: new Map(), cost: new Map(), salary: new Map(), cash: new Map(), ar: new Map() };
+  const split: Record<CardKey, Map<string, number>> = { revenue: new Map(), paid: new Map(), avgMonthly: new Map(), avgOrder: new Map(), clients: new Map(), cogs: new Map(), cost: new Map(), salary: new Map(), cash: new Map(), ar: new Map(), coverage: new Map() };
   const addSplit = (k: CardKey, workspaceId: string, v: number) => split[k].set(codeOf(workspaceId), (split[k].get(codeOf(workspaceId)) || 0) + v);
   const countByCode = new Map<string, number>();
   const clientsByCode = new Map<string, Set<string>>();
@@ -399,6 +402,11 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
   const avgMonthlyRevenue = monthFilter === null
     ? (recognizedMonths > 0 ? recognized.reduce((a, b) => a + b, 0) / recognizedMonths : 0)
     : recognized[monthFilter] || 0;
+  const costMonths = bucketCost.filter((v: number) => v > 0.5).length;
+  const monthlyCost = monthFilter === null
+    ? (costMonths > 0 ? totalCost / costMonths : 0)
+    : totalCost;
+  const coverageRatio = monthlyCost > 0 ? avgMonthlyRevenue / monthlyCost : 0;
 
   // Cash = what was already there when the period began + cash in - cash out. (Cash in: paid invoices. Cash out: reconciled bank transactions.)
   const periodStart = monthFilter === null ? `${currentYear}-01-01` : `${currentYear}-${String(monthFilter + 1).padStart(2, '0')}-01`;
@@ -445,6 +453,8 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     totalRevenue,
     paidRevenue,
     avgMonthlyRevenue,
+    monthlyCost,
+    coverageRatio,
     avgOrderValue,
     activeClientCount: activeClients.size,
     newClientCount,
@@ -494,6 +504,7 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
       salary: { series: bucketSalary, labels, split: toSplit(split.salary) },
       cash: { series: liveCashBalance, labels, split: toSplit(split.cash) },
       ar: { series: bucketAr, labels, split: toSplit(split.ar) },
+      coverage: { series: monthFilter === null ? recognized.map((v: number, i: number) => (bucketCost[i] > 0 ? v / bucketCost[i] : 0)) : [], labels, split: [] },
     };
   }
 

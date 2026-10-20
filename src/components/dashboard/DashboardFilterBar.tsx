@@ -22,7 +22,7 @@ export function DashboardFilterBar({ year, years, companies }: { year: number; y
   };
 
   return (
-    <div className="grid gap-4 rounded-2xl border border-[#d4af37]/20 bg-[#0e0f14]/80 p-4 sm:grid-cols-3">
+    <div className={`grid gap-4 rounded-2xl border border-[#d4af37]/20 bg-[#0e0f14]/80 p-4 ${companies.length ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
       <div>
         <label className={lab}>Year</label>
         <select value={year} disabled={pending} onChange={(e) => set('year', e.target.value === String(new Date().getFullYear()) ? '' : e.target.value)} className={sel}>
@@ -36,13 +36,13 @@ export function DashboardFilterBar({ year, years, companies }: { year: number; y
           {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
         </select>
       </div>
-      <div>
+      {companies.length > 0 && (<div>
         <label className={lab}>Company {pending && <Loader2 className="ml-1 inline h-3 w-3 animate-spin" />}</label>
         <select value={search.get('company') ?? ''} disabled={pending} onChange={(e) => set('company', e.target.value)} className={sel}>
           <option value="">All (together)</option>
           {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-      </div>
+      </div>)}
     </div>
   );
 }

@@ -94,7 +94,7 @@ export default async function CyberneticAccountingDashboardRSC({ searchParams }:
           </header>
 
           <div className="mb-6">
-            <DashboardFilterBar year={year} years={telemetry.availableYears || [year]} companies={telemetry.companyOptions || []} />
+            <DashboardFilterBar year={year} years={telemetry.availableYears || [year]} companies={wsContext.activeWorkspaceId === '11111111-1111-1111-1111-111111111111' ? [] : telemetry.companyOptions || []} />
           </div>
 
           {needsDepreciation && (

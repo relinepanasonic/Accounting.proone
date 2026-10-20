@@ -99,7 +99,8 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
   // A single company's dashboard holds its own books plus what PT Pintu paid or collected for it (items assigned to this company).
   const A = activeWorkspaceId;
   const queryWorkspaceIds: string[] = combined ? (workspaceIds as string[]) : A !== PT_WORKSPACE_ID ? [A, PT_WORKSPACE_ID] : [PT_WORKSPACE_ID];
-  const companyFilter = !combined && options.company ? options.company : '';
+  // PT Pintu's dashboard stands for itself (it is used for tax): the Company filter is for the other companies.
+  const companyFilter = !combined && A !== PT_WORKSPACE_ID && options.company ? options.company : '';
   /** Which company an invoice / expense / ledger line counts for in a single-company dashboard; null = not part of this dashboard. */
   const sourceOf = (workspaceId: string, assigned: string | null | undefined): string | null => {
     if (A === PT_WORKSPACE_ID) return assigned || PT_WORKSPACE_ID;
@@ -368,11 +369,27 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     ? (monthsWithData > 0 ? totalRevenue / monthsWithData : 0)
     : totalRevenue; // If 1 month selected, avg monthly is just that month's revenue
 
-  const totalCashFlow = paidRevenue - transactions.filter(t => isTargetPeriod(t.due_date) && t.reconciled).reduce((s, t) => s + Number(t.amount), 0);
+  // Cash = what was already there when the period began + cash in - cash out. (Cash in: paid invoices. Cash out: reconciled bank transactions.)
+  const periodStart = monthFilter === null ? `${currentYear}-01-01` : `${currentYear}-${String(monthFilter + 1).padStart(2, '0')}-01`;
+  let openingCash = 0;
+  for (const inv of invoices) {
+    if (String(inv.status || '').toLowerCase() !== 'paid' || (clientName && nameOf(inv) !== clientName)) continue;
+    if (String(inv.issue_date || inv.created_at || '').slice(0, 10) < periodStart) {
+      openingCash += Number(inv.total_amount || 0);
+      addSplit('cash', inv.workspace_id, Number(inv.total_amount || 0));
+    }
+  }
+  for (const tx of transactions) {
+    if (tx.reconciled && tx.due_date && String(tx.due_date).slice(0, 10) < periodStart) {
+      openingCash -= Number(tx.amount || 0);
+      addSplit('cash', tx.workspace_id, -Number(tx.amount || 0));
+    }
+  }
+  const totalCashFlow = openingCash + paidRevenue - transactions.filter(t => isTargetPeriod(t.due_date) && t.reconciled).reduce((s, t) => s + Number(t.amount), 0);
 
   // Cumulative Live Cash
   const liveCashBalance = new Array(numBuckets).fill(0);
-  let runningCash = 0;
+  let runningCash = openingCash;
   for (let i = 0; i < numBuckets; i++) {
     runningCash += bucketCashFlow[i];
     liveCashBalance[i] = runningCash;

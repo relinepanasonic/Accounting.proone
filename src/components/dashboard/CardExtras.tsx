@@ -50,7 +50,7 @@ export function CardExtras({ extra, color, count }: { extra?: CardExtra; color: 
   return (
     <div className="mt-3">
       <div className={hasTrend ? '' : 'opacity-30'}><Sparkline values={extra.series.length ? extra.series : [0, 0]} color={color} /></div>
-      {extra.split.length > 0 && (
+      {extra.split.length > 1 && (
         <div className="mt-2 space-y-0.5 border-t border-white/5 pt-2">
           {extra.split.map((s) => (
             <div key={s.code} className="flex items-center justify-between font-mono text-[10.5px] leading-tight">

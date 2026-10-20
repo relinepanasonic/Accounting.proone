@@ -44,14 +44,19 @@ type SortField = 'invoiceNumber' | 'rawIssueDate' | 'clientName' | 'rawDueDate' 
 type SortOrder = 'asc' | 'desc';
 
 import { updateInvoiceAssignment } from '@/app/actions/invoices';
+import { workspaceCode } from '@/lib/workspaces/known';
 
 /** PT Pintu only: which workspace this invoice belongs to (the job is done there; PT collects the payment). */
-function InvoiceWorkspaceDropdown({ invoiceId, current, workspaces, activeWorkspaceName }: { invoiceId: string; current: string | null; workspaces: any[]; activeWorkspaceName: string }) {
+function InvoiceWorkspaceDropdown({ invoiceId, current, workspaces, activeWorkspaceName, readOnly }: { invoiceId: string; current: string | null; workspaces: any[]; activeWorkspaceName: string; readOnly?: boolean }) {
   const [value, setValue] = React.useState(current || '');
   const [error, setError] = React.useState('');
   const [pending, start] = React.useTransition();
   // Other workspaces: every invoice here belongs to this workspace.
-  if (!activeWorkspaceName.toLowerCase().includes('pintu langit')) return <span className="text-[11px] text-zinc-300">{activeWorkspaceName}</span>;
+  // An invoice that PT Pintu issued for this workspace says PLIG; the others belong to this workspace itself.
+  if (!activeWorkspaceName.toLowerCase().includes('pintu langit')) {
+    const code = readOnly ? 'PLIG' : workspaceCode(null, activeWorkspaceName);
+    return <span title={readOnly ? 'PT Pintu Langit Inovasi Global' : activeWorkspaceName} className="inline-block rounded border border-zinc-700 px-2 py-0.5 font-mono text-[11px] font-bold text-zinc-200">{code}</span>;
+  }
   const options = workspaces.filter((w) => !String(w.name).toLowerCase().includes('pintu langit'));
   return (
     <div>
@@ -68,10 +73,10 @@ function InvoiceWorkspaceDropdown({ invoiceId, current, workspaces, activeWorksp
           });
         }}
         title="The workspace this invoice belongs to"
-        className={`bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-[10px] text-zinc-300 focus:outline-none focus:border-[#d4af37] cursor-pointer hover:border-[#d4af37]/50 transition-colors max-w-[150px] ${pending ? 'opacity-50' : ''}`}
+        className={`bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-[10px] text-zinc-300 focus:outline-none focus:border-[#d4af37] cursor-pointer hover:border-[#d4af37]/50 transition-colors w-[84px] font-mono ${pending ? 'opacity-50' : ''}`}
       >
-        <option value="">PT Pintu (own)</option>
-        {options.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+        <option value="">PLIG</option>
+        {options.map((w) => <option key={w.id} value={w.id} title={w.name}>{workspaceCode(w.id, w.name)}</option>)}
       </select>
       {error && <div className="text-[10px] text-red-400 mt-1 max-w-[150px]">{error}</div>}
     </div>
@@ -290,7 +295,7 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
                 <th className="py-3 px-3 cursor-pointer select-none group" onClick={() => handleSort('rawAmount')}>
                   <div className="flex items-center justify-end gap-2">Amount Billed {getSortIcon('rawAmount')}</div>
                 </th>
-                <th className="py-3 px-3">Workspace</th>
+                <th className="py-3 px-2 w-[96px]">Workspace</th>
                 <th className="py-3 px-3 cursor-pointer select-none group text-center" onClick={() => handleSort('status')}>
                   <div className="flex items-center justify-center gap-2">Status {getSortIcon('status')}</div>
                 </th>
@@ -374,7 +379,7 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
                   </td>
                   {/* Workspace */}
                   <td className="py-3 px-3 font-sans">
-                    <InvoiceWorkspaceDropdown invoiceId={inv.id} current={inv.assignedWorkspaceId} workspaces={availableWorkspaces} activeWorkspaceName={activeWorkspaceName} />
+                    <InvoiceWorkspaceDropdown invoiceId={inv.id} current={inv.assignedWorkspaceId} workspaces={availableWorkspaces} activeWorkspaceName={activeWorkspaceName} readOnly={inv.readOnly} />
                   </td>
                   {/* Status */}
                   <td className="py-3 px-3 text-center">

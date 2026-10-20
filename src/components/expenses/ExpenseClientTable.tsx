@@ -6,6 +6,7 @@ import { Plus, Receipt, Search, Filter, Calendar, ChevronDown, ChevronRight } fr
 import { ExpenseRowActions } from './ExpenseRowActions';
 import { formatIndoDate } from '@/lib/utils';
 import { updateExpenseAssignment } from '@/app/actions/expense-workspace';
+import { workspaceCode } from '@/lib/workspaces/known';
 
 /** PT Pintu: which workspace this expense belongs to. */
 function ExpenseWorkspaceSelect({ id, current, workspaces }: { id: string; current: string | null | undefined; workspaces: { id: string; name: string }[] }) {
@@ -26,10 +27,10 @@ function ExpenseWorkspaceSelect({ id, current, workspaces }: { id: string; curre
             if (!res.success) { setValue(current || ''); setError(res.error || 'Could not assign.'); }
           });
         }}
-        className={`bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-[10px] text-zinc-300 focus:outline-none focus:border-[#d4af37] max-w-[150px] ${pending ? 'opacity-50' : ''}`}
+        className={`bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-[10px] text-zinc-300 focus:outline-none focus:border-[#d4af37] w-[84px] font-mono ${pending ? 'opacity-50' : ''}`}
       >
-        <option value="">PT Pintu (own)</option>
-        {workspaces.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+        <option value="">PLIG</option>
+        {workspaces.map((w) => <option key={w.id} value={w.id} title={w.name}>{workspaceCode(w.id, w.name)}</option>)}
       </select>
       {error && <div className="text-[10px] text-red-400 mt-1 max-w-[150px]">{error}</div>}
     </div>

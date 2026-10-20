@@ -1,6 +1,6 @@
 import React, { Suspense } from 'react';
 import Link from 'next/link';
-import { Settings, Plus, Receipt, Building2, AlertTriangle } from 'lucide-react';
+import { Building2, AlertTriangle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { getDashboardTelemetry } from '@/lib/data/dashboard';
@@ -87,39 +87,6 @@ export default async function CyberneticAccountingDashboardRSC({ searchParams }:
             </div>
 
             <div className="flex items-center gap-3 self-start sm:self-center">
-              <Link
-                href="/invoices/new"
-                className="gold-btn hidden sm:flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-extrabold uppercase tracking-wider shadow-[0_0_20px_rgba(212,175,55,0.35)] transition-transform hover:scale-105"
-              >
-                <Plus className="w-4 h-4 text-black" />
-                <span>NEW INVOICE</span>
-              </Link>
-
-              <Link
-                href="/expenses/new"
-                className="hidden sm:flex items-center gap-2 px-5 py-2.5 rounded-full bg-zinc-900 border border-[#d4af37]/50 hover:bg-[#d4af37]/15 text-[#f5d77f] font-extrabold text-xs uppercase tracking-wider shadow-[0_0_15px_rgba(212,175,55,0.2)] transition-transform hover:scale-105"
-              >
-                <Receipt className="w-4 h-4" />
-                <span>RECORD EXPENSE</span>
-              </Link>
-
-              <Link
-                href="/settings"
-                title="Workspace & User Settings"
-                className="w-11 h-11 rounded-2xl gold-glass-panel border border-[#d4af37]/50 hover:border-[#d4af37] flex items-center justify-center text-[#f5d77f] hover:scale-105 transition-all shadow-[0_0_20px_rgba(212,175,55,0.25)] shrink-0"
-              >
-                <Settings className="w-5 h-5" />
-              </Link>
-
-              <Link
-                href="/workspaces"
-                title={`Logged in as ${userName}`}
-                className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-[#18233c] via-[#d4af37] to-[#f5d77f] p-0.5 shadow-[0_0_25px_rgba(212,175,55,0.35)] flex items-center justify-center overflow-hidden shrink-0 group transition-transform hover:scale-105"
-              >
-                <div className="w-full h-full rounded-[14px] bg-[#0b0c10] group-hover:bg-[#18233c] transition-colors flex items-center justify-center text-sm font-extrabold font-serif text-[#f5d77f]">
-                  {userName.substring(0, 2).toUpperCase()}
-                </div>
-              </Link>
               <MonthFilter />
             </div>
           </header>

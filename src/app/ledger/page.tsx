@@ -1,3 +1,5 @@
+import { LedgerTabs } from '@/components/ledger/LedgerTabs';
+import { LedgerEntries } from '@/components/ledger/LedgerEntries';
 import React, { Suspense } from 'react';
 import Link from 'next/link';
 import { ShieldAlert, BookOpen, CheckCircle2, ScanSearch } from 'lucide-react';
@@ -111,103 +113,8 @@ async function ActivityLedgerTimeline() {
 
   const displayEntries = Object.values(grouped).sort((a, b) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime());
 
-  return (
-    <div className="space-y-6">
-      {displayEntries.length === 0 ? (
-        <div className="gold-glass-panel rounded-2xl p-16 text-center space-y-4">
-          <div className="w-12 h-12 rounded-full bg-[#d4af37]/10 border border-[#d4af37]/30 flex items-center justify-center mx-auto text-[#f5d77f]">
-            <BookOpen className="w-6 h-6" />
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider">No Double-Entry Journal Entries Posted Yet</h3>
-            <p className="text-xs text-zinc-400 font-sans mt-1">Activity ledger transactions are automatically generated when you issue invoices, record expenses, or reconcile bank statements.</p>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {displayEntries.map((entry) => (
-            <div
-              key={entry.id}
-              className="gold-glass-panel rounded-2xl p-6 transition-all hover:border-[#d4af37]/30 hover:shadow-[0_0_20px_rgba(212,175,55,0.05)]"
-            >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-zinc-800/80">
-                <div>
-                  <div className="flex items-center gap-3 mb-1">
-                    <span className="text-sm font-bold text-white font-mono bg-zinc-900 px-2 py-0.5 rounded">
-                      {entry.entry_number}
-                    </span>
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#d4af37]/10 text-[#f5d77f] border border-[#d4af37]/20">
-                      {entry.source_module.toUpperCase()}
-                    </span>
-                  </div>
-                  <p className="text-xs text-zinc-400 font-sans">{entry.description}</p>
-                </div>
-                <div className="text-right">
-                  <div className="text-xs font-bold text-white bg-zinc-900/50 px-3 py-1 rounded-full border border-zinc-800 inline-block">
-                    {entry.entry_date}
-                  </div>
-                </div>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs font-mono">
-                  <thead>
-                    <tr className="text-zinc-500 uppercase tracking-wider border-b border-zinc-800/60">
-                      <th className="pb-3 pl-2 font-medium">Account</th>
-                      <th className="pb-3 text-right font-medium w-1/4">Debit</th>
-                      <th className="pb-3 pr-2 text-right font-medium w-1/4">Credit</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-800/30">
-                    {entry.lines.map((line, idx) => (
-                      <tr key={line.id} className="group hover:bg-zinc-800/20 transition-colors">
-                        <td className="py-3 pl-2 text-zinc-300 font-sans font-medium flex items-center gap-2">
-                          {line.credit_amount > 0 && <span className="w-4" />}
-                          {line.account_name}
-                        </td>
-                        <td className="py-3 text-right">
-                          {line.debit_amount > 0 ? (
-                            <span className="text-white font-bold">
-                              Rp {line.debit_amount.toLocaleString('en-US')}
-                            </span>
-                          ) : (
-                            <span className="text-zinc-700">-</span>
-                          )}
-                        </td>
-                        <td className="py-3 pr-2 text-right">
-                          {line.credit_amount > 0 ? (
-                            <span className="text-[#d4af37] font-bold">
-                              Rp {line.credit_amount.toLocaleString('en-US')}
-                            </span>
-                          ) : (
-                            <span className="text-zinc-700">-</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="border-t border-zinc-700/80 bg-zinc-900/30">
-                      <td className="py-3 pl-2 font-bold text-zinc-400 uppercase tracking-widest text-[10px]">Totals</td>
-                      <td className="py-3 text-right font-bold text-white">
-                        Rp {entry.lines.reduce((sum, l) => sum + l.debit_amount, 0).toLocaleString('en-US')}
-                      </td>
-                      <td className="py-3 pr-2 text-right font-bold text-[#d4af37]">
-                        Rp {entry.lines.reduce((sum, l) => sum + l.credit_amount, 0).toLocaleString('en-US')}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+  return <LedgerEntries entries={displayEntries} />;
 }
-
-import { LedgerTabs } from '@/components/ledger/LedgerTabs';
 
 export default function LedgerPage() {
   return (

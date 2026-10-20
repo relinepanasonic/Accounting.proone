@@ -152,6 +152,13 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
             { type: 'link', name: 'Productivity', href: '/productivity/me', icon: <Activity className="w-4 h-4" />, isActive: (p) => p.startsWith('/productivity/me') },
             { type: 'link', name: 'Absensi', href: '/hrd/absensi', icon: <Users className="w-4 h-4" />, isActive: isHrdPath },
           ]
+      : activeRole === 'admin'
+        ? [
+            // Admin staff: their own work. No Accounting (dashboard, income, expenses, ledger...) and no payroll.
+            { type: 'link', name: 'Productivity', href: '/productivity/me', icon: <Activity className="w-4 h-4" />, isActive: isProductivityPath },
+            { type: 'group', name: 'Optimizing', icon: <TrendingUp className="w-4 h-4" />, isActive: isOptimizingPath, children: OPTIMIZING_CHILDREN },
+            { type: 'link', name: 'Absensi', href: '/hrd/absensi', icon: <Users className="w-4 h-4" />, isActive: isHrdPath },
+          ]
       : limited
         ? [{ type: 'link', name: 'Pabrik Sosmed', href: '/productivity/pabrik-sosmed', icon: <Share2 className="w-4 h-4" />, isActive: isPabrikPath }]
         : MAIN_MODULES;
@@ -220,7 +227,7 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
         />
 
         {/* Add Workspace Button in Sidebar */}
-        {!isCollapsed && !limited && (
+        {!isCollapsed && !limited && activeRole !== 'admin' && (
           <div className="px-3 pt-2">
             <Link
               href="/settings/general"

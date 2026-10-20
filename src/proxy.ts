@@ -10,11 +10,14 @@ const LIMITED_ROLE_HOME: Record<string, string> = {
   advertiser: '/productivity/advertiser',
   sales: '/sales',
   client: '/productivity/pabrik-sosmed',
+  // Admin staff run clients and reports. The company books (dashboard, income, expenses, assets, ledger, reconcile, COA, vendors, settings) are not theirs.
+  admin: '/productivity/admin',
 };
 const LIMITED_ROLE_ALLOWED: Record<string, string[]> = {
   advertiser: ['/productivity/advertiser', '/productivity/me', '/productivity/calendar', '/productivity/tasks', '/productivity/meetings', '/productivity/stats', '/no-access', '/workspaces'],
   sales: ['/sales', '/hrd/absensi', '/productivity/me', '/productivity/calendar', '/productivity/tasks', '/productivity/meetings', '/productivity/stats', '/no-access', '/workspaces'],
   client: ['/productivity/pabrik-sosmed', '/no-access', '/workspaces'],
+  admin: ['/productivity', '/optimizing', '/sales', '/hrd', '/no-access', '/workspaces'],
 };
 
 export async function proxy(request: NextRequest) {
@@ -123,7 +126,7 @@ export async function proxy(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    if ((role === 'advertiser' || role === 'sales' || role === 'client') && !pathname.startsWith('/api/')) {
+    if ((role === 'advertiser' || role === 'sales' || role === 'client' || role === 'admin') && !pathname.startsWith('/api/')) {
       const allowed = LIMITED_ROLE_ALLOWED[role].some((p) => pathname === p || pathname.startsWith(p + '/'));
       if (!allowed) return redirectTo(LIMITED_ROLE_HOME[role]);
     }

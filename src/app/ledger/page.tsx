@@ -62,12 +62,27 @@ async function ActivityLedgerTimeline() {
     );
   }
 
-  // Fetch flat journal_entries
-  const { data: rawLines } = await supabase
-    .from('journal_entries')
-    .select('*, global_chart_of_accounts(account_name)')
-    .eq('workspace_id', activeWorkspaceId)
-    .order('transaction_date', { ascending: false });
+  // Every journal line of this company. One request returns at most 1000 rows, so read page by page.
+  const rawLines: any[] = [];
+  for (let from = 0; from < 50000; from += 1000) {
+    const { data: page, error: pageError } = await supabase
+      .from('journal_entries')
+      .select('*')
+      .eq('workspace_id', activeWorkspaceId)
+      .order('transaction_date', { ascending: false })
+      .order('id', { ascending: true })
+      .range(from, from + 999);
+    if (pageError) {
+      console.error('Activity ledger read failed:', pageError.message);
+      break;
+    }
+    rawLines.push(...(page || []));
+    if (!page || page.length < 1000) break;
+  }
+
+  // Account names by code (there is no link between the two tables to join on).
+  const { data: coaRows } = await supabase.from('global_chart_of_accounts').select('account_code, account_name').eq('workspace_id', activeWorkspaceId);
+  const accountName = new Map<string, string>((coaRows || []).map((a: any) => [a.account_code, a.account_name]));
 
   // Group by reference_id
   const grouped: Record<string, JournalEntryRecord> = {};
@@ -87,7 +102,7 @@ async function ActivityLedgerTimeline() {
       }
       grouped[ref].lines.push({
         id: line.id,
-        account_name: (line.global_chart_of_accounts && line.global_chart_of_accounts.length > 0) ? line.global_chart_of_accounts[0]?.account_name || line.account_code : line.account_code,
+        account_name: accountName.get(line.account_code) ? `${line.account_code} - ${accountName.get(line.account_code)}` : line.account_code,
         debit_amount: Number(line.debit_amount || 0),
         credit_amount: Number(line.credit_amount || 0),
       });

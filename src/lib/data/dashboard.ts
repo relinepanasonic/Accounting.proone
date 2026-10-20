@@ -63,6 +63,8 @@ export interface DashboardTelemetry {
   /** The year the numbers are for. */
   year?: number;
   details?: DashboardDetails;
+  /** The Company filter of a single-company dashboard: where the numbers can come from. */
+  companyOptions?: Array<{ id: string; name: string }>;
 }
 
 export interface DashboardTelemetryOptions {
@@ -72,6 +74,11 @@ export interface DashboardTelemetryOptions {
   year?: number;
   /** Only this client (masked name as shown in the filter). Costs are not tied to clients, so they drop out. */
   clientName?: string | null;
+  /**
+   * Single-company dashboard only: show only the numbers of one source. For Prof Toko: its own books or what PT Pintu holds for it.
+   * For PT Pintu: its own books or what it holds for one of the other companies. Empty = everything.
+   */
+  company?: string | null;
   /** Pass the page's own context so it is not fetched a second time. */
   ctx?: Awaited<ReturnType<typeof getAuthenticatedWorkspaceContext>>;
 }
@@ -83,18 +90,31 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
   const { activeWorkspaceId, userEmail, availableWorkspaces } = options.ctx || (await getAuthenticatedWorkspaceContext(supabase));
   const mask = clientMask({ userEmail, availableWorkspaces });
 
-  const queryWorkspaceIds = workspaceIds && workspaceIds.length > 0 ? workspaceIds : [activeWorkspaceId];
+  const combined = Boolean(workspaceIds && workspaceIds.length);
+  // A single company's dashboard holds its own books plus what PT Pintu paid or collected for it (items assigned to this company).
+  const A = activeWorkspaceId;
+  const queryWorkspaceIds: string[] = combined ? (workspaceIds as string[]) : A !== PT_WORKSPACE_ID ? [A, PT_WORKSPACE_ID] : [PT_WORKSPACE_ID];
+  const companyFilter = !combined && options.company ? options.company : '';
+  /** Which company an invoice / expense / ledger line counts for in a single-company dashboard; null = not part of this dashboard. */
+  const sourceOf = (workspaceId: string, assigned: string | null | undefined): string | null => {
+    if (A === PT_WORKSPACE_ID) return assigned || PT_WORKSPACE_ID;
+    if (workspaceId === A) return A;
+    if (workspaceId === PT_WORKSPACE_ID && assigned === A) return PT_WORKSPACE_ID;
+    return null;
+  };
 
   const yearForCosts = options.year ?? new Date().getFullYear();
   // Costs come from the LEDGER (journal entries of the expense accounts), the same numbers as the accounting pages.
   // A bank transaction list also holds loans, taxes payable and equity, which are not costs. Paged: one request returns at most 1000 rows.
+  // Expenses PT Pintu paid for a company (transactions assigned to it): their ledger lines count in that company's costs.
+  const assignedTx = new Map<string, string>();
   const fetchCostLines = async () => {
     if (clientName) return [] as any[]; // costs are not tied to clients
     const out: any[] = [];
     for (let from = 0; from < 20000; from += 1000) {
       const { data, error } = await supabase
         .from('journal_entries')
-        .select('account_code, debit_amount, credit_amount, transaction_date')
+        .select('account_code, debit_amount, credit_amount, transaction_date, workspace_id, reference_id')
         .in('workspace_id', queryWorkspaceIds)
         .gte('transaction_date', `${yearForCosts}-01-01`)
         .lte('transaction_date', `${yearForCosts}-12-31`)
@@ -107,32 +127,44 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     return out;
   };
 
-  const [invoicesRes, clientsRes, txRes, costLines, coaRes] = await Promise.all([
+  // The bank transactions. assigned_workspace_id needs one migration; without it nothing is assigned.
+  const fetchTransactions = async () => {
+    const q = (cols: string) => supabase.from('transactions').select(cols).in('workspace_id', queryWorkspaceIds);
+    const r: any = await q('id, description, amount, due_date, category, reconciled, workspace_id, assigned_workspace_id');
+    if (!r.error) return r;
+    return q('id, description, amount, due_date, category, reconciled, workspace_id');
+  };
+
+  const [invoicesRes, clientsRes, txRes, rawCostLines, coaRes] = await Promise.all([
     supabase
       .from('invoices')
       .select('id, invoice_number, status, total_amount, amount_paid, issue_date, due_date, created_at, client_id, workspace_id, assigned_workspace_id, clients(name), invoice_line_items(package_name, description, amount, quantity)')
       .eq('is_quotation', false)
       .in('workspace_id', queryWorkspaceIds),
     withoutProspects((hide) => {
-      let q = supabase.from('clients').select('id, name, created_at').in('workspace_id', queryWorkspaceIds);
+      let q = supabase.from('clients').select('id, name, created_at').in('workspace_id', combined ? queryWorkspaceIds : [A]);
       if (hide) q = q.eq('is_prospect', false);
       return q;
     }),
-    supabase
-      .from('transactions')
-      .select('id, description, amount, due_date, category, reconciled')
-      .in('workspace_id', queryWorkspaceIds),
+    fetchTransactions(),
     fetchCostLines(),
     supabase.from('global_chart_of_accounts').select('account_code, account_name, account_type').in('workspace_id', queryWorkspaceIds),
   ]);
 
   console.log(`[combined-dashboard] queries ${Date.now() - startedAt} ms (invoices ${invoicesRes.data?.length ?? 0}, transactions ${txRes.data?.length ?? 0})`);
   // Combined view: a PT Pintu invoice that belongs to a workspace you did not pick (for example a New Wave job) stays out.
-  const combined = Boolean(workspaceIds && workspaceIds.length);
-  const invoices = (invoicesRes.data || []).filter((inv: any) => !(combined && inv.workspace_id === PT_WORKSPACE_ID && inv.assigned_workspace_id && !queryWorkspaceIds.includes(inv.assigned_workspace_id)));
+  // Single-company view: own books + PT items assigned to this company, narrowed by the Company filter.
+  const keep = (workspaceId: string, assigned: string | null | undefined) => {
+    if (combined) return true;
+    const src = sourceOf(workspaceId, assigned);
+    return src !== null && (!companyFilter || src === companyFilter);
+  };
+  const invoices = (invoicesRes.data || []).filter((inv: any) => (combined ? !(inv.workspace_id === PT_WORKSPACE_ID && inv.assigned_workspace_id && !queryWorkspaceIds.includes(inv.assigned_workspace_id)) : keep(inv.workspace_id, inv.assigned_workspace_id)));
+  for (const tx of (txRes.data || []) as any[]) if (tx.assigned_workspace_id) assignedTx.set(tx.id, tx.assigned_workspace_id);
+  const costLines = (rawCostLines as any[]).filter((l) => (combined ? true : keep(l.workspace_id, l.workspace_id === PT_WORKSPACE_ID ? assignedTx.get(l.reference_id) : null)));
   const clients = clientsRes.data || [];
   // Costs belong to vendors, not clients: with a client chosen they are left out of the numbers.
-  const transactions = clientName ? [] : txRes.data || [];
+  const transactions = clientName ? [] : ((txRes.data || []) as any[]).filter((t) => keep(t.workspace_id, t.assigned_workspace_id));
 
   const currentYear = options.year ?? new Date().getFullYear();
 
@@ -360,5 +392,16 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     clientNames,
     year: currentYear,
     details,
+    companyOptions: combined ? undefined : companyOptions(),
   };
+
+  /** The Company filter: this company's own books and the other source(s) behind it. */
+  function companyOptions() {
+    const name = (id: string) => availableWorkspaces.find((w: any) => w.id === id)?.name || (id === PT_WORKSPACE_ID ? 'PT Pintu Langit Inovasi Global' : 'Company');
+    if (A !== PT_WORKSPACE_ID) return [{ id: A, name: name(A) }, { id: PT_WORKSPACE_ID, name: `${name(PT_WORKSPACE_ID)} (assigned to ${name(A)})` }];
+    const others = new Set<string>();
+    for (const inv of invoicesRes.data || []) if ((inv as any).assigned_workspace_id) others.add((inv as any).assigned_workspace_id);
+    for (const tx of (txRes.data || []) as any[]) if (tx.assigned_workspace_id) others.add(tx.assigned_workspace_id);
+    return [{ id: PT_WORKSPACE_ID, name: name(PT_WORKSPACE_ID) }, ...Array.from(others).map((id) => ({ id, name: name(id) }))];
+  }
 }

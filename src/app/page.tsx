@@ -4,7 +4,7 @@ import { Building2, AlertTriangle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { getDashboardTelemetry } from '@/lib/data/dashboard';
-import { MonthFilter } from '@/components/dashboard/MonthFilter';
+import { DashboardFilterBar } from '@/components/dashboard/DashboardFilterBar';
 
 import { DashboardTopNumbers } from '@/components/dashboard/center-column/DashboardTopNumbers';
 import { DashboardBottomNumbers } from '@/components/dashboard/center-column/DashboardBottomNumbers';
@@ -23,14 +23,17 @@ const ColumnSkeleton = () => (
 );
 
 interface PageProps {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ month?: string; year?: string; company?: string }>;
 }
 
 export default async function CyberneticAccountingDashboardRSC({ searchParams }: PageProps) {
   const params = await searchParams;
   const monthFilter = params?.month ? parseInt(params.month, 10) : null;
   const wsContext = await getAuthenticatedWorkspaceContext();
-  const telemetry = await getDashboardTelemetry({ monthFilter });
+  const yearNum = params?.year ? parseInt(params.year, 10) : NaN;
+  const year = Number.isFinite(yearNum) && yearNum > 2000 && yearNum < 2100 ? yearNum : new Date().getFullYear();
+  const company = (params?.company || '').slice(0, 60);
+  const telemetry = await getDashboardTelemetry({ monthFilter, year, company, ctx: wsContext });
   const userName = wsContext.userName || 'Executive';
   const activeWorkspaceName = wsContext.activeWorkspaceName || 'Professor Toko Online HQ';
   const supabase = await createClient();
@@ -87,9 +90,12 @@ export default async function CyberneticAccountingDashboardRSC({ searchParams }:
             </div>
 
             <div className="flex items-center gap-3 self-start sm:self-center">
-              <MonthFilter />
             </div>
           </header>
+
+          <div className="mb-6">
+            <DashboardFilterBar year={year} years={telemetry.availableYears || [year]} companies={telemetry.companyOptions || []} />
+          </div>
 
           {needsDepreciation && (
             <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-red-950/40 via-red-900/20 to-transparent border border-red-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-[0_0_30px_rgba(239,68,68,0.15)] relative overflow-hidden">

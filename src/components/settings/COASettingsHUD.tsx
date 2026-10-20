@@ -198,7 +198,7 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [], active
               onClick={() => setIsMappingModalOpen(true)}
               className="px-6 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider border border-[#d4af37]/30 text-[#d4af37] hover:bg-[#d4af37]/10 transition-colors"
             >
-              Workspace Mappings
+              Company Mappings
             </button>
           )}
 
@@ -261,7 +261,7 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [], active
                 <th className="px-6 py-4 text-[10px] font-black tracking-widest text-[#d4af37] uppercase">Code</th>
                 <th className="px-6 py-4 text-[10px] font-black tracking-widest text-[#d4af37] uppercase">Account Name</th>
                 <th className="px-6 py-4 text-[10px] font-black tracking-widest text-[#d4af37] uppercase">Type</th>
-                <th className="px-6 py-4 text-[10px] font-black tracking-widest text-[#d4af37] uppercase">Workspace</th>
+                <th className="px-6 py-4 text-[10px] font-black tracking-widest text-[#d4af37] uppercase">Company</th>
                 <th className="px-6 py-4 text-[10px] font-black tracking-widest text-[#d4af37] uppercase text-right">Balance</th>
                 <th className="px-6 py-4 text-[10px] font-black tracking-widest text-[#d4af37] uppercase">Status</th>
                 {hasClearance && <th className="px-6 py-4 text-[10px] font-black tracking-widest text-[#d4af37] uppercase text-right">Actions</th>}
@@ -332,7 +332,7 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [], active
                     <td className="px-6 py-4">
                       {acc.workspace_id ? (
                         <span className="inline-flex items-center px-2 py-1 rounded bg-[#d4af37]/10 border border-[#d4af37]/20 text-[10px] font-mono text-[#d4af37] uppercase w-max">
-                          {workspaces.find(w => w.id === acc.workspace_id)?.name || 'Unknown Workspace'}
+                          {workspaces.find(w => w.id === acc.workspace_id)?.name || 'Unknown Company'}
                         </span>
                       ) : (
                         <span className="inline-flex items-center px-2 py-1 rounded bg-zinc-800 border border-zinc-700 text-[10px] font-mono text-zinc-400 uppercase w-max">
@@ -463,9 +463,9 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [], active
               </div>
               
               <div>
-                <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-2">Workspace Assignment</label>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-2">Company Assignment</label>
                 {workspaces.length === 0 ? (
-                  <div className="text-xs text-zinc-500 font-mono italic p-3 border border-zinc-800 rounded-xl">No workspaces available</div>
+                  <div className="text-xs text-zinc-500 font-mono italic p-3 border border-zinc-800 rounded-xl">No companies available</div>
                 ) : (
                   <div className="space-y-2 p-3 bg-zinc-950/50 border border-zinc-800/80 rounded-xl max-h-32 overflow-y-auto custom-scrollbar">
                     {workspaces.map(w => (
@@ -497,7 +497,7 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [], active
                 )}
                 {cloneWorkspaceIds.length > 1 && !formId && (
                   <p className="text-[10px] text-[#d4af37] font-mono mt-1 flex items-center gap-1">
-                    <Copy className="w-3 h-3" /> Will clone this account to {cloneWorkspaceIds.length} workspaces
+                    <Copy className="w-3 h-3" /> Will clone this account to {cloneWorkspaceIds.length} companies
                   </p>
                 )}
               </div>

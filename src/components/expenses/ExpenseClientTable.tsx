@@ -244,7 +244,7 @@ export function ExpenseClientTable({ initialRecords, workspaces, fromPtLabel = '
               <th className="py-4 px-4 font-bold w-1/3">Notes / Remarks</th>
               <th className="py-4 px-4 font-bold max-w-[200px]">Category</th>
               <th className="py-4 px-4 font-bold text-right">Amount Owed</th>
-              {workspaces && <th className="py-4 px-4 font-bold">Workspace</th>}
+              {workspaces && <th className="py-4 px-4 font-bold">Company</th>}
               <th className="py-4 px-4 font-bold text-center">Action</th>
             </tr>
           </thead>

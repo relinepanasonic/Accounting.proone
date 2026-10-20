@@ -22,6 +22,7 @@ export function CatalogTable({ initialProducts, canEdit, workspaces, activeWorks
   const [rows, setRows] = useState<Row[]>(initialProducts);
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [descOpen, setDescOpen] = useState<string | null>(null);
   const [, start] = useTransition();
@@ -40,12 +41,13 @@ export function CatalogTable({ initialProducts, canEdit, workspaces, activeWorks
     setError('');
     setBusy(row.id);
     start(async () => {
-      const res = await updateProduct({
+      const res: any = await updateProduct({
         id: row.id, name: row.name.trim(), description: row.description || '', unitPrice: Number(row.unit_price) || 0,
         quantity: Number(row.quantity) || 1, scale: row.scale || 'pc',
         durationType: (row.duration_type || 'none') as DurType, durationValue: Number(row.duration_value) || 0, deliverableUnit: row.deliverable_unit || 'pc',
       });
       if (!res.success) setError(res.error || 'Could not save.');
+      else if (res.renamedLines > 0) setNotice(`Renamed in ${res.renamedLines} invoice line${res.renamedLines === 1 ? '' : 's'}: every invoice that used this product now shows the new name.`);
       setBusy(null);
     });
   };
@@ -64,7 +66,7 @@ export function CatalogTable({ initialProducts, canEdit, workspaces, activeWorks
 
   const saveNew = (row: Row) => {
     if (!row.name.trim()) { setError('Write the product name first.'); return; }
-    if (showWorkspace && !row.workspace_id) { setError('Choose the workspace this product belongs to.'); return; }
+    if (showWorkspace && !row.workspace_id) { setError('Choose the company this product belongs to.'); return; }
     setError('');
     setBusy(row.id);
     start(async () => {
@@ -148,6 +150,7 @@ export function CatalogTable({ initialProducts, canEdit, workspaces, activeWorks
         </div>
       </div>
       {!canEdit && <p className="text-[11px] text-zinc-500">You can look at the catalog but not change it.</p>}
+      {notice && <p className="flex items-center justify-between rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">{notice}<button onClick={() => setNotice('')} aria-label="Dismiss"><X className="h-3.5 w-3.5" /></button></p>}
       {error && <p className="flex items-center justify-between rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">{error}<button onClick={() => setError('')} aria-label="Dismiss"><X className="h-3.5 w-3.5" /></button></p>}
 
       <div className="overflow-x-auto rounded-xl border border-[#d4af37]/20 bg-[#0e0f14] shadow-xl">
@@ -164,7 +167,7 @@ export function CatalogTable({ initialProducts, canEdit, workspaces, activeWorks
           </colgroup>
           <thead className="border-b border-[#d4af37]/10 bg-zinc-900/50 text-[11px] uppercase tracking-wider text-zinc-400">
             <tr>
-              {showWorkspace && <th className="px-3 py-3 font-bold">Workspace</th>}
+              {showWorkspace && <th className="px-3 py-3 font-bold">Company</th>}
               <th className="px-3 py-3 font-bold">Product</th>
               <th className="px-3 py-3 font-bold">Description</th>
               <th className="px-3 py-3 font-bold text-right">Price</th>

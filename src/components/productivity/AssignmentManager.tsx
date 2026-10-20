@@ -60,7 +60,7 @@ export function AssignmentManager({ clients, staff, assignments }: AssignmentMan
           </h2>
         </div>
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          {staff.length === 0 && <div className="p-6 text-center text-xs text-zinc-500">No staff in this workspace yet.</div>}
+          {staff.length === 0 && <div className="p-6 text-center text-xs text-zinc-500">No staff in this company yet.</div>}
           {staff.map(member => {
             const isSelected = member.user_id === selectedUserId;
             const n = countFor(member.user_id);

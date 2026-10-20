@@ -127,7 +127,7 @@ export function TeamOverview({
             </thead>
             <tbody className="divide-y divide-zinc-900">
               {activities.length === 0 && (
-                <tr><td colSpan={5} className="p-8 text-center text-zinc-500">No staff in this workspace yet.</td></tr>
+                <tr><td colSpan={5} className="p-8 text-center text-zinc-500">No staff in this company yet.</td></tr>
               )}
               {activities.map((a) => (
                 <tr key={a.person.userId} className="hover:bg-zinc-900/40">

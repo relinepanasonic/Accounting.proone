@@ -8,7 +8,7 @@ import { withSharedCookieOptions } from '@/lib/supabase/cookie-options';
 export async function switchWorkspace(newWorkspaceId: string) {
   try {
     if (!newWorkspaceId) {
-      return { success: false, error: 'Invalid Target Workspace ID.' };
+      return { success: false, error: 'Invalid target company.' };
     }
 
     const cookieStore = await cookies();
@@ -63,7 +63,7 @@ function generateSlug(name: string): string {
 export async function createWorkspace(workspaceName: string) {
   try {
     if (!workspaceName || !workspaceName.trim()) {
-      return { success: false, error: 'Company or Workspace name is required.' };
+      return { success: false, error: 'Company name is required.' };
     }
 
     const newName = workspaceName.trim();

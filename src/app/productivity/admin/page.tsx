@@ -58,7 +58,7 @@ export default async function AdminDivisionPage() {
         </div>
         <div>
           <h1 className="text-2xl font-extrabold text-zinc-100 font-serif">Admin Division</h1>
-          <p className="text-sm text-zinc-400 mt-1">Workspace: {activeWorkspaceName}</p>
+          <p className="text-sm text-zinc-400 mt-1">Company: {activeWorkspaceName}</p>
         </div>
       </div>
 
@@ -89,7 +89,7 @@ export default async function AdminDivisionPage() {
           <ShopeeReportTracker reports={reports} />
         </div>
 
-        {/* Right Column: Client List for Active Workspace */}
+        {/* Right Column: Client List for Active Company */}
         <div className="lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold text-zinc-100 font-serif">Clients</h2>
@@ -101,7 +101,7 @@ export default async function AdminDivisionPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {clientsWithStats.length === 0 ? (
               <div className="col-span-full p-8 text-center text-zinc-500 bg-[#0e0f14] rounded-xl border border-zinc-800">
-                No clients found in this workspace.
+                No clients found in this company.
               </div>
             ) : (
               clientsWithStats.map(client => (

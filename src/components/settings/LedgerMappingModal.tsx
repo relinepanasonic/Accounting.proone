@@ -111,7 +111,7 @@ export function LedgerMappingModal({ isOpen, onClose, accounts, workspaceId, wor
                 Ledger Mappings
               </h2>
               <p className="text-xs text-zinc-400 mt-1 uppercase tracking-wider font-mono">
-                Workspace: <span className="text-white">{workspaceName}</span>
+                Company: <span className="text-white">{workspaceName}</span>
               </p>
             </div>
             <button
@@ -245,7 +245,7 @@ export function LedgerMappingModal({ isOpen, onClose, accounts, workspaceId, wor
             </h3>
             
             {bankAccounts.length === 0 ? (
-              <p className="text-sm text-zinc-400 font-mono">No bank accounts configured for this workspace.</p>
+              <p className="text-sm text-zinc-400 font-mono">No bank accounts configured for this company.</p>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {bankAccounts.map(bank => (

@@ -50,7 +50,7 @@ export function TeamManager({ initialMembers, currentUserRole, workspaces, activ
   const toggleId = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
 
   const handleDelete = (id: string) => {
-    if (!confirm('Remove this person?\n\nIf this is the only workspace they belong to, their login is deleted completely, so the same email can be invited again as a new person.')) return;
+    if (!confirm('Remove this person?\n\nIf this is the only company they belong to, their login is deleted completely, so the same email can be invited again as a new person.')) return;
     
     startTransition(async () => {
       try {
@@ -58,7 +58,7 @@ export function TeamManager({ initialMembers, currentUserRole, workspaces, activ
         if (res.success) {
           setMembers((prev) => prev.filter((m) => m.id !== id));
           if ('loginError' in res && res.loginError) {
-            setErrorMsg(`Removed from this workspace, but the login could not be deleted: ${res.loginError}`);
+            setErrorMsg(`Removed from this company, but the login could not be deleted: ${res.loginError}`);
           } else if ('loginDeleted' in res && res.loginDeleted) {
             setSuccessMsg('Member removed and their login deleted. That email can be invited again.');
             setInviteLink(null);
@@ -252,7 +252,7 @@ export function TeamManager({ initialMembers, currentUserRole, workspaces, activ
                   </label>
                 ))}
               </div>
-              <p className="mt-1 text-[10px] text-zinc-500">The role above applies in every workspace you tick.</p>
+              <p className="mt-1 text-[10px] text-zinc-500">The role above applies in every company you tick.</p>
             </div>
           )}
         </div>
@@ -337,7 +337,7 @@ export function TeamManager({ initialMembers, currentUserRole, workspaces, activ
                             {w.name}
                           </label>
                         ))}
-                        <div className="text-[9px] text-zinc-500">Role applies here and to workspaces you add.</div>
+                        <div className="text-[9px] text-zinc-500">Role applies here and to companies you add.</div>
                       </div>
                     ) : (
                       workspaces.length > 1 && (

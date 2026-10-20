@@ -9,7 +9,7 @@ export default function NoAccessPage() {
       </div>
       <h2 className="text-sm font-black uppercase tracking-widest text-red-400 mb-2">NO WORKSPACE ACCESS</h2>
       <p className="text-xs text-zinc-300 font-mono leading-relaxed">
-        Your account is not a member of any workspace yet. Ask a Superadmin to invite you.
+        Your account is not a member of any company yet. Ask a Superadmin to invite you.
       </p>
     </div>
   );

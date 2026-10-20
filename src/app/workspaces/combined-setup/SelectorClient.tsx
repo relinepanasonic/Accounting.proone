@@ -43,7 +43,7 @@ export function SelectorClient({ workspaces, firstName }: SelectorClientProps) {
       <div className="w-full max-w-2xl">
         <a href="/workspaces" className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white transition-colors mb-8">
           <ArrowLeft className="w-4 h-4" />
-          Back to Workspaces
+          Back to Companies
         </a>
 
         <div className="flex flex-col items-center text-center mb-8">
@@ -54,7 +54,7 @@ export function SelectorClient({ workspaces, firstName }: SelectorClientProps) {
             Combined Global Dashboard
           </h1>
           <p className="mt-2 text-sm text-zinc-400 max-w-md">
-            Select the companies you want to merge. The dashboard will aggregate financial data and metrics across all selected workspaces.
+            Select the companies you want to merge. The dashboard will aggregate financial data and metrics across all selected companies.
           </p>
         </div>
 

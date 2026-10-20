@@ -15,7 +15,7 @@ const ROLE_ORDER = ['founder', 'superadmin', 'accounting', 'admin', 'advertiser'
 const since = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta', day: '2-digit', month: 'short', year: 'numeric' }) : '-';
 
-/** HRD > Employee Directory: everyone who works in this workspace, with role and contact. */
+/** HRD > Employee Directory: everyone who works in this company, with role and contact. */
 export default async function EmployeeDirectoryPage() {
   const supabase = await createClient();
   const ctx = await getAuthenticatedWorkspaceContext(supabase);
@@ -55,7 +55,7 @@ export default async function EmployeeDirectoryPage() {
     <div className="mx-auto max-w-5xl space-y-6 px-4 py-8 lg:px-6 animate-in fade-in duration-300">
       <div className="border-b border-[#d4af37]/20 pb-4">
         <h1 className="flex items-center gap-2 text-lg font-extrabold uppercase tracking-wider text-white"><Users className="h-5 w-5 text-[#d4af37]" /> Employee Directory</h1>
-        <p className="mt-1 text-xs text-zinc-500">{ctx.activeWorkspaceName} · {visible.length} people. Add or remove people on the Team &amp; invites page (from the workspace chooser).</p>
+        <p className="mt-1 text-xs text-zinc-500">{ctx.activeWorkspaceName} · {visible.length} people. Add or remove people on the Team &amp; invites page (from the company chooser).</p>
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-[#d4af37]/20 bg-[#0e0f14] shadow-xl">

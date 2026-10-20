@@ -166,7 +166,7 @@ export function TaxDocumentManager({ invoices }: { invoices: TaxInvoice[] }) {
               {invoices.length === 0 && (
                 <tr>
                   <td colSpan={5} className="py-12 text-center text-zinc-500 text-sm">
-                    No invoices found for this workspace.
+                    No invoices found for this company.
                   </td>
                 </tr>
               )}

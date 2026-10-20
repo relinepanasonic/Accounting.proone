@@ -89,11 +89,11 @@ export function GeneralSettingsForm({
         });
 
         if (!res.success) {
-          setStatusMsg({ type: 'error', text: res.error || 'Failed to save workspace settings.' });
+          setStatusMsg({ type: 'error', text: res.error || 'Failed to save company settings.' });
         } else {
           setStatusMsg({
             type: 'success',
-            text: 'Workspace identity, tax status, and bank accounts saved successfully.',
+            text: 'Company identity, tax status, and bank accounts saved successfully.',
           });
         }
       } catch (err: any) {

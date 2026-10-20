@@ -22,7 +22,7 @@ export function RegisterWorkspaceCard() {
     startTransition(async () => {
       const res = await createWorkspace(companyName.trim());
       if (res.success) {
-        setSuccessMsg(`Registered "${companyName.trim()}" successfully! Switching workspace...`);
+        setSuccessMsg(`Registered "${companyName.trim()}" successfully! Switching company...`);
         setCompanyName('');
         router.refresh();
       } else {
@@ -96,7 +96,7 @@ export function RegisterWorkspaceCard() {
               <PlusCircle className="w-4 h-4 text-black" />
             )}
             <span>
-              {isPending ? 'DEPLOYING TENANT...' : 'Register & Switch Workspace'}
+              {isPending ? 'DEPLOYING TENANT...' : 'Register & Switch Company'}
             </span>
           </button>
         </div>

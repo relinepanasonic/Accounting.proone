@@ -289,12 +289,7 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
       payment_instructions: payload.paymentInstructions || null,
       updated_at: new Date().toISOString(),
     };
-    // The workspace tag (set by hand or from the catalog) is kept; the form only turns the New Wave tag on or off.
-    {
-      const { data: cur } = await supabase.from('invoices').select('assigned_workspace_id').eq('id', payload.id).maybeSingle();
-      if (payload.assignedWorkspaceId === NEW_WAVE_WORKSPACE_ID) updateData.assigned_workspace_id = NEW_WAVE_WORKSPACE_ID;
-      else if (cur?.assigned_workspace_id === NEW_WAVE_WORKSPACE_ID) updateData.assigned_workspace_id = null;
-    }
+    // The company tag (set in the Company column or from the catalog) is never changed by editing an invoice.
 
     let updateQuery = supabase
       .from('invoices')

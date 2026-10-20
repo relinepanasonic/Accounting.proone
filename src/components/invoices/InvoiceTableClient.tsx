@@ -72,7 +72,7 @@ function InvoiceWorkspaceDropdown({ invoiceId, current, workspaces, activeWorksp
             if (!res.success) { setValue(current || ''); setError(res.error || 'Could not assign.'); }
           });
         }}
-        title="The workspace this invoice belongs to"
+        title="The company this invoice belongs to"
         className={`bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-[10px] text-zinc-300 focus:outline-none focus:border-[#d4af37] cursor-pointer hover:border-[#d4af37]/50 transition-colors w-[84px] font-mono ${pending ? 'opacity-50' : ''}`}
       >
         <option value="">PLIG</option>
@@ -324,7 +324,7 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
                 <th className="py-3 px-3 cursor-pointer select-none group" onClick={() => handleSort('rawAmount')}>
                   <div className="flex items-center justify-end gap-2">Amount Billed {getSortIcon('rawAmount')}</div>
                 </th>
-                <th className="py-3 px-2 w-[96px]">Workspace</th>
+                <th className="py-3 px-2 w-[96px]">Company</th>
                 <th className="py-3 px-3 cursor-pointer select-none group text-center" onClick={() => handleSort('status')}>
                   <div className="flex items-center justify-center gap-2">Status {getSortIcon('status')}</div>
                 </th>
@@ -406,7 +406,7 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
                       </div>
                     )}
                   </td>
-                  {/* Workspace */}
+                  {/* Company */}
                   <td className="py-3 px-3 font-sans">
                     <InvoiceWorkspaceDropdown invoiceId={inv.id} current={inv.assignedWorkspaceId} workspaces={availableWorkspaces} activeWorkspaceName={activeWorkspaceName} readOnly={inv.readOnly} />
                   </td>

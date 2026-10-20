@@ -201,7 +201,7 @@ export function ContactCrmManager({ initialClients, currentUserRole, activeWorks
             READ-ONLY MODE
           </h3>
           <p className="text-xs text-zinc-400 mb-4">
-            Contacts in PT Pintu Langit are mirrored from Prof Toko Online and New Wave. Please switch to the original workspace to onboard or edit a contact.
+            Contacts in PT Pintu Langit are mirrored from Prof Toko Online and New Wave. Please switch to the original company to onboard or edit a contact.
           </p>
         </div>
       ) : (

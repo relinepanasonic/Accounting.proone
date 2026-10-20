@@ -338,7 +338,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
           } else if (res.success && res.error) {
             setErrorMsg(res.error);
           } else {
-            setErrorMsg(res.error || 'Failed to create invoice. Please verify your workspace permission.');
+            setErrorMsg(res.error || 'Failed to create invoice. Please verify your company permission.');
           }
         }
       } catch (err: any) {
@@ -434,28 +434,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                         {selectedClient?.company_legal_name || '—'}
                       </div>
                     </div>
-                    {activeWorkspaceId === '11111111-1111-1111-1111-111111111111' && (
-                      <div>
-                        <label className="block text-[10px] font-bold uppercase tracking-wider text-orange-400 mb-2 flex items-center gap-1.5">
-                          <Building2 className="w-3.5 h-3.5" />
-                          New Wave job
-                        </label>
-                        <select
-                          value={assignedWorkspaceId}
-                          onChange={(e) => setAssignedWorkspaceId(e.target.value)}
-                          className="w-full bg-zinc-950 border border-orange-500/30 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-orange-500"
-                        >
-                          <option value="">No</option>
-                          <option value={NEW_WAVE_WORKSPACE_ID}>Yes: send to New Wave hour system</option>
-                        </select>
-                      </div>
-                    )}
                   </div>
-                  {activeWorkspaceId === '11111111-1111-1111-1111-111111111111' && (
-                    <p className="text-[10px] text-zinc-500 font-mono">
-                      This invoice and its revenue will reflect on the assigned workspace's dashboard.
-                    </p>
-                  )}
                 </div>
               );
             })()}

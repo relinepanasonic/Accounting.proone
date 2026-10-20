@@ -57,7 +57,7 @@ export default async function WorkspacesLandingPage() {
           <h1 className="mt-4 text-2xl font-extrabold tracking-wide text-white font-serif">
             {firstName ? `Welcome, ${firstName}` : 'Welcome'}
           </h1>
-          <p className="mt-1 text-sm text-zinc-400">Choose the workspace you want to enter.</p>
+          <p className="mt-1 text-sm text-zinc-400">Choose the company you want to enter.</p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -404,7 +404,7 @@ export function WorkspaceDetailTabs({
             className="inline-flex items-center gap-2 text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 hover:text-[#f5d77f] transition-colors group"
           >
             <ArrowLeft className="w-4 h-4 text-[#d4af37] group-hover:-translate-x-1 transition-transform" />
-            <span>← Back to Workspaces</span>
+            <span>← Back to Companies</span>
           </Link>
 
           {isCurrentActive ? (
@@ -577,7 +577,7 @@ export function WorkspaceDetailTabs({
                   BRAND IDENTITY PARAMETERS (FOR INVOICES & QUOTATIONS)
                 </h3>
                 <p className="text-[11px] text-zinc-400 font-sans mt-0.5">
-                  These details auto-fill onto PDF Invoices, Quotations, and client pitches generated from this workspace.
+                  These details auto-fill onto PDF Invoices, Quotations, and client pitches generated from this company.
                 </p>
               </div>
 

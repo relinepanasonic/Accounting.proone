@@ -417,7 +417,7 @@ export async function updateGeneralSettings(payload: {
           return {
             success: true,
             warning:
-              "Workspace Name saved. Note: Run the SQL migration in Supabase to enable custom tax & bank instruction columns.",
+              "Company Name saved. Note: Run the SQL migration in Supabase to enable custom tax & bank instruction columns.",
           };
         }
       }
@@ -546,6 +546,8 @@ export async function updateProduct(payload: {
       quantity: Number(payload.quantity) || 1,
       scale: payload.scale || 'pc',
     };
+    // The name before the change: invoices that use this product follow a rename.
+    const { data: before } = await supabase.from('products').select('name, workspace_id').eq('id', payload.id).maybeSingle();
     const wanted = lengthColumns(payload);
     let { error } = await supabase.from('products').update({ ...row, ...wanted }).eq('id', payload.id);
     if (error && isMissingLengthColumn(error)) {
@@ -557,12 +559,31 @@ export async function updateProduct(payload: {
       return { success: false, error: error.message };
     }
 
+    // Renamed: every invoice line that carried the old name takes the new one (the invoices of this product's company, including
+    // PT Pintu invoices assigned to it). "Other Product" is shared by every company, so it is never renamed this way.
+    let renamedLines = 0;
+    const oldName = String(before?.name || '').trim();
+    const newName = String(payload.name || '').trim();
+    if (before && oldName && newName && oldName !== newName && oldName.toLowerCase() !== 'other product') {
+      const admin = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+      const { data: invs } = await admin.from('invoices').select('id').or(`workspace_id.eq.${before.workspace_id},assigned_workspace_id.eq.${before.workspace_id}`);
+      const ids = (invs || []).map((i: { id: string }) => i.id);
+      for (let i = 0; i < ids.length; i += 100) {
+        const { data: changed } = await admin.from('invoice_line_items').update({ package_name: newName }).in('invoice_id', ids.slice(i, i + 100)).eq('package_name', oldName).select('id');
+        renamedLines += changed?.length || 0;
+      }
+      revalidatePath('/invoices');
+      revalidatePath('/sales/clients');
+      revalidatePath('/optimizing/clients');
+    }
+
     revalidatePath('/settings');
     if (payload.targetWorkspaceId) {
       revalidatePath(`/settings/workspaces/${payload.targetWorkspaceId}`);
     }
     revalidatePath('/invoices/new');
-    return { success: true };
+    revalidatePath('/optimizing/catalog');
+    return { success: true, renamedLines };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Failed to update catalog item.' };
   }

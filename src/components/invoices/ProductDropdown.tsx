@@ -10,9 +10,11 @@ interface ProductDropdownProps {
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
+  /** Off for invoices: only catalog products may be chosen ("Other Product" covers one-offs). */
+  allowCustom?: boolean;
 }
 
-export function ProductDropdown({ products, value, onChange, placeholder = 'Select a product...', className = '' }: ProductDropdownProps) {
+export function ProductDropdown({ products, value, onChange, placeholder = 'Select a product...', className = '', allowCustom = true }: ProductDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -94,13 +96,15 @@ export function ProductDropdown({ products, value, onChange, placeholder = 'Sele
           </div>
           
           <div className="overflow-y-auto flex-1 p-1 custom-scrollbar">
-            <button
-              type="button"
-              onClick={() => { onChange('custom'); setIsOpen(false); }}
-              className="w-full text-left px-3 py-2 text-[11px] font-mono text-zinc-400 hover:bg-zinc-800/50 hover:text-white rounded-md transition-colors"
-            >
-              -- Custom / Manual --
-            </button>
+            {allowCustom && (
+              <button
+                type="button"
+                onClick={() => { onChange('custom'); setIsOpen(false); }}
+                className="w-full text-left px-3 py-2 text-[11px] font-mono text-zinc-400 hover:bg-zinc-800/50 hover:text-white rounded-md transition-colors"
+              >
+                -- Custom / Manual --
+              </button>
+            )}
             
             {groupedProducts.map(([category, items]) => (
               <div key={category} className="mt-2 mb-1">

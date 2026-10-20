@@ -53,7 +53,7 @@ import { getWorkspaceMappings } from './mappings';
 import { resolveArAccount } from '@/lib/accounting/accounts';
 import { createAdminClient as createServiceClient } from '@/lib/api/supabase-admin';
 import { completeInvoiceRequest, onInvoicePaid } from '@/lib/sales/server';
-import { autoAssignFromCatalog } from '@/lib/invoices/catalog-workspace';
+import { autoAssignFromCatalog, catalogError, unknownProducts } from '@/lib/invoices/catalog-workspace';
 
 /**
  * Helper: Retrieve Authenticated User ID and their active workspace_id (respecting multi-tenant cookie)
@@ -248,6 +248,11 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
     }
     if (!payload.lineItems || payload.lineItems.length === 0) {
       return { success: false, error: 'At least one deliverable line item is required.' };
+    }
+    if (!payload.isHistorical) {
+      const { data: existing } = await supabase.from('invoice_line_items').select('package_name').eq('invoice_id', payload.id);
+      const bad = await unknownProducts(supabase, workspaceId, payload.lineItems.map((l) => l.packageName || ''), (existing || []).map((e: any) => e.package_name || ''));
+      if (bad.length) return { success: false, error: catalogError(bad) };
     }
 
     const subtotal = payload.lineItems.reduce(
@@ -540,6 +545,10 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
 
     if (!payload.lineItems || payload.lineItems.length === 0) {
       return { success: false, error: 'At least one deliverable line item is required.' };
+    }
+    if (!payload.isHistorical) {
+      const bad = await unknownProducts(supabase, workspaceId, payload.lineItems.map((l) => l.packageName || ''));
+      if (bad.length) return { success: false, error: catalogError(bad) };
     }
 
     // Calculate Subtotal & Total

@@ -26,6 +26,8 @@ interface InvoiceData {
   assignedWorkspaceId: string | null;
   assignedWorkspaceName: string;
   paidAmount: number;
+  /** A PT Pintu invoice assigned to this workspace: visible here, changed only in PT Pintu. */
+  readOnly?: boolean;
 }
 
 export interface InvoiceRequestRow {
@@ -336,6 +338,7 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
                       <div className="w-1 h-4 bg-[#d4af37] rounded-sm"></div>
                       {inv.invoiceNumber}
                     </div>
+                    {inv.readOnly && <div className="mt-0.5 pl-3 text-[9px] font-bold uppercase tracking-wider text-sky-300">From PT Pintu</div>}
                   </td>
                   {/* Tanggal Invoice */}
                   <td className={`py-3 px-3 font-sans whitespace-nowrap ${inv.isQuotation ? 'text-white' : 'text-zinc-400'}`}>
@@ -375,7 +378,9 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
                   </td>
                   {/* Status */}
                   <td className="py-3 px-3 text-center">
-                    {inv.isQuotation ? (
+                    {inv.readOnly ? (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full border border-zinc-700 text-zinc-300 font-bold text-[10px] tracking-widest uppercase">{String(inv.status).replace('_', ' ')}</span>
+                    ) : inv.isQuotation ? (
                       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 font-bold text-[10px] tracking-widest uppercase">
                         QUOTE
                       </span>
@@ -393,7 +398,7 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
                   </td>
                   {/* Aksi */}
                   <td className="py-3 px-3 text-center">
-                    <InvoiceActionGroup id={inv.id} isQuotation={inv.isQuotation} status={inv.status} />
+                    {inv.readOnly ? <Link href={`/invoices/${inv.id}`} className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-[#f5d77f]">View</Link> : <InvoiceActionGroup id={inv.id} isQuotation={inv.isQuotation} status={inv.status} />}
                   </td>
                 </tr>
               ))}

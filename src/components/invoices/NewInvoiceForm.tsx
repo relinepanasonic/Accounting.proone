@@ -126,6 +126,19 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
 
   const [lineItems, setLineItems] = useState<LineItem[]>(initialData?.lineItems || []);
 
+  // Invoices use catalog products only. The catalog of the active workspace (PT: of every workspace) is listed once per name.
+  const catalog = React.useMemo(() => {
+    const seen = new Map<string, any>();
+    for (const p of products || []) {
+      const key = String(p.name).trim().toLowerCase();
+      if (!seen.has(key) || (p as any).workspace_id === activeWorkspaceId) seen.set(key, p);
+    }
+    return Array.from(seen.values());
+  }, [products, activeWorkspaceId]);
+  const catalogNames = React.useMemo(() => new Set(catalog.map((p: any) => String(p.name).trim().toLowerCase())), [catalog]);
+  // Old invoices may still carry a name that is not in the catalog: it can stay while editing.
+  const grandfathered = React.useMemo(() => new Set<string>((initialData?.lineItems || []).map((l: any) => String(l.packageName || '').trim().toLowerCase())), [initialData]);
+
   const handleAddLineItem = () => {
     setLineItems((prev) => [
       ...prev,
@@ -239,6 +252,13 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
     if (lineItems.length === 0) {
       setErrorMsg('Please add at least one deliverable line item before saving.');
       return;
+    }
+    if (!isHistorical) {
+      const bad = lineItems.filter((l) => { const k = String(l.packageName || '').trim().toLowerCase(); return !k || !(catalogNames.has(k) || grandfathered.has(k)); });
+      if (bad.length) {
+        setErrorMsg('Choose a product from the catalog on every line. For a one-off or temporary item choose "Other Product" and write the details in its notes.');
+        return;
+      }
     }
 
     setErrorMsg(null);
@@ -553,26 +573,21 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
 
                   <div className="grid grid-cols-12 gap-3 items-start pr-10">
                     <div className="col-span-12 md:col-span-3 space-y-1.5">
-                      {products && products.length > 0 ? (
-                        <ProductDropdown
-                          products={products}
-                          value={products.find(p => p.name === item.packageName) ? products.find(p => p.name === item.packageName)?.id || 'custom' : 'custom'}
-                          onChange={(val) => {
-                            if (val === 'custom') {
-                              handleUpdateItem(item.id, 'packageName', '');
-                            } else {
-                              handleSelectProduct(item.id, val);
-                            }
-                          }}
-                        />
+                      {catalog.length > 0 ? (
+                        <>
+                          <ProductDropdown
+                            products={catalog}
+                            allowCustom={false}
+                            placeholder="Choose a catalog product"
+                            value={catalog.find((p: any) => String(p.name).trim().toLowerCase() === String(item.packageName).trim().toLowerCase())?.id || ''}
+                            onChange={(val) => handleSelectProduct(item.id, val)}
+                          />
+                          {item.packageName && !catalogNames.has(String(item.packageName).trim().toLowerCase()) && (
+                            <div className="text-[10px] text-amber-300">&quot;{item.packageName}&quot; is not in the catalog. Pick a catalog product.</div>
+                          )}
+                        </>
                       ) : (
-                        <input
-                          type="text"
-                          placeholder="Package Name"
-                          value={item.packageName}
-                          onChange={(e) => handleUpdateItem(item.id, 'packageName', e.target.value)}
-                          className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs font-bold text-white focus:outline-none focus:border-[#d4af37]"
-                        />
+                        <div className="text-[11px] text-amber-300">The product catalog is empty. Add products in Optimizing &gt; Product Catalog first.</div>
                       )}
                     </div>
                     
@@ -580,7 +595,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                       <BulletTextarea
                         rows={2}
                         required
-                        placeholder="Automatic bullet points..."
+                        placeholder={String(item.packageName).trim().toLowerCase() === 'other product' ? 'Notes: what is this item for?' : 'Automatic bullet points...'}
                         value={item.description}
                         onChange={(val) =>
                           handleUpdateItem(item.id, 'description', val)

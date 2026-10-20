@@ -4,7 +4,7 @@ import { Plus } from 'lucide-react';
 import { formatIndoDate } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
-import { NEW_WAVE_WORKSPACE_ID } from '@/lib/workspaces/known';
+import { NEW_WAVE_WORKSPACE_ID, PT_WORKSPACE_ID } from '@/lib/workspaces/known';
 import { clientMask, HIDDEN_CLIENT } from '@/lib/auth/client-privacy';
 import { InvoiceStatusToggle, InvoiceActionGroup } from '@/components/invoices/InvoiceRowActions';
 import { InvoiceTableClient, type InvoiceRequestRow } from '@/components/invoices/InvoiceTableClient';
@@ -44,9 +44,23 @@ async function InvoicesTableServer({ activeTab }: { activeTab: string }) {
       .order('transaction_date', { ascending: false })
   ]);
 
+  // Another workspace: the PT Pintu invoices assigned to it (PT collects the money, the job is here). Shown read-only.
+  let ptAssigned: any[] = [];
+  if (activeWorkspaceId !== PT_WORKSPACE_ID && activeTab === 'invoices' && FINANCE_ROLES.includes(role)) {
+    const { data: assigned } = await createAdminClient()
+      .from('invoices')
+      .select('id, invoice_number, is_quotation, status, total_amount, amount_paid, issue_date, due_date, notes, client_id, assigned_workspace_id, clients(name, contact_name), invoice_line_items(package_name, description, quantity, scale)')
+      .eq('workspace_id', PT_WORKSPACE_ID)
+      .eq('assigned_workspace_id', activeWorkspaceId)
+      .eq('is_quotation', false)
+      .order('created_at', { ascending: false });
+    ptAssigned = (assigned || []).map((i: any) => ({ ...i, __ro: true }));
+  }
+  const allInvoices: any[] = [...(invoices || []), ...ptAssigned];
+
   const displayInvoices =
-    invoices && invoices.length > 0
-      ? invoices.map((inv) => {
+    allInvoices.length > 0
+      ? allInvoices.map((inv: any) => {
           const clientObj = Array.isArray(inv.clients) ? inv.clients[0] : inv.clients;
           const lineItems = Array.isArray(inv.invoice_line_items) ? inv.invoice_line_items : (inv.invoice_line_items ? [inv.invoice_line_items] : []);
           const firstPackage = lineItems.length > 0 ? (lineItems[0].package_name || lineItems[0].description || '—') : '—';
@@ -74,6 +88,7 @@ async function InvoicesTableServer({ activeTab }: { activeTab: string }) {
             status: inv.status || 'draft',
             assignedWorkspaceId: inv.assigned_workspace_id,
             assignedWorkspaceName: inv.assigned_workspace_id === NEW_WAVE_WORKSPACE_ID ? 'New Wave job' : '—',
+            readOnly: inv.__ro === true,
           };
         })
       : [];

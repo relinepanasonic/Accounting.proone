@@ -9,6 +9,7 @@ import { clientMask } from '@/lib/auth/client-privacy';
 import { MANUAL_STAGES, PIPELINE_STAGES, PROPOSAL_STAGES, computeProjectTerms, requestTotal, type NegotiationNote, type RequestItem } from '@/lib/sales/flow';
 import { dealItems, notify, resolveNotifications } from '@/lib/sales/server';
 import { invoiceScope } from '@/lib/sales/client-table';
+import { catalogError, unknownProducts } from '@/lib/invoices/catalog-workspace';
 
 type Result<T = {}> = ({ success: true } & T) | { success: false; error: string };
 
@@ -155,6 +156,10 @@ export async function requestInvoice(dealId: string, items: RequestItem[], note:
     }))
     .filter((i) => i.name && i.quantity > 0);
   if (clean.length === 0) return { success: false, error: 'Add at least one product with a quantity.' };
+  {
+    const bad = await unknownProducts(a.db, a.ctx.activeWorkspaceId, clean.map((i) => i.name));
+    if (bad.length) return { success: false, error: catalogError(bad) };
+  }
 
   const { data: deal } = await db.from('crm_deals').select('*').eq('id', dealId).eq('workspace_id', ctx.activeWorkspaceId).maybeSingle();
   if (!deal) return { success: false, error: 'Deal not found.' };

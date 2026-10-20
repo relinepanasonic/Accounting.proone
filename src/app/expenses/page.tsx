@@ -2,55 +2,78 @@ import React, { Suspense } from 'react';
 import Link from 'next/link';
 import { Plus, Receipt } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
-import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
+import { getAuthenticatedWorkspaceContext, FINANCE_ROLES } from '@/lib/auth/workspace-context';
+import { createAdminClient } from '@/lib/api/supabase-admin';
+import { PT_WORKSPACE_ID } from '@/lib/workspaces/known';
 import { ExpenseClientTable, ExpenseRecord } from '@/components/expenses/ExpenseClientTable';
 
 export const dynamic = 'force-dynamic';
 
 async function ExpensesTable() {
   const supabase = await createClient();
-  const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+  const { activeWorkspaceId, availableWorkspaces, role } = await getAuthenticatedWorkspaceContext(supabase);
+  const isPT = activeWorkspaceId === PT_WORKSPACE_ID;
 
-  const { data: records, error } = await supabase
-    .from('transactions')
-    .select('id, due_date, transaction_date, description, category, amount, reconciled')
-    .eq('workspace_id', activeWorkspaceId)
-    .eq('type', 'expense')
-    // Exclude Fixed Asset purchases: any category whose COA code starts with '1' (Asset range: 10xx, 12xx, 15xx etc.)
-    // Real operating expenses use codes starting with '5' (COGS) or '6' (Opex)
-    .not('category', 'ilike', '1%')
-    .order('transaction_date', { ascending: false });
-
+  // assigned_workspace_id needs one migration; without it the list still works.
+  const ownQuery = (cols: string) =>
+    supabase
+      .from('transactions')
+      .select(cols)
+      .eq('workspace_id', activeWorkspaceId)
+      .eq('type', 'expense')
+      // Exclude Fixed Asset purchases: any category whose COA code starts with '1' (Asset range: 10xx, 12xx, 15xx etc.)
+      // Real operating expenses use codes starting with '5' (COGS) or '6' (Opex)
+      .not('category', 'ilike', '1%')
+      .order('transaction_date', { ascending: false });
+  const base = 'id, due_date, transaction_date, description, category, amount, reconciled';
+  let { data: records, error } = (await ownQuery(`${base}, assigned_workspace_id`)) as any;
+  if (error) ({ data: records, error } = (await ownQuery(base)) as any);
   if (error) {
     console.error('Error fetching expenses:', error);
   }
 
-  const displayRecords: ExpenseRecord[] =
-    records && records.length > 0
-      ? records.map((r) => {
-          const rawDesc = r.description || 'Vendor Payee';
-          let vendorPart = rawDesc;
-          let notesPart = '-';
-          if (rawDesc.includes(' | ')) {
-             const parts = rawDesc.split(' | ');
-             vendorPart = parts[0];
-             notesPart = parts.slice(1).join(' | ');
-          } else if (rawDesc.includes(' - ')) {
-             const parts = rawDesc.split(' - ');
-             vendorPart = parts[0];
-             notesPart = parts.slice(1).join(' - ');
-          }
-          return {
-            id: r.id,
-            date: r.due_date || r.transaction_date,
-            vendor: vendorPart,
-            notes: notesPart,
-            category: r.category || '6000 - Operating Expenses',
-            amount: Number(r.amount || 0),
-            status: r.reconciled ? 'paid' : 'pending',
-          };
-        })
-      : [];
+  // Another workspace: the PT Pintu expenses that were assigned to this one, shown read-only.
+  let fromPt: any[] = [];
+  if (!isPT && FINANCE_ROLES.includes(role)) {
+    const { data: assigned } = await createAdminClient()
+      .from('transactions')
+      .select(base)
+      .eq('workspace_id', PT_WORKSPACE_ID)
+      .eq('assigned_workspace_id', activeWorkspaceId)
+      .eq('type', 'expense')
+      .not('category', 'ilike', '1%')
+      .order('transaction_date', { ascending: false });
+    fromPt = assigned || [];
+  }
+
+  const toRecord = (r: any, readOnly: boolean): ExpenseRecord => {
+  const rawDesc = r.description || 'Vendor Payee';
+  let vendorPart = rawDesc;
+  let notesPart = '-';
+  if (rawDesc.includes(' | ')) {
+     const parts = rawDesc.split(' | ');
+     vendorPart = parts[0];
+     notesPart = parts.slice(1).join(' | ');
+  } else if (rawDesc.includes(' - ')) {
+     const parts = rawDesc.split(' - ');
+     vendorPart = parts[0];
+     notesPart = parts.slice(1).join(' - ');
+  }
+  return {
+    id: r.id,
+    date: r.due_date || r.transaction_date,
+    vendor: vendorPart,
+    notes: notesPart,
+    category: r.category || '6000 - Operating Expenses',
+    amount: Number(r.amount || 0),
+    status: r.reconciled ? 'paid' : 'pending',
+  };
+  };
+
+  const displayRecords: ExpenseRecord[] = [
+    ...fromPt.map((r) => toRecord(r, true)),
+    ...((records as any[]) || []).map((r) => toRecord(r, false)),
+  ].sort((x, y) => String(y.date).localeCompare(String(x.date)));
 
   return (
     <div className="gold-glass-panel rounded-2xl p-6">
@@ -64,7 +87,7 @@ async function ExpensesTable() {
         
       </div>
 
-      <ExpenseClientTable initialRecords={displayRecords} />
+      <ExpenseClientTable initialRecords={displayRecords} workspaces={isPT ? availableWorkspaces.filter((w) => w.id !== PT_WORKSPACE_ID).map((w) => ({ id: w.id, name: w.name })) : undefined} fromPtLabel="PT Pintu" />
     </div>
   );
 }

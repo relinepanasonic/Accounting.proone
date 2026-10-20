@@ -5,6 +5,36 @@ import Link from 'next/link';
 import { Plus, Receipt, Search, Filter, Calendar, ChevronDown, ChevronRight } from 'lucide-react';
 import { ExpenseRowActions } from './ExpenseRowActions';
 import { formatIndoDate } from '@/lib/utils';
+import { updateExpenseAssignment } from '@/app/actions/expense-workspace';
+
+/** PT Pintu: which workspace this expense belongs to. */
+function ExpenseWorkspaceSelect({ id, current, workspaces }: { id: string; current: string | null | undefined; workspaces: { id: string; name: string }[] }) {
+  const [value, setValue] = React.useState(current || '');
+  const [error, setError] = React.useState('');
+  const [pending, start] = React.useTransition();
+  return (
+    <div>
+      <select
+        value={value}
+        disabled={pending}
+        onChange={(e) => {
+          const v = e.target.value;
+          setValue(v);
+          setError('');
+          start(async () => {
+            const res = await updateExpenseAssignment(id, v || null);
+            if (!res.success) { setValue(current || ''); setError(res.error || 'Could not assign.'); }
+          });
+        }}
+        className={`bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-[10px] text-zinc-300 focus:outline-none focus:border-[#d4af37] max-w-[150px] ${pending ? 'opacity-50' : ''}`}
+      >
+        <option value="">PT Pintu (own)</option>
+        {workspaces.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+      </select>
+      {error && <div className="text-[10px] text-red-400 mt-1 max-w-[150px]">{error}</div>}
+    </div>
+  );
+}
 
 export interface ExpenseRecord {
   id: string;
@@ -14,9 +44,13 @@ export interface ExpenseRecord {
   category: string;
   amount: number;
   status: string;
+  /** PT Pintu only: the workspace this expense belongs to. */
+  assignedWorkspaceId?: string | null;
+  /** Paid by PT Pintu for this workspace: shown here, changed only in PT Pintu. */
+  readOnly?: boolean;
 }
 
-export function ExpenseClientTable({ initialRecords }: { initialRecords: ExpenseRecord[] }) {
+export function ExpenseClientTable({ initialRecords, workspaces, fromPtLabel = 'PT Pintu' }: { initialRecords: ExpenseRecord[]; workspaces?: { id: string; name: string }[]; fromPtLabel?: string }) {
   const [searchPayee, setSearchPayee] = useState('');
   const [searchNotes, setSearchNotes] = useState('');
   const [filterMonth, setFilterMonth] = useState('');
@@ -209,13 +243,14 @@ export function ExpenseClientTable({ initialRecords }: { initialRecords: Expense
               <th className="py-4 px-4 font-bold w-1/3">Notes / Remarks</th>
               <th className="py-4 px-4 font-bold max-w-[200px]">Category</th>
               <th className="py-4 px-4 font-bold text-right">Amount Owed</th>
+              {workspaces && <th className="py-4 px-4 font-bold">Workspace</th>}
               <th className="py-4 px-4 font-bold text-center">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800/40">
             {filteredRecords.length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-12 text-center text-zinc-500 font-sans border-dashed border border-zinc-800/60">
+                <td colSpan={7} className="py-12 text-center text-zinc-500 font-sans border-dashed border border-zinc-800/60">
                   No records match your filters.
                 </td>
               </tr>
@@ -229,6 +264,7 @@ export function ExpenseClientTable({ initialRecords }: { initialRecords: Expense
                     <div className="max-w-[150px] sm:max-w-[220px] truncate" title={item.vendor}>
                       {item.vendor}
                     </div>
+                    {item.readOnly && <div className="mt-0.5 text-[9px] font-bold uppercase tracking-wider text-sky-300">Paid by {fromPtLabel}</div>}
                   </td>
                   <td className="py-3.5 px-4 font-sans text-zinc-500 group-hover:text-zinc-300 transition-colors">
                     <div className="truncate whitespace-normal line-clamp-2 max-h-10 leading-tight" title={item.notes}>
@@ -245,8 +281,13 @@ export function ExpenseClientTable({ initialRecords }: { initialRecords: Expense
                       Rp {item.amount.toLocaleString('id-ID')}
                     </span>
                   </td>
+                  {workspaces && (
+                    <td className="py-3.5 px-4 font-sans">
+                      <ExpenseWorkspaceSelect id={item.id} current={item.assignedWorkspaceId} workspaces={workspaces} />
+                    </td>
+                  )}
                   <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                    <ExpenseRowActions id={item.id} status={item.status} />
+                    {item.readOnly ? <span className="text-[10px] uppercase tracking-wider text-zinc-600">Read only</span> : <ExpenseRowActions id={item.id} status={item.status} />}
                   </td>
                 </tr>
               ))

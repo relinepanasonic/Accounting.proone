@@ -39,9 +39,7 @@ export function RequestInvoiceModal({
   const [pending, start] = useTransition();
 
   const addProduct = (id: string) => {
-    if (id === '__custom__') {
-      setItems((l) => [...l, { product_id: null, name: '', quantity: 1, unit_price: 0, scale: null, duration_type: 'none', duration_value: 0, deliverable_unit: null }]);
-    } else {
+    {
       const p = products.find((x) => x.id === id);
       if (!p) return;
       setItems((l) => [
@@ -90,7 +88,7 @@ export function RequestInvoiceModal({
           {items.map((it, i) => (
             <div key={i} className="rounded-lg border border-zinc-800 bg-zinc-950/50 p-3 space-y-2">
               <div className="flex items-center gap-2">
-                <input className={`${field} flex-1`} value={it.name} onChange={(e) => update(i, { name: e.target.value })} placeholder="Product name" />
+                <input className={`${field} flex-1`} value={it.name} readOnly placeholder="Product name" />
                 <button onClick={() => setItems((l) => l.filter((_, k) => k !== i))} className="p-1.5 text-zinc-500 hover:text-red-400" aria-label="Remove"><Trash2 className="w-4 h-4" /></button>
               </div>
               <div className="grid grid-cols-3 gap-2 text-xs">
@@ -110,17 +108,12 @@ export function RequestInvoiceModal({
           <ProductDropdown
             products={products}
             value={pick}
-            onChange={(val) => {
-              if (val === 'custom') {
-                addProduct('__custom__');
-              } else {
-                addProduct(val);
-              }
-            }}
+            allowCustom={false}
+            onChange={(val) => addProduct(val)}
             placeholder="+ Add a product from the catalog"
             className="w-full"
           />
-          {products.length === 0 && <p className="text-[11px] text-amber-300">The product catalog is empty. Add products under Optimizing → Product Catalog, or use a custom item.</p>}
+          {products.length === 0 && <p className="text-[11px] text-amber-300">The product catalog is empty. Add products under Optimizing → Product Catalog, or pick "Other Product".</p>}
 
           <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Note for Accounting (discount, payment terms, anything special)" className={`${field} w-full`} />
 

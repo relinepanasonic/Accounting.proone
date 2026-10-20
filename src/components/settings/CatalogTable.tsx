@@ -132,14 +132,15 @@ export function CatalogTable({ initialProducts, canEdit, workspaces, activeWorks
               {showWorkspace && <th className="px-3 py-3 font-bold">Company</th>}
               <th className="px-3 py-3 font-bold">Product</th>
               <th className="px-3 py-3 font-bold">Description</th>
-              <th className="px-3 py-3 font-bold text-right">Price</th>
+              <th className="px-3 py-3 font-bold text-right">Unit Price</th>
               <th className="px-3 py-3 font-bold">Qty</th>
               <th className="px-3 py-3 font-bold" title="month / day / week / year give the project length; pc, video... are amounts to deliver">Unit (length)</th>
+              <th className="px-3 py-3 font-bold text-right" title="Unit Price x Qty">Price</th>
               {canEdit && <th className="px-3 py-3 font-bold text-right">Actions</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800/50">
-            {shown.length === 0 && <tr><td colSpan={7} className="p-8 text-center text-sm text-zinc-500">No products. {canEdit ? 'Press "Add new product".' : ''}</td></tr>}
+            {shown.length === 0 && <tr><td colSpan={8} className="p-8 text-center text-sm text-zinc-500">No products. {canEdit ? 'Press "Add new product".' : ''}</td></tr>}
             {shown.map((row) => (
               <tr key={row.id} className={row._new ? 'bg-[#d4af37]/[0.06]' : 'hover:bg-zinc-900/30'}>
                 {showWorkspace && (
@@ -185,6 +186,7 @@ export function CatalogTable({ initialProducts, canEdit, workspaces, activeWorks
                 <td className="px-2 py-2 align-top">
                   <input className={cell} disabled={!canEdit} value={row.scale || ''} placeholder="pc" onChange={(e) => patchLocal(row.id, { scale: e.target.value })} onBlur={() => save(row)} />
                 </td>
+                <td className="px-3 py-4 align-top text-right font-mono text-xs font-bold text-[#f5d77f] whitespace-nowrap">{rp((Number(row.unit_price) || 0) * (Number(row.quantity) || 1))}</td>
                 {canEdit && (
                   <td className="px-2 py-2 align-top text-right whitespace-nowrap">
                     {busy === row.id ? <Loader2 className="ml-auto h-4 w-4 animate-spin text-zinc-500" /> : row._new ? (

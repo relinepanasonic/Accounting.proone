@@ -225,7 +225,14 @@ async function loadInvoiceRows(db: Db, workspaceId: string, opts: LoadOpts): Pro
  * (one row, product "No invoice yet"), so each client can be handed to an advertiser and an admin.
  */
 export async function loadClientRows(db: Db, workspaceId: string, opts: LoadOpts & { includeAll?: boolean }): Promise<ClientRow[]> {
-  const rows = await loadInvoiceRows(db, workspaceId, opts);
+  let rows = await loadInvoiceRows(db, workspaceId, opts);
+  // The Churn archive: newest churn date first (the rows of one invoice stay together).
+  if (opts.archived === 'only') {
+    const groups: ClientRow[][] = [];
+    for (const r of rows) (r.groupIndex === 0 ? groups.push([r]) : groups[groups.length - 1]?.push(r));
+    groups.sort((a, b) => String(b[0].churnDate || '').localeCompare(String(a[0].churnDate || '')));
+    rows = groups.flat();
+  }
   if (!opts.includeAll || opts.archived === 'only' || opts.salesmanId) return rows;
 
   // Clients that already have an issued invoice are covered above (or archived in Churn).

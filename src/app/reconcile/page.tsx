@@ -105,10 +105,11 @@ async function ReconciliationCore() {
     supabase
       .from('clients')
       .select('id, name')
+      .eq('workspace_id', activeWorkspaceId)
       .eq('contact_type', 'vendor')
       .order('name', { ascending: true }),
     supabase
-      .from('journal_entries').select('description').eq('reference_type', 'bank_match').ilike('description', '%BANK-REF%')
+      .from('journal_entries').select('description').eq('workspace_id', activeWorkspaceId).eq('reference_type', 'bank_match').ilike('description', '%BANK-REF%')
   ]);
 
   const rawInvoices = invoicesRes.data || [];

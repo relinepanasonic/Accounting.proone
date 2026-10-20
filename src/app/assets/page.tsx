@@ -1,3 +1,4 @@
+import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import React, { Suspense } from 'react';
 import { Box, Edit2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
@@ -23,10 +24,13 @@ interface FixedAssetRecord {
 
 async function FixedAssetsRegistry() {
   const supabase = await createClient();
+  const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
+  // Only this company's assets: a founder can read every company's rows, so the filter has to be here.
   const { data: records } = await supabase
     .from('fixed_assets')
     .select('id, asset_name, category, initial_value, salvage_value, purchase_date, annual_depreciation, status, useful_life_years')
+    .eq('workspace_id', activeWorkspaceId)
     .order('asset_name', { ascending: true });
 
   const displayRecords: FixedAssetRecord[] =

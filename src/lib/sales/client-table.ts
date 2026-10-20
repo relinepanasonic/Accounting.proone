@@ -53,6 +53,8 @@ export interface ClientRow {
   isDeal: boolean;
   advertiserId: string | null;
   adminId: string | null;
+  /** The salesman who got this client (from the pipeline card). */
+  salesman: string;
   groupSize: number;
   groupIndex: number;
 }
@@ -89,7 +91,7 @@ async function loadInvoiceRows(db: Db, workspaceId: string, opts: LoadOpts): Pro
   const clientIds = Array.from(new Set(invoices.map((i) => i.client_id)));
 
   const [dealsRes, clientsRes, projectsRes, linesRes, productsRes, assignRes, payRes, txPayRes] = await Promise.all([
-    db.from('crm_deals').select('id, invoice_id, stage, salesman_id, paid_at, acc_approved_at').eq('workspace_id', workspaceId).in('invoice_id', invoiceIds),
+    db.from('crm_deals').select('id, invoice_id, stage, salesman_id, salesman_name, paid_at, acc_approved_at').eq('workspace_id', workspaceId).in('invoice_id', invoiceIds),
     db.from('clients').select('id, name, company_name, store_name').in('id', clientIds),
     db.from('projects').select('invoice_id, deal_id, start_date').eq('workspace_id', workspaceId).in('invoice_id', invoiceIds),
     db.from('invoice_line_items').select('invoice_id, package_name, description, quantity, scale').in('invoice_id', invoiceIds),
@@ -210,6 +212,7 @@ async function loadInvoiceRows(db: Db, workspaceId: string, opts: LoadOpts): Pro
         invoiceNumber: inv.invoice_number || null,
         status: inv.status || null,
         isDeal,
+        salesman: deal?.salesman_name || '',
         advertiserId: handler(inv.client_id, 'advertising'),
         adminId: handler(inv.client_id, 'admin'),
         groupSize: lines.length,
@@ -276,6 +279,7 @@ export async function loadClientRows(db: Db, workspaceId: string, opts: LoadOpts
     invoiceNumber: null,
     status: null,
     isDeal: false,
+    salesman: '',
     advertiserId: handler(c.id, 'advertising'),
     adminId: handler(c.id, 'admin'),
     groupSize: 1,

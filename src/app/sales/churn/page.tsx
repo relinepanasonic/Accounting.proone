@@ -37,7 +37,7 @@ export default async function SalesChurnPage() {
         </p>
         <p className="mt-2 text-xs text-zinc-500">{clients} client{clients === 1 ? '' : 's'} · {groups.length} invoice{groups.length === 1 ? '' : 's'}</p>
       </div>
-      <ClientProjectsTable rows={sorted} showStatus canEditStart={false} canEditNames={false} canEditStatus={canEdit} />
+      <ClientProjectsTable rows={sorted} showStatus canEditStart={false} canEditNames={false} canEditStatus={canEdit} showSalesman />
     </div>
   );
 }

@@ -164,7 +164,7 @@ function HandlerSelect({ clientId, job, current, people }: { clientId: string; j
 }
 
 export function ClientProjectsTable({
-  rows, showStatus, canEditStart, canEditNames, canEditPaid = false, canEditStatus = false, advertisers, admins,
+  rows, showStatus, canEditStart, canEditNames, canEditPaid = false, canEditStatus = false, hidePaid = false, showSalesman = false, advertisers, admins,
 }: {
   rows: ClientRow[];
   showStatus: boolean;
@@ -174,6 +174,10 @@ export function ClientProjectsTable({
   canEditPaid?: boolean;
   /** Accounting sets Freeze / Churn by hand. */
   canEditStatus?: boolean;
+  /** Advertiser / Admin tabs: no Paid Date column. */
+  hidePaid?: boolean;
+  /** Sales tabs: which salesman got the client. */
+  showSalesman?: boolean;
   /** Superadmin / founder only: dropdowns to assign who handles each client. */
   advertisers?: Person[];
   admins?: Person[];
@@ -208,10 +212,11 @@ export function ClientProjectsTable({
       <table className="w-full text-left text-sm">
         <thead className="border-b border-[#d4af37]/10 bg-zinc-900/50 text-[11px] uppercase tracking-wider text-zinc-400">
           <tr>
-            <th className="px-3 py-3 font-bold">Paid Date</th>
+            {!hidePaid && <th className="px-3 py-3 font-bold">Paid Date</th>}
             <th className="px-3 py-3 font-bold">Start Project</th>
             <th className="px-3 py-3 font-bold">End Project</th>
             <th className="px-3 py-3 font-bold">Client</th>
+            {showSalesman && <th className="px-3 py-3 font-bold">Salesman</th>}
             <th className="px-3 py-3 font-bold">Brand Name</th>
             <th className="px-3 py-3 font-bold">Store Name</th>
             <th className="px-3 py-3 font-bold">Product</th>
@@ -227,7 +232,7 @@ export function ClientProjectsTable({
           <tbody key={g[0].key} className="divide-y divide-zinc-800/40 border-t border-zinc-800/70">
             {g.map((row, i) => (
               <tr key={row.key} className="hover:bg-zinc-900/30">
-                {i === 0 && (
+                {i === 0 && !hidePaid && (
                   <td rowSpan={g.length} className="px-3 py-3 align-top whitespace-nowrap">
                     <PaidCell row={row} canEdit={canEditPaid} />
                   </td>
@@ -242,6 +247,7 @@ export function ClientProjectsTable({
                     {row.invoiceNumber && <div className="font-mono text-[10px] font-normal text-zinc-500">{row.invoiceNumber}</div>}
                   </td>
                 )}
+                {i === 0 && showSalesman && <td rowSpan={g.length} className="px-3 py-3 align-top whitespace-nowrap text-zinc-300">{row.salesman || <span className="text-zinc-600">-</span>}</td>}
                 {i === 0 && <NameCells row={row} canEdit={canEditNames} />}
                 <td className="min-w-[260px] px-3 py-3 text-zinc-200">
                   {row.product}

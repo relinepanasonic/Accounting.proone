@@ -41,7 +41,7 @@ export async function DivisionClients({ base, job, title }: { base: '/productivi
         </p>
         <p className="mt-2 text-xs text-zinc-500">{clients} client{clients === 1 ? '' : 's'} · {rows.length} product line{rows.length === 1 ? '' : 's'}</p>
       </div>
-      <ClientProjectsTable rows={rows} showStatus={false} canEditStart={false} canEditNames={false} />
+      <ClientProjectsTable rows={rows} showStatus={false} canEditStart={false} canEditNames={false} hidePaid />
     </div>
   );
 }

@@ -27,7 +27,7 @@ const MOBILE_NAV_ITEMS = [
   { name: 'Productivity', href: '/productivity', icon: <CheckSquare className="w-5 h-5" />, isActive: isProductivityPath },
   { name: 'Accounting', href: '/', icon: <LayoutDashboard className="w-5 h-5" />, isActive: isAccountingPath },
   // Optimizing = Admin + Sales + Advertiser; the other two are one tap away in the bar under the page title.
-  { name: 'Optimizing', href: '/sales', icon: <TrendingUp className="w-5 h-5" />, isActive: isOptimizingPath },
+  { name: 'Optimizing', href: '/optimizing/clients', icon: <TrendingUp className="w-5 h-5" />, isActive: isOptimizingPath },
   { name: 'Pabrik', href: '/productivity/pabrik-sosmed', icon: <Share2 className="w-5 h-5" />, isActive: isPabrikPath },
   { name: 'HRD', href: '/payroll', icon: <Users className="w-5 h-5" />, isActive: isHrdPath },
 ];

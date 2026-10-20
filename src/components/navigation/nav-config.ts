@@ -29,10 +29,11 @@ export const isProductivityPath = (p: string) =>
 export const isHrdPath = (p: string) => p.startsWith('/payroll') || p.startsWith('/hrd');
 
 export const OPTIMIZING_CHILDREN = [
+  // Clients come first: that is where each client is handed to an admin and an advertiser.
+  { name: 'Clients', href: '/optimizing/clients', isActive: isOptimizingClientsPath },
   { name: 'Admin', href: '/productivity/admin', isActive: isOptimizingAdminPath },
   { name: 'Sales', href: '/sales', isActive: isOptimizingSalesPath },
   { name: 'Advertiser', href: '/productivity/advertiser', isActive: isOptimizingAdvertiserPath },
-  { name: 'Clients', href: '/optimizing/clients', isActive: isOptimizingClientsPath },
   { name: 'Product Catalog', href: '/optimizing/catalog', isActive: isOptimizingCatalogPath },
 ] as const;
 

@@ -41,6 +41,7 @@ export default async function SalesClientsPage() {
         canEditNames={canEdit}
         canEditPaid={canEdit}
         canEditStatus={canEdit}
+        showSalesman
       />
 
       {role !== 'sales' && (

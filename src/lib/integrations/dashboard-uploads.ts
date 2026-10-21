@@ -14,6 +14,7 @@ export interface DashboardUpload {
   store?: string;
   month?: string;
   week?: string;
+  workspace?: string; // Reline: which workspace the upload went to
   files?: string[];
   tags?: string[];
 }
@@ -21,6 +22,7 @@ export interface DashboardUpload {
 export interface DashboardAdmin {
   name: string;
   stores?: string[];
+  workspaces?: string[];
 }
 
 export interface DashboardUploadLog {
@@ -37,11 +39,17 @@ export function jakartaDay(d: Date): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: LOG_TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
 }
 
-export async function getDashboardUploadLog(days = 7): Promise<DashboardUploadLogResult> {
-  const apiKey = process.env.DASHBOARD_API_KEY;
-  if (!apiKey) return { ok: false, error: 'DASHBOARD_API_KEY is not set.' };
+export const getDashboardUploadLog = (days = 7) =>
+  fetchUploadLog(days, 'DASHBOARD_API_KEY', process.env.DASHBOARD_API_KEY, process.env.DASHBOARD_API_URL || 'https://dashboard.profesoronline.id');
 
-  const base = (process.env.DASHBOARD_API_URL || 'https://dashboard.profesoronline.id').replace(/\/$/, '');
+/** Reline (reline.profesoronline.id): same contract, see RELINE_UPLOAD_LOG_API_PROMPT.md. Env: RELINE_API_URL, RELINE_API_KEY. */
+export const getRelineUploadLog = (days = 7) =>
+  fetchUploadLog(days, 'RELINE_API_KEY', process.env.RELINE_API_KEY, process.env.RELINE_API_URL || 'https://reline.profesoronline.id');
+
+async function fetchUploadLog(days: number, keyName: string, apiKey: string | undefined, baseUrl: string): Promise<DashboardUploadLogResult> {
+  if (!apiKey) return { ok: false, error: `${keyName} is not set.` };
+
+  const base = baseUrl.replace(/\/$/, '');
   const dayList = Array.from({ length: days }).map((_, i) => jakartaDay(new Date(Date.now() - i * 86400000)));
   const from = dayList[dayList.length - 1];
   const to = dayList[0];
@@ -55,7 +63,7 @@ export async function getDashboardUploadLog(days = 7): Promise<DashboardUploadLo
     });
     // A redirect means the dashboard's login middleware caught the request (endpoint missing or not exempted).
     if (res.status >= 300 && res.status < 400) {
-      return { ok: false, error: 'Dashboard API redirected to its login page: /api/erp/* must skip the login middleware.' };
+      return { ok: false, error: 'The API redirected to its login page: /api/erp/* must skip the login middleware (or the endpoint does not exist yet).' };
     }
     if (!res.ok) return { ok: false, error: `Dashboard API answered ${res.status}.` };
 

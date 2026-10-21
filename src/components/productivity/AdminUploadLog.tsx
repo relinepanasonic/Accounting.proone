@@ -8,13 +8,13 @@ const dayLabel = (day: string) =>
 const timeLabel = (iso: string) =>
   new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: LOG_TIMEZONE });
 
-export function AdminUploadLog({ log }: { log: DashboardUploadLogResult }) {
+export function AdminUploadLog({ log, title = 'Admin Upload Log', source = 'dashboard.profesoronline.id' }: { log: DashboardUploadLogResult; title?: string; source?: string }) {
   if (!log.ok) {
     return (
       <div className="bg-[#0e0f14] border border-amber-500/30 rounded-xl p-5 flex items-start gap-3">
         <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
         <div>
-          <h2 className="text-sm font-bold text-zinc-100 uppercase tracking-wide">Admin Upload Log</h2>
+          <h2 className="text-sm font-bold text-zinc-100 uppercase tracking-wide">{title}</h2>
           <p className="text-xs text-zinc-400 mt-1">Log unavailable: {log.error}</p>
         </div>
       </div>
@@ -42,9 +42,9 @@ export function AdminUploadLog({ log }: { log: DashboardUploadLogResult }) {
   return (
     <div className="bg-[#0e0f14] border border-[#d4af37]/20 rounded-xl overflow-hidden shadow-lg">
       <div className="p-4 border-b border-[#d4af37]/10 bg-zinc-900/40">
-        <h2 className="text-sm font-bold text-zinc-100 uppercase tracking-wide">Admin Upload Log</h2>
+        <h2 className="text-sm font-bold text-zinc-100 uppercase tracking-wide">{title}</h2>
         <p className="text-xs text-zinc-400 mt-1">
-          Live from dashboard.profesoronline.id, last {log.days.length} days ({LOG_TIMEZONE}). Red = no upload that day.
+          Live from {source}, last {log.days.length} days ({LOG_TIMEZONE}). Red = no upload that day.
         </p>
       </div>
 
@@ -104,6 +104,7 @@ export function AdminUploadLog({ log }: { log: DashboardUploadLogResult }) {
               <span className="font-semibold text-zinc-200 w-24 truncate">{u.admin}</span>
               <span className="text-zinc-400 w-40 truncate">{u.type}</span>
               <span className="text-[#f5d77f] truncate">{u.store || '-'}</span>
+              {u.workspace && <span className="text-zinc-500 truncate">{u.workspace}</span>}
               {u.files && u.files.length > 0 && <span className="text-zinc-600 truncate">{u.files.length} file(s)</span>}
             </div>
           ))}

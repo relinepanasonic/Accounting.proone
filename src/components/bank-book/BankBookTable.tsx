@@ -11,7 +11,9 @@ const field = 'rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs t
 const rp = (n: number) => `Rp ${Math.round(Math.abs(n)).toLocaleString('id-ID')}`;
 const PAGE = 100;
 
-const bankLabel = (b: BankBookAccount) => `${b.bankName}${b.accountName ? ` · ${b.accountName}` : ''}`;
+/** Just the bank name; the account holder is added only when two accounts share the same bank name. */
+const bankLabel = (b: BankBookAccount, all: BankBookAccount[]) =>
+  all.filter((x) => x.bankName === b.bankName).length > 1 && b.accountName ? `${b.bankName} · ${b.accountName}` : b.bankName;
 
 /** Buku Bank: all stored statement lines, filtered by bank account, month, direction and text. */
 export function BankBookTable({ lines, banks, migrationMissing }: { lines: BankBookLine[]; banks: BankBookAccount[]; migrationMissing: boolean }) {
@@ -68,7 +70,7 @@ export function BankBookTable({ lines, banks, migrationMissing }: { lines: BankB
         </button>
         {banks.map((b) => (
           <button key={b.id} onClick={() => reflow(setBank)(b.id)} title={b.accountNumber} className={`rounded-full border px-4 py-1.5 text-xs font-bold ${bank === b.id ? 'border-[#d4af37] bg-[#d4af37]/15 text-[#f5d77f]' : 'border-zinc-700 text-zinc-400 hover:border-zinc-500'}`}>
-            {bankLabel(b)} <span className="ml-1 font-mono text-[10px] opacity-70">{countByBank.get(b.id) || 0}</span>
+            {bankLabel(b, banks)} <span className="ml-1 font-mono text-[10px] opacity-70">{countByBank.get(b.id) || 0}</span>
           </button>
         ))}
       </div>

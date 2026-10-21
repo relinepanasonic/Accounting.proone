@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { reconcileRecord, quickResolveAndReconcile, unreconcileRecord } from '@/app/actions/reconcile';
 import { createClientRecord } from '@/app/actions/settings';
+import { saveBankStatement, type BankBookLineInput } from '@/app/actions/bank-book';
 import { RupiahInput } from '@/components/ui/RupiahInput';
 
 export interface UnreconciledSystemRecord {
@@ -187,6 +188,15 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bankLines, filterMonth, filterYear, activeFilterTab, recordsList]);
 
+  const [bookNotice, setBookNotice] = useState('');
+  /** Buku Bank: keep every line of the uploaded statement (the page /bank-book), whatever is reconciled already. */
+  const storeInBook = async (fileName: string, all: BankLine[]) => {
+    if (!activeBankId || all.length === 0) return;
+    const input: BankBookLineInput[] = all.map((l) => ({ date: l.date, sourceDestination: l.sourceDestination, transactionDetails: l.transactionDetails, notes: l.notes, rekFrom: l.rekFrom, amount: l.amount }));
+    const res = await saveBankStatement(activeBankId, fileName, input);
+    setBookNotice(res.success ? `Buku Bank: ${res.saved} new line(s) stored${res.skipped ? `, ${res.skipped} already there` : ''}.` : `Buku Bank: not stored. ${res.error || ''}`);
+  };
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -208,6 +218,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
           }
           if (result.data && Array.isArray(result.data)) {
             const reconciledSet = new Set(reconciledRefs);
+            void storeInBook(file.name, result.data.map((t: any, i: number) => ({ id: `pdf-${i}`, date: t.date, sourceDestination: t.sourceDestination || '', transactionDetails: t.transactionDetails || '', notes: t.notes || '', rekFrom: t.rekFrom || '', amount: Number(t.amount) })));
             const parsed: BankLine[] = result.data
               .filter((t: any) => !reconciledSet.has(`BANK-REF:${t.date}:${t.amount}:${t.sourceDestination}`))
               .map((t: any, i: number) => ({
@@ -243,6 +254,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
         const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
         const reconciledSet = new Set(reconciledRefs);
         const parsed: BankLine[] = [];
+        const everyLine: BankLine[] = [];
         for (let i = 1; i < lines.length; i++) {
           const cols = lines[i].split(',');
           if (cols.length < 3) continue;
@@ -251,10 +263,12 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
           const rawAmt = cols[2]?.trim().replace(/[^0-9.-]/g, '');
           const amount = parseFloat(rawAmt);
           if (!date || isNaN(amount)) continue;
+          everyLine.push({ id: `csv-${i}`, date, sourceDestination, transactionDetails: cols[3]?.trim() || '', notes: cols[4]?.trim() || '', rekFrom: cols[5]?.trim() || '', amount });
           if (reconciledSet.has(`BANK-REF:${date}:${amount}:${sourceDestination}`)) continue;
           parsed.push({ id: `csv-${i}-${date}-${amount}`, date, sourceDestination, transactionDetails: cols[3]?.trim() || '', notes: cols[4]?.trim() || '', rekFrom: cols[5]?.trim() || '', amount });
         }
         
+        void storeInBook(file.name, everyLine);
         if (parsed.length === 0) {
           alert('All items in this statement have already been reconciled and filtered out!');
           return;
@@ -502,6 +516,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
             <input type="file" accept=".csv,.pdf" className="hidden" onChange={handleFileUpload} disabled={isPending} />
             {isPending && <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center"><div className="w-4 h-4 border-2 border-[#f5d77f] border-t-transparent rounded-full animate-spin" /></div>}
           </label>
+          {bookNotice && <span className="text-[11px] text-zinc-400">{bookNotice}</span>}
         </div>
       </div>
 

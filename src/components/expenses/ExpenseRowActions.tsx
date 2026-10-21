@@ -9,9 +9,11 @@ import { toggleExpenseStatus, deleteExpense } from '@/app/actions/expenses';
 interface ExpenseRowActionsProps {
   id: string;
   status: string;
+  /** Shown right after the PAID badge (the bank reconcile light). */
+  afterPaid?: React.ReactNode;
 }
 
-export function ExpenseRowActions({ id, status }: ExpenseRowActionsProps) {
+export function ExpenseRowActions({ id, status, afterPaid }: ExpenseRowActionsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const isPaid = status.toLowerCase() === 'paid';
@@ -46,11 +48,11 @@ export function ExpenseRowActions({ id, status }: ExpenseRowActionsProps) {
   };
 
   return (
-    <div className="inline-flex items-center gap-2">
+    <div className="inline-flex items-center gap-1.5">
       <button
         onClick={handleToggle}
         disabled={isPending}
-        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-mono uppercase transition-all duration-200 ${
+        className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-mono uppercase transition-all duration-200 ${
           isPaid
             ? 'bg-[#d4af37]/15 border border-[#d4af37]/40 text-[#f5d77f] hover:bg-[#d4af37]/25 shadow-[0_0_12px_rgba(212,175,55,0.25)]'
             : 'bg-zinc-900 border border-[#d4af37]/30 text-[#d4af37] hover:border-[#f5d77f]'
@@ -68,6 +70,7 @@ export function ExpenseRowActions({ id, status }: ExpenseRowActionsProps) {
           </>
         )}
       </button>
+      {afterPaid}
       <Link
         href={`/expenses/${id}/edit`}
         title="Edit Expense"

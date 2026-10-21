@@ -26,7 +26,7 @@ async function ExpensesTable() {
       // Real operating expenses use codes starting with '5' (COGS) or '6' (Opex)
       .not('category', 'ilike', '1%')
       .order('transaction_date', { ascending: false });
-  const base = 'id, due_date, transaction_date, description, category, amount, reconciled';
+  const base = 'id, due_date, transaction_date, description, category, amount, reconciled, bank_reference';
   let { data: records, error } = (await ownQuery(`${base}, assigned_workspace_id`)) as any;
   if (error) ({ data: records, error } = (await ownQuery(base)) as any);
   if (error) {
@@ -68,6 +68,8 @@ async function ExpensesTable() {
     category: r.category || '6000 - Operating Expenses',
     amount: Number(r.amount || 0),
     status: r.reconciled ? 'paid' : 'pending',
+    // Green light: reconciled with a bank line in Bank Reconcile. Paid by PT: that reconcile lives in PT only, so no light here.
+    bankMatched: !readOnly && Boolean(r.reconciled && String(r.bank_reference || '').startsWith('BANK-REF:')),
     assignedWorkspaceId: readOnly ? null : r.assigned_workspace_id ?? null,
     readOnly,
   };

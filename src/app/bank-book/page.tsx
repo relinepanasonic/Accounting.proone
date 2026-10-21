@@ -7,7 +7,7 @@ import { BankBookTable, type BankBookLine, type BankBookAccount } from '@/compon
 
 export const dynamic = 'force-dynamic';
 
-async function BankBookCore() {
+async function BankBookCore({ focusTx }: { focusTx: string }) {
   const supabase = await createClient();
   const { activeWorkspaceId, userEmail } = await getAuthenticatedWorkspaceContext(supabase);
 
@@ -61,10 +61,11 @@ async function BankBookCore() {
   }));
   const banks: BankBookAccount[] = (accounts || []).map((a: any) => ({ id: a.id, bankName: a.bank_name || 'Bank', accountNumber: a.account_number || '', accountName: a.account_name || '' }));
 
-  return <BankBookTable lines={lines} banks={banks} migrationMissing={migrationMissing} canEdit={canEditBankBook(userEmail)} />;
+  return <BankBookTable lines={lines} banks={banks} migrationMissing={migrationMissing} canEdit={canEditBankBook(userEmail)} focusTx={focusTx} />;
 }
 
-export default function BankBookPage() {
+export default async function BankBookPage({ searchParams }: { searchParams: Promise<{ tx?: string }> }) {
+  const focusTx = String((await searchParams)?.tx || '').slice(0, 64);
   return (
     <div className="p-4 lg:p-8 space-y-6">
       <div className="flex items-center gap-4">
@@ -75,7 +76,7 @@ export default function BankBookPage() {
         </div>
       </div>
       <Suspense fallback={<div className="gold-glass-panel rounded-2xl h-64 animate-pulse" />}>
-        <BankBookCore />
+        <BankBookCore focusTx={focusTx} />
       </Suspense>
     </div>
   );

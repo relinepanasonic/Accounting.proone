@@ -37,6 +37,16 @@ function ExpenseWorkspaceSelect({ id, current, workspaces }: { id: string; curre
   );
 }
 
+/** After PAID: green = reconciled with the bank (click: the line in Buku Bank), grey = not reconciled. */
+function BankLight({ matched, id }: { matched: boolean; id: string }) {
+  if (!matched) return <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-zinc-600" title="Not reconciled with the bank" />;
+  return (
+    <Link href={`/bank-book?tx=${id}`} title="Reconciled with the bank. Click to see the line in Buku Bank" className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full hover:bg-emerald-500/20">
+      <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+    </Link>
+  );
+}
+
 export interface ExpenseRecord {
   id: string;
   date: string;
@@ -49,6 +59,8 @@ export interface ExpenseRecord {
   assignedWorkspaceId?: string | null;
   /** Paid by PT Pintu for this workspace: shown here, changed only in PT Pintu. */
   readOnly?: boolean;
+  /** Reconciled with a bank line in Bank Reconcile. */
+  bankMatched?: boolean;
 }
 
 export function ExpenseClientTable({ initialRecords, workspaces, fromPtLabel = 'PT Pintu' }: { initialRecords: ExpenseRecord[]; workspaces?: { id: string; name: string }[]; fromPtLabel?: string }) {
@@ -239,13 +251,13 @@ export function ExpenseClientTable({ initialRecords, workspaces, fromPtLabel = '
         <table className="w-full text-left border-collapse text-xs font-mono">
           <thead>
             <tr className="border-b border-zinc-800 text-zinc-400 uppercase text-[10px] font-sans whitespace-nowrap bg-zinc-900/40">
-              <th className="py-4 px-4 font-bold">Due Date</th>
-              <th className="py-4 px-4 font-bold">Vendor / Payee</th>
-              <th className="py-4 px-4 font-bold w-1/3">Notes / Remarks</th>
-              <th className="py-4 px-4 font-bold max-w-[200px]">Category</th>
-              <th className="py-4 px-4 font-bold text-right">Amount Owed</th>
-              {workspaces && <th className="py-4 px-4 font-bold">Company</th>}
-              <th className="py-4 px-4 font-bold text-center">Action</th>
+              <th className="py-3 px-2.5 font-bold">Due Date</th>
+              <th className="py-3 px-2.5 font-bold">Vendor / Payee</th>
+              <th className="py-3 px-2.5 font-bold w-1/3">Notes / Remarks</th>
+              <th className="py-3 px-2.5 font-bold max-w-[200px]">Category</th>
+              <th className="py-3 px-2.5 font-bold text-right">Amount Owed</th>
+              {workspaces && <th className="py-3 px-2.5 font-bold">Company</th>}
+              <th className="py-3 px-2.5 font-bold text-center">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800/40">
@@ -258,37 +270,37 @@ export function ExpenseClientTable({ initialRecords, workspaces, fromPtLabel = '
             ) : (
               filteredRecords.map((item) => (
                 <tr key={item.id} className="hover:bg-zinc-800/30 transition-colors group">
-                  <td className="py-3.5 px-4 text-zinc-400 whitespace-nowrap">
+                  <td className="py-3 px-2.5 text-zinc-400 whitespace-nowrap">
                     {formatIndoDate(item.date)}
                   </td>
-                  <td className="py-3.5 px-4 font-sans font-semibold text-zinc-200 group-hover:text-[#f5d77f] transition-colors whitespace-nowrap">
+                  <td className="py-3 px-2.5 font-sans font-semibold text-zinc-200 group-hover:text-[#f5d77f] transition-colors whitespace-nowrap">
                     <div className="max-w-[150px] sm:max-w-[220px] truncate" title={item.vendor}>
                       {item.vendor}
                     </div>
                     {item.readOnly && <div className="mt-0.5 text-[9px] font-bold uppercase tracking-wider text-sky-300">Paid by {fromPtLabel}</div>}
                   </td>
-                  <td className="py-3.5 px-4 font-sans text-zinc-500 group-hover:text-zinc-300 transition-colors">
+                  <td className="py-3 px-2.5 font-sans text-zinc-500 group-hover:text-zinc-300 transition-colors">
                     <div className="truncate whitespace-normal line-clamp-2 max-h-10 leading-tight" title={item.notes}>
                       {item.notes}
                     </div>
                   </td>
-                  <td className="py-3.5 px-4 text-zinc-500 font-sans whitespace-nowrap">
+                  <td className="py-3 px-2.5 text-zinc-500 font-sans whitespace-nowrap">
                     <div className="max-w-[150px] sm:max-w-[200px] truncate" title={item.category}>
                       {item.category}
                     </div>
                   </td>
-                  <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                  <td className="py-3 px-2.5 text-right whitespace-nowrap">
                     <span className="text-[13px] font-extrabold text-[#f5d77f]">
                       Rp {item.amount.toLocaleString('id-ID')}
                     </span>
                   </td>
                   {workspaces && (
-                    <td className="py-3.5 px-4 font-sans">
+                    <td className="py-3 px-2.5 font-sans">
                       <ExpenseWorkspaceSelect id={item.id} current={item.assignedWorkspaceId} workspaces={workspaces} />
                     </td>
                   )}
-                  <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                    {item.readOnly ? <span className="text-[10px] uppercase tracking-wider text-zinc-600">Read only</span> : <ExpenseRowActions id={item.id} status={item.status} />}
+                  <td className="py-3 px-2.5 text-center whitespace-nowrap">
+                    {item.readOnly ? <span className="text-[10px] uppercase tracking-wider text-zinc-600">Read only</span> : <ExpenseRowActions id={item.id} status={item.status} afterPaid={<BankLight matched={Boolean(item.bankMatched)} id={item.id} />} />}
                   </td>
                 </tr>
               ))

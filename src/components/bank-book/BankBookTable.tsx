@@ -31,10 +31,16 @@ function SortArrows({ dir }: { dir: 'asc' | 'desc' | null }) {
   );
 }
 
+const isOpeningRow = (l: BankBookLine) => l.amount === 0 && l.counterparty === 'Opening balance';
+/** The Details text of a row; the opening-balance row says what its saldo is. */
+const detailsText = (l: BankBookLine) =>
+  isOpeningRow(l) ? `Last saldo ${l.balance !== null ? rp(l.balance) : '-'} (${dmy(l.date)})` : [l.details, l.rekFrom, l.notes].filter(Boolean).join(' · ') || '-';
+
 type SortKey = 'date' | 'bank' | 'counterparty' | 'details' | 'in' | 'out' | 'status';
 
 /** Buku Bank: all stored statement lines, filtered by bank account, year, month, in/out and status, sortable from the header. */
-export function BankBookTable({ lines: serverLines, banks, migrationMissing, canEdit = false }: { lines: BankBookLine[]; banks: BankBookAccount[]; migrationMissing: boolean; canEdit?: boolean }) {
+export function BankBookTable({ lines: serverLines, banks, migrationMissing, canEdit = false, focusTx = '' }: { lines: BankBookLine[]; banks: BankBookAccount[]; migrationMissing: boolean; canEdit?: boolean; focusTx?: string }) {
+  const [focus, setFocus] = useState(focusTx);
   const [lines, setLines] = useState(serverLines);
   useEffect(() => setLines(serverLines), [serverLines]);
   const [editing, setEditing] = useState<string | null>(null);
@@ -69,6 +75,7 @@ export function BankBookTable({ lines: serverLines, banks, migrationMissing, can
     const q = search.trim().toLowerCase();
     const digits = q.replace(/[^\d]/g, '');
     return lines.filter((l) => {
+      if (focus && l.transactionId !== focus && l.invoiceId !== focus) return false;
       if (bank && l.bankAccountId !== bank) return false;
       if (year && !l.date.startsWith(year)) return false;
       if (month && l.date.slice(5, 7) !== month) return false;
@@ -78,7 +85,7 @@ export function BankBookTable({ lines: serverLines, banks, migrationMissing, can
       if (!q) return true;
       return `${l.counterparty} ${l.details} ${l.rekFrom} ${l.notes}`.toLowerCase().includes(q) || (digits.length >= 3 && String(Math.round(Math.abs(l.amount))).includes(digits));
     });
-  }, [lines, bank, year, month, dir, status, search]);
+  }, [lines, bank, year, month, dir, status, search, focus]);
 
   const sorted = useMemo(() => {
     const val = (l: BankBookLine): string | number => {
@@ -202,6 +209,13 @@ export function BankBookTable({ lines: serverLines, banks, migrationMissing, can
         </div>
       )}
 
+      {focus && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 text-xs text-emerald-300">
+          <span>{filtered.length > 0 ? 'Showing the bank line connected to that expense.' : 'No bank line in Buku Bank is connected to that expense yet. Upload that bank statement here, then press "Check reconcile links".'}</span>
+          <button onClick={() => setFocus('')} className="rounded-lg border border-emerald-500/40 px-3 py-1.5 font-bold hover:bg-emerald-500/10">Show all lines</button>
+        </div>
+      )}
+
       {/* Bank filter */}
       <div className="flex flex-wrap items-center gap-2">
         <button onClick={() => reflow(setBank)('')} className={`rounded-full border px-4 py-1.5 text-xs font-bold ${bank === '' ? 'border-[#d4af37] bg-[#d4af37]/15 text-[#f5d77f]' : 'border-zinc-700 text-zinc-400 hover:border-zinc-500'}`}>
@@ -284,21 +298,20 @@ export function BankBookTable({ lines: serverLines, banks, migrationMissing, can
               )}
               {sorted.slice(0, shown).map((l) => editing === l.id ? (
                 <tr key={l.id} className="bg-[#d4af37]/5">
-                  <td className="px-2 py-2"><input type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} className={`${field} w-[128px] px-2`} /></td>
-                  <td className="whitespace-nowrap px-2 py-2 text-zinc-400">{bankName(l.bankAccountId) || '-'}</td>
-                  <td className="px-2 py-2"><input value={draft.counterparty} onChange={(e) => setDraft({ ...draft, counterparty: e.target.value })} className={`${field} w-full min-w-0`} /></td>
-                  <td className="space-y-1 px-2 py-2">
-                    <input value={draft.details} onChange={(e) => setDraft({ ...draft, details: e.target.value })} placeholder="Details" className={`${field} w-full min-w-0`} />
-                    <input value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} placeholder="Notes" className={`${field} w-full`} />
-                  </td>
-                  <td className="px-2 py-2 text-right" colSpan={2}>
-                    <input value={draft.amount} onChange={(e) => setDraft({ ...draft, amount: e.target.value })} inputMode="decimal" title="Money in is positive, money out is negative" className={`${field} w-[120px] text-right font-mono`} />
-                    <div className="mt-1 text-[10px] text-zinc-500">in = +, out = -</div>
-                  </td>
-                  <td className="px-2 py-2">{rowError && <span className="text-[11px] text-red-400">{rowError}</span>}</td>
-                  <td className="whitespace-nowrap px-2 py-2 text-right">
-                    <button onClick={() => saveEdit(l.id)} disabled={saving} className="mr-1 rounded-lg border border-emerald-500/40 p-1.5 text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50" title="Save"><Check className="h-3.5 w-3.5" /></button>
-                    <button onClick={() => { setEditing(null); setRowError(''); }} className="rounded-lg border border-zinc-700 p-1.5 text-zinc-400 hover:bg-zinc-800" title="Cancel"><X className="h-3.5 w-3.5" /></button>
+                  <td colSpan={canEdit ? 8 : 7} className="px-4 py-3">
+                    <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500">Editing · {bankName(l.bankAccountId) || '-'}</div>
+                    <div className="flex flex-wrap items-end gap-2">
+                      <label className="text-[10px] text-zinc-500">Date<input type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} className={`${field} mt-1 block w-[140px] px-2`} /></label>
+                      <label className="min-w-[180px] flex-1 text-[10px] text-zinc-500">Source / Destination<input value={draft.counterparty} onChange={(e) => setDraft({ ...draft, counterparty: e.target.value })} className={`${field} mt-1 block w-full`} /></label>
+                      <label className="min-w-[160px] flex-1 text-[10px] text-zinc-500">Details<input value={draft.details} onChange={(e) => setDraft({ ...draft, details: e.target.value })} className={`${field} mt-1 block w-full`} /></label>
+                      <label className="min-w-[160px] flex-1 text-[10px] text-zinc-500">Notes<input value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} className={`${field} mt-1 block w-full`} /></label>
+                      <label className="text-[10px] text-zinc-500">Amount (in +, out -)<input value={draft.amount} onChange={(e) => setDraft({ ...draft, amount: e.target.value })} inputMode="decimal" className={`${field} mt-1 block w-[130px] text-right font-mono`} /></label>
+                      <div className="flex gap-1">
+                        <button onClick={() => saveEdit(l.id)} disabled={saving} className="rounded-lg border border-emerald-500/40 p-2 text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50" title="Save"><Check className="h-4 w-4" /></button>
+                        <button onClick={() => { setEditing(null); setRowError(''); }} className="rounded-lg border border-zinc-700 p-2 text-zinc-400 hover:bg-zinc-800" title="Cancel"><X className="h-4 w-4" /></button>
+                      </div>
+                    </div>
+                    {rowError && <div className="mt-2 text-[11px] text-red-400">{rowError}</div>}
                   </td>
                 </tr>
               ) : (
@@ -306,12 +319,12 @@ export function BankBookTable({ lines: serverLines, banks, migrationMissing, can
                   <td className="whitespace-nowrap px-4 py-3 font-mono text-zinc-300">{dmy(l.date)}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-zinc-400">{bankName(l.bankAccountId) || '-'}</td>
                   <td className="max-w-[260px] truncate px-4 py-3 font-semibold text-zinc-100" title={l.counterparty}>{l.counterparty || '-'}</td>
-                  <td className="max-w-[300px] truncate px-4 py-3 text-zinc-500" title={[l.details, l.rekFrom, l.notes].filter(Boolean).join(' · ')}>{[l.details, l.rekFrom, l.notes].filter(Boolean).join(' · ') || '-'}</td>
+                  <td className="max-w-[300px] truncate px-4 py-3 text-zinc-500" title={detailsText(l)}>{detailsText(l)}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-right font-mono text-emerald-400">{l.amount > 0 ? rp(l.amount) : ''}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-right font-mono text-red-400">{l.amount < 0 ? rp(l.amount) : ''}</td>
                   <td className="px-4 py-3">
-                    {l.amount === 0 && l.counterparty === 'Opening balance' ? (
-                      <span className="rounded-full border border-sky-500/30 px-2 py-0.5 text-[10px] font-bold uppercase text-sky-400" title={l.balance !== null ? `Saldo ${rp(l.balance)}` : ''}>saldo{l.balance !== null ? ` ${rp(l.balance)}` : ''}</span>
+                    {isOpeningRow(l) ? (
+                      <span className="text-zinc-700">-</span>
                     ) : l.transactionId || l.invoiceId ? (
                       <button onClick={() => openConnection(l)} className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-400 hover:bg-emerald-500/10" title="See what it is connected to">
                         <Link2 className="h-3 w-3" /> reconciled

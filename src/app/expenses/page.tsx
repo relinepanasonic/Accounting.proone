@@ -68,6 +68,8 @@ async function ExpensesTable() {
     category: r.category || '6000 - Operating Expenses',
     amount: Number(r.amount || 0),
     status: r.reconciled ? 'paid' : 'pending',
+    assignedWorkspaceId: readOnly ? null : r.assigned_workspace_id ?? null,
+    readOnly,
   };
   };
 

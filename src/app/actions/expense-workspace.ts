@@ -1,6 +1,5 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext, FINANCE_ROLES } from '@/lib/auth/workspace-context';
 import { PT_WORKSPACE_ID } from '@/lib/workspaces/known';
@@ -18,9 +17,9 @@ export async function updateExpenseAssignment(transactionId: string, assignedWor
       if (assignedWorkspaceId === PT_WORKSPACE_ID || !(await assignableWorkspaces(ctx)).some((w) => w.id === assignedWorkspaceId)) return { success: false, error: 'You cannot assign an expense to that workspace.' };
       target = assignedWorkspaceId;
     }
-    const { error } = await supabase.from('transactions').update({ assigned_workspace_id: target }).eq('id', transactionId).eq('workspace_id', ctx.activeWorkspaceId);
+    const { data: changed, error } = await supabase.from('transactions').update({ assigned_workspace_id: target }).eq('id', transactionId).eq('workspace_id', ctx.activeWorkspaceId).select('id');
     if (error) return { success: false, error: error.code === '42703' || /assigned_workspace_id/.test(error.message) ? 'Run supabase/migrations/20261012_transaction_workspace.sql in Supabase first.' : error.message };
-    revalidatePath('/expenses');
+    if (!changed || changed.length === 0) return { success: false, error: 'Nothing was changed (expense not found or not allowed).' };
     return { success: true };
   } catch (e: any) {
     return { success: false, error: e?.message || 'Could not assign.' };

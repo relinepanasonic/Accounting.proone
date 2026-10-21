@@ -1,77 +1,64 @@
 // Server-side only (uses a secret key): import it from server components / actions, never from client components.
-// Upload log of dashboard.profesoronline.id (a separate app). Read through its own API, never its database.
-// Env (server only): DASHBOARD_API_URL (default https://dashboard.profesoronline.id) and DASHBOARD_API_KEY.
-// Contract: see DASHBOARD_UPLOAD_LOG_API_PROMPT.md.
+// Upload logs of dashboard.profesoronline.id and reline.profesoronline.id (separate apps). Read through their own API, never their database.
+// Env (server only): DASHBOARD_API_URL / DASHBOARD_API_KEY and RELINE_API_URL / RELINE_API_KEY.
+// Contracts: DASHBOARD_UPLOAD_LOG_API_PROMPT.md and RELINE_UPLOAD_LOG_API_PROMPT.md.
 
-export const LOG_TIMEZONE = 'Asia/Jakarta';
+import { jakartaDay, type DashboardAdmin, type DashboardUpload, type DashboardUploadLogResult } from './upload-log-shared';
 
-export interface DashboardUpload {
-  id: string;
-  uploadedAt: string; // ISO timestamp
-  type: string; // "Ads Performance" | "Store Performance"
-  admin: string;
-  owner?: string;
-  store?: string;
-  month?: string;
-  week?: string;
-  workspace?: string; // Reline: which workspace the upload went to
-  files?: string[];
-  tags?: string[];
-}
+export * from './upload-log-shared';
 
-export interface DashboardAdmin {
-  name: string;
-  stores?: string[];
-  workspaces?: string[];
-}
-
-export interface DashboardUploadLog {
-  ok: true;
-  days: string[]; // YYYY-MM-DD in Asia/Jakarta, newest first
-  admins: DashboardAdmin[];
-  uploads: DashboardUpload[];
-}
-
-export type DashboardUploadLogResult = DashboardUploadLog | { ok: false; error: string };
-
-/** YYYY-MM-DD for a date in Jakarta time. */
-export function jakartaDay(d: Date): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: LOG_TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
-}
+/** The feed answers at most 60 days per call. */
+const MAX_RANGE_DAYS = 60;
+/** The log is not real time; a short cache keeps the Admin page fast. */
+const CACHE_SECONDS = 120;
 
 export const getDashboardUploadLog = (days = 7) =>
   fetchUploadLog(days, 'DASHBOARD_API_KEY', process.env.DASHBOARD_API_KEY, process.env.DASHBOARD_API_URL || 'https://dashboard.profesoronline.id');
 
-/** Reline (reline.profesoronline.id): same contract, see RELINE_UPLOAD_LOG_API_PROMPT.md. Env: RELINE_API_URL, RELINE_API_KEY. */
 export const getRelineUploadLog = (days = 7) =>
   fetchUploadLog(days, 'RELINE_API_KEY', process.env.RELINE_API_KEY, process.env.RELINE_API_URL || 'https://reline.profesoronline.id');
 
-async function fetchUploadLog(days: number, keyName: string, apiKey: string | undefined, baseUrl: string): Promise<DashboardUploadLogResult> {
+const addDays = (day: string, n: number) => jakartaDay(new Date(new Date(`${day}T12:00:00+07:00`).getTime() + n * 86400000));
+
+export async function fetchUploadLog(days: number, keyName: string, apiKey: string | undefined, baseUrl: string): Promise<DashboardUploadLogResult> {
   if (!apiKey) return { ok: false, error: `${keyName} is not set.` };
 
   const base = baseUrl.replace(/\/$/, '');
   const dayList = Array.from({ length: days }).map((_, i) => jakartaDay(new Date(Date.now() - i * 86400000)));
-  const from = dayList[dayList.length - 1];
-  const to = dayList[0];
+
+  // Ranges longer than 60 days are asked for in several calls, oldest chunk first.
+  const chunks: Array<{ from: string; to: string }> = [];
+  const oldest = dayList[dayList.length - 1];
+  for (let from = oldest; from <= dayList[0]; ) {
+    const to = addDays(from, MAX_RANGE_DAYS - 1);
+    chunks.push({ from, to: to > dayList[0] ? dayList[0] : to });
+    from = addDays(from, MAX_RANGE_DAYS);
+  }
 
   try {
-    const res = await fetch(`${base}/api/erp/upload-log?from=${from}&to=${to}`, {
-      headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
-      cache: 'no-store',
-      redirect: 'manual',
-      signal: AbortSignal.timeout(10000),
-    });
-    // A redirect means the dashboard's login middleware caught the request (endpoint missing or not exempted).
-    if (res.status >= 300 && res.status < 400) {
-      return { ok: false, error: 'The API redirected to its login page: /api/erp/* must skip the login middleware (or the endpoint does not exist yet).' };
-    }
-    if (!res.ok) return { ok: false, error: `Dashboard API answered ${res.status}.` };
+    const uploads: DashboardUpload[] = [];
+    const admins = new Map<string, DashboardAdmin>();
+    for (const c of chunks) {
+      const res = await fetch(`${base}/api/erp/upload-log?from=${c.from}&to=${c.to}`, {
+        headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
+        next: { revalidate: CACHE_SECONDS },
+        redirect: 'manual',
+        signal: AbortSignal.timeout(10000),
+      });
+      // A redirect means the app's login middleware caught the request (endpoint missing or not exempted).
+      if (res.status >= 300 && res.status < 400) {
+        return { ok: false, error: 'The API redirected to its login page: /api/erp/* must skip the login middleware (or the endpoint does not exist yet).' };
+      }
+      if (res.status === 401) return { ok: false, error: `The API refused the key (401): ${keyName} here must equal ERP_API_KEY there.` };
+      if (res.status === 400) return { ok: false, error: 'The API rejected the dates (400).' };
+      if (!res.ok) return { ok: false, error: `The API answered ${res.status}.` };
 
-    const json = await res.json();
-    const uploads: DashboardUpload[] = Array.isArray(json?.uploads) ? json.uploads : [];
-    const admins: DashboardAdmin[] = Array.isArray(json?.admins) ? json.admins : [];
-    return { ok: true, days: dayList, admins, uploads };
+      const json = await res.json();
+      if (Array.isArray(json?.uploads)) uploads.push(...json.uploads);
+      if (Array.isArray(json?.admins)) for (const a of json.admins as DashboardAdmin[]) if (!admins.has(a.name)) admins.set(a.name, a);
+    }
+    return { ok: true, days: dayList, admins: Array.from(admins.values()), uploads };
   } catch (err: any) {
-    return { ok: false, error: err?.name === 'TimeoutError' ? 'Dashboard API timed out.' : 'Could not reach the dashboard API.' };
+    return { ok: false, error: err?.name === 'TimeoutError' ? 'The API timed out.' : 'Could not reach the API.' };
   }
 }

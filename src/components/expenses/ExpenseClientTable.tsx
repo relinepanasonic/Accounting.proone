@@ -7,6 +7,7 @@ import { ExpenseRowActions } from './ExpenseRowActions';
 import { formatIndoDate } from '@/lib/utils';
 import { updateExpenseAssignment } from '@/app/actions/expense-workspace';
 import { workspaceCode } from '@/lib/workspaces/known';
+import { SortArrows } from '@/components/ui/SortArrows';
 
 /** PT Pintu: which workspace this expense belongs to. */
 function ExpenseWorkspaceSelect({ id, current, workspaces }: { id: string; current: string | null | undefined; workspaces: { id: string; name: string }[] }) {
@@ -104,15 +105,27 @@ export function ExpenseClientTable({ initialRecords, workspaces, fromPtLabel = '
     return Array.from(m).sort((a, b) => b.localeCompare(a));
   }, [initialRecords]);
 
+  const [sort, setSort] = useState<{ key: 'date' | 'vendor' | 'notes' | 'category' | 'amount' | 'company' | 'status'; asc: boolean }>({ key: 'date', asc: false });
+  const toggleSort = (key: typeof sort.key) => setSort((p) => (p.key === key ? { key, asc: !p.asc } : { key, asc: key !== 'date' && key !== 'amount' }));
+  const companyOf = (r: ExpenseRecord) => (r.assignedWorkspaceId ? workspaceCode(r.assignedWorkspaceId, workspaces?.find((w) => w.id === r.assignedWorkspaceId)?.name) : 'PLIG');
+
   const filteredRecords = useMemo(() => {
-    return initialRecords.filter((r) => {
+    const filtered = initialRecords.filter((r) => {
             if (searchPayee && !r.vendor.toLowerCase().includes(searchPayee.toLowerCase())) return false;
       if (searchNotes && !r.notes.toLowerCase().includes(searchNotes.toLowerCase())) return false;
       if (filterMonth && !r.date.startsWith(filterMonth)) return false;
       if (filterCategory && r.category !== filterCategory) return false;
       return true;
     });
-  }, [initialRecords, searchPayee, filterMonth, filterCategory]);
+    const val = (r: ExpenseRecord): string | number =>
+      sort.key === 'date' ? String(r.date) : sort.key === 'vendor' ? r.vendor.toLowerCase() : sort.key === 'notes' ? r.notes.toLowerCase()
+        : sort.key === 'category' ? r.category.toLowerCase() : sort.key === 'amount' ? r.amount : sort.key === 'company' ? companyOf(r).toLowerCase() : r.status;
+    return [...filtered].sort((a, b) => {
+      const x = val(a), y = val(b);
+      return (typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y))) * (sort.asc ? 1 : -1);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialRecords, searchPayee, searchNotes, filterMonth, filterCategory, sort, workspaces]);
 
   if (initialRecords.length === 0) {
     return (
@@ -251,13 +264,13 @@ export function ExpenseClientTable({ initialRecords, workspaces, fromPtLabel = '
         <table className="w-full text-left border-collapse text-xs font-mono">
           <thead>
             <tr className="border-b border-zinc-800 text-zinc-400 uppercase text-[10px] font-sans whitespace-nowrap bg-zinc-900/40">
-              <th className="py-3 px-2.5 font-bold">Due Date</th>
-              <th className="py-3 px-2.5 font-bold">Vendor / Payee</th>
-              <th className="py-3 px-2.5 font-bold w-1/3">Notes / Remarks</th>
-              <th className="py-3 px-2.5 font-bold max-w-[200px]">Category</th>
-              <th className="py-3 px-2.5 font-bold text-right">Amount Owed</th>
-              {workspaces && <th className="py-3 px-2.5 font-bold">Company</th>}
-              <th className="py-3 px-2.5 font-bold text-center">Action</th>
+              <th className="py-3 px-2.5 font-bold "><button onClick={() => toggleSort('date')} className={`inline-flex items-center gap-1.5 uppercase hover:text-zinc-200 ${sort.key === 'date' ? 'text-[#f5d77f]' : ''}`}>Due Date<SortArrows dir={sort.key === 'date' ? (sort.asc ? 'asc' : 'desc') : null} /></button></th>
+              <th className="py-3 px-2.5 font-bold "><button onClick={() => toggleSort('vendor')} className={`inline-flex items-center gap-1.5 uppercase hover:text-zinc-200 ${sort.key === 'vendor' ? 'text-[#f5d77f]' : ''}`}>Vendor / Payee<SortArrows dir={sort.key === 'vendor' ? (sort.asc ? 'asc' : 'desc') : null} /></button></th>
+              <th className="py-3 px-2.5 font-bold w-1/3"><button onClick={() => toggleSort('notes')} className={`inline-flex items-center gap-1.5 uppercase hover:text-zinc-200 ${sort.key === 'notes' ? 'text-[#f5d77f]' : ''}`}>Notes / Remarks<SortArrows dir={sort.key === 'notes' ? (sort.asc ? 'asc' : 'desc') : null} /></button></th>
+              <th className="py-3 px-2.5 font-bold max-w-[200px]"><button onClick={() => toggleSort('category')} className={`inline-flex items-center gap-1.5 uppercase hover:text-zinc-200 ${sort.key === 'category' ? 'text-[#f5d77f]' : ''}`}>Category<SortArrows dir={sort.key === 'category' ? (sort.asc ? 'asc' : 'desc') : null} /></button></th>
+              <th className="py-3 px-2.5 font-bold text-right"><button onClick={() => toggleSort('amount')} className={`inline-flex items-center gap-1.5 uppercase hover:text-zinc-200 ${sort.key === 'amount' ? 'text-[#f5d77f]' : ''}`}>Amount Owed<SortArrows dir={sort.key === 'amount' ? (sort.asc ? 'asc' : 'desc') : null} /></button></th>
+              {workspaces && <th className="py-3 px-2.5 font-bold "><button onClick={() => toggleSort('company')} className={`inline-flex items-center gap-1.5 uppercase hover:text-zinc-200 ${sort.key === 'company' ? 'text-[#f5d77f]' : ''}`}>Company<SortArrows dir={sort.key === 'company' ? (sort.asc ? 'asc' : 'desc') : null} /></button></th>}
+              <th className="py-3 px-2.5 font-bold text-center"><button onClick={() => toggleSort('status')} className={`inline-flex items-center gap-1.5 uppercase hover:text-zinc-200 ${sort.key === 'status' ? 'text-[#f5d77f]' : ''}`}>Action<SortArrows dir={sort.key === 'status' ? (sort.asc ? 'asc' : 'desc') : null} /></button></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800/40">

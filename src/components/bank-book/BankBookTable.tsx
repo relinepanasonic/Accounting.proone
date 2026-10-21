@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { updateBankLine, deleteBankLine, relinkBankBook, getBankLineConnection, terminateBankLink, type BankLineConnection } from '@/app/actions/bank-book';
 import { BankStatementUpload } from '@/components/bank-book/BankStatementUpload';
+import { SortArrows } from '@/components/ui/SortArrows';
 
 export interface BankBookLine { id: string; bankAccountId: string; date: string; counterparty: string; details: string; rekFrom: string; notes: string; amount: number; status: string; fileName: string; balance: number | null; time: string; transactionId: string | null; invoiceId: string | null }
 export interface BankBookAccount { id: string; bankName: string; accountNumber: string; accountName: string }
@@ -19,17 +20,6 @@ const dmy = (iso: string) => (/^\d{4}-\d{2}-\d{2}/.test(iso) ? `${iso.slice(8, 1
 
 /** Bank name | account number (no account holder). */
 export const bankLabel = (b: BankBookAccount) => (b.accountNumber ? `${b.bankName} | ${b.accountNumber}` : b.bankName);
-
-/** The sort arrow: an up triangle above a down triangle. The direction in use is lit. */
-function SortArrows({ dir }: { dir: 'asc' | 'desc' | null }) {
-  const lit = '#f5d77f', dim = '#5b6f9a';
-  return (
-    <svg width="9" height="14" viewBox="0 0 9 14" aria-hidden="true" className="shrink-0">
-      <path d="M4.5 0.5 L8.5 5.5 L0.5 5.5 Z" fill={dir === 'asc' ? lit : dim} />
-      <path d="M4.5 13.5 L0.5 8.5 L8.5 8.5 Z" fill={dir === 'desc' ? lit : dim} />
-    </svg>
-  );
-}
 
 const isOpeningRow = (l: BankBookLine) => l.amount === 0 && l.counterparty === 'Opening balance';
 /** The Details text of a row; the opening-balance row says what its saldo is. */

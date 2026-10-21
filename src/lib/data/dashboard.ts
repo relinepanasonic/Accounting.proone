@@ -90,6 +90,8 @@ export interface DashboardTelemetryOptions {
    * For PT Pintu: its own books or what it holds for one of the other companies. Empty = everything.
    */
   company?: string | null;
+  /** A ready database client (service role) for callers without a login, such as the machine API. Default: the logged-in user's client. */
+  db?: any;
   /** Pass the page's own context so it is not fetched a second time. */
   ctx?: Awaited<ReturnType<typeof getAuthenticatedWorkspaceContext>>;
 }
@@ -97,7 +99,7 @@ export interface DashboardTelemetryOptions {
 export async function getDashboardTelemetry(options: DashboardTelemetryOptions = {}): Promise<DashboardTelemetry> {
   const { monthFilter = null, workspaceIds, clientName = null } = options;
   const startedAt = Date.now();
-  const supabase = await createClient();
+  const supabase = (options.db || (await createClient())) as Awaited<ReturnType<typeof createClient>>;
   const { activeWorkspaceId, userEmail, availableWorkspaces } = options.ctx || (await getAuthenticatedWorkspaceContext(supabase));
   const mask = clientMask({ userEmail, availableWorkspaces });
 

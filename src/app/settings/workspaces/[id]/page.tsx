@@ -1,4 +1,5 @@
 import React from 'react';
+import { createAdminClient } from '@/lib/api/supabase-admin';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
@@ -27,7 +28,7 @@ export default async function WorkspaceDetailPage({ params }: WorkspaceDetailPag
     supabase.from('workspace_bank_accounts').select('*').eq('workspace_id', targetId).order('is_default', { ascending: false }),
     supabase.from('products').select('*').eq('workspace_id', targetId).order('created_at', { ascending: false }),
     supabase.from('clients').select('id, name').eq('workspace_id', targetId).or('contact_type.eq.client,contact_type.is.null').order('name'),
-    supabase.from('workspace_members').select('user_id, role, profiles(full_name, email)').eq('workspace_id', targetId),
+    fetchStaff(supabase, targetId),
     supabase.from('client_assignments').select('client_id, user_id').eq('workspace_id', targetId)
   ]);
 
@@ -113,4 +114,14 @@ export default async function WorkspaceDetailPage({ params }: WorkspaceDetailPag
       currentUserId={userData.user?.id}
     />
   );
+}
+
+/** The team of a company. There is no foreign key between workspace_members and profiles, so the names come from a second query. */
+async function fetchStaff(supabase: Awaited<ReturnType<typeof createClient>>, workspaceId: string) {
+  const { data: members } = await supabase.from('workspace_members').select('user_id, role').eq('workspace_id', workspaceId);
+  const ids = (members || []).map((m: any) => m.user_id);
+  if (ids.length === 0) return { data: [] as any[] };
+  const { data: profiles } = await createAdminClient().from('profiles').select('id, full_name, email').in('id', ids);
+  const byId = new Map((profiles || []).map((p: any) => [p.id, p]));
+  return { data: (members || []).map((m: any) => ({ ...m, profiles: byId.get(m.user_id) || null })) };
 }

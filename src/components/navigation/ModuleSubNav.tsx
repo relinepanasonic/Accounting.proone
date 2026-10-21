@@ -13,10 +13,10 @@ const MODULES = {
       { name: 'Income', href: '/invoices' },
       { name: 'Tax / Pajak', href: '/invoices/tax' },
       { name: 'Expenses', href: '/expenses' },
+      { name: 'Buku Bank', href: '/bank-book' },
       { name: 'Assets', href: '/assets' },
       { name: 'Activity Ledger', href: '/ledger' },
       { name: 'Bank Reconcile', href: '/reconcile' },
-      { name: 'Buku Bank', href: '/bank-book' },
       { name: 'COA Mapping', href: '/coa' },
       { name: 'Vendors', href: '/vendors' },
     ]

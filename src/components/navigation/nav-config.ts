@@ -31,8 +31,8 @@ export const isHrdPath = (p: string) => p.startsWith('/payroll') || p.startsWith
 export const OPTIMIZING_CHILDREN = [
   // Clients come first: that is where each client is handed to an admin and an advertiser.
   { name: 'Clients', href: '/optimizing/clients', isActive: isOptimizingClientsPath },
-  { name: 'Admin', href: '/productivity/admin', isActive: isOptimizingAdminPath },
   { name: 'Sales', href: '/sales', isActive: isOptimizingSalesPath },
+  { name: 'Admin', href: '/productivity/admin', isActive: isOptimizingAdminPath },
   { name: 'Advertiser', href: '/productivity/advertiser', isActive: isOptimizingAdvertiserPath },
   { name: 'Product Catalog', href: '/optimizing/catalog', isActive: isOptimizingCatalogPath },
 ] as const;
@@ -42,10 +42,10 @@ export const ACCOUNTING_CHILDREN = [
   { name: 'Income', href: '/invoices', isActive: (p: string) => p === '/invoices' || p.startsWith('/invoices/') && !p.startsWith('/invoices/tax') },
   { name: 'Tax / Pajak', href: '/invoices/tax', isActive: (p: string) => p.startsWith('/invoices/tax') },
   { name: 'Expenses', href: '/expenses', isActive: (p: string) => p === '/expenses' || p.startsWith('/expenses/') },
+  { name: 'Buku Bank', href: '/bank-book', isActive: (p: string) => p === '/bank-book' || p.startsWith('/bank-book/') },
   { name: 'Assets', href: '/assets', isActive: (p: string) => p === '/assets' || p.startsWith('/assets/') },
   { name: 'Activity Ledger', href: '/ledger', isActive: (p: string) => p === '/ledger' || p.startsWith('/ledger/') },
   { name: 'Bank Reconcile', href: '/reconcile', isActive: (p: string) => p === '/reconcile' || p.startsWith('/reconcile/') },
-  { name: 'Buku Bank', href: '/bank-book', isActive: (p: string) => p === '/bank-book' || p.startsWith('/bank-book/') },
   { name: 'COA Mapping', href: '/coa', isActive: (p: string) => p === '/coa' || p.startsWith('/coa/') },
   { name: 'Vendors', href: '/vendors', isActive: (p: string) => p === '/vendors' || p.startsWith('/vendors/') },
   { name: 'Settings Hub', href: '/settings', isActive: (p: string) => p === '/settings' || p.startsWith('/settings/') },

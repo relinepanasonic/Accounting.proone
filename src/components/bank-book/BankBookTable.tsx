@@ -4,7 +4,7 @@ import React, { useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import { BankStatementUpload } from '@/components/bank-book/BankStatementUpload';
 
-export interface BankBookLine { id: string; bankAccountId: string; date: string; counterparty: string; details: string; notes: string; amount: number; status: string; fileName: string }
+export interface BankBookLine { id: string; bankAccountId: string; date: string; counterparty: string; details: string; rekFrom: string; notes: string; amount: number; status: string; fileName: string }
 export interface BankBookAccount { id: string; bankName: string; accountNumber: string; accountName: string }
 
 const field = 'rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-600 focus:border-[#d4af37]/60 focus:outline-none';
@@ -44,7 +44,7 @@ export function BankBookTable({ lines, banks, migrationMissing }: { lines: BankB
       if (dir === 'out' && l.amount >= 0) return false;
       if (status && l.status !== status) return false;
       if (!q) return true;
-      return `${l.counterparty} ${l.details} ${l.notes}`.toLowerCase().includes(q) || (digits.length >= 3 && String(Math.round(Math.abs(l.amount))).includes(digits));
+      return `${l.counterparty} ${l.details} ${l.rekFrom} ${l.notes}`.toLowerCase().includes(q) || (digits.length >= 3 && String(Math.round(Math.abs(l.amount))).includes(digits));
     });
   }, [lines, bank, year, month, dir, status, search]);
 
@@ -135,7 +135,7 @@ export function BankBookTable({ lines, banks, migrationMissing }: { lines: BankB
                   <td className="whitespace-nowrap px-4 py-3 font-mono text-zinc-300">{l.date}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-zinc-400">{bankById.get(l.bankAccountId)?.bankName || '-'}</td>
                   <td className="max-w-[260px] truncate px-4 py-3 font-semibold text-zinc-100" title={l.counterparty}>{l.counterparty || '-'}</td>
-                  <td className="max-w-[300px] truncate px-4 py-3 text-zinc-500" title={`${l.details} ${l.notes}`}>{[l.details, l.notes].filter(Boolean).join(' · ') || '-'}</td>
+                  <td className="max-w-[300px] truncate px-4 py-3 text-zinc-500" title={[l.details, l.rekFrom, l.notes].filter(Boolean).join(' · ')}>{[l.details, l.rekFrom, l.notes].filter(Boolean).join(' · ') || '-'}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-right font-mono text-emerald-400">{l.amount > 0 ? rp(l.amount) : ''}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-right font-mono text-red-400">{l.amount < 0 ? rp(l.amount) : ''}</td>
                   <td className="px-4 py-3">

@@ -31,7 +31,7 @@ async function BankBookCore() {
     }
     return { rows: out, error: null };
   };
-  let res = await fetchAll('id, bank_account_id, date, description, counterparty, details, notes, amount, status, file_name');
+  let res = await fetchAll('id, bank_account_id, date, description, counterparty, details, rek_from, notes, amount, status, file_name');
   let migrationMissing = false;
   if (res.error) {
     migrationMissing = true;
@@ -44,6 +44,7 @@ async function BankBookCore() {
     date: String(r.date).slice(0, 10),
     counterparty: r.counterparty || r.description || '',
     details: r.details || '',
+    rekFrom: r.rek_from || '',
     notes: r.notes || '',
     amount: Number(r.amount || 0),
     status: r.status || 'unreconciled',

@@ -1,7 +1,12 @@
 import { BankTransaction, ParseResult } from './types';
 import { parseBankDate, parseIndonesianNumber } from './utils';
+import { parseJagoPockets } from './jago-pockets';
 
 export function parseJago(rawLines: string[]): ParseResult {
+  // The "Pockets Transactions History" layout has its own reader; older statements fall through to the generic one below.
+  const pockets = parseJagoPockets(rawLines);
+  if (pockets.length > 0) return { success: true, data: pockets };
+
   const transactions: BankTransaction[] = [];
   const dateRegex = /(?:^|\s)(\d{2}\s+[A-Za-z]{3}\s+\d{4})/
   

@@ -61,7 +61,7 @@ export default function BankBookPage() {
         <div className="p-3 bg-[#d4af37]/10 rounded-xl text-[#d4af37]"><BookMarked className="w-7 h-7" /></div>
         <div>
           <h1 className="text-2xl font-extrabold text-zinc-100 font-serif">Buku Bank</h1>
-          <p className="text-sm text-zinc-400 mt-1">Every bank statement you upload in Bank Reconcile is kept here, per bank account.</p>
+          <p className="text-sm text-zinc-400 mt-1">Upload your bank statements here (PDF or CSV). Every line is kept, per bank account.</p>
         </div>
       </div>
       <Suspense fallback={<div className="gold-glass-panel rounded-2xl h-64 animate-pulse" />}>

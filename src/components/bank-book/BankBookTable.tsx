@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
+import { BankStatementUpload } from '@/components/bank-book/BankStatementUpload';
 
 export interface BankBookLine { id: string; bankAccountId: string; date: string; counterparty: string; details: string; notes: string; amount: number; status: string; fileName: string }
 export interface BankBookAccount { id: string; bankName: string; accountNumber: string; accountName: string }
@@ -52,6 +53,8 @@ export function BankBookTable({ lines, banks, migrationMissing }: { lines: BankB
 
   return (
     <div className="space-y-5">
+      <BankStatementUpload banks={banks} />
+
       {migrationMissing && (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-300">
           Run <b>supabase/migrations/20261014_bank_book.sql</b> in Supabase once. Until then uploaded statements cannot be stored here.
@@ -123,7 +126,7 @@ export function BankBookTable({ lines, banks, migrationMissing }: { lines: BankB
             </thead>
             <tbody className="divide-y divide-zinc-800/50">
               {filtered.length === 0 && (
-                <tr><td colSpan={8} className="p-10 text-center text-zinc-500">{lines.length === 0 ? 'Nothing stored yet. Upload a bank statement in Bank Reconcile and it appears here.' : 'No line matches these filters.'}</td></tr>
+                <tr><td colSpan={8} className="p-10 text-center text-zinc-500">{lines.length === 0 ? 'Nothing stored yet. Choose the bank account above and upload a statement.' : 'No line matches these filters.'}</td></tr>
               )}
               {filtered.slice(0, shown).map((l) => (
                 <tr key={l.id} className="hover:bg-zinc-900/30">

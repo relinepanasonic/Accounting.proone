@@ -3,6 +3,7 @@
 import crypto from 'crypto';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext, FINANCE_ROLES } from '@/lib/auth/workspace-context';
+import { canEditBankBook } from '@/lib/auth/bank-book-editors';
 
 export interface BankBookLineInput {
   date: string;
@@ -64,5 +65,51 @@ export async function saveBankStatement(bankAccountId: string, fileName: string,
     return { success: true, saved, skipped: rows.length - saved };
   } catch (e: any) {
     return { success: false, error: e?.message || 'Could not save the statement.' };
+  }
+}
+
+export interface BankBookLineEdit { date: string; counterparty: string; details: string; notes: string; amount: number }
+
+/** Edit one stored line. Only the people in lib/auth/bank-book-editors.ts. */
+export async function updateBankLine(id: string, edit: BankBookLineEdit): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = await createClient();
+    const ctx = await getAuthenticatedWorkspaceContext(supabase);
+    if (!canEditBankBook(ctx.userEmail)) return { success: false, error: 'Only the owner and Lucy can edit Buku Bank.' };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(edit.date) || !Number.isFinite(edit.amount)) return { success: false, error: 'Check the date and the amount.' };
+    const { data, error } = await supabase
+      .from('bank_statement_lines')
+      .update({
+        date: edit.date,
+        description: (edit.counterparty || edit.details || '-').slice(0, 500),
+        counterparty: edit.counterparty || null,
+        details: edit.details || null,
+        notes: edit.notes || null,
+        amount: edit.amount,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .eq('workspace_id', ctx.activeWorkspaceId)
+      .select('id');
+    if (error) return { success: false, error: error.message };
+    if (!data || data.length === 0) return { success: false, error: 'Line not found.' };
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Could not save.' };
+  }
+}
+
+/** Delete one stored line. Only the people in lib/auth/bank-book-editors.ts. */
+export async function deleteBankLine(id: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = await createClient();
+    const ctx = await getAuthenticatedWorkspaceContext(supabase);
+    if (!canEditBankBook(ctx.userEmail)) return { success: false, error: 'Only the owner and Lucy can delete Buku Bank lines.' };
+    const { data, error } = await supabase.from('bank_statement_lines').delete().eq('id', id).eq('workspace_id', ctx.activeWorkspaceId).select('id');
+    if (error) return { success: false, error: error.message };
+    if (!data || data.length === 0) return { success: false, error: 'Line not found.' };
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Could not delete.' };
   }
 }

@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
-import { Search } from 'lucide-react';
+import React, { useEffect, useMemo, useState, useTransition } from 'react';
+import { Search, Pencil, Trash2, Check, X } from 'lucide-react';
+import { updateBankLine, deleteBankLine } from '@/app/actions/bank-book';
 import { BankStatementUpload } from '@/components/bank-book/BankStatementUpload';
 
 export interface BankBookLine { id: string; bankAccountId: string; date: string; counterparty: string; details: string; rekFrom: string; notes: string; amount: number; status: string; fileName: string }
@@ -16,7 +17,13 @@ const bankLabel = (b: BankBookAccount, all: BankBookAccount[]) =>
   all.filter((x) => x.bankName === b.bankName).length > 1 && b.accountName ? `${b.bankName} · ${b.accountName}` : b.bankName;
 
 /** Buku Bank: all stored statement lines, filtered by bank account, month, direction and text. */
-export function BankBookTable({ lines, banks, migrationMissing }: { lines: BankBookLine[]; banks: BankBookAccount[]; migrationMissing: boolean }) {
+export function BankBookTable({ lines: serverLines, banks, migrationMissing, canEdit = false }: { lines: BankBookLine[]; banks: BankBookAccount[]; migrationMissing: boolean; canEdit?: boolean }) {
+  const [lines, setLines] = useState(serverLines);
+  useEffect(() => setLines(serverLines), [serverLines]);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draft, setDraft] = useState({ date: '', counterparty: '', details: '', notes: '', amount: '' });
+  const [rowError, setRowError] = useState('');
+  const [saving, startSave] = useTransition();
   const [bank, setBank] = useState('');
   const [year, setYear] = useState('');
   const [month, setMonth] = useState('');
@@ -51,6 +58,28 @@ export function BankBookTable({ lines, banks, migrationMissing }: { lines: BankB
   const totalIn = filtered.reduce((s, l) => s + (l.amount > 0 ? l.amount : 0), 0);
   const totalOut = filtered.reduce((s, l) => s + (l.amount < 0 ? -l.amount : 0), 0);
   const reset = () => { setBank(''); setYear(''); setMonth(''); setDir(''); setStatus(''); setSearch(''); setShown(PAGE); };
+  const startEdit = (l: BankBookLine) => {
+    setRowError('');
+    setEditing(l.id);
+    setDraft({ date: l.date, counterparty: l.counterparty, details: l.details, notes: l.notes, amount: String(l.amount) });
+  };
+  const saveEdit = (id: string) => {
+    const amount = Number(String(draft.amount).replace(/[^\d.-]/g, ''));
+    startSave(async () => {
+      const res = await updateBankLine(id, { date: draft.date, counterparty: draft.counterparty.trim(), details: draft.details.trim(), notes: draft.notes.trim(), amount });
+      if (!res.success) { setRowError(res.error || 'Could not save.'); return; }
+      setLines((prev) => prev.map((l) => (l.id === id ? { ...l, date: draft.date, counterparty: draft.counterparty.trim(), details: draft.details.trim(), notes: draft.notes.trim(), amount } : l)));
+      setEditing(null);
+    });
+  };
+  const removeLine = (l: BankBookLine) => {
+    if (!window.confirm(`Delete this line?\n\n${l.date}  ${l.counterparty}  ${rp(l.amount)}`)) return;
+    startSave(async () => {
+      const res = await deleteBankLine(l.id);
+      if (!res.success) { setRowError(res.error || 'Could not delete.'); return; }
+      setLines((prev) => prev.filter((x) => x.id !== l.id));
+    });
+  };
   const reflow = <T,>(fn: (v: T) => void) => (v: T) => { fn(v); setShown(PAGE); };
 
   return (
@@ -124,13 +153,33 @@ export function BankBookTable({ lines, banks, migrationMissing }: { lines: BankB
                 <th className="px-4 py-3 text-right font-bold">Out</th>
                 <th className="px-4 py-3 font-bold">Status</th>
                 <th className="px-4 py-3 font-bold">File</th>
+                {canEdit && <th className="px-4 py-3 text-right font-bold">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/50">
               {filtered.length === 0 && (
-                <tr><td colSpan={8} className="p-10 text-center text-zinc-500">{lines.length === 0 ? 'Nothing stored yet. Choose the bank account above and upload a statement.' : 'No line matches these filters.'}</td></tr>
+                <tr><td colSpan={canEdit ? 9 : 8} className="p-10 text-center text-zinc-500">{lines.length === 0 ? 'Nothing stored yet. Choose the bank account above and upload a statement.' : 'No line matches these filters.'}</td></tr>
               )}
-              {filtered.slice(0, shown).map((l) => (
+              {filtered.slice(0, shown).map((l) => editing === l.id ? (
+                <tr key={l.id} className="bg-[#d4af37]/5">
+                  <td className="px-4 py-2"><input type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} className={`${field} w-[140px]`} /></td>
+                  <td className="whitespace-nowrap px-4 py-2 text-zinc-400">{bankById.get(l.bankAccountId)?.bankName || '-'}</td>
+                  <td className="px-4 py-2"><input value={draft.counterparty} onChange={(e) => setDraft({ ...draft, counterparty: e.target.value })} className={`${field} w-full min-w-[180px]`} /></td>
+                  <td className="px-4 py-2 space-y-1">
+                    <input value={draft.details} onChange={(e) => setDraft({ ...draft, details: e.target.value })} placeholder="Details" className={`${field} w-full min-w-[200px]`} />
+                    <input value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} placeholder="Notes" className={`${field} w-full`} />
+                  </td>
+                  <td className="px-4 py-2 text-right" colSpan={2}>
+                    <input value={draft.amount} onChange={(e) => setDraft({ ...draft, amount: e.target.value })} inputMode="decimal" title="Money in is positive, money out is negative" className={`${field} w-[150px] text-right font-mono`} />
+                    <div className="mt-1 text-[10px] text-zinc-500">in = +, out = -</div>
+                  </td>
+                  <td className="px-4 py-2" colSpan={2}>{rowError && <span className="text-[11px] text-red-400">{rowError}</span>}</td>
+                  <td className="whitespace-nowrap px-4 py-2 text-right">
+                    <button onClick={() => saveEdit(l.id)} disabled={saving} className="mr-1 rounded-lg border border-emerald-500/40 p-1.5 text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50" title="Save"><Check className="h-3.5 w-3.5" /></button>
+                    <button onClick={() => { setEditing(null); setRowError(''); }} className="rounded-lg border border-zinc-700 p-1.5 text-zinc-400 hover:bg-zinc-800" title="Cancel"><X className="h-3.5 w-3.5" /></button>
+                  </td>
+                </tr>
+              ) : (
                 <tr key={l.id} className="hover:bg-zinc-900/30">
                   <td className="whitespace-nowrap px-4 py-3 font-mono text-zinc-300">{l.date}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-zinc-400">{bankById.get(l.bankAccountId)?.bankName || '-'}</td>
@@ -142,6 +191,12 @@ export function BankBookTable({ lines, banks, migrationMissing }: { lines: BankB
                     <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${l.status === 'reconciled' ? 'border-emerald-500/30 text-emerald-400' : l.status === 'ignored' ? 'border-zinc-600 text-zinc-500' : 'border-amber-500/30 text-amber-400'}`}>{l.status}</span>
                   </td>
                   <td className="max-w-[160px] truncate px-4 py-3 text-zinc-600" title={l.fileName}>{l.fileName || '-'}</td>
+                  {canEdit && (
+                    <td className="whitespace-nowrap px-4 py-3 text-right">
+                      <button onClick={() => startEdit(l)} disabled={saving} className="mr-1 rounded-lg border border-zinc-700 p-1.5 text-zinc-300 hover:border-[#d4af37]/60 hover:text-[#f5d77f]" title="Edit"><Pencil className="h-3.5 w-3.5" /></button>
+                      <button onClick={() => removeLine(l)} disabled={saving} className="rounded-lg border border-red-500/30 p-1.5 text-red-400 hover:bg-red-500/10" title="Delete"><Trash2 className="h-3.5 w-3.5" /></button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

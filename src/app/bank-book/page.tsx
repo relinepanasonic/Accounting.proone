@@ -2,13 +2,14 @@ import React, { Suspense } from 'react';
 import { BookMarked } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
+import { canEditBankBook } from '@/lib/auth/bank-book-editors';
 import { BankBookTable, type BankBookLine, type BankBookAccount } from '@/components/bank-book/BankBookTable';
 
 export const dynamic = 'force-dynamic';
 
 async function BankBookCore() {
   const supabase = await createClient();
-  const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+  const { activeWorkspaceId, userEmail } = await getAuthenticatedWorkspaceContext(supabase);
 
   const { data: accounts } = await supabase
     .from('workspace_bank_accounts')
@@ -52,7 +53,7 @@ async function BankBookCore() {
   }));
   const banks: BankBookAccount[] = (accounts || []).map((a: any) => ({ id: a.id, bankName: a.bank_name || 'Bank', accountNumber: a.account_number || '', accountName: a.account_name || '' }));
 
-  return <BankBookTable lines={lines} banks={banks} migrationMissing={migrationMissing} />;
+  return <BankBookTable lines={lines} banks={banks} migrationMissing={migrationMissing} canEdit={canEditBankBook(userEmail)} />;
 }
 
 export default function BankBookPage() {

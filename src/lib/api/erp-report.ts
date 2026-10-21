@@ -15,7 +15,14 @@ export function authorizeErpApi(request: Request): boolean {
   return crypto.timingSafeEqual(h(m[1]), h(expected));
 }
 
-const rupiah = (n: number) => `Rp ${Math.round(n).toLocaleString('id-ID')}`;
+const jt = (n: number) => {
+  const a = Math.abs(n);
+  const sign = n < 0 ? '-' : '';
+  if (a >= 1_000_000_000) return `${sign}Rp ${(a / 1_000_000_000).toFixed(1).replace('.', ',')} M`;
+  if (a >= 1_000_000) return `${sign}Rp ${(a / 1_000_000).toFixed(1).replace('.', ',')} jt`;
+  return `${sign}Rp ${Math.round(a).toLocaleString('id-ID')}`;
+};
+const dayLabel = (day: string) => new Date(`${day}T12:00:00+07:00`).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Asia/Jakarta' });
 
 export function dashboardNumbers(t: DashboardTelemetry) {
   return {
@@ -89,20 +96,23 @@ export async function buildErpReport() {
 
   const t = total!;
   const y = yearTotal!;
+  const cov = y.monthlyCost <= 0 ? '' : y.coverageRatio >= 1.5 ? 'aman' : y.coverageRatio >= 1 ? 'tipis' : 'di bawah overhead';
+  const missing = [
+    ...(uploads.profesorToko.ok ? uploads.profesorToko.notUploaded.map((n) => `- ${n} (Profesor Toko)`) : ['- Log Profesor Toko tidak bisa dibaca']),
+    ...(uploads.reline.ok ? uploads.reline.notUploaded.map((n) => `- ${n} (Reline)`) : ['- Log Reline tidak bisa dibaca']),
+  ];
   const lines = [
-    `Morning report ${today}`,
+    `Pagi ${dayLabel(today)}`,
     '',
-    `This month: revenue ${rupiah(t.totalRevenue)}, paid ${rupiah(t.paidRevenue)}`,
-    `This year: MRR ${rupiah(y.avgMonthlyRevenue)} vs overhead ${rupiah(y.monthlyCost)} per month: coverage ${y.monthlyCost > 0 ? `${y.coverageRatio.toFixed(2)}x` : '-'}`,
-    `Cash ${rupiah(t.totalCashFlow)}, receivable ${rupiah(t.totalAR)}`,
-    `Overdue invoices: ${overdue.length} (${rupiah(overdueTotal)})`,
-    ...overdue.slice(0, 3).map((a) => `- ${a.number || 'Invoice'} ${a.client}: ${rupiah(a.balance)}`),
+    `MRR ${jt(y.avgMonthlyRevenue)} | Overhead ${jt(y.monthlyCost)}`,
+    y.monthlyCost > 0 ? `Coverage ${y.coverageRatio.toFixed(2)}x (${cov})` : 'Coverage: belum ada biaya tercatat',
+    `Kas ${jt(t.totalCashFlow)} | Piutang ${jt(t.totalAR)}`,
     '',
-    'Not uploaded yesterday:',
-    ...[
-      ...(uploads.profesorToko.ok ? uploads.profesorToko.notUploaded.map((n) => `- ${n} (Profesor Toko)`) : ['- Profesor Toko log unavailable']),
-      ...(uploads.reline.ok ? uploads.reline.notUploaded.map((n) => `- ${n} (Reline)`) : ['- Reline log unavailable']),
-    ],
+    overdue.length ? `Perlu ditagih (${overdue.length} lewat jatuh tempo, ${jt(overdueTotal)})` : 'Tidak ada invoice lewat jatuh tempo',
+    ...overdue.slice(0, 3).map((a) => `- ${a.number || 'Invoice'} ${a.client}: ${jt(a.balance)}`),
+    '',
+    missing.length ? `Belum upload kemarin` : 'Semua admin sudah upload kemarin',
+    ...missing,
   ];
 
   return {

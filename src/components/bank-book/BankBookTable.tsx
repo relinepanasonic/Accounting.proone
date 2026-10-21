@@ -310,7 +310,9 @@ export function BankBookTable({ lines: serverLines, banks, migrationMissing, can
                   <td className="whitespace-nowrap px-4 py-3 text-right font-mono text-emerald-400">{l.amount > 0 ? rp(l.amount) : ''}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-right font-mono text-red-400">{l.amount < 0 ? rp(l.amount) : ''}</td>
                   <td className="px-4 py-3">
-                    {l.transactionId || l.invoiceId ? (
+                    {l.amount === 0 && l.counterparty === 'Opening balance' ? (
+                      <span className="rounded-full border border-sky-500/30 px-2 py-0.5 text-[10px] font-bold uppercase text-sky-400" title={l.balance !== null ? `Saldo ${rp(l.balance)}` : ''}>saldo{l.balance !== null ? ` ${rp(l.balance)}` : ''}</span>
+                    ) : l.transactionId || l.invoiceId ? (
                       <button onClick={() => openConnection(l)} className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-400 hover:bg-emerald-500/10" title="See what it is connected to">
                         <Link2 className="h-3 w-3" /> reconciled
                       </button>

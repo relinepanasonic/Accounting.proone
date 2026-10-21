@@ -14,6 +14,8 @@ export function BankStatementUpload({ banks }: { banks: BankBookAccount[] }) {
   const [bankId, setBankId] = useState(banks[0]?.id || '');
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, start] = useTransition();
+  // Opening balance only: keep just the last saldo of the statement (for the month before the first one you keep in full).
+  const [lastOnly, setLastOnly] = useState(false);
 
   const bank = banks.find((b) => b.id === bankId);
   // PDF layouts: BCA Business statements and Jago statements are read differently.
@@ -57,9 +59,16 @@ export function BankStatementUpload({ banks }: { banks: BankBookAccount[] }) {
           lines = parseCsv(await file.text());
         }
         if (lines.length === 0) { setNotice({ ok: false, text: 'No transaction lines found in that file.' }); return; }
+        if (lastOnly) {
+          const withBalance = lines.map((l, i) => ({ l, i })).filter((x) => typeof x.l.balance === 'number');
+          if (withBalance.length === 0) { setNotice({ ok: false, text: 'This file has no saldo (balance) column, so there is no last balance to keep.' }); return; }
+          const last = withBalance.sort((a, b) => `${a.l.date} ${a.l.time || ''}`.localeCompare(`${b.l.date} ${b.l.time || ''}`) || a.i - b.i).pop()!.l;
+          // One row with no money moved: it only carries the saldo of the last day.
+          lines = [{ date: last.date, sourceDestination: 'Opening balance', transactionDetails: 'Last saldo of the statement', notes: '', rekFrom: '', amount: 0, balance: last.balance, time: last.time }];
+        }
         const res = await saveBankStatement(bankId, file.name, lines);
         if (!res.success) { setNotice({ ok: false, text: res.error || 'Could not store the statement.' }); return; }
-        setNotice({ ok: true, text: `${file.name}: ${res.saved} new line(s) stored${res.skipped ? `, ${res.skipped} were already there` : ''}.` });
+        setNotice({ ok: true, text: lastOnly ? `${file.name}: last saldo kept (${lines[0].date}).` : `${file.name}: ${res.saved} new line(s) stored${res.skipped ? `, ${res.skipped} were already there` : ''}.` });
         router.refresh();
       } catch (err: any) {
         setNotice({ ok: false, text: err?.message || 'Upload failed.' });
@@ -77,6 +86,9 @@ export function BankStatementUpload({ banks }: { banks: BankBookAccount[] }) {
         {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
         <span>{pending ? 'Reading the statement...' : 'Upload bank statement'}</span>
         <input type="file" accept=".csv,.pdf" className="hidden" onChange={handleFile} disabled={pending || !bankId} />
+      </label>
+      <label className="flex cursor-pointer items-center gap-2 text-[11px] font-bold text-zinc-300" title="Keep only the saldo of the last line (Opening Balance); the other lines are not stored">
+        <input type="checkbox" checked={lastOnly} onChange={(e) => setLastOnly(e.target.checked)} className="h-3.5 w-3.5 accent-[#d4af37]" /> Keep only the last saldo (opening balance)
       </label>
       <span className="text-[11px] text-zinc-500">PDF or CSV. Choose the bank account first.</span>
       {notice && <div className={`w-full text-xs ${notice.ok ? 'text-emerald-400' : 'text-red-400'}`}>{notice.text}</div>}

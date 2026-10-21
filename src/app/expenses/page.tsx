@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext, FINANCE_ROLES } from '@/lib/auth/workspace-context';
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { PT_WORKSPACE_ID } from '@/lib/workspaces/known';
+import { assignableWorkspaces } from '@/lib/workspaces/assignable';
 import { ExpenseClientTable, ExpenseRecord } from '@/components/expenses/ExpenseClientTable';
 
 export const dynamic = 'force-dynamic';
@@ -87,7 +88,7 @@ async function ExpensesTable() {
         
       </div>
 
-      <ExpenseClientTable initialRecords={displayRecords} workspaces={isPT ? availableWorkspaces.filter((w) => w.id !== PT_WORKSPACE_ID).map((w) => ({ id: w.id, name: w.name })) : undefined} fromPtLabel="PT Pintu" />
+      <ExpenseClientTable initialRecords={displayRecords} workspaces={isPT ? (await assignableWorkspaces({ role, availableWorkspaces })).filter((w) => w.id !== PT_WORKSPACE_ID) : undefined} fromPtLabel="PT Pintu" />
     </div>
   );
 }

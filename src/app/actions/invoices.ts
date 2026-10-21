@@ -391,7 +391,7 @@ export async function updateInvoiceAssignment(invoiceId: string, assignedWorkspa
     // PT Pintu collects the money for the group: it may hand an invoice to any workspace the person can enter (not itself).
     let target: string | null = null;
     if (assignedWorkspaceId) {
-      const allowed = ctx.availableWorkspaces.some((w) => w.id === assignedWorkspaceId) && assignedWorkspaceId !== workspaceId;
+      const allowed = (await assignableWorkspaces(ctx)).some((w) => w.id === assignedWorkspaceId) && assignedWorkspaceId !== workspaceId;
       if (!allowed) return { success: false, error: 'You cannot assign an invoice to that workspace.' };
       target = assignedWorkspaceId;
     }

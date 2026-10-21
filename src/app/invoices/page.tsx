@@ -1,4 +1,5 @@
 import React, { Suspense } from 'react';
+import { assignableWorkspaces } from '@/lib/workspaces/assignable';
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { formatIndoDate } from '@/lib/utils';
@@ -182,7 +183,7 @@ async function InvoicesTableServer({ activeTab }: { activeTab: string }) {
     });
   }
 
-  return <InvoiceTableClient requests={requests} activeWorkspaceId={activeWorkspaceId} initialInvoices={finalInvoices} availableWorkspaces={availableWorkspaces} activeWorkspaceName={activeWorkspaceName} />;
+  return <InvoiceTableClient requests={requests} activeWorkspaceId={activeWorkspaceId} initialInvoices={finalInvoices} availableWorkspaces={await assignableWorkspaces({ role, availableWorkspaces })} activeWorkspaceName={activeWorkspaceName} />;
 }
 
 export default async function InvoicesPage({ searchParams }: { searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext, FINANCE_ROLES } from '@/lib/auth/workspace-context';
 import { PT_WORKSPACE_ID } from '@/lib/workspaces/known';
+import { assignableWorkspaces } from '@/lib/workspaces/assignable';
 
 /** PT Pintu only: say which workspace an expense belongs to. Empty = PT's own. */
 export async function updateExpenseAssignment(transactionId: string, assignedWorkspaceId: string | null): Promise<{ success: boolean; error?: string }> {
@@ -14,7 +15,7 @@ export async function updateExpenseAssignment(transactionId: string, assignedWor
     if (ctx.activeWorkspaceId !== PT_WORKSPACE_ID) return { success: false, error: 'Only PT Pintu hands expenses to other workspaces.' };
     let target: string | null = null;
     if (assignedWorkspaceId) {
-      if (assignedWorkspaceId === PT_WORKSPACE_ID || !ctx.availableWorkspaces.some((w) => w.id === assignedWorkspaceId)) return { success: false, error: 'You cannot assign an expense to that workspace.' };
+      if (assignedWorkspaceId === PT_WORKSPACE_ID || !(await assignableWorkspaces(ctx)).some((w) => w.id === assignedWorkspaceId)) return { success: false, error: 'You cannot assign an expense to that workspace.' };
       target = assignedWorkspaceId;
     }
     const { error } = await supabase.from('transactions').update({ assigned_workspace_id: target }).eq('id', transactionId).eq('workspace_id', ctx.activeWorkspaceId);

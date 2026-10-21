@@ -15,9 +15,8 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', '
 /** 2026-01-04 -> 04 Jan 2026 */
 const dmy = (iso: string) => (/^\d{4}-\d{2}-\d{2}/.test(iso) ? `${iso.slice(8, 10)} ${MONTHS[Number(iso.slice(5, 7)) - 1] || iso.slice(5, 7)} ${iso.slice(0, 4)}` : iso);
 
-/** Just the bank name; the account holder is added only when two accounts share the same bank name. */
-const bankLabel = (b: BankBookAccount, all: BankBookAccount[]) =>
-  all.filter((x) => x.bankName === b.bankName).length > 1 && b.accountName ? `${b.bankName} · ${b.accountName}` : b.bankName;
+/** Bank name | account number (no account holder). */
+export const bankLabel = (b: BankBookAccount) => (b.accountNumber ? `${b.bankName} | ${b.accountNumber}` : b.bankName);
 
 /** The sort arrow: an up triangle above a down triangle. The direction in use is lit. */
 function SortArrows({ dir }: { dir: 'asc' | 'desc' | null }) {
@@ -152,8 +151,8 @@ export function BankBookTable({ lines: serverLines, banks, migrationMissing, can
           All banks <span className="ml-1 font-mono text-[10px] opacity-70">{lines.length}</span>
         </button>
         {banks.map((b) => (
-          <button key={b.id} onClick={() => reflow(setBank)(b.id)} title={b.accountNumber} className={`rounded-full border px-4 py-1.5 text-xs font-bold ${bank === b.id ? 'border-[#d4af37] bg-[#d4af37]/15 text-[#f5d77f]' : 'border-zinc-700 text-zinc-400 hover:border-zinc-500'}`}>
-            {bankLabel(b, banks)} <span className="ml-1 font-mono text-[10px] opacity-70">{countByBank.get(b.id) || 0}</span>
+          <button key={b.id} onClick={() => reflow(setBank)(b.id)} className={`rounded-full border px-4 py-1.5 text-xs font-bold ${bank === b.id ? 'border-[#d4af37] bg-[#d4af37]/15 text-[#f5d77f]' : 'border-zinc-700 text-zinc-400 hover:border-zinc-500'}`}>
+            {bankLabel(b)} <span className="ml-1 font-mono text-[10px] opacity-70">{countByBank.get(b.id) || 0}</span>
           </button>
         ))}
       </div>

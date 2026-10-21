@@ -4,7 +4,7 @@ import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { UploadCloud, Loader2 } from 'lucide-react';
 import { saveBankStatement, type BankBookLineInput } from '@/app/actions/bank-book';
-import type { BankBookAccount } from '@/components/bank-book/BankBookTable';
+import { bankLabel, type BankBookAccount } from '@/components/bank-book/BankBookTable';
 
 const field = 'rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-xs font-bold text-[#f5d77f] focus:border-[#d4af37]/60 focus:outline-none';
 
@@ -70,7 +70,7 @@ export function BankStatementUpload({ banks }: { banks: BankBookAccount[] }) {
     <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[#d4af37]/20 bg-[#0e0f14]/80 p-4">
       <select value={bankId} onChange={(e) => setBankId(e.target.value)} className={`${field} min-w-[220px]`} title="Which bank account is this statement of?">
         {banks.length === 0 && <option value="">No bank account registered</option>}
-        {banks.map((b) => <option key={b.id} value={b.id}>{banks.filter((x) => x.bankName === b.bankName).length > 1 && b.accountName ? `${b.bankName} · ${b.accountName}` : b.bankName}</option>)}
+        {banks.map((b) => <option key={b.id} value={b.id}>{bankLabel(b)}</option>)}
       </select>
       <label className={`relative flex cursor-pointer items-center gap-2 rounded-full border border-[#d4af37]/40 bg-gradient-to-r from-transparent via-[#d4af37]/10 to-transparent px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-[#f5d77f] transition-all hover:border-[#d4af37] hover:bg-[#d4af37]/20 ${!bankId ? 'pointer-events-none opacity-40' : ''}`}>
         {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}

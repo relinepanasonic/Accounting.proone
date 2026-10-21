@@ -51,6 +51,7 @@ export function BankStatementUpload({ banks }: { banks: BankBookAccount[] }) {
           lines = (json.data || []).map((t: any) => ({
             date: t.date, sourceDestination: t.sourceDestination || '', transactionDetails: t.transactionDetails || '',
             notes: t.notes || '', rekFrom: t.rekFrom || '', amount: Number(t.amount),
+            balance: typeof t.balance === 'number' ? t.balance : undefined, time: t.time || undefined,
           }));
         } else {
           lines = parseCsv(await file.text());

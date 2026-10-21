@@ -218,7 +218,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
           }
           if (result.data && Array.isArray(result.data)) {
             const reconciledSet = new Set(reconciledRefs);
-            void storeInBook(file.name, result.data.map((t: any, i: number) => ({ id: `pdf-${i}`, date: t.date, sourceDestination: t.sourceDestination || '', transactionDetails: t.transactionDetails || '', notes: t.notes || '', rekFrom: t.rekFrom || '', amount: Number(t.amount) })));
+            void storeInBook(file.name, result.data.map((t: any, i: number) => ({ id: `pdf-${i}`, date: t.date, sourceDestination: t.sourceDestination || '', transactionDetails: t.transactionDetails || '', notes: t.notes || '', rekFrom: t.rekFrom || '', amount: Number(t.amount), balance: typeof t.balance === 'number' ? t.balance : undefined, time: t.time || undefined })));
             const parsed: BankLine[] = result.data
               .filter((t: any) => !reconciledSet.has(`BANK-REF:${t.date}:${t.amount}:${t.sourceDestination}`))
               .map((t: any, i: number) => ({

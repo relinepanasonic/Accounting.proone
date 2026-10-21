@@ -1,11 +1,13 @@
 'use client';
 
 import React, { useEffect, useMemo, useState, useTransition } from 'react';
-import { Search, Pencil, Trash2, Check, X } from 'lucide-react';
-import { updateBankLine, deleteBankLine } from '@/app/actions/bank-book';
+import { Search, Pencil, Trash2, Check, X, Link2, ExternalLink, Unlink, RefreshCw } from 'lucide-react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { updateBankLine, deleteBankLine, relinkBankBook, getBankLineConnection, terminateBankLink, type BankLineConnection } from '@/app/actions/bank-book';
 import { BankStatementUpload } from '@/components/bank-book/BankStatementUpload';
 
-export interface BankBookLine { id: string; bankAccountId: string; date: string; counterparty: string; details: string; rekFrom: string; notes: string; amount: number; status: string; fileName: string }
+export interface BankBookLine { id: string; bankAccountId: string; date: string; counterparty: string; details: string; rekFrom: string; notes: string; amount: number; status: string; fileName: string; balance: number | null; time: string; transactionId: string | null; invoiceId: string | null }
 export interface BankBookAccount { id: string; bankName: string; accountNumber: string; accountName: string }
 
 const field = 'rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-600 focus:border-[#d4af37]/60 focus:outline-none';
@@ -47,6 +49,12 @@ export function BankBookTable({ lines: serverLines, banks, migrationMissing, can
   const [search, setSearch] = useState('');
   const [shown, setShown] = useState(PAGE);
   const [sort, setSort] = useState<{ key: SortKey; asc: boolean }>({ key: 'date', asc: false });
+
+  const router = useRouter();
+  const [conn, setConn] = useState<{ lineId: string; loading: boolean; data?: BankLineConnection; error?: string } | null>(null);
+  const [linkNotice, setLinkNotice] = useState('');
+  const [terminating, startTerminate] = useTransition();
+  const [checking, startCheck] = useTransition();
 
   const bankById = useMemo(() => new Map(banks.map((b) => [b.id, b])), [banks]);
   const bankName = (id: string) => bankById.get(id)?.bankName || '';
@@ -92,9 +100,34 @@ export function BankBookTable({ lines: serverLines, banks, migrationMissing, can
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtered, sort, bankById]);
 
+  // Opening balance: the saldo before the first day of the period (the last line of the month before), per bank, added up.
+  const opening = useMemo(() => {
+    if (month && !year) return null;
+    const periodStart = year ? `${year}-${month || '01'}-01` : null;
+    const ids = bank ? [bank] : Array.from(new Set(lines.map((l) => l.bankAccountId)));
+    let sum = 0;
+    let known = false;
+    let asOf = periodStart || '';
+    for (const id of ids) {
+      const ofBank = lines.filter((l) => l.bankAccountId === id).sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+      if (ofBank.length === 0) continue;
+      const before = periodStart ? ofBank.filter((l) => l.date < periodStart) : [];
+      const prev = [...before].reverse().find((l) => l.balance !== null);
+      if (prev) { sum += prev.balance as number; known = true; continue; }
+      // Nothing earlier is stored: the first stored line tells it (its saldo minus its own amount).
+      const first = ofBank[0];
+      if (before.length === 0 && first.balance !== null && (!periodStart || first.date >= periodStart)) {
+        sum += first.balance - first.amount; known = true;
+        if (!periodStart && (!asOf || first.date < asOf)) asOf = first.date;
+      }
+    }
+    return known ? { amount: sum, asOf } : null;
+  }, [lines, bank, year, month]);
+  const rowFilters = Boolean(dir || status || search);
   const cashIn = filtered.reduce((s, l) => s + (l.amount > 0 ? l.amount : 0), 0);
   const cashOut = filtered.reduce((s, l) => s + (l.amount < 0 ? -l.amount : 0), 0);
-  const total = cashIn - cashOut;
+  const net = cashIn - cashOut;
+  const total = rowFilters || !opening ? net : opening.amount + net;
   const reset = () => { setBank(''); setYear(''); setMonth(''); setDir(''); setStatus(''); setSearch(''); setShown(PAGE); };
   const reflow = <T,>(fn: (v: T) => void) => (v: T) => { fn(v); setShown(PAGE); };
   const toggleSort = (key: SortKey) => setSort((s) => (s.key === key ? { key, asc: !s.asc } : { key, asc: key !== 'date' && key !== 'in' && key !== 'out' }));
@@ -122,6 +155,30 @@ export function BankBookTable({ lines: serverLines, banks, migrationMissing, can
     });
   };
 
+  const openConnection = (l: BankBookLine) => {
+    setConn({ lineId: l.id, loading: true });
+    void getBankLineConnection(l.id).then((res) => setConn({ lineId: l.id, loading: false, data: res.connection, error: res.success ? undefined : res.error }));
+  };
+  const terminate = () => {
+    if (!conn) return;
+    if (!window.confirm('Terminate this reconcile?\n\nThe expense / income / invoice becomes open again and this bank line is unlinked. You can reconcile it again later.')) return;
+    startTerminate(async () => {
+      const res = await terminateBankLink(conn.lineId);
+      if (!res.success) { setConn({ ...conn, error: res.error || 'Could not terminate.' }); return; }
+      setLines((prev) => prev.map((l) => (l.id === conn.lineId ? { ...l, status: 'unreconciled', transactionId: null, invoiceId: null } : l)));
+      setConn(null);
+      router.refresh();
+    });
+  };
+  const checkLinks = () => {
+    setLinkNotice('');
+    startCheck(async () => {
+      const res = await relinkBankBook();
+      setLinkNotice(res.success ? (res.linked ? `${res.linked} line(s) linked to what was reconciled in Bank Reconcile.` : 'No new connection found.') : res.error || 'Could not check.');
+      if (res.success && res.linked) router.refresh();
+    });
+  };
+
   const Th = ({ k, children, right }: { k: SortKey; children: React.ReactNode; right?: boolean }) => {
     const active = sort.key === k;
     return (
@@ -146,7 +203,7 @@ export function BankBookTable({ lines: serverLines, banks, migrationMissing, can
       )}
 
       {/* Bank filter */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button onClick={() => reflow(setBank)('')} className={`rounded-full border px-4 py-1.5 text-xs font-bold ${bank === '' ? 'border-[#d4af37] bg-[#d4af37]/15 text-[#f5d77f]' : 'border-zinc-700 text-zinc-400 hover:border-zinc-500'}`}>
           All banks <span className="ml-1 font-mono text-[10px] opacity-70">{lines.length}</span>
         </button>
@@ -155,7 +212,11 @@ export function BankBookTable({ lines: serverLines, banks, migrationMissing, can
             {bankLabel(b)} <span className="ml-1 font-mono text-[10px] opacity-70">{countByBank.get(b.id) || 0}</span>
           </button>
         ))}
+        <button onClick={checkLinks} disabled={checking} className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-zinc-700 px-4 py-1.5 text-xs font-bold text-zinc-300 hover:border-[#d4af37]/60 hover:text-[#f5d77f] disabled:opacity-50" title="Look for lines that were reconciled in Bank Reconcile">
+          <RefreshCw className={`h-3 w-3 ${checking ? 'animate-spin' : ''}`} /> Check reconcile links
+        </button>
       </div>
+      {linkNotice && <div className="text-xs text-zinc-400">{linkNotice}</div>}
 
       {/* Filters: Year | Month | In / Out | Status on the left, the search on the right */}
       <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[#d4af37]/20 bg-[#0e0f14]/80 p-4">
@@ -185,11 +246,20 @@ export function BankBookTable({ lines: serverLines, banks, migrationMissing, can
         </div>
       </div>
 
-      {/* Cash In | Cash Out | Total */}
-      <div className="grid grid-cols-3 gap-3">
+      {/* Opening Balance | Cash In | Cash Out | Total */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="gold-glass-panel rounded-xl p-4" title="Saldo at the start of the period (Saldo Awal): the last saldo of the month before">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-sky-400">Opening Balance</div>
+          <div className={`mt-1 font-serif text-xl font-bold ${opening && opening.amount < 0 ? 'text-red-400' : 'text-white'}`}>{opening ? `${opening.amount < 0 ? '-' : ''}${rp(opening.amount)}` : '-'}</div>
+          <div className="mt-0.5 text-[10px] text-zinc-500">{opening ? (opening.asOf ? `before ${dmy(opening.asOf)}` : 'start of the stored statements') : 'upload the statement of the month before'}</div>
+        </div>
         <div className="gold-glass-panel rounded-xl p-4"><div className="text-[10px] font-bold uppercase tracking-wider text-emerald-500">Cash In</div><div className="mt-1 font-serif text-xl font-bold text-emerald-400">{rp(cashIn)}</div></div>
         <div className="gold-glass-panel rounded-xl p-4"><div className="text-[10px] font-bold uppercase tracking-wider text-red-400">Cash Out</div><div className="mt-1 font-serif text-xl font-bold text-red-400">{rp(cashOut)}</div></div>
-        <div className="gold-glass-panel rounded-xl p-4"><div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Total</div><div className={`mt-1 font-serif text-xl font-bold ${total < 0 ? 'text-red-400' : 'text-white'}`}>{total < 0 ? '-' : ''}{rp(total)}</div></div>
+        <div className="gold-glass-panel rounded-xl p-4" title={rowFilters || !opening ? 'Cash In minus Cash Out' : 'Opening Balance + Cash In - Cash Out'}>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">{rowFilters || !opening ? 'Net' : 'Total'}</div>
+          <div className={`mt-1 font-serif text-xl font-bold ${total < 0 ? 'text-red-400' : 'text-white'}`}>{total < 0 ? '-' : ''}{rp(total)}</div>
+          <div className="mt-0.5 text-[10px] text-zinc-500">{rowFilters || !opening ? 'in minus out' : 'opening + in - out'}</div>
+        </div>
       </div>
 
       {/* Table */}
@@ -240,7 +310,13 @@ export function BankBookTable({ lines: serverLines, banks, migrationMissing, can
                   <td className="whitespace-nowrap px-4 py-3 text-right font-mono text-emerald-400">{l.amount > 0 ? rp(l.amount) : ''}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-right font-mono text-red-400">{l.amount < 0 ? rp(l.amount) : ''}</td>
                   <td className="px-4 py-3">
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${l.status === 'reconciled' ? 'border-emerald-500/30 text-emerald-400' : l.status === 'ignored' ? 'border-zinc-600 text-zinc-500' : 'border-amber-500/30 text-amber-400'}`}>{l.status}</span>
+                    {l.transactionId || l.invoiceId ? (
+                      <button onClick={() => openConnection(l)} className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-400 hover:bg-emerald-500/10" title="See what it is connected to">
+                        <Link2 className="h-3 w-3" /> reconciled
+                      </button>
+                    ) : (
+                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${l.status === 'reconciled' ? 'border-emerald-500/30 text-emerald-400' : l.status === 'ignored' ? 'border-zinc-600 text-zinc-500' : 'border-amber-500/30 text-amber-400'}`}>{l.status}</span>
+                    )}
                   </td>
                   {canEdit && (
                     <td className="whitespace-nowrap px-4 py-3 text-right">
@@ -259,6 +335,35 @@ export function BankBookTable({ lines: serverLines, banks, migrationMissing, can
           </div>
         )}
       </div>
+      {conn && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setConn(null)}>
+          <div className="w-full max-w-md rounded-2xl border border-[#d4af37]/30 bg-[#0e0f14] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-sm font-extrabold uppercase tracking-wider text-[#f5d77f]">Reconciled with {conn.data?.title || '...'}</h3>
+              <button onClick={() => setConn(null)} className="text-zinc-500 hover:text-zinc-200"><X className="h-4 w-4" /></button>
+            </div>
+            {conn.loading && <div className="py-6 text-center text-xs text-zinc-500">Loading...</div>}
+            {conn.error && <div className="mb-3 rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-xs text-red-300">{conn.error}</div>}
+            {conn.data && (
+              <>
+                <dl className="space-y-2 text-xs">
+                  {conn.data.lines.map((x) => (
+                    <div key={x.label} className="flex justify-between gap-4 border-b border-zinc-800/60 pb-2">
+                      <dt className="text-zinc-500">{x.label}</dt>
+                      <dd className="text-right font-semibold text-zinc-100">{x.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+                {conn.data.reference && <div className="mt-3 break-all rounded-lg bg-zinc-950 p-2 font-mono text-[10px] text-zinc-600">{conn.data.reference}</div>}
+                <div className="mt-5 flex items-center justify-between gap-3">
+                  <Link href={conn.data.href} className="inline-flex items-center gap-1.5 rounded-lg border border-[#d4af37]/40 px-4 py-2 text-xs font-bold text-[#f5d77f] hover:bg-[#d4af37]/10"><ExternalLink className="h-3.5 w-3.5" /> {conn.data.hrefLabel}</Link>
+                  <button onClick={terminate} disabled={terminating} className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/40 px-4 py-2 text-xs font-bold text-red-400 hover:bg-red-500/10 disabled:opacity-50"><Unlink className="h-3.5 w-3.5" /> {terminating ? 'Terminating...' : 'Terminate reconcile'}</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

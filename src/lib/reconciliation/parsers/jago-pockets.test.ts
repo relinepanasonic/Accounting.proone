@@ -62,6 +62,10 @@ describe('parseJago: Pockets Transactions History', () => {
     expect(tx[0]).toMatchObject({ sourceDestination: 'Hostinger', rekFrom: 'XENDIT 9360084800000000050', transactionDetails: 'Pembayaran QRIS', notes: 'domain profesoronline.id', amount: -234099 });
     expect(tx[1]).toMatchObject({ sourceDestination: 'LOSKE COFFEE SERVICE SU', rekFrom: 'BCA 9360001430042970944', notes: 'kopi', amount: -64000 });
   });
+  it('keeps the balance after each line and the time', () => {
+    expect(tx[0]).toMatchObject({ balance: 16131570.19, time: '15:15' });
+    expect(tx[3].balance).toBeCloseTo(17080372.27, 2);
+  });
   it('keeps the sign and the decimals of the amount', () => {
     expect(tx[2].amount).toBeCloseTo(12802.08, 2);
     expect(tx[3]).toMatchObject({ amount: 1000000, notes: '' });

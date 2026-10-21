@@ -32,8 +32,12 @@ async function BankBookCore() {
     }
     return { rows: out, error: null };
   };
-  let res = await fetchAll('id, bank_account_id, date, description, counterparty, details, rek_from, notes, amount, status, file_name');
+  let res = await fetchAll('id, bank_account_id, date, description, counterparty, details, rek_from, notes, amount, status, file_name, balance, txn_time, transaction_id, invoice_id');
   let migrationMissing = false;
+  if (res.error) {
+    // The balance migration (20261015) is not run yet: everything else still shows.
+    res = await fetchAll('id, bank_account_id, date, description, counterparty, details, rek_from, notes, amount, status, file_name, transaction_id, invoice_id');
+  }
   if (res.error) {
     migrationMissing = true;
     res = await fetchAll('id, bank_account_id, date, description, notes, amount, status');
@@ -50,6 +54,10 @@ async function BankBookCore() {
     amount: Number(r.amount || 0),
     status: r.status || 'unreconciled',
     fileName: r.file_name || '',
+    balance: r.balance === null || r.balance === undefined ? null : Number(r.balance),
+    time: r.txn_time || '',
+    transactionId: r.transaction_id || null,
+    invoiceId: r.invoice_id || null,
   }));
   const banks: BankBookAccount[] = (accounts || []).map((a: any) => ({ id: a.id, bankName: a.bank_name || 'Bank', accountNumber: a.account_number || '', accountName: a.account_name || '' }));
 

@@ -70,6 +70,8 @@ export function parseJagoPockets(rawLines: string[]): BankTransaction[] {
       notes,
       rekFrom: rekParts.join(' ').trim(),
       amount,
+      balance: parseIndonesianNumber(m[2]),
+      time: lines[from + 1].replace('.', ':'),
     });
   }
   return out;

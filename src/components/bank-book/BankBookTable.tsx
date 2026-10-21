@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState, useTransition } from 'react';
-import { Search, Pencil, Trash2, Check, X, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
+import { Search, Pencil, Trash2, Check, X } from 'lucide-react';
 import { updateBankLine, deleteBankLine } from '@/app/actions/bank-book';
 import { BankStatementUpload } from '@/components/bank-book/BankStatementUpload';
 
@@ -18,6 +18,17 @@ const dmy = (iso: string) => (/^\d{4}-\d{2}-\d{2}/.test(iso) ? `${iso.slice(8, 1
 /** Just the bank name; the account holder is added only when two accounts share the same bank name. */
 const bankLabel = (b: BankBookAccount, all: BankBookAccount[]) =>
   all.filter((x) => x.bankName === b.bankName).length > 1 && b.accountName ? `${b.bankName} · ${b.accountName}` : b.bankName;
+
+/** The sort arrow: an up triangle above a down triangle. The direction in use is lit. */
+function SortArrows({ dir }: { dir: 'asc' | 'desc' | null }) {
+  const lit = '#f5d77f', dim = '#5b6f9a';
+  return (
+    <svg width="9" height="14" viewBox="0 0 9 14" aria-hidden="true" className="shrink-0">
+      <path d="M4.5 0.5 L8.5 5.5 L0.5 5.5 Z" fill={dir === 'asc' ? lit : dim} />
+      <path d="M4.5 13.5 L0.5 8.5 L8.5 8.5 Z" fill={dir === 'desc' ? lit : dim} />
+    </svg>
+  );
+}
 
 type SortKey = 'date' | 'bank' | 'counterparty' | 'details' | 'in' | 'out' | 'status';
 
@@ -114,11 +125,10 @@ export function BankBookTable({ lines: serverLines, banks, migrationMissing, can
 
   const Th = ({ k, children, right }: { k: SortKey; children: React.ReactNode; right?: boolean }) => {
     const active = sort.key === k;
-    const Icon = !active ? ArrowUpDown : sort.asc ? ArrowUp : ArrowDown;
     return (
       <th className={`px-4 py-3 font-bold ${right ? 'text-right' : ''}`}>
         <button onClick={() => toggleSort(k)} className={`inline-flex items-center gap-1.5 uppercase tracking-wider hover:text-zinc-200 ${active ? 'text-[#f5d77f]' : ''}`}>
-          {children}<Icon className={`h-3 w-3 ${active ? '' : 'opacity-40'}`} />
+          {children}<SortArrows dir={active ? (sort.asc ? 'asc' : 'desc') : null} />
         </button>
       </th>
     );
@@ -148,17 +158,13 @@ export function BankBookTable({ lines: serverLines, banks, migrationMissing, can
         ))}
       </div>
 
-      {/* Filters: Year | Month | In / Out | Status */}
+      {/* Filters: Year | Month | In / Out | Status on the left, the search on the right */}
       <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[#d4af37]/20 bg-[#0e0f14]/80 p-4">
-        <div className="relative min-w-[220px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
-          <input value={search} onChange={(e) => reflow(setSearch)(e.target.value)} placeholder="Name, details, notes or amount" className={`${field} w-full pl-8`} />
-        </div>
-        <select value={year} onChange={(e) => reflow(setYear)(e.target.value)} className={field}>
+        <select value={year} onChange={(e) => reflow(setYear)(e.target.value)} className={`${field} w-[170px] py-2.5 text-sm`}>
           <option value="">Year</option>
           {years.map((y) => <option key={y} value={y}>{y}</option>)}
         </select>
-        <select value={month} onChange={(e) => reflow(setMonth)(e.target.value)} className={field}>
+        <select value={month} onChange={(e) => reflow(setMonth)(e.target.value)} className={`${field} w-[170px] py-2.5 text-sm`}>
           <option value="">Month</option>
           {MONTHS.map((m, i) => <option key={m} value={String(i + 1).padStart(2, '0')}>{m}</option>)}
         </select>
@@ -167,13 +173,17 @@ export function BankBookTable({ lines: serverLines, banks, migrationMissing, can
           <button onClick={() => reflow(setDir)('in' as const)} className={`border-l border-zinc-800 ${chip(dir === 'in')}`}>In</button>
           <button onClick={() => reflow(setDir)('out' as const)} className={`border-l border-zinc-800 ${chip(dir === 'out')}`}>Out</button>
         </div>
-        <select value={status} onChange={(e) => reflow(setStatus)(e.target.value)} className={field}>
+        <select value={status} onChange={(e) => reflow(setStatus)(e.target.value)} className={`${field} w-[170px] py-2.5 text-sm`}>
           <option value="">Status</option>
           <option value="unreconciled">Unreconciled</option>
           <option value="reconciled">Reconciled</option>
           <option value="ignored">Ignored</option>
         </select>
-        {(bank || year || month || dir || status || search) && <button onClick={reset} className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold text-zinc-300 hover:border-zinc-500">Reset</button>}
+        {(bank || year || month || dir || status || search) && <button onClick={reset} className="rounded-lg border border-zinc-700 px-3 py-2.5 text-xs font-bold text-zinc-300 hover:border-zinc-500">Reset</button>}
+        <div className="relative ml-auto min-w-[240px] flex-1 lg:max-w-[420px]">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
+          <input value={search} onChange={(e) => reflow(setSearch)(e.target.value)} placeholder="Name, details, notes or amount" className={`${field} w-full py-2.5 pl-8`} />
+        </div>
       </div>
 
       {/* Cash In | Cash Out | Total */}

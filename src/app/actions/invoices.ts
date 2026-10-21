@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { assignableWorkspaces } from '@/lib/workspaces/assignable';
 import { NEW_WAVE_WORKSPACE_ID } from '@/lib/workspaces/known';
 import { createClient } from '@/lib/supabase/server';
 

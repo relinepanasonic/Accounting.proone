@@ -284,19 +284,19 @@ export function BankBookTable({ lines: serverLines, banks, migrationMissing, can
               )}
               {sorted.slice(0, shown).map((l) => editing === l.id ? (
                 <tr key={l.id} className="bg-[#d4af37]/5">
-                  <td className="px-4 py-2"><input type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} className={`${field} w-[140px]`} /></td>
-                  <td className="whitespace-nowrap px-4 py-2 text-zinc-400">{bankName(l.bankAccountId) || '-'}</td>
-                  <td className="px-4 py-2"><input value={draft.counterparty} onChange={(e) => setDraft({ ...draft, counterparty: e.target.value })} className={`${field} w-full min-w-[180px]`} /></td>
-                  <td className="space-y-1 px-4 py-2">
-                    <input value={draft.details} onChange={(e) => setDraft({ ...draft, details: e.target.value })} placeholder="Details" className={`${field} w-full min-w-[200px]`} />
+                  <td className="px-2 py-2"><input type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} className={`${field} w-[128px] px-2`} /></td>
+                  <td className="whitespace-nowrap px-2 py-2 text-zinc-400">{bankName(l.bankAccountId) || '-'}</td>
+                  <td className="px-2 py-2"><input value={draft.counterparty} onChange={(e) => setDraft({ ...draft, counterparty: e.target.value })} className={`${field} w-full min-w-0`} /></td>
+                  <td className="space-y-1 px-2 py-2">
+                    <input value={draft.details} onChange={(e) => setDraft({ ...draft, details: e.target.value })} placeholder="Details" className={`${field} w-full min-w-0`} />
                     <input value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} placeholder="Notes" className={`${field} w-full`} />
                   </td>
-                  <td className="px-4 py-2 text-right" colSpan={2}>
-                    <input value={draft.amount} onChange={(e) => setDraft({ ...draft, amount: e.target.value })} inputMode="decimal" title="Money in is positive, money out is negative" className={`${field} w-[150px] text-right font-mono`} />
+                  <td className="px-2 py-2 text-right" colSpan={2}>
+                    <input value={draft.amount} onChange={(e) => setDraft({ ...draft, amount: e.target.value })} inputMode="decimal" title="Money in is positive, money out is negative" className={`${field} w-[120px] text-right font-mono`} />
                     <div className="mt-1 text-[10px] text-zinc-500">in = +, out = -</div>
                   </td>
-                  <td className="px-4 py-2">{rowError && <span className="text-[11px] text-red-400">{rowError}</span>}</td>
-                  <td className="whitespace-nowrap px-4 py-2 text-right">
+                  <td className="px-2 py-2">{rowError && <span className="text-[11px] text-red-400">{rowError}</span>}</td>
+                  <td className="whitespace-nowrap px-2 py-2 text-right">
                     <button onClick={() => saveEdit(l.id)} disabled={saving} className="mr-1 rounded-lg border border-emerald-500/40 p-1.5 text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50" title="Save"><Check className="h-3.5 w-3.5" /></button>
                     <button onClick={() => { setEditing(null); setRowError(''); }} className="rounded-lg border border-zinc-700 p-1.5 text-zinc-400 hover:bg-zinc-800" title="Cancel"><X className="h-3.5 w-3.5" /></button>
                   </td>

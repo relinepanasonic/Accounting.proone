@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   title: 'Professor Toko Accounting | Executive Luxury Gold Suite',
   description:
     'Frictionless Advanced Action-Oriented Accounting & Invoice Generator SaaS in Brushed Luxury Gold for non-accountants.',
-  manifest: '/manifest.json',
+  manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',

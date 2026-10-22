@@ -76,7 +76,35 @@ export interface TeamProfile {
   maxSubtasks?: number;
 }
 
+/** The default team: the supervisors of Optimize Control (see lib/ai/control-team.ts for the daily / weekly reports and the WhatsApp). */
+export const CONTROL_TEAM_SLUG = 'optimize-control';
+
 export const TEAM_PROFILES: Record<string, TeamProfile> = {
+  [CONTROL_TEAM_SLUG]: {
+    slug: CONTROL_TEAM_SLUG,
+    name: 'Optimize Control',
+    mission: 'The supervisors of the whole group (ProOne, PLIG, NW, DOA): Prof leads and checks; Acu watches accounting, Adi the admins, Avi the advertisers, Selly sales and Don Dream of AI. Daily and weekly reports go to Nico, Herlan and Lucy on WhatsApp.',
+    deepByDefault: false,
+    maxSubtasks: 3,
+    roster: [
+      { name: 'Prof', title: 'Boss: orchestrates, quality control, advice and recommendations', floor: 3, kind: 'planner', provider: 'anthropic', model: 'claude-sonnet-5-5', job_desk: 'You lead the supervisors. You split the owner\'s question over the right supervisors, check their answers against the numbers, and give a clear recommendation. Every morning you write the WhatsApp message for Nico, Herlan and Lucy.' },
+      { name: 'Acu', title: 'Accounting supervisor (weekly report)', floor: 2, kind: 'worker', provider: 'anthropic', model: 'claude-sonnet-5-5', job_desk: 'You read cash, revenue, MRR, overhead, coverage ratio, overdue invoices, expenses and bank reconcile status of all companies and report what needs action. Weekly report on Monday.' },
+      { name: 'Adi', title: 'Admin supervisor (weekly report)', floor: 1, kind: 'worker', provider: 'anthropic', model: 'claude-haiku-5-5', job_desk: 'You read the upload log of the admins (Profesor Dashboard and Reline): which stores uploaded each week, who is late, and the running Friends Order projects. Weekly report on Monday.' },
+      { name: 'Avi', title: 'Advertiser supervisor (daily and weekly report)', floor: 1, kind: 'worker', provider: 'anthropic', model: 'claude-haiku-5-5', job_desk: 'You read the advertiser reports: spend, sales, ROAS and ad balance per store, and who has not reported. Daily report and weekly report.' },
+      { name: 'Selly', title: 'Sales supervisor (daily and weekly report)', floor: 1, kind: 'worker', provider: 'anthropic', model: 'claude-haiku-5-5', job_desk: 'You read the sales pipeline: new leads, follow-ups that are overdue, invoices requested, deals won and their value per salesman. Daily report and weekly report.' },
+      { name: 'Don', title: 'Dream of AI supervisor (weekly report)', floor: 1, kind: 'worker', provider: 'anthropic', model: 'claude-haiku-5-5', job_desk: 'You read the numbers of Dream of AI. The workspace is still being set up, so say clearly when there is no data. Weekly report.' },
+    ],
+    plannerGuide:
+      'You are Prof, boss of the Optimize Control team. The brief starts with LIVE COMPANY NUMBERS from the ERP: use them, do not ask the supervisors to look anything up. ' +
+      'Your supervisors: Acu (accounting), Adi (admin uploads), Avi (advertisers), Selly (sales), Don (Dream of AI). Use only the ones the question needs (one to three). ' +
+      'Give each ONE focused question that includes the numbers it needs, and set "agent" to that supervisor name. Keep the work small: this team exists to save tokens.',
+    reportGuide:
+      'You are Prof. Answer the owner in Bahasa Indonesia, short and decisive: the answer in 2-3 lines, then "Perlu tindakan:" with max 5 bullets (who does what), then "Saran Prof:" with max 3 recommendations. Use only numbers from the brief or the supervisors. No Markdown tables.',
+    workerGuide: {
+      worker:
+        'You are a supervisor of the Optimize Control team. Answer the ONE question you were given using only the numbers in it. Be short (under 120 words), in Bahasa Indonesia, and say clearly when data is missing. Never invent numbers.',
+    },
+  },
   'scout-team': {
     slug: 'scout-team',
     name: 'AI Scout Team',
@@ -220,7 +248,9 @@ export async function ensureAgents(db: Db, workspaceId: string): Promise<{ agent
 async function loadTeams(db: Db, workspaceId: string): Promise<{ teams: OfficeTeam[]; ready: boolean }> {
   const { data, error } = await db.from('ai_teams').select('*').eq('workspace_id', workspaceId).order('created_at');
   if (error) return { teams: [], ready: !isMissingTable(error) };
-  return { teams: data || [], ready: true };
+  // Optimize Control is the default team: it comes first (left in the tabs, opened by default).
+  const teams: OfficeTeam[] = [...(data || [])].sort((a: OfficeTeam, b: OfficeTeam) => Number(b.slug === CONTROL_TEAM_SLUG) - Number(a.slug === CONTROL_TEAM_SLUG));
+  return { teams, ready: true };
 }
 
 /** Turns a team on: creates the team and its agents. Safe to call twice. */
@@ -263,10 +293,20 @@ export async function activateTeam(db: Db, workspaceId: string, slug: string) {
 
 export async function getOfficeState(db: Db, workspaceId: string) {
   const keys = providerStatus();
-  const { agents, tablesReady } = await ensureAgents(db, workspaceId);
+  let { agents, tablesReady } = await ensureAgents(db, workspaceId);
   if (!tablesReady) return { setup: { tables: false, teams: false, ...keys }, agents: [], teams: [], skills: [], goals: [], events: [], active: false };
 
-  const { teams, ready: teamsReady } = await loadTeams(db, workspaceId);
+  let { teams, ready: teamsReady } = await loadTeams(db, workspaceId);
+  // The Optimize Control supervisors are the default team: switch them on the first time the office opens.
+  if (teamsReady && !teams.some((t) => t.slug === CONTROL_TEAM_SLUG)) {
+    try {
+      await activateTeam(db, workspaceId, CONTROL_TEAM_SLUG);
+      ({ agents } = await ensureAgents(db, workspaceId));
+      ({ teams, ready: teamsReady } = await loadTeams(db, workspaceId));
+    } catch {
+      /* the owner can still switch it on by hand */
+    }
+  }
 
   let skills: any[] = [];
   if (teamsReady) {
@@ -326,7 +366,7 @@ export async function submitGoal(
   if (await budgetBlocks(db, workspaceId)) {
     throw new Error('The monthly AI budget is used up. Raise it in Mission Control > Dashboard, or wait for next month.');
   }
-  const text = brief.trim();
+  let text = brief.trim();
   const title = text.split('\n')[0].slice(0, 90);
   if (!teamId) throw new Error('Choose a team first. Activate the AI Scout Team in Virtual Office.');
 
@@ -335,6 +375,16 @@ export async function submitGoal(
     const { data } = await db.from('ai_teams').select('*').eq('id', teamId).eq('workspace_id', workspaceId).maybeSingle();
     if (!data || !data.enabled) throw new Error('That team is not active.');
     team = data;
+  }
+  // The supervisors cannot read the ERP themselves: this team gets the live numbers of all companies with the brief.
+  if (team?.slug === CONTROL_TEAM_SLUG) {
+    try {
+      const { buildErpReport } = await import('@/lib/api/erp-report');
+      const report = await buildErpReport();
+      text = `LIVE COMPANY NUMBERS (${report.period.year}-${String(report.period.month).padStart(2, '0')}):\n${report.text}\nPer company: ${JSON.stringify(report.companies.map((x: any) => ({ code: x.code, revenue: x.revenue, paid: x.paidRevenue, mrr: x.mrr, overhead: x.monthlyOverhead, coverage: x.coverageRatio, cash: x.cash, receivable: x.receivable })))}\n\nOWNER'S QUESTION:\n${text}`;
+    } catch {
+      /* without the numbers the team still answers, and says what is missing */
+    }
   }
   const deep = deepThink || Boolean(team && TEAM_PROFILES[team.slug]?.deepByDefault);
 

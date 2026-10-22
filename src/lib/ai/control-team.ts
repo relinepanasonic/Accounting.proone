@@ -11,7 +11,7 @@ import { workspaceCode } from '@/lib/workspaces/known';
 import { costUsd } from '@/lib/ai/costs';
 
 export type AgentKey = 'prof' | 'acu' | 'adi' | 'avi' | 'selly' | 'don';
-export type Cadence = 'daily' | 'weekly';
+export type Cadence = 'daily' | 'weekly' | 'qc';
 
 export interface ControlAgent {
   key: AgentKey;

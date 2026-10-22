@@ -7,7 +7,7 @@ import { runControlNow } from '@/app/actions/control-team';
 import type { ControlAgent, AgentKey } from '@/lib/ai/control-team';
 import { fmtUsd } from '@/lib/ai/costs';
 
-export interface StoredReport { date: string; agent: AgentKey; cadence: 'daily' | 'weekly'; content: string; model: string; tokens: number; costUsd: number }
+export interface StoredReport { date: string; agent: AgentKey; cadence: 'daily' | 'weekly' | 'qc'; content: string; model: string; tokens: number; costUsd: number }
 
 const MODEL_LABEL = (m: string) => (m.includes('sonnet') ? 'Sonnet 5.5' : m.includes('haiku') ? 'Haiku 5.5' : m.includes('opus') ? 'Opus 5.5' : m);
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];

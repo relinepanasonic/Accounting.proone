@@ -6,7 +6,6 @@ import { canEditBankBook } from '@/lib/auth/bank-book-editors';
 import { storeStatement, linkReconciled, type BankBookLineInput } from '@/lib/bank-book/store';
 import { unreconcileRecord } from '@/app/actions/reconcile';
 
-export type { BankBookLineInput };
 
 /**
  * Buku Bank: keep every line of an uploaded statement (see lib/bank-book/store.ts). Needs supabase/migrations/20261014_bank_book.sql

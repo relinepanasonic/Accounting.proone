@@ -231,9 +231,9 @@ export async function runControlTeam(opts: { force?: boolean; today?: string } =
         'Use "-" for bullets. No markdown.',
         { headline, reports: reports.map((r) => ({ from: agentByKey(r.agent).name, cadence: r.cadence, text: r.content })), problems: errors });
       // Only the part after [PESAN] goes to WhatsApp; the QC notes stay in the dashboard.
-      const split = out.text.split(/[PESAN]/i);
-      message = (split.length > 1 ? split[split.length - 1] : out.text).replace(/^s*[:-]?s*/, '').trim();
-      const qc = split.length > 1 ? split[0].replace(/[QC]/i, '').trim() : '';
+      const marker = out.text.search(/\[PESAN\]/i);
+      message = (marker >= 0 ? out.text.slice(marker + '[PESAN]'.length) : out.text).replace(/^\s*:?\s*/, '').trim();
+      const qc = marker >= 0 ? out.text.slice(0, marker).replace(/\[QC\]/i, '').trim() : '';
       if (qc) await save(db, today, { agent: 'prof', cadence: 'qc', content: qc, model: out.model, tokensIn: 0, tokensOut: 0, costUsd: 0 });
       await save(db, today, { agent: 'prof', cadence: weekly ? 'weekly' : 'daily', content: message, model: out.model, tokensIn: out.tokensIn, tokensOut: out.tokensOut, costUsd: costUsd(out.model, out.tokensIn, out.tokensOut) });
     } catch (e: any) {

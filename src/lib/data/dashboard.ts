@@ -430,7 +430,44 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
       addSplit('cash', tx.workspace_id, -Number(tx.amount || 0));
     }
   }
-  const totalCashFlow = openingCash + paidRevenue - transactions.filter(t => isTargetPeriod(t.due_date) && t.reconciled).reduce((s, t) => s + Number(t.amount), 0);
+  let totalCashFlow = openingCash + paidRevenue - transactions.filter(t => isTargetPeriod(t.due_date) && t.reconciled).reduce((s, t) => s + Number(t.amount), 0);
+
+  // Total Cash is the Buku Bank total of the period (opening saldo + cash in - cash out of the stored statements) when statements are uploaded.
+  // A client-only view has no bank lines (the bank is not tied to clients), so it keeps the figure above.
+  if (!clientName) {
+    const bookWorkspaces = combined ? (workspaceIds as string[]) : [A];
+    const periodEnd = monthFilter === null ? `${currentYear}-12-31` : `${currentYear}-${String(monthFilter + 1).padStart(2, '0')}-${String(new Date(currentYear, monthFilter + 1, 0).getDate()).padStart(2, '0')}`;
+    const bookLines: { bank_account_id: string; date: string; txn_time: string | null; amount: number; balance: number | null }[] = [];
+    for (let from = 0; from < 50000; from += 1000) {
+      const { data, error } = await supabase
+        .from('bank_statement_lines')
+        .select('bank_account_id, date, txn_time, amount, balance')
+        .in('workspace_id', bookWorkspaces)
+        .lte('date', periodEnd)
+        .order('date', { ascending: true })
+        .range(from, from + 999);
+      if (error || !data) break; // the Buku Bank tables are not there yet: keep the figure above
+      bookLines.push(...(data as any[]));
+      if (data.length < 1000) break;
+    }
+    if (bookLines.length > 0) {
+      let bookTotal = 0;
+      let known = false;
+      const banks = Array.from(new Set(bookLines.map((l) => l.bank_account_id)));
+      for (const id of banks) {
+        const ofBank = bookLines.filter((l) => l.bank_account_id === id).sort((x, y) => `${String(x.date).slice(0, 10)} ${x.txn_time || ''}`.localeCompare(`${String(y.date).slice(0, 10)} ${y.txn_time || ''}`));
+        const before = ofBank.filter((l) => String(l.date).slice(0, 10) < periodStart);
+        const inPeriod = ofBank.filter((l) => String(l.date).slice(0, 10) >= periodStart);
+        const prev = [...before].reverse().find((l) => l.balance !== null && l.balance !== undefined);
+        let opening = 0;
+        if (prev) opening = Number(prev.balance);
+        else if (before.length === 0 && ofBank[0] && ofBank[0].balance !== null && ofBank[0].balance !== undefined) opening = Number(ofBank[0].balance) - Number(ofBank[0].amount);
+        bookTotal += opening + inPeriod.reduce((sum, l) => sum + Number(l.amount || 0), 0);
+        known = true;
+      }
+      if (known) totalCashFlow = bookTotal;
+    }
+  }
 
   // Cumulative Live Cash
   const liveCashBalance = new Array(numBuckets).fill(0);

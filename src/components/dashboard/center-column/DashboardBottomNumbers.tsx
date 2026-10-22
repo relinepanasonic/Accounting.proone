@@ -83,7 +83,7 @@ export function DashboardBottomNumbers({ telemetry }: { telemetry: DashboardTele
         </div>
         <div>
           <div className="text-xl font-bold font-serif text-white">{formatRupiah(telemetry.totalCashFlow)}</div>
-          <div className="text-xs text-[#d4af37]/60 font-mono mt-1">Opening + In - Out</div>
+          <div className="text-xs text-[#d4af37]/60 font-mono mt-1">Buku Bank: opening + in - out</div>
         </div>
         <CardExtras extra={telemetry.cards?.cash} color="#f5d77f" />
       </div>

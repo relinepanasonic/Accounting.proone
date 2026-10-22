@@ -113,11 +113,14 @@ export function BankBookTable({ lines: serverLines, banks, migrationMissing, can
       const before = periodStart ? ofBank.filter((l) => l.date < periodStart) : [];
       const prev = [...before].reverse().find((l) => l.balance !== null);
       if (prev) { sum += prev.balance as number; known = true; continue; }
-      // Nothing earlier is stored: the first stored line tells it (its saldo minus its own amount).
       const first = ofBank[0];
+      // Nothing earlier is stored: the first stored line tells it (its saldo minus its own amount).
       if (before.length === 0 && first.balance !== null && (!periodStart || first.date >= periodStart)) {
         sum += first.balance - first.amount; known = true;
         if (!periodStart && (!asOf || first.date < asOf)) asOf = first.date;
+      } else if (periodStart) {
+        // No saldo to read: the opening is the total of the months before (the sum of every earlier line).
+        sum += before.reduce((s2, l) => s2 + l.amount, 0); known = true;
       }
     }
     return known ? { amount: sum, asOf } : null;

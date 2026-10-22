@@ -437,11 +437,11 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
   if (!clientName) {
     const bookWorkspaces = combined ? (workspaceIds as string[]) : [A];
     const periodEnd = monthFilter === null ? `${currentYear}-12-31` : `${currentYear}-${String(monthFilter + 1).padStart(2, '0')}-${String(new Date(currentYear, monthFilter + 1, 0).getDate()).padStart(2, '0')}`;
-    const bookLines: { bank_account_id: string; date: string; txn_time: string | null; amount: number; balance: number | null }[] = [];
+    const bookLines: { workspace_id: string; bank_account_id: string; date: string; txn_time: string | null; amount: number; balance: number | null }[] = [];
     for (let from = 0; from < 50000; from += 1000) {
       const { data, error } = await supabase
         .from('bank_statement_lines')
-        .select('bank_account_id, date, txn_time, amount, balance')
+        .select('workspace_id, bank_account_id, date, txn_time, amount, balance')
         .in('workspace_id', bookWorkspaces)
         .lte('date', periodEnd)
         .order('date', { ascending: true })
@@ -451,8 +451,10 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
       if (data.length < 1000) break;
     }
     if (bookLines.length > 0) {
+      // Per bank: the opening is the saldo of the last line before the period (the total of the month before); a bank whose statements carry
+      // no saldo starts from the sum of its earlier lines. Then add the cash in and out of the period. The cards of each company use the same rule.
       let bookTotal = 0;
-      let known = false;
+      const perCompany = new Map<string, number>();
       const banks = Array.from(new Set(bookLines.map((l) => l.bank_account_id)));
       for (const id of banks) {
         const ofBank = bookLines.filter((l) => l.bank_account_id === id).sort((x, y) => `${String(x.date).slice(0, 10)} ${x.txn_time || ''}`.localeCompare(`${String(y.date).slice(0, 10)} ${y.txn_time || ''}`));
@@ -462,10 +464,14 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
         let opening = 0;
         if (prev) opening = Number(prev.balance);
         else if (before.length === 0 && ofBank[0] && ofBank[0].balance !== null && ofBank[0].balance !== undefined) opening = Number(ofBank[0].balance) - Number(ofBank[0].amount);
-        bookTotal += opening + inPeriod.reduce((sum, l) => sum + Number(l.amount || 0), 0);
-        known = true;
+        else opening = before.reduce((sum, l) => sum + Number(l.amount || 0), 0);
+        const total = opening + inPeriod.reduce((sum, l) => sum + Number(l.amount || 0), 0);
+        bookTotal += total;
+        perCompany.set(ofBank[0].workspace_id, (perCompany.get(ofBank[0].workspace_id) || 0) + total);
       }
-      if (known) totalCashFlow = bookTotal;
+      totalCashFlow = bookTotal;
+      split.cash.clear();
+      for (const [wsId, v] of perCompany) addSplit('cash', wsId, v);
     }
   }
 

@@ -640,6 +640,9 @@ export async function createClientRecord(payload: {
   name: string;
   company_legal_name?: string;
   contactPerson?: string;
+  /** The person in charge of the client (the PIC column of the Client table). */
+  pic?: string;
+  storeName?: string;
   email?: string;
   contactType?: 'client' | 'vendor';
   cloneWorkspaceIds?: string[];
@@ -656,8 +659,9 @@ export async function createClientRecord(payload: {
       workspace_id: workspaceId,
       name: payload.name.trim(),
       company_legal_name: payload.company_legal_name?.trim() || null,
-      contact_name: payload.contactPerson?.trim() || null,
-      company_name: payload.name.trim(),
+      contact_name: payload.contactPerson?.trim() || payload.pic?.trim() || null,
+      company_name: payload.pic?.trim() || payload.name.trim(),
+      ...(payload.storeName?.trim() ? { store_name: payload.storeName.trim() } : {}),
       email: payload.email?.trim() || null,
       contact_type: payload.contactType || 'client',
     };

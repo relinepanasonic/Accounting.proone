@@ -104,6 +104,8 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [quickAddName, setQuickAddName] = useState('');
   const [isQuickAdding, setIsQuickAdding] = useState(false);
+  const [quickAddPic, setQuickAddPic] = useState('');
+  const [quickAddStore, setQuickAddStore] = useState('');
   const [invoiceNumber, setInvoiceNumber] = useState(() => initialData?.invoiceNumber || (initialData?.isQuotation || (typeof searchParams !== 'undefined' && searchParams.get('type') === 'quotation') ? `QUOTE-2026-${Math.floor(100 + Math.random() * 900)}` : `INV-2026-${Math.floor(100 + Math.random() * 900)}`));
   const [issueDate, setIssueDate] = useState(() => initialData?.issueDate || new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState(() => initialData?.dueDate || getNet7Date());
@@ -225,11 +227,13 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
   const displayedGrandTotal = Math.ceil(grandTotal) - (isPTPL && (hasPpn || hasPph) ? adjustmentAmount : 0);
 
   const handleQuickAddClient = async () => {
-    if (!quickAddName.trim()) return;
+    if (!quickAddName.trim() || !quickAddPic.trim()) return;
     setIsQuickAdding(true);
     try {
       const res = await createClientRecord({
         name: quickAddName,
+        pic: quickAddPic,
+        storeName: quickAddStore,
         contactType: 'client'
       });
       if (res.success && res.client) {
@@ -237,6 +241,8 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
         setClientId(res.client.id);
         setShowQuickAdd(false);
         setQuickAddName('');
+        setQuickAddPic('');
+        setQuickAddStore('');
       } else {
         setErrorMsg(res.error || 'Failed to create client');
       }
@@ -374,33 +380,39 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
             </div>
             
             {showQuickAdd && (
-              <div className="flex gap-2 mb-3 bg-black/40 p-2 rounded-xl border border-zinc-800">
-                <input 
-                  type="text"
-                  placeholder="Client Name..."
-                  value={quickAddName}
-                  onChange={(e) => setQuickAddName(e.target.value)}
-                  className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-sm text-white focus:border-[#d4af37] focus:outline-none"
-                  autoFocus
-                />
-                <button
-                  type="button"
-                  disabled={isQuickAdding || !quickAddName.trim()}
-                  onClick={handleQuickAddClient}
-                  className="bg-[#d4af37] text-black px-3 py-1.5 rounded-lg text-xs font-bold uppercase disabled:opacity-50"
-                >
-                  {isQuickAdding ? '...' : 'Save'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowQuickAdd(false)}
-                  className="bg-zinc-800 text-zinc-400 px-3 py-1.5 rounded-lg text-xs font-bold uppercase"
-                >
-                  Cancel
-                </button>
+              <div className="mb-3 space-y-2 bg-black/40 p-3 rounded-xl border border-zinc-800">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Client Name <span className="text-red-500">*</span>
+                    <input type="text" value={quickAddName} onChange={(e) => setQuickAddName(e.target.value)} className="mt-1 w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-sm text-white focus:border-[#d4af37] focus:outline-none" autoFocus />
+                  </label>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">PIC <span className="text-red-500">*</span>
+                    <input type="text" value={quickAddPic} onChange={(e) => setQuickAddPic(e.target.value)} className="mt-1 w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-sm text-white focus:border-[#d4af37] focus:outline-none" />
+                  </label>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Store name
+                    <input type="text" value={quickAddStore} onChange={(e) => setQuickAddStore(e.target.value)} className="mt-1 w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-sm text-white focus:border-[#d4af37] focus:outline-none" />
+                  </label>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={isQuickAdding || !quickAddName.trim() || !quickAddPic.trim()}
+                    onClick={handleQuickAddClient}
+                    className="bg-[#d4af37] text-black px-4 py-1.5 rounded-lg text-xs font-bold uppercase disabled:opacity-40"
+                  >
+                    {isQuickAdding ? '...' : 'Save'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowQuickAdd(false)}
+                    className="bg-zinc-800 text-zinc-400 px-4 py-1.5 rounded-lg text-xs font-bold uppercase"
+                  >
+                    Cancel
+                  </button>
+                  {(!quickAddName.trim() || !quickAddPic.trim()) && <span className="self-center text-[10px] text-zinc-500">Client Name and PIC are required.</span>}
+                </div>
               </div>
             )}
-            
+
             <ClientSelect
               value={clientId}
               onChange={setClientId}

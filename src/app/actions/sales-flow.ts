@@ -561,6 +561,14 @@ export async function decideAcc(dealId: string, approve: boolean, comment: strin
 }
 
 // ------------------------------------------------------------------------------------------------ 8. client table
+/** The client belongs to this company, or has an invoice in this company's scope (its own, or PT Pintu's assigned to it). */
+async function clientInScope(db: any, workspaceId: string, clientId: string): Promise<boolean> {
+  const { data: own } = await db.from('clients').select('id').eq('id', clientId).eq('workspace_id', workspaceId).maybeSingle();
+  if (own) return true;
+  const { data: inv } = await db.from('invoices').select('id').eq('client_id', clientId).or(invoiceScope(workspaceId)).limit(1);
+  return Boolean(inv && inv.length);
+}
+
 /** Picks (or changes) the project start date of an invoice. The end date follows from each product length. */
 export async function setProjectStart(invoiceId: string, startDate: string): Promise<Result> {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) return { success: false, error: 'Choose the start date.' };
@@ -613,7 +621,9 @@ export async function updateClientNames(clientId: string, brand: string, store: 
   const a = await actor();
   if (!a || !FINANCE.includes(a.ctx.role)) return { success: false, error: 'Only Accounting, Admin and the owners can change client names.' };
   const { ctx, db } = a;
-  const { error } = await db.from('clients').update({ company_name: str(brand) || null, store_name: str(store) || null }).eq('id', clientId).eq('workspace_id', ctx.activeWorkspaceId);
+  // A client of this company, or a client of an invoice PT Pintu holds for this company (PT x Prof): Prof edits it.
+  if (!(await clientInScope(db, ctx.activeWorkspaceId, clientId))) return { success: false, error: 'Client not found.' };
+  const { error } = await db.from('clients').update({ company_name: str(brand) || null, store_name: str(store) || null }).eq('id', clientId);
   if (error) return fail(error);
   revalidatePath('/sales/clients');
   revalidatePath('/productivity/advertiser/clients');
@@ -627,8 +637,7 @@ export async function setClientHandler(clientId: string, job: 'advertising' | 'a
   if (!a || !OWNERS.includes(a.ctx.role)) return { success: false, error: 'Only a superadmin can assign.' };
   if (job !== 'advertising' && job !== 'admin') return { success: false, error: 'Unknown job.' };
   const { ctx, db } = a;
-  const { data: client } = await db.from('clients').select('id').eq('id', clientId).eq('workspace_id', ctx.activeWorkspaceId).maybeSingle();
-  if (!client) return { success: false, error: 'Client not found.' };
+  if (!(await clientInScope(db, ctx.activeWorkspaceId, clientId))) return { success: false, error: 'Client not found.' };
 
   await db.from('client_assignments').delete().eq('workspace_id', ctx.activeWorkspaceId).eq('client_id', clientId).eq('job', job);
   if (userId) {
@@ -655,8 +664,8 @@ export async function setPaidDate(invoiceId: string, date: string): Promise<Resu
 }
 
 /** Accounting sets a client's status by hand: Freeze (something happened), Churn, or back to Auto (Active / Scheduled by the dates). */
-export async function setClientStatus(invoiceId: string, status: 'auto' | 'freeze' | 'churn'): Promise<Result> {
-  if (!['auto', 'freeze', 'churn'].includes(status)) return { success: false, error: 'Unknown status.' };
+export async function setClientStatus(invoiceId: string, status: 'auto' | 'freeze' | 'churn' | 'finished'): Promise<Result> {
+  if (!['auto', 'freeze', 'churn', 'finished'].includes(status)) return { success: false, error: 'Unknown status.' };
   const a = await actor();
   if (!a || !FINANCE.includes(a.ctx.role)) return { success: false, error: 'Only Accounting, Admin and the owners can change the status.' };
   const today = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
@@ -665,7 +674,7 @@ export async function setClientStatus(invoiceId: string, status: 'auto' | 'freez
     .update({ client_status: status === 'auto' ? null : status, client_status_at: status === 'auto' ? null : today })
     .eq('id', invoiceId)
     .or(invoiceScope(a.ctx.activeWorkspaceId));
-  if (error) return { success: false, error: error.code === '42703' || /client_status/.test(error.message) ? 'Run supabase/migrations/20261010_client_status.sql in Supabase first.' : error.message };
+  if (error) return { success: false, error: error.code === '23514' ? 'Run supabase/migrations/20261019_client_status_finished.sql in Supabase first.' : error.code === '42703' || /client_status/.test(error.message) ? 'Run supabase/migrations/20261010_client_status.sql in Supabase first.' : error.message };
   revalidatePath('/sales/clients');
   revalidatePath('/sales/churn');
   revalidatePath('/optimizing/clients');

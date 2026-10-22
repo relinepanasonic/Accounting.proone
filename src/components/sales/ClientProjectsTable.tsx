@@ -14,9 +14,10 @@ const LIFE_STYLE: Record<string, string> = {
   active: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
   scheduled: 'bg-sky-500/10 text-sky-300 border-sky-500/30',
   freeze: 'bg-cyan-500/10 text-cyan-200 border-cyan-400/40',
+  finished: 'bg-violet-500/10 text-violet-300 border-violet-500/30',
   churn: 'bg-red-500/10 text-red-300 border-red-500/30',
 };
-const LIFE_LABEL: Record<string, string> = { active: 'Active', scheduled: 'Scheduled', freeze: 'Freeze', churn: 'Churn' };
+const LIFE_LABEL: Record<string, string> = { active: 'Active', scheduled: 'Scheduled', freeze: 'Freeze', finished: 'Finished', churn: 'Churn' };
 
 interface Person { id: string; name: string }
 
@@ -37,7 +38,7 @@ function NameCells({ row, canEdit }: { row: ClientRow; canEdit: boolean }) {
   return (
     <>
       <td rowSpan={row.groupSize} className="px-3 py-3 align-top">
-        {canEdit ? <input value={brand} onChange={(e) => setBrand(e.target.value)} onBlur={save} placeholder="Brand name" className={cls} /> : <span className="text-zinc-200">{row.brand || '-'}</span>}
+        {canEdit ? <input value={brand} onChange={(e) => setBrand(e.target.value)} onBlur={save} placeholder="PIC" className={cls} /> : <span className="text-zinc-200">{row.brand || '-'}</span>}
       </td>
       <td rowSpan={row.groupSize} className="px-3 py-3 align-top">
         {canEdit ? <input value={store} onChange={(e) => setStore(e.target.value)} onBlur={save} placeholder="Store name" className={cls} /> : <span className="text-zinc-200">{row.store || '-'}</span>}
@@ -59,44 +60,51 @@ function PaidCell({ row }: { row: ClientRow; canEdit?: boolean }) {
 }
 
 function StatusCell({ row, canEdit }: { row: ClientRow; canEdit: boolean }) {
+  // The change shows at once; the save runs behind it and is undone only if it fails. No page reload.
   const router = useRouter();
+  const [life, setLife] = useState(row.lifecycle);
+  const [override, setOverride] = useState(row.override);
+  const [churnDate, setChurnDate] = useState(row.churnDate);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
   const [pending, start] = useTransition();
   const editable = canEdit && Boolean(row.invoiceId);
-  const badge = `inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${LIFE_STYLE[row.lifecycle]}`;
+  const badge = `inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${LIFE_STYLE[life]}`;
 
-  const choose = (status: 'auto' | 'freeze' | 'churn') => {
+  const choose = (status: 'auto' | 'freeze' | 'churn' | 'finished') => {
     setError('');
+    const before = { life, override, churnDate };
+    setOpen(false);
+    setOverride(status === 'auto' ? null : status);
+    if (status !== 'auto') setLife(status); // Auto: the real state comes from the dates, so it is read again below
+    setChurnDate(status === 'churn' ? new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' }) : null);
     start(async () => {
       const res = await setClientStatus(row.invoiceId, status);
-      if (!res.success) setError(res.error);
-      else setOpen(false);
-      router.refresh();
+      if (!res.success) { setError(res.error); setLife(before.life); setOverride(before.override); setChurnDate(before.churnDate); return; }
+      if (status === 'auto') router.refresh();
     });
   };
 
   return (
     <div className="space-y-1.5">
       {editable ? (
-        <button type="button" onClick={() => setOpen((o) => !o)} disabled={pending} className={`${badge} cursor-pointer hover:brightness-125`} title="Click to change the status">
-          {LIFE_LABEL[row.lifecycle]} <span className="text-[8px] opacity-70">{open ? '▲' : '▼'}</span>
+        <button type="button" onClick={() => setOpen((o) => !o)} className={`${badge} cursor-pointer hover:brightness-125 ${pending ? 'opacity-70' : ''}`} title="Click to change the status">
+          {LIFE_LABEL[life]} <span className="text-[8px] opacity-70">{open ? '▲' : '▼'}</span>
         </button>
       ) : (
-        <span className={badge}>{LIFE_LABEL[row.lifecycle]}</span>
+        <span className={badge}>{LIFE_LABEL[life]}</span>
       )}
-      {row.lifecycle === 'churn' && row.churnDate && <div className="text-[10px] text-zinc-500">since {dmy(row.churnDate)}</div>}
+      {life === 'churn' && churnDate && <div className="text-[10px] text-zinc-500">since {dmy(churnDate)}</div>}
       {editable && open && (
         <div className="flex flex-col items-start gap-1 rounded-lg border border-zinc-800 bg-zinc-950 p-1.5">
-          {([['auto', 'Auto (by dates)'], ['freeze', 'Freeze'], ['churn', 'Churn']] as const).map(([k, label]) => (
+          {([['auto', 'Auto (by dates)'], ['finished', 'Finished (client stays)'], ['freeze', 'Freeze'], ['churn', 'Churn (client left)']] as const).map(([k, label]) => (
             <button
               key={k}
               type="button"
-              disabled={pending}
               onClick={() => choose(k)}
-              className={`w-full rounded-md px-2 py-1 text-left text-[11px] font-semibold hover:bg-zinc-800 ${(row.override || 'auto') === k ? 'text-[#f5d77f]' : 'text-zinc-300'}`}
+              className={`w-full rounded-md px-2 py-1 text-left text-[11px] font-semibold hover:bg-zinc-800 ${(override || 'auto') === k ? 'text-[#f5d77f]' : 'text-zinc-300'}`}
             >
-              {(row.override || 'auto') === k ? '✓ ' : ''}{label}
+              {(override || 'auto') === k ? '✓ ' : ''}{label}
             </button>
           ))}
         </div>
@@ -229,7 +237,7 @@ export function ClientProjectsTable({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search client, brand, store, product or invoice" className={`${field} w-full max-w-sm py-1.5`} />
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search client, PIC, store, product or invoice" className={`${field} w-full max-w-sm py-1.5`} />
         {assign && (
           <label className="flex cursor-pointer items-center gap-2 text-xs text-zinc-400">
             <input type="checkbox" checked={onlyOpen} onChange={(e) => setOnlyOpen(e.target.checked)} className="accent-[#d4af37]" /> Only clients missing an advertiser or admin
@@ -246,7 +254,7 @@ export function ClientProjectsTable({
             <Th k="end">End Project</Th>
             <Th k="client">Client</Th>
             {showSalesman && <Th k="salesman">Salesman</Th>}
-            <Th k="brand">Brand Name</Th>
+            <Th k="brand">PIC</Th>
             <Th k="store">Store Name</Th>
             <Th k="product">Product</Th>
             {showStatus && <Th k="status">Status</Th>}

@@ -4,7 +4,7 @@
 // Used by Sales > Client, Optimizing > Clients (with handler assignment) and mirrored in Advertiser / Admin (up to Product).
 import { computeProjectTerms, withLengthFromQuantity, type RequestItem } from '@/lib/sales/flow';
 import { todayJakarta } from '@/lib/kpi/calendar';
-import { PT_WORKSPACE_ID } from '@/lib/workspaces/known';
+import { PT_WORKSPACE_ID, NEW_WAVE_WORKSPACE_ID } from '@/lib/workspaces/known';
 
 /**
  * Which invoices belong to a workspace's Client table: its own, plus (for a workspace other than PT Pintu) the PT Pintu invoices
@@ -14,7 +14,8 @@ import { PT_WORKSPACE_ID } from '@/lib/workspaces/known';
 export const invoiceScope = (workspaceId: string) =>
   workspaceId === PT_WORKSPACE_ID ? `workspace_id.eq.${workspaceId}` : `workspace_id.eq.${workspaceId},and(workspace_id.eq.${PT_WORKSPACE_ID},assigned_workspace_id.eq.${workspaceId})`;
 
-export type Lifecycle = 'active' | 'scheduled' | 'freeze' | 'churn';
+/** finished: the project is done but the client is still with us. churn: the client left (set by hand). */
+export type Lifecycle = 'active' | 'scheduled' | 'freeze' | 'finished' | 'churn';
 
 type Db = any;
 
@@ -39,7 +40,7 @@ export interface ClientRow {
   /** Active / Scheduled (project not started) / Freeze (set by hand) / Churn (project ended). */
   lifecycle: Lifecycle;
   /** Freeze or Churn set by hand; null = automatic. */
-  override: 'freeze' | 'churn' | null;
+  override: 'freeze' | 'churn' | 'finished' | null;
   /** Day the project ended (or was marked churn). */
   churnDate: string | null;
   /** Churned in an earlier month: lives on the Churn page, not in Client. */
@@ -173,15 +174,16 @@ async function loadInvoiceRows(db: Db, workspaceId: string, opts: LoadOpts): Pro
     const projectDate = /\[ProjectDate:(\d{4}-\d{2}-\d{2})\]/.exec(inv.notes || '')?.[1] || null;
     const pickedStart: string | null = projectByInvoice.get(inv.id)?.start_date || null;
     const start: string | null = pickedStart || (isDeal ? projectDate : null);
-    const override: 'freeze' | 'churn' | null = inv.client_status === 'freeze' || inv.client_status === 'churn' ? inv.client_status : null;
+    const override: 'freeze' | 'churn' | 'finished' | null = inv.client_status === 'freeze' || inv.client_status === 'churn' || inv.client_status === 'finished' ? inv.client_status : null;
     const ends = lines.map((it) => (start ? computeProjectTerms([it], start).endDate : null)).filter(Boolean) as string[];
     const projectEnd = ends.length ? ends.sort()[ends.length - 1] : null;
     let lifecycle: Lifecycle;
     let churnDate: string | null = null;
     if (override === 'churn') { lifecycle = 'churn'; churnDate = inv.client_status_at || today; }
     else if (override === 'freeze') lifecycle = 'freeze';
+    else if (override === 'finished') lifecycle = 'finished';
     else if (!start || start > today) lifecycle = 'scheduled';
-    else if (projectEnd && projectEnd < today) { lifecycle = 'churn'; churnDate = projectEnd; }
+    else if (projectEnd && projectEnd < today) lifecycle = 'finished'; // the project ran out; the client may well continue (Churn is set by hand)
     else lifecycle = 'active';
     // A churned client stays in Client until the end of that month, then moves to the Churn page.
     const archived = lifecycle === 'churn' && !!churnDate && churnDate.slice(0, 7) < today.slice(0, 7);
@@ -249,7 +251,18 @@ export async function loadClientRows(db: Db, workspaceId: string, opts: LoadOpts
   };
   let { data: clients, error } = await build(true);
   if (error) ({ data: clients, error } = await build(false));
-  const list: any[] = (clients || []).filter((c: any) => !hasInvoice.has(c.id) && (!opts.clientIds || opts.clientIds.has(c.id)));
+  let list: any[] = (clients || []).filter((c: any) => !hasInvoice.has(c.id) && (!opts.clientIds || opts.clientIds.has(c.id)));
+  if (workspaceId !== NEW_WAVE_WORKSPACE_ID && list.length) {
+    // New Wave's own clients (Panasonic dealers...) are not Prof's: same name in New Wave, an invoice held for New Wave, or a Panasonic name.
+    const norm = (v: string) => String(v || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+    const [{ data: nwClients }, { data: nwInvoices }] = await Promise.all([
+      db.from('clients').select('name').eq('workspace_id', NEW_WAVE_WORKSPACE_ID).limit(2000),
+      db.from('invoices').select('client_id').eq('assigned_workspace_id', NEW_WAVE_WORKSPACE_ID).in('client_id', list.map((c) => c.id)).limit(3000),
+    ]);
+    const nwNames = new Set((nwClients || []).map((c: any) => norm(c.name)));
+    const nwInvoiceClients = new Set((nwInvoices || []).map((i: any) => i.client_id));
+    list = list.filter((c) => !nwNames.has(norm(c.name)) && !nwInvoiceClients.has(c.id) && !/panasonic/i.test(String(c.name || '')));
+  }
   if (!list.length) return rows;
 
   const { data: assigns } = await db.from('client_assignments').select('client_id, user_id, job').eq('workspace_id', workspaceId).in('client_id', list.map((c) => c.id)).in('job', ['advertising', 'admin']);

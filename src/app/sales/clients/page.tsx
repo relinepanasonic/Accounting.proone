@@ -31,7 +31,7 @@ export default async function SalesClientsPage() {
         <p className="text-sm text-zinc-400 mt-1">
           Every product each client took, from the moment its invoice exists. Accounting types the paid date and picks the project start date; the end date follows from each product&apos;s length.{!canEdit && ' You can look at this table but not change it.'}
         </p>
-        <p className="mt-2 text-xs text-zinc-500">{clients} client{clients === 1 ? '' : 's'} · Active {count('active')} · Scheduled {count('scheduled')} · Freeze {count('freeze')} · Churn this month {count('churn')}. A churned client moves to the Churn page next month.</p>
+        <p className="mt-2 text-xs text-zinc-500">{clients} client{clients === 1 ? '' : 's'} · Active {count('active')} · Scheduled {count('scheduled')} · Finished {count('finished')} · Freeze {count('freeze')} · Churn {count('churn')}. Finished = the project is done, the client stays. Churn = the client left.</p>
       </div>
 
       <ClientProjectsTable

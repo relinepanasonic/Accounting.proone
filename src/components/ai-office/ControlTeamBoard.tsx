@@ -22,7 +22,8 @@ export function ControlTeamBoard({ team, reports, migrationMissing }: { team: Co
   const [openDay, setOpenDay] = useState<string | null>(null);
 
   const days = useMemo(() => Array.from(new Set(reports.map((r) => r.date))), [reports]);
-  const latestMessage = reports.find((r) => r.agent === 'prof');
+  const latestMessage = reports.find((r) => r.agent === 'prof' && r.cadence !== 'qc');
+  const latestQc = reports.find((r) => r.agent === 'prof' && r.cadence === 'qc' && r.date === latestMessage?.date);
   const name = (k: AgentKey) => team.find((a) => a.key === k)?.name || k;
   const monthKey = new Date().toISOString().slice(0, 7);
   const monthCost = reports.filter((r) => r.date.startsWith(monthKey)).reduce((s, r) => s + r.costUsd, 0);
@@ -76,6 +77,13 @@ export function ControlTeamBoard({ team, reports, migrationMissing }: { team: Co
         {notice && <div className="mb-3 text-xs text-zinc-400">{notice}</div>}
         <pre className="whitespace-pre-wrap rounded-xl border border-zinc-800 bg-zinc-950 p-4 font-sans text-[13px] leading-relaxed text-zinc-200">{latestMessage?.content || 'No message yet. Press "Run the team now".'}</pre>
       </div>
+
+      {latestQc && (
+        <div className="gold-glass-panel rounded-2xl p-5">
+          <h2 className="mb-2 text-sm font-extrabold uppercase tracking-wider text-zinc-200">Prof&apos;s QC notes</h2>
+          <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed text-zinc-300">{latestQc.content}</pre>
+        </div>
+      )}
 
       {/* Reports per day */}
       <div className="space-y-2">

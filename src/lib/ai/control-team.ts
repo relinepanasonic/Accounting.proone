@@ -226,11 +226,15 @@ export async function runControlTeam(opts: { force?: boolean; today?: string } =
       const headline = await buildErpReport().then((r) => ({ today: r.period, total: r.total, yearToDate: { mrr: r.yearTotal.mrr, overhead: r.yearTotal.monthlyOverhead, coverage: r.yearTotal.coverageRatio }, overdue: r.overdueInvoices.count })).catch(() => null);
       const out = await ask(prof,
         'You are Prof, the boss of the AI team. You get the reports of your supervisors (Acu accounting, Adi admin, Avi ads, Selly sales, Don Dream of AI). ' +
-        'Do QC: point out anything that contradicts the numbers or looks wrong. Then write ONE WhatsApp message for the owners (Nico, Herlan, Lucy), max 1200 characters: ' +
+        'Do QC: point out anything that contradicts the numbers or looks wrong. Answer in exactly two parts: first the line [QC] and your QC notes (max 80 words, for the owner dashboard only), then the line [PESAN] and then ONE WhatsApp message for the owners (Nico, Herlan, Lucy) with nothing else after it, max 1200 characters: ' +
         `start with "Laporan Pagi ${today}"${weekly ? ' and mark it as the weekly report' : ''}, then the key numbers in 3-4 lines, then "Perlu tindakan hari ini:" with max 5 bullets (who does what), then "Saran Prof:" with max 3 short recommendations. ` +
         'Use "-" for bullets. No markdown.',
         { headline, reports: reports.map((r) => ({ from: agentByKey(r.agent).name, cadence: r.cadence, text: r.content })), problems: errors });
-      message = out.text;
+      // Only the part after [PESAN] goes to WhatsApp; the QC notes stay in the dashboard.
+      const split = out.text.split(/[PESAN]/i);
+      message = (split.length > 1 ? split[split.length - 1] : out.text).replace(/^s*[:-]?s*/, '').trim();
+      const qc = split.length > 1 ? split[0].replace(/[QC]/i, '').trim() : '';
+      if (qc) await save(db, today, { agent: 'prof', cadence: 'qc', content: qc, model: out.model, tokensIn: 0, tokensOut: 0, costUsd: 0 });
       await save(db, today, { agent: 'prof', cadence: weekly ? 'weekly' : 'daily', content: message, model: out.model, tokensIn: out.tokensIn, tokensOut: out.tokensOut, costUsd: costUsd(out.model, out.tokensIn, out.tokensOut) });
     } catch (e: any) {
       errors.push(`Prof: ${e?.message || 'failed'}`);

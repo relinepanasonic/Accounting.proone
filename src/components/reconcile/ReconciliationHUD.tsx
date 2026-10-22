@@ -513,6 +513,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
     let list = recordsList.filter((r) => {
       if (!inMonth(r.date, sysMonth, sysYear)) return false;
       if (rightTab === 'matched') return Boolean(r.reconciled);
+      if (r.reconciled) return false; // a matched record moves to the Matched tab
       if (rightTab === 'expenses') return r.type === 'expense' || r.type === 'payroll';
       return r.type === 'income' || r.type === 'invoice';
     });
@@ -532,7 +533,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
     for (const r of recordsList) {
       if (!inMonth(r.date, sysMonth, sysYear)) continue;
       if (r.reconciled) matched++;
-      if (r.type === 'expense' || r.type === 'payroll') expenses++;
+      else if (r.type === 'expense' || r.type === 'payroll') expenses++;
       else cash++;
     }
     return { cash, expenses, matched, unpaid: openInvoices.length };
@@ -748,9 +749,6 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                     </div>
                     {rec.notes && <div className="mt-0.5 truncate text-[10px] text-zinc-500">{rec.notes}</div>}
                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                      {rightTab !== 'matched' && (rec.reconciled
-                        ? <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold text-emerald-400">Reconciled</span>
-                        : <span className="rounded-full bg-zinc-800/60 px-2 py-0.5 text-[9px] font-bold text-zinc-400">Not reconciled</span>)}
                       {!rec.reconciled && isBest && amountMatch && <span className="rounded-full bg-[#d4af37]/10 px-2 py-0.5 text-[9px] font-bold text-[#f5d77f]">Suggested</span>}
                       {rec.reconciled && (
                         <button type="button" disabled={isPending} onClick={(e) => { e.stopPropagation(); handleUndoMatch(rec); }} className="ml-auto rounded border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-red-300 hover:bg-red-500/20 disabled:opacity-40">Undo match</button>

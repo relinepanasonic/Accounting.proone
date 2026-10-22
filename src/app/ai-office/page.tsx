@@ -1,4 +1,5 @@
 import React from 'react';
+import Link from 'next/link';
 import { ShieldAlert } from 'lucide-react';
 import { getOfficeAccess } from '@/lib/ai/office-auth';
 import { MissionControl } from '@/components/ai-office/MissionControl';
@@ -10,11 +11,14 @@ export default async function AIOfficePage() {
 
   return (
     <div className="p-4 lg:p-8 space-y-6 animate-in fade-in zoom-in-95 duration-300">
+      <div className="flex flex-wrap items-start justify-between gap-4">
       <div>
         <h1 className="text-2xl font-extrabold text-zinc-100 font-serif">AI Office · Mission Control</h1>
         <p className="text-sm text-zinc-400 mt-1">
           Brief the boss. It plans the work, the floors below do it, and quality control checks it before you get the report.
         </p>
+      </div>
+        {access && <Link href="/ai-office/control" className="rounded-lg border border-[#d4af37]/40 bg-[#d4af37]/10 px-4 py-2 text-xs font-bold uppercase tracking-wider text-[#f5d77f] hover:bg-[#d4af37]/20">Optimize Control</Link>}
       </div>
 
       {access ? (

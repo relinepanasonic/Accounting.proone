@@ -159,7 +159,8 @@ async function loadInvoiceRows(db: Db, workspaceId: string, opts: LoadOpts): Pro
   };
 
   const today = todayJakarta();
-  const rows: ClientRow[] = [];
+  type Pending = { inv: any; client: any; deal: any; lines: RequestItem[]; start: string | null; pickedStart: string | null; projectEnd: string | null; override: 'freeze' | 'churn' | 'finished' | null; lifecycle: Lifecycle | 'ended'; churnDate: string | null; paidAt: string | null; paid: boolean; isDeal: boolean };
+  const pending: Pending[] = [];
   for (const inv of invoices) {
     const client = clientById.get(inv.client_id);
     if (!client) continue;
@@ -167,7 +168,6 @@ async function loadInvoiceRows(db: Db, workspaceId: string, opts: LoadOpts): Pro
     const status = String(inv.status || '').toLowerCase();
     const paid = status === 'paid';
     const isDeal = paid || deal?.stage === 'Deal';
-    const paidManual: string | null = null; // the paid date is automatic (invoice payment); nothing is typed by hand
     const paidAt: string | null = deal?.paid_at || deal?.acc_approved_at || (paid ? lastPayment.get(inv.id) || null : null);
     const items = itemsOf(inv, deal);
     const lines = items.length ? items : [NO_LINES];
@@ -177,14 +177,29 @@ async function loadInvoiceRows(db: Db, workspaceId: string, opts: LoadOpts): Pro
     const override: 'freeze' | 'churn' | 'finished' | null = inv.client_status === 'freeze' || inv.client_status === 'churn' || inv.client_status === 'finished' ? inv.client_status : null;
     const ends = lines.map((it) => (start ? computeProjectTerms([it], start).endDate : null)).filter(Boolean) as string[];
     const projectEnd = ends.length ? ends.sort()[ends.length - 1] : null;
-    let lifecycle: Lifecycle;
+    let lifecycle: Lifecycle | 'ended';
     let churnDate: string | null = null;
     if (override === 'churn') { lifecycle = 'churn'; churnDate = inv.client_status_at || today; }
     else if (override === 'freeze') lifecycle = 'freeze';
     else if (override === 'finished') lifecycle = 'finished';
     else if (!start || start > today) lifecycle = 'scheduled';
-    else if (projectEnd && projectEnd < today) lifecycle = 'finished'; // the project ran out; the client may well continue (Churn is set by hand)
+    else if (projectEnd && projectEnd < today) lifecycle = 'ended'; // decided below: Finished or Churn
     else lifecycle = 'active';
+    pending.push({ inv, client, deal, lines, start, pickedStart, projectEnd, override, lifecycle, churnDate, paidAt, paid, isDeal });
+  }
+
+  // A project that ran out is Finished when the client is still in the ecosystem (a running project or a recent purchase in ANY
+  // company, matched by client name), and Churn when the client is gone.
+  const alive = await aliveClients(db, pending, today);
+  const rows: ClientRow[] = [];
+  for (const p of pending) {
+    const { inv, client, deal, lines, start, pickedStart, override, paidAt, paid, isDeal } = p;
+    let lifecycle: Lifecycle;
+    let churnDate = p.churnDate;
+    if (p.lifecycle === 'ended') {
+      if (alive.has(clientNameKey(client.name))) lifecycle = 'finished';
+      else { lifecycle = 'churn'; churnDate = p.projectEnd; }
+    } else lifecycle = p.lifecycle;
     // A churned client stays in Client until the end of that month, then moves to the Churn page.
     const archived = lifecycle === 'churn' && !!churnDate && churnDate.slice(0, 7) < today.slice(0, 7);
     if (opts.archived === 'only' ? !archived : opts.archived === 'all' ? false : archived) continue;
@@ -201,7 +216,7 @@ async function loadInvoiceRows(db: Db, workspaceId: string, opts: LoadOpts): Pro
         product: it.name,
         quantity: Number(it.quantity || 1),
         paidAt,
-        paidManual,
+        paidManual: null, // the paid date is automatic (invoice payment); nothing is typed by hand
         accApprovedOnly: Boolean(deal && !deal.paid_at && deal.acc_approved_at && !paid),
         start,
         startAuto: !pickedStart && !!start,
@@ -223,6 +238,44 @@ async function loadInvoiceRows(db: Db, workspaceId: string, opts: LoadOpts): Pro
     });
   }
   return rows;
+}
+
+/** The same client across the companies: matched by name (each company keeps its own copy of a client). */
+const clientNameKey = (name: string) => String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+const RECENT_PURCHASE_DAYS = 90;
+
+/**
+ * The clients (by name key) that are still in the ecosystem: a project of this table that is running, scheduled or frozen, or in any
+ * company an invoice whose project still runs (or starts later), or a purchase of the last 90 days that has no project yet.
+ */
+async function aliveClients(db: Db, pending: Array<{ client: any; lifecycle: string; inv: any }>, today: string): Promise<Set<string>> {
+  const alive = new Set<string>();
+  const ownInvoiceIds = new Set<string>();
+  for (const p of pending) {
+    ownInvoiceIds.add(p.inv.id);
+    if (p.lifecycle === 'active' || p.lifecycle === 'scheduled' || p.lifecycle === 'freeze') alive.add(clientNameKey(p.client.name));
+  }
+  const wanted = new Set(pending.filter((p) => p.lifecycle === 'ended').map((p) => clientNameKey(p.client.name)).filter((k) => !alive.has(k)));
+  if (wanted.size === 0) return alive;
+
+  const { data: allClients } = await db.from('clients').select('id, name').limit(10000);
+  const keyById = new Map<string, string>();
+  for (const c of allClients || []) { const k = clientNameKey(c.name); if (wanted.has(k)) keyById.set(c.id, k); }
+  const ids = Array.from(keyById.keys());
+  const recent = new Date(new Date(`${today}T12:00:00Z`).getTime() - RECENT_PURCHASE_DAYS * 86400000).toISOString().slice(0, 10);
+  for (let i = 0; i < ids.length; i += 150) {
+    const { data: invs } = await db.from('invoices').select('id, client_id, issue_date, status').in('client_id', ids.slice(i, i + 150)).eq('is_quotation', false);
+    const others = (invs || []).filter((v: any) => !ownInvoiceIds.has(v.id) && !HIDDEN_STATUS.includes(String(v.status || '').toLowerCase()));
+    if (!others.length) continue;
+    const { data: projs } = await db.from('projects').select('invoice_id, start_date, end_date').in('invoice_id', others.map((v: any) => v.id));
+    const projByInv = new Map<string, any>((projs || []).map((p: any) => [p.invoice_id, p]));
+    for (const v of others) {
+      const pr = projByInv.get(v.id);
+      const running = pr ? (!pr.end_date || String(pr.end_date) >= today || (pr.start_date && String(pr.start_date) > today)) : String(v.issue_date || '') >= recent;
+      if (running) alive.add(keyById.get(v.client_id) as string);
+    }
+  }
+  return alive;
 }
 
 /**

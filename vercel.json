@@ -1,5 +1,12 @@
 {
   "crons": [
-    { "path": "/api/ai-office/cron", "schedule": "0 0 * * *" }
+    {
+      "path": "/api/ai-office/cron",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/ai-office/control-cron",
+      "schedule": "0 1 * * *"
+    }
   ]
 }

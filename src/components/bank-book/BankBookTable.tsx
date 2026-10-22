@@ -22,9 +22,11 @@ const dmy = (iso: string) => (/^\d{4}-\d{2}-\d{2}/.test(iso) ? `${iso.slice(8, 1
 export const bankLabel = (b: BankBookAccount) => (b.accountNumber ? `${b.bankName} | ${b.accountNumber}` : b.bankName);
 
 const isOpeningRow = (l: BankBookLine) => l.amount === 0 && l.counterparty === 'Opening balance';
-/** The Details text of a row; the opening-balance row says what its saldo is. */
+/** The Details column is the note of the bank line (what you wrote: "Beli kulkas gading"); without a note, the type. The opening-balance row says what its saldo is. */
 const detailsText = (l: BankBookLine) =>
-  isOpeningRow(l) ? `Last saldo ${l.balance !== null ? rp(l.balance) : '-'} (${dmy(l.date)})` : [l.details, l.rekFrom, l.notes].filter(Boolean).join(' · ') || '-';
+  isOpeningRow(l) ? `Last saldo ${l.balance !== null ? rp(l.balance) : '-'} (${dmy(l.date)})` : l.notes || l.details || '-';
+/** Hover text: the type of transaction, the bank and account, and the note. */
+const detailsHover = (l: BankBookLine) => (isOpeningRow(l) ? detailsText(l) : [l.details, l.rekFrom, l.notes].filter(Boolean).join(' · ') || '-');
 
 type SortKey = 'date' | 'bank' | 'counterparty' | 'details' | 'in' | 'out' | 'status';
 
@@ -309,7 +311,7 @@ export function BankBookTable({ lines: serverLines, banks, migrationMissing, can
                   <td className="whitespace-nowrap px-4 py-3 font-mono text-zinc-300">{dmy(l.date)}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-zinc-400">{bankName(l.bankAccountId) || '-'}</td>
                   <td className="max-w-[260px] truncate px-4 py-3 font-semibold text-zinc-100" title={l.counterparty}>{l.counterparty || '-'}</td>
-                  <td className="max-w-[300px] truncate px-4 py-3 text-zinc-500" title={detailsText(l)}>{detailsText(l)}</td>
+                  <td className="max-w-[300px] truncate px-4 py-3 text-zinc-500" title={detailsHover(l)}>{detailsText(l)}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-right font-mono text-emerald-400">{l.amount > 0 ? rp(l.amount) : ''}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-right font-mono text-red-400">{l.amount < 0 ? rp(l.amount) : ''}</td>
                   <td className="px-4 py-3">

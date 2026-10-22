@@ -22,6 +22,9 @@ export function parseJago(rawLines: string[]): ParseResult {
       continue;
     }
 
+    // The statement's own header lines carry a date too ("... Latest balance 22 Oct 2026"): they are not transactions.
+    if (dateMatch && /(Saldo terbaru|Latest Balance|Menampilkan transaksi|Showing .*transaction|Tanggal & Waktu|Date & Time)/i.test(line)) continue;
+
     if (dateMatch) {
       if (currentTx) parsedBlocks.push(currentTx);
       currentTx = {

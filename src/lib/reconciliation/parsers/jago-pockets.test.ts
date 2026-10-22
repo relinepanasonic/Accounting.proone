@@ -71,3 +71,49 @@ describe('parseJago: Pockets Transactions History', () => {
     expect(tx[3]).toMatchObject({ amount: 1000000, notes: '' });
   });
 });
+
+describe('parseJago: English statement', () => {
+  const EN = `PT Bank Jago Tbk is licensed and supervised by Financial Services Authority (OJK), Bank Indonesia, and
+also a member of Indonesia Deposit Insurance Corporation (LPS) deposit insurance program. www.jago.com
+Pockets Transactions History Page 1 of 8
+NICO WINARTA JAPAR
+New Wave Agency 102900358121
+Showing Rupiah transaction from Latest Balance per 13 Mar 2025
+01 Jan 2025 - 12 Mar 2025 Rp14.095.306
+Date & Time Source/Destination Transaction Details Notes Amount Balance
+January 2025
+03 Jan 2025
+11:59
+ERIC SETIAWAN
+BCA 6440604160
+Incoming Transfer
+ID# 1329662145
++10.000.000 11.084.106
+03 Jan 2025
+12:28
+Ads New Wave
+Movement between Pockets
+Movement between Pockets
+ID# 1329741298
+-2.500.000 8.584.106
+06 Jan 2025
+12:09
+GUNUNG ANSA RETAIL
+PT
+BCA 5910155433
+Outgoing Transfer
+ID# 250106JAGBIDJA00054190
+rent nov -3.885.000 2.199.106
+Disclaimer
+This document is your list of Jago Transaction History.`;
+  const tx = parseJago(EN.split('\n')).data || [];
+  it('reads the 24-hour times with a colon and balances without decimals, and never the header', () => {
+    expect(tx).toHaveLength(3);
+    expect(tx.some((t) => /Date & Time|Latest Balance/.test(t.sourceDestination))).toBe(false);
+    expect(tx[0]).toMatchObject({ date: '2025-01-03', sourceDestination: 'ERIC SETIAWAN', transactionDetails: 'Incoming Transfer', amount: 10000000, balance: 11084106, time: '11:59' });
+    expect(tx[2]).toMatchObject({ sourceDestination: 'GUNUNG ANSA RETAIL PT', notes: 'rent nov', amount: -3885000 });
+  });
+  it('a move between pockets has no account', () => {
+    expect(tx[1]).toMatchObject({ sourceDestination: 'Ads New Wave', transactionDetails: 'Movement between Pockets', rekFrom: '' });
+  });
+});

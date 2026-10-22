@@ -15,10 +15,10 @@ import { parseBankDate, parseIndonesianNumber } from './utils';
  * Returns an empty list when the file is not in this layout, so the caller can try the older reader.
  */
 const DATE_LINE = /^\d{1,2}\s+[A-Za-z]{3,4}\s+\d{4}$/;
-const TIME_LINE = /^\d{2}\.\d{2}$/;
-const AMOUNT_TAIL = /([-+]\s?\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?)\s+(\d{1,3}(?:\.\d{3})*,\d{2})$/;
+const TIME_LINE = /^\d{2}[.:]\d{2}$/; // the Indonesian statement writes 15.15, the English one 15:15
+const AMOUNT_TAIL = /([-+]\s?\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?)\s+(\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?)$/;
 const ID_LINE = /^ID#\s*(.+)$/i;
-const FOOTER = /^(PT Bank Jago Tbk|merupakan peserta penjaminan|Pockets Transactions History|Tanggal & Waktu|Info Penting)/i;
+const FOOTER = /^(PT Bank Jago Tbk|merupakan peserta penjaminan|also a member of|Pockets Transactions History|Tanggal & Waktu|Date & Time|Info Penting|Disclaimer)/i;
 const MONTH_HEADER = /^[A-Za-z]+\s+\d{4}$/; // "Januari 2026"
 const BANKS = /^(BCA Digital|BCA|BRI|BNI|BTN|Bank Mandiri|Mandiri|CIMB Niaga|CIMB|Permata|Danamon|BSI|XENDIT|FINPAY|ShopeePay|GoPay|OVO|DANA|LinkAja|PLN|Jago|Bank Jago|Blu|SeaBank|Allo Bank)\b/i;
 const LONG_DIGITS = /\d{6,}/;
@@ -35,8 +35,8 @@ export function parseJagoPockets(rawLines: string[]): BankTransaction[] {
     const to = b + 1 < starts.length ? starts[b + 1] : lines.length;
     const block: string[] = [];
     for (let i = from + 2; i < to; i++) {
-      if (/^Info Penting/i.test(lines[i])) break;
-      if (FOOTER.test(lines[i]) || /^merupakan peserta/i.test(lines[i]) || MONTH_HEADER.test(lines[i])) continue;
+      if (/^(Info Penting|Disclaimer)/i.test(lines[i])) break;
+      if (FOOTER.test(lines[i]) || /^(merupakan peserta|also a member of)/i.test(lines[i]) || MONTH_HEADER.test(lines[i])) continue;
       block.push(lines[i]);
     }
 
@@ -68,7 +68,7 @@ export function parseJagoPockets(rawLines: string[]): BankTransaction[] {
       sourceDestination: name || type,
       transactionDetails: type,
       notes,
-      rekFrom: rekParts.join(' ').trim(),
+      rekFrom: rekParts.join(' ').trim() === type ? '' : rekParts.join(' ').trim(), // a move between pockets repeats its type here
       amount,
       balance: parseIndonesianNumber(m[2]),
       time: lines[from + 1].replace('.', ':'),

@@ -40,6 +40,7 @@ interface BankLine {
   notes: string;
   rekFrom: string;
   amount: number;
+  reconciled?: boolean;
 }
 
 interface BankAccount {
@@ -72,7 +73,7 @@ function toIsoDate(value: string): string | undefined {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-export interface BookLine { id: string; bankAccountId: string; date: string; counterparty: string; details: string; notes: string; rekFrom: string; amount: number }
+export interface BookLine { id: string; bankAccountId: string; date: string; counterparty: string; details: string; notes: string; rekFrom: string; amount: number; reconciled?: boolean }
 export interface OpenInvoice { id: string; number: string; client: string; date: string; total: number; paid: number; balance: number }
 
 interface ReconciliationHUDProps {
@@ -129,7 +130,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   // Right side: Cash Received | Invoice Unpaid | Expenses | Matched
   const [rightTab, setRightTab] = useState<'cash' | 'unpaid' | 'expenses' | 'matched'>('cash');
   const [dirFilter, setDirFilter] = useState<'all' | 'in' | 'out'>('all');
-  const [activeFilterTab, setActiveFilterTab] = useState<'all' | 'matched' | 'unmatched'>('all');
+  const [activeFilterTab, setActiveFilterTab] = useState<'open' | 'matched' | 'all'>('open');
   const [paySearch, setPaySearch] = useState('');
   const [payPartial, setPayPartial] = useState<Record<string, number | ''>>({});
   const [payBusy, setPayBusy] = useState<string | null>(null);
@@ -190,7 +191,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   useEffect(() => {
     const feed: BankLine[] = bookLines
       .filter((l) => l.bankAccountId === activeBankId)
-      .map((l) => ({ id: l.id, date: l.date, sourceDestination: l.counterparty, transactionDetails: l.details, notes: l.notes, rekFrom: l.rekFrom, amount: l.amount }))
+      .map((l) => ({ id: l.id, date: l.date, sourceDestination: l.counterparty, transactionDetails: l.details, notes: l.notes, rekFrom: l.rekFrom, amount: l.amount, reconciled: l.reconciled }))
       .sort((a, b) => a.date.localeCompare(b.date));
     setBankLines(feed);
     if (!feedStarted.current && feed.length > 0) {
@@ -248,8 +249,9 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
       try {
         const res: any = await recordInvoicePayment(inv.id, amount, toIsoDate(line.date) || line.date, 'Bank Transfer', `Bank ${line.sourceDestination}`.slice(0, 80), undefined, bankId);
         if (!res?.success || !res.transactionId) { setPayError(res?.error || 'Could not record the payment.'); return; }
-        await reconcileRecord(res.transactionId, 'income', ref, activeBankId, undefined, false, undefined, toIsoDate(line.date));
-        setBankLines((prev) => prev.filter((b) => b.id !== line.id));
+        const rec: any = await reconcileRecord(res.transactionId, 'income', ref, activeBankId, undefined, false, undefined, toIsoDate(line.date));
+        if (rec?.success === false) { setPayError(`Payment recorded but not matched: ${rec.error}`); return; }
+        setBankLines((prev) => prev.map((b) => (b.id === line.id ? { ...b, reconciled: true } : b)));
         setSelectedBankId(null);
         setNoMatchMode(null);
         void relinkBankBook().finally(() => router.refresh());
@@ -266,6 +268,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   const suggestions = useMemo(() => {
     const pairs: { lineId: string; record: UnreconciledSystemRecord; score: number }[] = [];
     for (const bankLine of bankLines) {
+      if (bankLine.reconciled) continue;
       for (const r of recordsList) {
         if (r.reconciled) continue;
         const typeOk = (bankLine.amount > 0 && (r.type === 'invoice' || r.type === 'income')) ||
@@ -313,9 +316,8 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
       if (!inMonth(b.date, bankMonth, bankYear)) return false;
       if (dirFilter === 'in' && !(b.amount > 0)) return false;
       if (dirFilter === 'out' && !(b.amount < 0)) return false;
-      const bm = findBestMatch(b);
-      if (activeFilterTab === 'matched') return !!bm;
-      if (activeFilterTab === 'unmatched') return !bm;
+      if (activeFilterTab === 'open') return !b.reconciled;
+      if (activeFilterTab === 'matched') return Boolean(b.reconciled);
       return true;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -399,7 +401,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
         const taxWriteoffAmount = isTaxWriteoff ? recordAmountAbs - bankAmountAbs : undefined;
 
         for (const targetRecord of targetRecords) {
-          await reconcileRecord(
+          const out: any = await reconcileRecord(
             targetRecord.id,
             targetRecord.type,
             uniqueRef,
@@ -411,8 +413,13 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
             taxWriteoffAmount,
             toIsoDate(activeBankLine.date)
           );
+          if (out?.success === false) {
+            await askOptions('Could not match', out.error || 'Something went wrong. Nothing was changed for this record.', [{ text: 'Close', value: 'close', isPrimary: true }]);
+            router.refresh();
+            return;
+          }
         }
-        setBankLines((prev) => prev.filter((b) => b.id !== activeBankLine.id));
+        setBankLines((prev) => prev.map((b) => (b.id === activeBankLine.id ? { ...b, reconciled: true } : b)));
         void relinkBankBook().finally(() => router.refresh());
         if (isPartialPayment) {
           setRecordsList((prev) => prev.map((r) => activeTargetIds.includes(r.id) ? { ...r, amount: r.amount > 0 ? r.amount - bankAmountAbs : r.amount + bankAmountAbs } : r));
@@ -421,7 +428,10 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
         }
         setSelectedRecordIds([]);
         setSelectedBankId(null);
-      } catch (err) { console.error(err); }
+      } catch (err: any) {
+        console.error(err);
+        await askOptions('Could not match', err?.message || 'Something went wrong. Reload the page and try again.', [{ text: 'Close', value: 'close', isPrimary: true }]);
+      }
     });
   };
 
@@ -468,8 +478,9 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
       try {
         const uniqueBankRef = `BANK-REF:${activeBankLine.date}:${activeBankLine.amount}:${activeBankLine.sourceDestination}`;
         const finalDescription = (quickVendorName ? quickVendorName + ' | ' : '') + quickNotes;
-        await quickResolveAndReconcile(type, quickCategory, Number(quickAmount) || Math.abs(activeBankLine.amount), quickDate || activeBankLine.date, finalDescription || 'Quick Resolve', uniqueBankRef, activeBankId, quickVendorId);
-        setBankLines((prev) => prev.filter((b) => b.id !== activeBankLine.id));
+        const q: any = await quickResolveAndReconcile(type, quickCategory, Number(quickAmount) || Math.abs(activeBankLine.amount), quickDate || activeBankLine.date, finalDescription || 'Quick Resolve', uniqueBankRef, activeBankId, quickVendorId);
+        if (q?.success === false || q?.error) { alert(q.error || 'Failed to save.'); return; }
+        setBankLines((prev) => prev.map((b) => (b.id === activeBankLine.id ? { ...b, reconciled: true } : b)));
         void relinkBankBook().finally(() => router.refresh());
         setSelectedBankId(null);
         setQuickCategory(''); setQuickVendorName(''); setQuickVendorId(undefined); setQuickNotes(''); setShowQuickForm(false);
@@ -600,25 +611,25 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
             </select>
           </div>
           <div className="mb-2 flex h-9 items-center gap-2">
-            <Segment value={activeFilterTab} onChange={setActiveFilterTab} options={[{ key: 'all', label: 'All' }, { key: 'matched', label: 'Matched', tone: 'green' }, { key: 'unmatched', label: 'Not Found', tone: 'red' }]} />
+            <Segment value={activeFilterTab} onChange={setActiveFilterTab} options={[{ key: 'open', label: 'Not Reconciled', tone: 'red' }, { key: 'matched', label: 'Matched', tone: 'green' }, { key: 'all', label: 'All' }]} />
             <Segment value={dirFilter} onChange={setDirFilter} options={[{ key: 'all', label: 'All' }, { key: 'in', label: 'In', tone: 'green' }, { key: 'out', label: 'Out', tone: 'red' }]} />
-            <span className="ml-auto font-mono text-[10px] text-zinc-500">{filteredBankLines.length} open</span>
+            <span className="ml-auto font-mono text-[10px] text-zinc-500">{filteredBankLines.length} lines</span>
           </div>
           <div className="mb-3 flex h-9 items-center"><MonthFilter month={bankMonth} year={bankYear} years={years} onChange={(m, y) => { setBankMonth(m); setBankYear(y); }} /></div>
 
           <div className="flex-1 space-y-2 overflow-y-auto pr-1">
             {filteredBankLines.length === 0 ? (
               <div className="rounded-xl border border-dashed border-zinc-800 p-8 text-center text-xs text-zinc-500">
-                {bankLines.length === 0 ? 'No open line in Buku Bank for this account. Upload a statement in Buku Bank.' : 'No line for these filters.'}
+                {bankLines.length === 0 ? 'No line in Buku Bank for this account. Upload a statement in Buku Bank.' : 'No line for these filters.'}
               </div>
             ) : filteredBankLines.map((line) => {
               const isSel = selectedBankId === line.id;
-              const hint = findBestMatch(line);
+              const hint = line.reconciled ? null : findBestMatch(line);
               return (
                 <div
                   key={line.id}
-                  onClick={() => pickBankLine(line)}
-                  className={`cursor-pointer rounded-xl border p-3 transition-all ${isSel ? 'border-[#f5d77f] bg-[#d4af37]/15 shadow-[0_0_18px_rgba(212,175,55,0.22)]' : 'border-zinc-800/80 bg-zinc-950/60 hover:border-zinc-700'}`}
+                  onClick={() => { if (!line.reconciled) pickBankLine(line); }}
+                  className={`rounded-xl border p-3 transition-all ${line.reconciled ? '' : 'cursor-pointer '}${isSel ? 'border-[#f5d77f] bg-[#d4af37]/15 shadow-[0_0_18px_rgba(212,175,55,0.22)]' : 'border-zinc-800/80 bg-zinc-950/60 hover:border-zinc-700'}`}
                 >
                   <div className="flex items-center justify-between font-mono text-xs">
                     <span className="text-zinc-400">{formatIndoDate(line.date)}</span>
@@ -627,9 +638,9 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                   <div className="mt-1 truncate text-xs font-medium text-white">{line.sourceDestination || '-'}</div>
                   {(line.transactionDetails || line.notes) && <div className="mt-0.5 truncate text-[10px] text-zinc-500">{[line.transactionDetails, line.notes].filter(Boolean).join(' | ')}</div>}
                   <div className="mt-2 flex items-center justify-between">
-                    {hint ? <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold text-emerald-400">Match found</span> : <span className="rounded-full bg-zinc-800/60 px-2 py-0.5 text-[9px] font-bold text-zinc-500">No match</span>}
+                    {line.reconciled ? <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold text-emerald-400">Reconciled</span> : hint ? <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold text-emerald-400">Match found</span> : <span className="rounded-full bg-zinc-800/60 px-2 py-0.5 text-[9px] font-bold text-zinc-500">No match</span>}
                     <div className="flex items-center gap-1">
-                      {line.amount < 0 ? (
+                      {line.reconciled ? null : line.amount < 0 ? (
                         <button type="button" title="No match: create an expense" aria-label="Create expense" onClick={(e) => { e.stopPropagation(); openNoMatch(line, 'expense'); }} className="rounded-md border border-red-500/30 p-1 text-red-400 hover:bg-red-500/10"><Receipt className="h-3.5 w-3.5" /></button>
                       ) : (
                         <>

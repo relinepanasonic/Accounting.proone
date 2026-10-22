@@ -121,7 +121,6 @@ async function ReconciliationCore() {
       .from('bank_statement_lines')
       .select('id, bank_account_id, date, counterparty, description, details, notes, rek_from, amount, status')
       .eq('workspace_id', activeWorkspaceId)
-      .neq('status', 'reconciled')
       .neq('amount', 0)
       .order('date', { ascending: true })
       .range(from, from + 999);
@@ -131,7 +130,7 @@ async function ReconciliationCore() {
   }
   const bookLinesForScreen = bookLines.map((l: any) => ({
     id: l.id as string, bankAccountId: l.bank_account_id as string, date: String(l.date).slice(0, 10),
-    counterparty: (l.counterparty || l.description || '') as string, details: (l.details || '') as string, notes: (l.notes || '') as string, rekFrom: (l.rek_from || '') as string, amount: Number(l.amount || 0),
+    counterparty: (l.counterparty || l.description || '') as string, details: (l.details || '') as string, notes: (l.notes || '') as string, rekFrom: (l.rek_from || '') as string, amount: Number(l.amount || 0), reconciled: l.status === 'reconciled',
   }));
 
   const rawInvoices = invoicesRes.data || [];

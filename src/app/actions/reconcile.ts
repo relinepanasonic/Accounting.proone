@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { getWorkspaceMappings } from './mappings';
 
-export async function reconcileRecord(
+async function reconcileRecordCore(
   recordId: string,
   recordType: 'invoice' | 'expense' | 'payroll' | 'income',
   bankReference: string,
@@ -270,6 +270,15 @@ export async function quickResolveAndReconcile(
  * Quick Log (they only exist because of that match) are deleted with their ledger lines.
  * Not restored: a total or amount that was adjusted during the match, and the original payment date.
  */
+/** A failed match answers with its message (a thrown error is hidden in production and left the screen silent). */
+export async function reconcileRecord(...args: Parameters<typeof reconcileRecordCore>): Promise<{ success: boolean; error?: string }> {
+  try {
+    return await reconcileRecordCore(...args);
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Could not match.' };
+  }
+}
+
 export async function unreconcileRecord(recordId: string, recordType: 'invoice' | 'expense' | 'payroll' | 'income') {
   const supabase = await createClient();
   const ctx = await getAuthenticatedWorkspaceContext(supabase);

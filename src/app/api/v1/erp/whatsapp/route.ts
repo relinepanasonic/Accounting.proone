@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { authorizeErpApi } from '@/lib/api/erp-report';
 import { buildWhatsAppReport } from '@/lib/reports/whatsapp-report';
+import { signedReportUrl } from '@/lib/reports/signed-url';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
@@ -17,7 +18,7 @@ export async function GET(request: Request) {
     const date = new URL(request.url).searchParams.get('date') || undefined;
     const res = await buildWhatsAppReport(date);
     const origin = new URL(request.url).origin;
-    const files = ((res as any).files || []).map((f: any) => ({ ...f, url: `${origin}/api/v1/erp/report-pdf?company=${f.company}&date=${res.date}` }));
+    const files = ((res as any).files || []).map((f: any) => ({ ...f, url: signedReportUrl(origin, f.company, res.date) }));
     return NextResponse.json({ ...res, files, chars: res.text.length }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (err: any) {
     console.error('whatsapp report failed', err);

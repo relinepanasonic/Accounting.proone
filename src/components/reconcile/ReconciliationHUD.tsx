@@ -96,12 +96,12 @@ function MonthFilter({ month, year, years, onChange }: { month: number; year: nu
   const cls = 'rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-[11px] font-bold text-zinc-200 outline-none focus:border-[#d4af37]/60';
   return (
     <div className="flex items-center gap-1.5">
+      <select value={year} onChange={(e) => onChange(month, Number(e.target.value))} className={cls} aria-label="Year">
+        {years.map((y) => <option key={y} value={y}>{y}</option>)}
+      </select>
       <select value={month} onChange={(e) => onChange(Number(e.target.value), year)} className={cls} aria-label="Month">
         <option value={0}>All months</option>
         {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-      </select>
-      <select value={year} onChange={(e) => onChange(month, Number(e.target.value))} className={cls} aria-label="Year">
-        {years.map((y) => <option key={y} value={y}>{y}</option>)}
       </select>
     </div>
   );
@@ -502,7 +502,6 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
     let list = recordsList.filter((r) => {
       if (!inMonth(r.date, sysMonth, sysYear)) return false;
       if (rightTab === 'matched') return Boolean(r.reconciled);
-      if (r.reconciled) return false;
       if (rightTab === 'expenses') return r.type === 'expense' || r.type === 'payroll';
       return r.type === 'income' || r.type === 'invoice';
     });
@@ -522,7 +521,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
     for (const r of recordsList) {
       if (!inMonth(r.date, sysMonth, sysYear)) continue;
       if (r.reconciled) matched++;
-      else if (r.type === 'expense' || r.type === 'payroll') expenses++;
+      if (r.type === 'expense' || r.type === 'payroll') expenses++;
       else cash++;
     }
     return { cash, expenses, matched, unpaid: openInvoices.length };
@@ -594,18 +593,18 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
       <div className="grid grid-cols-1 gap-4 lg:h-[calc(100vh-230px)] lg:min-h-[560px] lg:grid-cols-[1fr_130px_1fr]">
         {/* LEFT: Buku Bank */}
         <section className="flex min-h-[420px] min-w-0 flex-col rounded-2xl border border-zinc-800 p-4 gold-glass-panel lg:min-h-0">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[#d4af37]">Buku Bank</h3>
-            <span className="font-mono text-[10px] text-zinc-500">{filteredBankLines.length} open</span>
+          <div className="mb-2 flex h-9 items-center gap-2">
+            <h3 className="shrink-0 text-xs font-bold uppercase tracking-wider text-[#d4af37]">Buku Bank</h3>
+            <select value={activeBankId} onChange={(e) => { setActiveBankId(e.target.value); setSelectedBankId(null); }} className="h-9 min-w-0 flex-1 rounded-lg border border-zinc-800 bg-zinc-950 px-3 font-mono text-[11px] font-bold text-[#f5d77f] outline-none focus:border-[#d4af37]/60">
+              {bankAccounts.length === 0 ? <option value="">No bank registered</option> : bankAccounts.map((b) => <option key={b.id} value={b.id}>{b.bank_name} | {b.account_number}{b.account_holder ? ` | ${b.account_holder}` : ''}</option>)}
+            </select>
           </div>
-          <select value={activeBankId} onChange={(e) => { setActiveBankId(e.target.value); setSelectedBankId(null); }} className="mb-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 font-mono text-[11px] font-bold text-[#f5d77f] outline-none focus:border-[#d4af37]/60">
-            {bankAccounts.length === 0 ? <option value="">No bank registered</option> : bankAccounts.map((b) => <option key={b.id} value={b.id}>{b.bank_name} | {b.account_number}{b.account_holder ? ` | ${b.account_holder}` : ''}</option>)}
-          </select>
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <MonthFilter month={bankMonth} year={bankYear} years={years} onChange={(m, y) => { setBankMonth(m); setBankYear(y); }} />
-            <Segment value={dirFilter} onChange={setDirFilter} options={[{ key: 'all', label: 'All' }, { key: 'in', label: 'In', tone: 'green' }, { key: 'out', label: 'Out', tone: 'red' }]} />
+          <div className="mb-2 flex h-9 items-center gap-2">
             <Segment value={activeFilterTab} onChange={setActiveFilterTab} options={[{ key: 'all', label: 'All' }, { key: 'matched', label: 'Matched', tone: 'green' }, { key: 'unmatched', label: 'Not Found', tone: 'red' }]} />
+            <Segment value={dirFilter} onChange={setDirFilter} options={[{ key: 'all', label: 'All' }, { key: 'in', label: 'In', tone: 'green' }, { key: 'out', label: 'Out', tone: 'red' }]} />
+            <span className="ml-auto font-mono text-[10px] text-zinc-500">{filteredBankLines.length} open</span>
           </div>
+          <div className="mb-3 flex h-9 items-center"><MonthFilter month={bankMonth} year={bankYear} years={years} onChange={(m, y) => { setBankMonth(m); setBankYear(y); }} /></div>
 
           <div className="flex-1 space-y-2 overflow-y-auto pr-1">
             {filteredBankLines.length === 0 ? (
@@ -665,30 +664,27 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
 
         {/* RIGHT: System */}
         <section className="flex min-h-[420px] min-w-0 flex-col rounded-2xl border border-zinc-800 p-4 gold-glass-panel lg:min-h-0">
-          <div className="mb-3 flex items-center justify-between">
+          <div className="mb-2 flex h-9 items-center justify-between gap-2">
             <h3 className="text-xs font-bold uppercase tracking-wider text-[#d4af37]">System</h3>
             <span className="font-mono text-[10px] text-zinc-500">{selectedRecords.length > 0 ? `${selectedRecords.length} selected` : ''}</span>
           </div>
-          <div className="mb-2 grid grid-cols-2 gap-1 rounded-lg border border-zinc-800 bg-zinc-950 p-0.5 sm:grid-cols-4">
-            {tabs.map((t) => (
-              <button key={t.key} type="button" onClick={() => { setRightTab(t.key); setPayError(''); }} className={`rounded-md px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide transition-all ${rightTab === t.key ? tabTone[t.tone || 'gold'] : 'text-zinc-500 hover:text-zinc-300'}`}>
-                {t.label} <span className="font-mono opacity-70">{t.count}</span>
-              </button>
-            ))}
-          </div>
-          {rightTab !== 'unpaid' && (
-            <div className="mb-3">
-              <MonthFilter month={sysMonth} year={sysYear} years={years} onChange={(m, y) => { setSysMonth(m); setSysYear(y); }} />
+          <div className="mb-2 flex h-9 items-center">
+            <div className="grid w-full grid-cols-4 gap-1 rounded-lg border border-zinc-800 bg-zinc-950 p-0.5">
+              {tabs.map((t) => (
+                <button key={t.key} type="button" onClick={() => { setRightTab(t.key); setPayError(''); }} className={`truncate rounded-md px-1.5 py-1.5 text-[10px] font-bold uppercase tracking-wide transition-all ${rightTab === t.key ? tabTone[t.tone || 'gold'] : 'text-zinc-500 hover:text-zinc-300'}`}>
+                  {t.label} <span className="font-mono opacity-70">{t.count}</span>
+                </button>
+              ))}
             </div>
-          )}
+          </div>
+          <div className="mb-3 flex h-9 items-center">
+            {rightTab === 'unpaid'
+              ? <input value={paySearch} onChange={(e) => setPaySearch(e.target.value)} placeholder="Search client or invoice number" className="h-9 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 text-[11px] text-zinc-100 outline-none focus:border-sky-500/50" />
+              : <MonthFilter month={sysMonth} year={sysYear} years={years} onChange={(m, y) => { setSysMonth(m); setSysYear(y); }} />}
+          </div>
 
           {rightTab === 'unpaid' ? (
             <div className="flex min-h-0 flex-1 flex-col">
-              <p className="mb-2 text-[11px] text-zinc-500">
-                {activeBankLine && activeBankLine.amount > 0 ? `Bank line: ${signed(activeBankLine.amount)} from ${activeBankLine.sourceDestination}. The closest invoices are on top.` : 'Choose an incoming bank card on the left to get suggestions.'}
-                {' '}Paid or Partial creates a cash record in Cash Received, ready to match.
-              </p>
-              <input value={paySearch} onChange={(e) => setPaySearch(e.target.value)} placeholder="Search client or invoice number" className="mb-3 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-sky-500/50" />
               {payError && <div className="mb-3 rounded-lg border border-red-500/30 bg-red-500/5 p-2 text-xs text-red-300">{payError}</div>}
               <div className="flex-1 space-y-2 overflow-y-auto pr-1">
                 {payShown.length === 0 && <div className="rounded-xl border border-dashed border-zinc-800 p-8 text-center text-xs text-zinc-500">No unpaid invoice found.</div>}
@@ -741,7 +737,10 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                     </div>
                     {rec.notes && <div className="mt-0.5 truncate text-[10px] text-zinc-500">{rec.notes}</div>}
                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                      {isBest && amountMatch && <span className="rounded-full bg-[#d4af37]/10 px-2 py-0.5 text-[9px] font-bold text-[#f5d77f]">Suggested</span>}
+                      {rightTab !== 'matched' && (rec.reconciled
+                        ? <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold text-emerald-400">Reconciled</span>
+                        : <span className="rounded-full bg-zinc-800/60 px-2 py-0.5 text-[9px] font-bold text-zinc-400">Not reconciled</span>)}
+                      {!rec.reconciled && isBest && amountMatch && <span className="rounded-full bg-[#d4af37]/10 px-2 py-0.5 text-[9px] font-bold text-[#f5d77f]">Suggested</span>}
                       {rec.reconciled && (
                         <button type="button" disabled={isPending} onClick={(e) => { e.stopPropagation(); handleUndoMatch(rec); }} className="ml-auto rounded border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-red-300 hover:bg-red-500/20 disabled:opacity-40">Undo match</button>
                       )}

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { authorizeErpApi } from '@/lib/api/erp-report';
 import { gatherReportData } from '@/lib/reports/whatsapp-report';
 import { REPORT_COMPANIES, reportFiles, type ReportCompany } from '@/lib/reports/report-files';
+import { createAdminClient } from '@/lib/api/supabase-admin';
 import { renderReportPdf } from '@/lib/reports/pdf-report';
 import { validReportSignature } from '@/lib/reports/signed-url';
 
@@ -26,11 +27,25 @@ export async function GET(request: Request) {
     const data = await gatherReportData(url.searchParams.get('date') || undefined);
     if (!data || (data.plan.kind !== 'weekly' && data.plan.kind !== 'monthly')) return new NextResponse(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });
 
-    const name = reportFiles(data.plan, data.today).find((f) => f.company === company)!.name;
+    const file = reportFiles(data.plan, data.today).find((f) => f.company === company)!;
+    const headers = { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="${file.name}"`, 'Cache-Control': 'no-store' };
+
+    // Every report is kept: the first request makes it and stores it (private bucket "reports", <year>/<mm Month>/<file>); later requests
+    // open the stored copy, so a link still shows the numbers of that Monday. Bearer + ?fresh=1 makes it again.
+    const db = createAdminClient();
+    const path = `${file.folderPath.replace(' / ', '/')}/${file.name}`;
+    const fresh = url.searchParams.get('fresh') === '1' && !signedOk;
+    if (!fresh) {
+      const { data: stored } = await db.storage.from('reports').download(path);
+      if (stored) return new NextResponse(new Uint8Array(await stored.arrayBuffer()), { headers });
+    }
     const pdf = await renderReportPdf(data, company);
-    return new NextResponse(new Uint8Array(pdf), {
-      headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="${name}"`, 'Cache-Control': 'no-store' },
-    });
+    const up = await db.storage.from('reports').upload(path, pdf, { contentType: 'application/pdf', upsert: true });
+    if (up.error && /bucket/i.test(up.error.message)) {
+      await db.storage.createBucket('reports', { public: false });
+      await db.storage.from('reports').upload(path, pdf, { contentType: 'application/pdf', upsert: true });
+    }
+    return new NextResponse(new Uint8Array(pdf), { headers });
   } catch (err: any) {
     console.error('report pdf failed', err);
     return NextResponse.json({ error: err?.message || 'PDF failed' }, { status: 500, headers: { 'Cache-Control': 'no-store' } });

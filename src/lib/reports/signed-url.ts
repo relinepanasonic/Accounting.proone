@@ -4,15 +4,17 @@ import crypto from 'crypto';
  * A short-lived link to one report PDF, so Make.com's "Get a file" (which cannot send a header) can download it.
  * The signature covers the company, the date and the expiry; it is made with ERP_API_KEY, which never leaves the server.
  */
-const TTL_SECONDS = 30 * 60;
+const FETCH_TTL_SECONDS = 30 * 60;
+/** The link that goes into the WhatsApp message: it must still open weeks later. */
+export const SHARE_TTL_SECONDS = 400 * 24 * 3600;
 
 const sign = (company: string, date: string, exp: number) => {
   const key = process.env.ERP_API_KEY || '';
   return crypto.createHmac('sha256', key).update(`${company.toLowerCase()}|${date}|${exp}`).digest('hex');
 };
 
-export function signedReportUrl(origin: string, company: string, date: string): string {
-  const exp = Math.floor(Date.now() / 1000) + TTL_SECONDS;
+export function signedReportUrl(origin: string, company: string, date: string, ttlSeconds = FETCH_TTL_SECONDS): string {
+  const exp = Math.floor(Date.now() / 1000) + ttlSeconds;
   return `${origin}/api/v1/erp/report-pdf?company=${encodeURIComponent(company)}&date=${date}&exp=${exp}&sig=${sign(company, date, exp)}`;
 }
 

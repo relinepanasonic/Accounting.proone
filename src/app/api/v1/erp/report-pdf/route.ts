@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { authorizeErpApi } from '@/lib/api/erp-report';
-import { gatherReportData } from '@/lib/reports/whatsapp-report';
+import { gatherReportData, planReport, resolveToday } from '@/lib/reports/whatsapp-report';
 import { REPORT_COMPANIES, reportFiles, type ReportCompany } from '@/lib/reports/report-files';
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { renderReportPdf } from '@/lib/reports/pdf-report';
@@ -24,10 +24,12 @@ export async function GET(request: Request) {
     const company = (REPORT_COMPANIES as readonly string[]).find((c) => c.toLowerCase() === String(url.searchParams.get('company') || '').toLowerCase()) as ReportCompany | undefined;
     if (!company) return NextResponse.json({ error: `company must be one of ${REPORT_COMPANIES.join(', ')}` }, { status: 400 });
 
-    const data = await gatherReportData(url.searchParams.get('date') || undefined);
-    if (!data || (data.plan.kind !== 'weekly' && data.plan.kind !== 'monthly')) return new NextResponse(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });
+    // The plan and the file name only need the date: open a stored copy without counting the numbers again.
+    const today = resolveToday(url.searchParams.get('date') || undefined);
+    const plan = planReport(today);
+    if (plan.kind !== 'weekly' && plan.kind !== 'monthly') return new NextResponse(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });
 
-    const file = reportFiles(data.plan, data.today).find((f) => f.company === company)!;
+    const file = reportFiles(plan, today).find((f) => f.company === company)!;
     const headers = { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="${file.name}"`, 'Cache-Control': 'no-store' };
 
     // Every report is kept: the first request makes it and stores it (private bucket "reports", <year>/<mm Month>/<file>); later requests
@@ -39,6 +41,8 @@ export async function GET(request: Request) {
       const { data: stored } = await db.storage.from('reports').download(path);
       if (stored) return new NextResponse(new Uint8Array(await stored.arrayBuffer()), { headers });
     }
+    const data = await gatherReportData(today);
+    if (!data) return new NextResponse(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });
     const pdf = await renderReportPdf(data, company);
     const up = await db.storage.from('reports').upload(path, pdf, { contentType: 'application/pdf', upsert: true });
     if (up.error && /bucket/i.test(up.error.message)) {

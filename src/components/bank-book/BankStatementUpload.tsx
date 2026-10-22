@@ -3,10 +3,18 @@
 import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { UploadCloud, Loader2 } from 'lucide-react';
-import { saveBankStatement, type BankBookLineInput } from '@/app/actions/bank-book';
+import type { BankBookLineInput } from '@/lib/bank-book/store';
 import { bankLabel, type BankBookAccount } from '@/components/bank-book/BankBookTable';
 
 const field = 'rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-xs font-bold text-[#f5d77f] focus:border-[#d4af37]/60 focus:outline-none';
+
+/** Reads a JSON answer; a non-JSON answer (a timeout page, a login redirect) becomes a readable message. */
+async function readJson(res: Response): Promise<any> {
+  const text = await res.text();
+  try { return JSON.parse(text); } catch {
+    throw new Error(res.status === 504 || /timeout/i.test(text) ? 'The server took too long (timeout). Try again, or upload a shorter period.' : res.status === 401 || res.redirected ? 'You are signed out. Sign in again and retry.' : `The server answered with an error (${res.status}). ${text.replace(/<[^>]*>/g, ' ').replace(/s+/g, ' ').trim().slice(0, 140)}`);
+  }
+}
 
 /** Upload a bank statement (PDF or CSV) into Buku Bank. Choose the bank account first. Lines already stored are skipped. */
 export function BankStatementUpload({ banks }: { banks: BankBookAccount[] }) {
@@ -48,7 +56,7 @@ export function BankStatementUpload({ banks }: { banks: BankBookAccount[] }) {
           form.append('file', file);
           form.append('bankFormat', bankFormat);
           const res = await fetch('/api/v1/reconcile/parse-pdf', { method: 'POST', body: form });
-          const json = await res.json();
+          const json = await readJson(res);
           if (!json.success) { setNotice({ ok: false, text: `Could not read the PDF: ${json.error || 'unknown error'}` }); return; }
           lines = (json.data || []).map((t: any) => ({
             date: t.date, sourceDestination: t.sourceDestination || '', transactionDetails: t.transactionDetails || '',
@@ -66,14 +74,13 @@ export function BankStatementUpload({ banks }: { banks: BankBookAccount[] }) {
           // One row with no money moved: it only carries the saldo of the last day.
           lines = [{ date: last.date, sourceDestination: 'Opening balance', transactionDetails: 'Last saldo of the statement', notes: '', rekFrom: '', amount: 0, balance: last.balance, time: last.time }];
         }
-        const res = await saveBankStatement(bankId, file.name, lines);
+        const saveRes = await fetch('/api/v1/bank-book/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bankAccountId: bankId, fileName: file.name, lines }) });
+        const res = await readJson(saveRes);
         if (!res.success) { setNotice({ ok: false, text: res.error || 'Could not store the statement.' }); return; }
         setNotice({ ok: true, text: lastOnly ? `${file.name}: last saldo kept (${lines[0].date}).` : `${file.name}: ${res.saved} new line(s) stored${res.skipped ? `, ${res.skipped} were already there` : ''}.` });
         router.refresh();
       } catch (err: any) {
-        // Production hides the real message of a server error. It usually means this page is older than the deployed version: reload it.
-        const msg = String(err?.message || '');
-        setNotice({ ok: false, text: /Server Components render|Failed to find Server Action|digest/i.test(msg) ? 'The server could not take this upload. The page may be out of date after an update: reload it (Ctrl+Shift+R) and upload again. If it happens again, tell Claude the file name.' : msg || 'Upload failed.' });
+        setNotice({ ok: false, text: String(err?.message || 'Upload failed.') });
       }
     });
   };

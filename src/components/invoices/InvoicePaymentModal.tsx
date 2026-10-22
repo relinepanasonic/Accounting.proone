@@ -6,6 +6,10 @@ import { RupiahInput } from '@/components/ui/RupiahInput';
 import { recordInvoicePayment, getInvoicePayments, deleteInvoicePayment } from '@/app/actions/invoices';
 import { useRouter } from 'next/navigation';
 import { createPortal } from 'react-dom';
+import { DatePickerUI } from '@/components/ui/DatePickerUI';
+
+// Local date as YYYY-MM-DD (toISOString would give the UTC day).
+const todayLocal = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
 interface InvoicePaymentModalProps {
   isOpen: boolean;
@@ -33,6 +37,7 @@ export function InvoicePaymentModal({
   const [paymentAmount, setPaymentAmount] = useState<number | ''>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [selectedBankId, setSelectedBankId] = useState<string>('default');
+  const [paymentDate, setPaymentDate] = useState<string>(todayLocal());
 
   const [payments, setPayments] = useState<any[]>([]);
   const [banks, setBanks] = useState<any[]>([]);
@@ -49,6 +54,7 @@ export function InvoicePaymentModal({
       setPaymentAmount('');
       setErrorMsg(null);
       setSelectedBankId('default');
+      setPaymentDate(todayLocal());
       loadHistory();
     }
   }, [isOpen, invoiceId]);
@@ -87,13 +93,13 @@ export function InvoicePaymentModal({
 
     startTransition(async () => {
       setErrorMsg(null);
-      const today = new Date().toISOString().split('T')[0];
+      const payDate = paymentDate || todayLocal();
       const bankId = selectedBankId === 'default' ? undefined : selectedBankId;
       
       const res = await recordInvoicePayment(
         invoiceId, 
         amountToPay, 
-        today, 
+        payDate, 
         'Manual Payment', 
         undefined, // reference
         undefined, // workspaces are separate: no inter-company transfer
@@ -204,6 +210,11 @@ export function InvoicePaymentModal({
                 <p className="text-[10px] text-zinc-500 font-sans">
                   Enter 0 and save to just mark as sent/invoiced without a payment.
                 </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold tracking-widest text-zinc-400 uppercase">Payment Date</label>
+                <DatePickerUI value={paymentDate} onChange={setPaymentDate} required />
               </div>
 
               {/* Bank Selection */}

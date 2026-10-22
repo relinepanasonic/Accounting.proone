@@ -219,7 +219,7 @@ export async function runControlTeam(opts: { force?: boolean; today?: string } =
   // Prof: QC, priorities and the WhatsApp message, from the short reports only (plus the headline numbers).
   const bossKey = `prof|${weekly ? 'weekly' : 'daily'}`;
   let message = '';
-  if (!opts.force && have.has(bossKey)) message = have.get(bossKey)!.content;
+  if (!opts.force && have.has(bossKey) && have.get(bossKey)!.content.length > 150) message = have.get(bossKey)!.content; // a stored message shorter than 150 characters is broken: write it again
   else {
     try {
       const prof = agentByKey('prof');

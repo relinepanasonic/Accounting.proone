@@ -23,7 +23,7 @@ const daysBetween = (a: string, b: string) => Math.max(0, Math.round((new Date(`
 type PSort = 'client' | 'product' | 'start' | 'orders' | 'total';
 type OSort = 'client' | 'orderNo' | 'buyer' | 'total';
 
-/** Fake Order. Active: the running projects (a client invoice with Friends Order / Paket Optimize Shopee New Store, start date by hand) and their fake orders. Finished: the ended ones. */
+/** Friends Order. Active: the running projects (a client invoice with Friends Order / Paket Optimize Shopee New Store, start date by hand) and their fake orders. Finished: the ended ones. */
 export function FakeOrderBoard({ mode, projects, orders, candidates, migrationMissing }: { mode: 'active' | 'finished'; projects: FakeOrderProject[]; orders: FakeOrderRow[]; candidates: ProjectCandidate[]; migrationMissing: boolean }) {
   const router = useRouter();
   const orderForm = useRef<HTMLFormElement>(null);
@@ -37,6 +37,8 @@ export function FakeOrderBoard({ mode, projects, orders, candidates, migrationMi
   const [search, setSearch] = useState('');
   const [proofView, setProofView] = useState('');
   const [totalInput, setTotalInput] = useState<number>(0);
+  // The order goes to the project chosen in the filter (or the only running project).
+  const targetProject = projectFilter || (projects.length === 1 ? projects[0].id : '');
   const [psort, setPsort] = useState<{ key: PSort; asc: boolean }>({ key: 'start', asc: false });
   const [osort, setOsort] = useState<{ key: OSort; asc: boolean }>({ key: 'client', asc: true });
   const active = mode === 'active';
@@ -87,7 +89,7 @@ export function FakeOrderBoard({ mode, projects, orders, candidates, migrationMi
     if (d) run(() => finishFakeOrderProject(p.id, d.trim()));
   };
   const removeProject = (p: FakeOrderProject) => {
-    if (window.confirm(`Delete the project of ${p.clientName} and all its fake orders?`)) run(() => deleteFakeOrderProject(p.id));
+    if (window.confirm(`Delete the project of ${p.clientName} and all its friends orders?`)) run(() => deleteFakeOrderProject(p.id));
   };
   const submitOrder = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -168,7 +170,7 @@ export function FakeOrderBoard({ mode, projects, orders, candidates, migrationMi
                       <td className="whitespace-nowrap px-3 py-3 text-right">
                         {active ? (
                           <>
-                            <button onClick={() => { setProjectFilter(p.id); setShowOrder(true); }} className="mr-1 rounded-lg border border-[#d4af37]/40 px-2.5 py-1.5 text-[11px] font-bold text-[#f5d77f] hover:bg-[#d4af37]/10" title="Add a fake order to this project">+ Order</button>
+                            <button onClick={() => { setProjectFilter(p.id); setShowOrder(true); }} className="mr-1 rounded-lg border border-[#d4af37]/40 px-2.5 py-1.5 text-[11px] font-bold text-[#f5d77f] hover:bg-[#d4af37]/10" title="Add a friends order to this project">+ Order</button>
                             <button onClick={() => finish(p)} disabled={pending} className="mr-1 inline-flex items-center gap-1 rounded-lg border border-emerald-500/40 px-2.5 py-1.5 text-[11px] font-bold text-emerald-400 hover:bg-emerald-500/10" title="Finish: moves to Finished"><Check className="h-3 w-3" /> Finish</button>
                           </>
                         ) : (
@@ -186,27 +188,23 @@ export function FakeOrderBoard({ mode, projects, orders, candidates, migrationMi
         {active && <p className="text-[11px] text-zinc-600">A renewal is a new invoice: when the client renews, the new invoice shows up under "Start project" and starts over as a new project.</p>}
       </section>
 
-      {/* Fake orders */}
+      {/* Friends orders */}
       <section className="space-y-3">
         <div className="flex flex-wrap items-center gap-3">
-          <h2 className="text-sm font-extrabold uppercase tracking-wider text-zinc-200">Fake orders</h2>
+          <h2 className="text-sm font-extrabold uppercase tracking-wider text-zinc-200">Friends orders</h2>
           <select value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)} className={`${field} w-[260px] py-2 text-xs`}>
             <option value="">All projects</option>
             {projects.map((p) => <option key={p.id} value={p.id}>{p.clientName} · {p.productName} ({dmy(p.startDate)})</option>)}
           </select>
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Client, order no or buyer" className={`${field} w-full min-w-[180px] py-2 text-xs sm:w-[260px]`} />
-          {active && <button onClick={() => { setShowOrder((v) => !v); setError(''); }} disabled={projects.length === 0} className="ml-auto inline-flex items-center gap-2 rounded-lg border border-[#d4af37]/40 bg-[#d4af37]/10 px-4 py-2 text-xs font-bold uppercase tracking-wider text-[#f5d77f] hover:bg-[#d4af37]/20 disabled:opacity-40"><Plus className="h-4 w-4" /> Add fake order</button>}
+          {active && <button onClick={() => { setShowOrder((v) => !v); setError(''); }} disabled={!targetProject} title={targetProject ? '' : 'Choose the client in the filter first'} className="ml-auto inline-flex items-center gap-2 rounded-lg border border-[#d4af37]/40 bg-[#d4af37]/10 px-4 py-2 text-xs font-bold uppercase tracking-wider text-[#f5d77f] hover:bg-[#d4af37]/20 disabled:opacity-40"><Plus className="h-4 w-4" /> Add friends order</button>}
         </div>
 
         {active && showOrder && (
           <form ref={orderForm} onSubmit={submitOrder} className="grid gap-3 rounded-2xl border border-[#d4af37]/30 bg-[#0e0f14] p-4 sm:grid-cols-2 lg:grid-cols-6">
-            <label className={`${lab} lg:col-span-3`}>Client / project
-              <select name="projectId" required value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)} className={`${field} mt-1 block w-full`}>
-                <option value="">Choose the project</option>
-                {projects.map((p) => <option key={p.id} value={p.id}>{p.clientName} · {p.productName}</option>)}
-              </select>
-            </label>
-            <label className={lab}>No Fake Order<input name="orderNo" required className={`${field} mt-1 block w-full`} /></label>
+            <input type="hidden" name="projectId" value={targetProject} />
+            <div className="text-[11px] text-zinc-400 lg:col-span-6">For: <b className="text-zinc-200">{projectById.get(targetProject)?.clientName || '-'}</b> · {projectById.get(targetProject)?.productName}</div>
+            <label className={lab}>No Friends Order<input name="orderNo" required className={`${field} mt-1 block w-full`} /></label>
             <label className={lab}>Buyer name<input name="buyerName" className={`${field} mt-1 block w-full`} /></label>
             <label className={lab}>Total (Rp)
               <input type="hidden" name="total" value={totalInput} />
@@ -224,10 +222,10 @@ export function FakeOrderBoard({ mode, projects, orders, candidates, migrationMi
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="border-b border-[#d4af37]/10 bg-zinc-900/50 text-[10px] text-zinc-400">
-                <tr>{!projectFilter && <OTh k="client">Client</OTh>}<OTh k="orderNo">No Fake Order</OTh><OTh k="buyer">Buyer name</OTh><OTh k="total" right>Total</OTh><th className="px-3 py-3 font-bold uppercase tracking-wider">Proof VA</th><th className="px-3 py-3 font-bold uppercase tracking-wider">Proof Review</th>{active && <th className="px-3 py-3" />}</tr>
+                <tr>{!projectFilter && <OTh k="client">Client</OTh>}<OTh k="orderNo">No Friends Order</OTh><OTh k="buyer">Buyer name</OTh><OTh k="total" right>Total</OTh><th className="px-3 py-3 font-bold uppercase tracking-wider">Proof VA</th><th className="px-3 py-3 font-bold uppercase tracking-wider">Proof Review</th>{active && <th className="px-3 py-3" />}</tr>
               </thead>
               <tbody className="divide-y divide-zinc-800/50">
-                {filteredOrders.length === 0 && <tr><td colSpan={(projectFilter ? 5 : 6) + (active ? 1 : 0)} className="p-8 text-center text-zinc-500">No fake order yet.</td></tr>}
+                {filteredOrders.length === 0 && <tr><td colSpan={(projectFilter ? 5 : 6) + (active ? 1 : 0)} className="p-8 text-center text-zinc-500">No friends order yet.</td></tr>}
                 {filteredOrders.map((o) => (
                   <tr key={o.id} className="hover:bg-zinc-900/30">
                     {!projectFilter && <td className="px-3 py-3 font-semibold text-zinc-100">{o.clientName}{o.projectId && projectById.get(o.projectId) ? <div className="text-[10px] font-normal text-zinc-600">{projectById.get(o.projectId)!.productName}</div> : null}</td>}
@@ -250,12 +248,12 @@ export function FakeOrderBoard({ mode, projects, orders, candidates, migrationMi
                         </button>
                       ) : <span className="inline-flex items-center gap-1 text-zinc-700"><ImageIcon className="h-3.5 w-3.5" /> none</span>}
                     </td>
-                    {active && <td className="px-3 py-3 text-right"><button onClick={() => window.confirm(`Delete fake order ${o.orderNo}?`) && run(() => deleteFakeOrder(o.id))} disabled={pending} className="rounded-lg border border-red-500/30 p-1.5 text-red-400 hover:bg-red-500/10" title="Delete"><Trash2 className="h-3.5 w-3.5" /></button></td>}
+                    {active && <td className="px-3 py-3 text-right"><button onClick={() => window.confirm(`Delete friends order ${o.orderNo}?`) && run(() => deleteFakeOrder(o.id))} disabled={pending} className="rounded-lg border border-red-500/30 p-1.5 text-red-400 hover:bg-red-500/10" title="Delete"><Trash2 className="h-3.5 w-3.5" /></button></td>}
                   </tr>
                 ))}
               </tbody>
               {filteredOrders.length > 0 && (
-                <tfoot><tr className="border-t border-zinc-700/80 bg-zinc-900/30"><td className="px-3 py-3 font-bold uppercase tracking-wider text-zinc-400" colSpan={projectFilter ? 2 : 3}>{filteredOrders.length} fake order(s)</td><td className="px-3 py-3 text-right font-mono font-bold text-[#f5d77f]">{rp(ordersTotal)}</td><td colSpan={active ? 3 : 2} /></tr></tfoot>
+                <tfoot><tr className="border-t border-zinc-700/80 bg-zinc-900/30"><td className="px-3 py-3 font-bold uppercase tracking-wider text-zinc-400" colSpan={projectFilter ? 2 : 3}>{filteredOrders.length} friends order(s)</td><td className="px-3 py-3 text-right font-mono font-bold text-[#f5d77f]">{rp(ordersTotal)}</td><td colSpan={active ? 3 : 2} /></tr></tfoot>
               )}
             </table>
           </div>

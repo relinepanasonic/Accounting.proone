@@ -2,13 +2,13 @@ import Link from 'next/link';
 
 type Active = 'dashboard' | 'client' | 'performance' | 'log' | 'fake';
 
-/** Tabs of the Advertiser and Admin pages. Admin: Performance | Log Detail | Fake Order | Client. Advertiser: Dashboard | Client. */
+/** Tabs of the Advertiser and Admin pages. Admin: Performance | Log Detail | Friends Order | Client. Advertiser: Dashboard | Client. */
 export function DivisionTabs({ base, active }: { base: '/productivity/advertiser' | '/productivity/admin'; active: Active }) {
   const items: Array<{ key: Active; name: string; href: string }> = base === '/productivity/admin'
     ? [
         { key: 'performance', name: 'Performance', href: base },
         { key: 'log', name: 'Log Detail', href: `${base}/log` },
-        { key: 'fake', name: 'Fake Order', href: `${base}/fake-order` },
+        { key: 'fake', name: 'Friends Order', href: `${base}/fake-order` },
         { key: 'client', name: 'Client', href: `${base}/clients` },
       ]
     : [

@@ -175,7 +175,7 @@ export function CatalogTable({ initialProducts, canEdit, workspaces, activeWorks
                 <td className="px-2 py-1 align-top">
                   <input
                     className={`${cell} text-right font-mono`} inputMode="numeric" disabled={!canEdit}
-                    value={row.unit_price ? String(row.unit_price) : ''} placeholder="0" title={rp(Number(row.unit_price))}
+                    value={row.unit_price ? rp(Number(row.unit_price)) : ''} placeholder="Rp 0" title={rp(Number(row.unit_price))}
                     onChange={(e) => patchLocal(row.id, { unit_price: Number(e.target.value.replace(/[^\d]/g, '')) })}
                     onBlur={() => save(row)}
                   />

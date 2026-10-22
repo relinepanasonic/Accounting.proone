@@ -6,7 +6,7 @@ import { loadFakeOrderBoard } from '@/lib/admin/fake-order-data';
 
 export const dynamic = 'force-dynamic';
 
-/** Admin > Fake Order > Finished: the projects that ended. A renewal starts over as a new project. */
+/** Admin > Friends Order > Finished: the projects that ended. A renewal starts over as a new project. */
 export default async function AdminFakeOrderFinishedPage() {
   const data = await loadFakeOrderBoard('finished');
   return (
@@ -15,8 +15,8 @@ export default async function AdminFakeOrderFinishedPage() {
       <div className="flex items-center gap-4">
         <div className="p-3 bg-[#d4af37]/10 rounded-xl text-[#d4af37]"><ShieldAlert className="w-8 h-8" /></div>
         <div>
-          <h1 className="text-2xl font-extrabold text-zinc-100 font-serif">Fake Order · Finished</h1>
-          <p className="text-sm text-zinc-400 mt-1">The projects that are done, with their fake orders</p>
+          <h1 className="text-2xl font-extrabold text-zinc-100 font-serif">Friends Order · Finished</h1>
+          <p className="text-sm text-zinc-400 mt-1">The projects that are done, with their friends orders</p>
         </div>
       </div>
       <FakeOrderBoard mode="finished" {...data} />

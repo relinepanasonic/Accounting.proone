@@ -40,7 +40,9 @@ export function BankBookTable({ lines: serverLines, banks, migrationMissing, can
   const [rowError, setRowError] = useState('');
   const [saving, startSave] = useTransition();
   const [bank, setBank] = useState('');
-  const [year, setYear] = useState('');
+  // The year opens on the current year; "Reset" goes back to it.
+  const currentYear = String(new Date().getFullYear());
+  const [year, setYear] = useState(currentYear);
   const [month, setMonth] = useState('');
   const [dir, setDir] = useState<'' | 'in' | 'out'>('');
   const [status, setStatus] = useState('');
@@ -130,7 +132,7 @@ export function BankBookTable({ lines: serverLines, banks, migrationMissing, can
   const cashOut = filtered.reduce((s, l) => s + (l.amount < 0 ? -l.amount : 0), 0);
   const net = cashIn - cashOut;
   const total = rowFilters || !opening ? net : opening.amount + net;
-  const reset = () => { setBank(''); setYear(''); setMonth(''); setDir(''); setStatus(''); setSearch(''); setShown(PAGE); };
+  const reset = () => { setBank(''); setYear(currentYear); setMonth(''); setDir(''); setStatus(''); setSearch(''); setShown(PAGE); };
   const reflow = <T,>(fn: (v: T) => void) => (v: T) => { fn(v); setShown(PAGE); };
   const toggleSort = (key: SortKey) => setSort((s) => (s.key === key ? { key, asc: !s.asc } : { key, asc: key !== 'date' && key !== 'in' && key !== 'out' }));
 

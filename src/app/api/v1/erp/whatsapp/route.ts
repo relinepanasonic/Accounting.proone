@@ -1,23 +1,24 @@
 import { NextResponse } from 'next/server';
 import { authorizeErpApi } from '@/lib/api/erp-report';
-import { runControlTeam } from '@/lib/ai/control-team';
+import { buildWhatsAppReport } from '@/lib/reports/whatsapp-report';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 300;
+export const maxDuration = 120;
 
 /**
- * GET /api/v1/erp/whatsapp: today's WhatsApp message of the AI team (Prof), for Make.com to send to Nico, Herlan and Lucy.
- * Normally ready since 08:00 (cron); if not, the team runs now (can take up to a minute).
- * Header: Authorization: Bearer <ERP_API_KEY>. Response: { date, text, chars, errors }.
+ * GET /api/v1/erp/whatsapp: the WhatsApp report for Nico, Herlan and Lucy (Make.com sends it at 09:00).
+ *  Tuesday to Saturday: Daily report of yesterday. Monday: Weekly report (Monthly on the first Monday of a month). Sunday: nothing.
+ * Header: Authorization: Bearer <ERP_API_KEY>. Optional ?date=YYYY-MM-DD acts as "today" (to test a day).
+ * Response: { send, kind, date, text }. Make must only send when send is true.
  */
 export async function GET(request: Request) {
   if (!authorizeErpApi(request)) return new NextResponse(null, { status: 401, headers: { 'Cache-Control': 'no-store' } });
   try {
-    const res = await runControlTeam();
-    if (!res.message) return NextResponse.json({ error: 'No message: ' + (res.errors.join('; ') || 'unknown'), errors: res.errors }, { status: 500, headers: { 'Cache-Control': 'no-store' } });
-    return NextResponse.json({ date: res.today, text: res.message, chars: res.message.length, errors: res.errors }, { headers: { 'Cache-Control': 'no-store' } });
+    const date = new URL(request.url).searchParams.get('date') || undefined;
+    const res = await buildWhatsAppReport(date);
+    return NextResponse.json({ ...res, chars: res.text.length }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (err: any) {
-    console.error('whatsapp message failed', err);
-    return NextResponse.json({ error: 'Message failed' }, { status: 500, headers: { 'Cache-Control': 'no-store' } });
+    console.error('whatsapp report failed', err);
+    return NextResponse.json({ error: 'Report failed' }, { status: 500, headers: { 'Cache-Control': 'no-store' } });
   }
 }

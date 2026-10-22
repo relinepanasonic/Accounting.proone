@@ -239,9 +239,9 @@ async function ReconciliationCore() {
         type: tx.type === 'income' ? ('income' as const) : ('expense' as const),
         reference: isInvoicePayment ? tx.description || 'Invoice payment' : tx.category || 'CATEGORY-REF',
         payeeOrClient: (isInvoicePayment && invoiceClientName.get(tx.invoice_id as string)) || tx.description || 'System Record',
-        // The transaction date of an invoice payment is the day "Paid" was clicked (often a later back-fill),
-        // so list it under the invoice's own date. Reconciling then sets the real bank date.
-        date: (isInvoicePayment && invoiceIssueDate.get(tx.invoice_id as string)) || tx.due_date || tx.transaction_date,
+        // A payment is listed on its own payment date (the Payment window asks for it), not the invoice's issue date:
+        // a partial payment of an old invoice must show in the month it was paid.
+        date: tx.transaction_date || tx.due_date || (isInvoicePayment && invoiceIssueDate.get(tx.invoice_id as string)) || '',
         amount: Number(tx.amount || 0),
         reconciled: Boolean(tx.reconciled),
         notes: tx.description || '',

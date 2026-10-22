@@ -7,6 +7,7 @@ import { recordInvoicePayment, getInvoicePayments, deleteInvoicePayment } from '
 import { useRouter } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { DatePickerUI } from '@/components/ui/DatePickerUI';
+import { formatIndoDate } from '@/lib/utils';
 
 // Local date as YYYY-MM-DD (toISOString would give the UTC day).
 const todayLocal = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
@@ -270,7 +271,7 @@ export function InvoicePaymentModal({
                           {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(p.amount)}
                         </div>
                         <div className="text-[10px] text-zinc-500 font-mono">
-                          {p.date} • {p.bankName || 'Default Account'}
+                          {formatIndoDate(p.date)} • {p.bankName || 'Default Account'}
                         </div>
                       </div>
                       <div className="flex items-center gap-1">

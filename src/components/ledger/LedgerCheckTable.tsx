@@ -17,7 +17,7 @@ const FLAGS: Record<CheckFlag, { label: string; explain: string; tone: 'red' | '
 };
 
 const rp = (n: number) => `${n < 0 ? '-' : ''}Rp ${Math.abs(Math.round(n)).toLocaleString('id-ID')}`;
-const day = (d: string | null) => (d ? new Date(`${d.slice(0, 10)}T12:00:00Z`).toLocaleDateString('id-ID', { timeZone: 'UTC', day: '2-digit', month: 'short', year: '2-digit' }) : '-');
+const day = (d: string | null) => (d ? new Date(`${d.slice(0, 10)}T12:00:00Z`).toLocaleDateString('id-ID', { timeZone: 'UTC', day: '2-digit', month: 'short', year: 'numeric' }) : '-');
 
 function Chip({ flag }: { flag: CheckFlag }) {
   const f = FLAGS[flag];

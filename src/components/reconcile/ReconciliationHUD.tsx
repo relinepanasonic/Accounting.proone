@@ -2,7 +2,8 @@
 import { formatIndoDate } from '@/lib/utils';
 import { DatePickerUI } from '@/components/ui/DatePickerUI';
 
-import React, { useState, useTransition } from 'react';
+import React, { useEffect, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   UploadCloud,
   CheckCircle2,
@@ -15,6 +16,7 @@ import {
 } from 'lucide-react';
 import { reconcileRecord, quickResolveAndReconcile, unreconcileRecord } from '@/app/actions/reconcile';
 import { createClientRecord } from '@/app/actions/settings';
+import { recordInvoicePayment } from '@/app/actions/invoices';
 import { saveBankStatement, type BankBookLineInput } from '@/app/actions/bank-book';
 import { RupiahInput } from '@/components/ui/RupiahInput';
 
@@ -69,19 +71,32 @@ function toIsoDate(value: string): string | undefined {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+export interface OpenInvoice { id: string; number: string; client: string; date: string; total: number; paid: number; balance: number }
+
 interface ReconciliationHUDProps {
   systemRecords: UnreconciledSystemRecord[];
   bankAccounts?: BankAccount[];
   coaAccounts?: COAAccountMinimal[];
   reconciledBankRefs?: string[];
   vendors?: { id: string; name: string }[];
+  /** Invoices that still have a balance: the window "Record invoice payment" turns a payment into a cash record to match. */
+  openInvoices?: OpenInvoice[];
 }
 
-export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccounts = [], reconciledBankRefs = [], vendors = [] }: ReconciliationHUDProps) {
+export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccounts = [], reconciledBankRefs = [], vendors = [], openInvoices = [] }: ReconciliationHUDProps) {
+  const router = useRouter();
   const [bankLines, setBankLines] = useState<BankLine[]>([]);
   const [recordsList, setRecordsList] = useState<UnreconciledSystemRecord[]>(systemRecords);
   const [selectedBankId, setSelectedBankId] = useState<string | null>(null);
   const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
+
+  // Record invoice payment: the invoice is not matched with the bank; its payment becomes a cash record, and that is matched.
+  const [showPay, setShowPay] = useState(false);
+  const [paySearch, setPaySearch] = useState('');
+  const [payPartial, setPayPartial] = useState<Record<string, number | ''>>({});
+  const [payBusy, setPayBusy] = useState<string | null>(null);
+  const [payError, setPayError] = useState('');
+  const [pendingSelect, setPendingSelect] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const [quickCategory, setQuickCategory] = useState<string>('');
@@ -128,6 +143,35 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   };
 
   const activeBankLine = bankLines.find((b) => b.id === selectedBankId);
+
+  useEffect(() => { setRecordsList(systemRecords); }, [systemRecords]);
+  useEffect(() => {
+    if (pendingSelect && recordsList.some((r) => r.id === pendingSelect)) { setSelectedRecordIds([pendingSelect]); setPendingSelect(null); }
+  }, [pendingSelect, recordsList]);
+
+  const payOneInvoice = (inv: OpenInvoice, amount: number) => {
+    if (!(amount > 0)) { setPayError('Fill the amount of the payment.'); return; }
+    setPayError('');
+    setPayBusy(inv.id);
+    const bankId = activeBank && !String(activeBank.id).startsWith('temp-') ? activeBank.id : undefined;
+    void recordInvoicePayment(inv.id, amount, activeBankLine?.date || new Date().toISOString().slice(0, 10), 'Bank Transfer', activeBankLine ? `Bank ${activeBankLine.sourceDestination}`.slice(0, 80) : undefined, undefined, bankId).then((res: any) => {
+      setPayBusy(null);
+      if (!res?.success) { setPayError(res?.error || 'Could not record the payment.'); return; }
+      setShowPay(false);
+      setPaySearch('');
+      if (res.transactionId) setPendingSelect(res.transactionId);
+      router.refresh();
+    });
+  };
+  const payShown = React.useMemo(() => {
+    const q = paySearch.trim().toLowerCase();
+    const line = activeBankLine && activeBankLine.amount > 0 ? activeBankLine : null;
+    const score = (i: OpenInvoice) => (line ? (Math.abs(i.balance - line.amount) < 1 ? 2 : 0) + payeeSimilarity(line.sourceDestination, i.client) * 1.5 : 0);
+    return openInvoices
+      .filter((i) => !q || `${i.client} ${i.number}`.toLowerCase().includes(q))
+      .sort((a, b) => score(b) - score(a) || b.date.localeCompare(a.date))
+      .slice(0, 60);
+  }, [openInvoices, paySearch, activeBankLine]);
 
   // One suggestion per bank line, and each system record is suggested at most once:
   // all same-amount pairs are scored, then assigned best score first.
@@ -582,6 +626,18 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
           
           <button
             type="button"
+            onClick={() => { setPayError(''); setShowPay(true); }}
+            className="flex flex-col items-center gap-1 px-3 py-3 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all border w-full text-center border-sky-500/40 bg-sky-500/10 text-sky-300 hover:bg-sky-500/20 cursor-pointer"
+            title="The bank is matched with cash records. Record the payment of an invoice first (Paid or Partial), then match it."
+          >
+            <span>INVOICE?</span>
+            <span className="text-[8px] font-mono opacity-70">Record Payment</span>
+          </button>
+
+          <div className="w-8 h-[1px] bg-zinc-800 my-1"></div>
+
+          <button
+            type="button"
             disabled={!activeBankLine}
             onClick={() => {
               setSelectedRecordIds([]);
@@ -801,6 +857,55 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
       </div>
       
       {/* Luxurious Options Modal */}
+      {showPay && (
+        <div className="fixed inset-0 z-[9500] flex items-center justify-center bg-black/70 p-4" onClick={() => setShowPay(false)}>
+          <div className="w-full max-w-3xl rounded-2xl border border-sky-500/30 bg-[#0e0f14] p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-extrabold uppercase tracking-wider text-sky-300">Record invoice payment</h3>
+                <p className="mt-0.5 text-[11px] text-zinc-500">
+                  {activeBankLine && activeBankLine.amount > 0
+                    ? `Bank line: +Rp ${activeBankLine.amount.toLocaleString('id-ID')} from ${activeBankLine.sourceDestination}. The closest invoices are on top.`
+                    : 'Choose an incoming bank line first to get suggestions. The payment is saved with the bank date.'}
+                </p>
+                <p className="mt-0.5 text-[11px] text-zinc-600">Paid or Partial creates a cash record (Cash Received) with that amount. Then select it on the right and press MATCH.</p>
+              </div>
+              <button onClick={() => setShowPay(false)} className="text-zinc-500 hover:text-zinc-200">✕</button>
+            </div>
+            <input value={paySearch} onChange={(e) => setPaySearch(e.target.value)} placeholder="Search client or invoice number" className="mb-3 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-sky-500/50" />
+            {payError && <div className="mb-3 rounded-lg border border-red-500/30 bg-red-500/5 p-2 text-xs text-red-300">{payError}</div>}
+            <div className="max-h-[55vh] overflow-auto rounded-xl border border-zinc-800">
+              <table className="w-full text-left text-xs">
+                <thead className="sticky top-0 bg-zinc-900 text-[10px] uppercase tracking-wider text-zinc-400">
+                  <tr><th className="px-3 py-2 font-bold">Client</th><th className="px-3 py-2 font-bold">Invoice</th><th className="px-3 py-2 font-bold">Date</th><th className="px-3 py-2 text-right font-bold">Balance</th><th className="px-3 py-2 font-bold">Payment</th></tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800/60">
+                  {payShown.length === 0 && <tr><td colSpan={5} className="p-6 text-center text-zinc-500">No open invoice found.</td></tr>}
+                  {payShown.map((i) => {
+                    const exact = Boolean(activeBankLine && activeBankLine.amount > 0 && Math.abs(i.balance - activeBankLine.amount) < 1);
+                    return (
+                      <tr key={i.id} className={exact ? 'bg-emerald-500/5' : ''}>
+                        <td className="px-3 py-2 font-semibold text-zinc-100">{i.client}{exact && <span className="ml-2 rounded-full border border-emerald-500/40 px-1.5 py-0.5 text-[9px] font-bold text-emerald-400">SAME AMOUNT</span>}</td>
+                        <td className="whitespace-nowrap px-3 py-2 font-mono text-zinc-400">{i.number}</td>
+                        <td className="whitespace-nowrap px-3 py-2 font-mono text-zinc-500">{formatIndoDate(i.date)}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-[#f5d77f]">Rp {i.balance.toLocaleString('id-ID')}{i.paid > 0 && <div className="text-[9px] text-zinc-600">paid {i.paid.toLocaleString('id-ID')} of {i.total.toLocaleString('id-ID')}</div>}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-1.5">
+                            <button disabled={payBusy !== null} onClick={() => payOneInvoice(i, i.balance)} className="rounded-lg border border-emerald-500/40 px-2.5 py-1.5 text-[11px] font-bold text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-40">{payBusy === i.id ? '...' : 'Paid'}</button>
+                            <input type="number" min={1} placeholder="Partial Rp" value={payPartial[i.id] ?? ''} onChange={(e) => setPayPartial({ ...payPartial, [i.id]: e.target.value === '' ? '' : Number(e.target.value) })} className="w-[110px] rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-right font-mono text-[11px] text-zinc-100 outline-none" />
+                            <button disabled={payBusy !== null || !payPartial[i.id]} onClick={() => payOneInvoice(i, Number(payPartial[i.id] || 0))} className="rounded-lg border border-sky-500/40 px-2.5 py-1.5 text-[11px] font-bold text-sky-300 hover:bg-sky-500/10 disabled:opacity-40">Partial</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
       {optionsDialog && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="gold-glass-panel rounded-2xl w-full max-w-md p-6 border border-[#d4af37]/30 shadow-[0_0_50px_rgba(212,175,55,0.15)] animate-in fade-in zoom-in-95 duration-200">

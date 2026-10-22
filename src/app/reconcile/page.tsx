@@ -193,26 +193,24 @@ async function ReconciliationCore() {
     rawTransactions.filter((tx) => tx.invoice_id && tx.type === 'income').map((tx) => tx.invoice_id as string)
   );
 
+  // The bank is matched with CASH records only (what was received or paid), never with an invoice directly.
+  // To match money that paid an invoice, record the payment first (button "Record invoice payment" on the reconcile screen):
+  // the payment becomes a cash record with its own amount, and that record is what the bank line is matched with.
+  const openInvoices = rawInvoices
+    .filter((inv: any) => !inv.reconciled || Number(inv.total_amount || 0) - Number(inv.amount_paid || 0) > 0)
+    .map((inv: any) => ({
+      id: inv.id as string,
+      number: (inv.invoice_number || 'INV') as string,
+      client: (invoiceClientName.get(inv.id) || 'Client') as string,
+      date: (inv.issue_date || '') as string,
+      total: Number(inv.total_amount || 0),
+      paid: Number(inv.amount_paid || 0),
+      balance: Math.max(0, Number(inv.total_amount || 0) - Number(inv.amount_paid || 0)),
+      status: String(inv.status || '').toLowerCase(),
+    }))
+    .filter((inv) => inv.balance > 0 && !['draft', 'cancelled', 'void', 'canceled'].includes(inv.status));
+
   const systemRecords: any[] = [
-    ...rawInvoices
-      // Fully paid invoices are represented by their payment transaction(s) (the paid amounts).
-      // An invoice still holding a balance (unpaid or partially paid) stays listed at that balance.
-      .filter((inv) => !(invoicesWithPayment.has(inv.id) && Number(inv.total_amount || 0) - Number(inv.amount_paid || 0) <= 0))
-      .map((inv) => {
-        const total = Number(inv.total_amount || 0);
-        const balance = total - Number(inv.amount_paid || 0);
-        return {
-          id: inv.id,
-          type: 'invoice' as const,
-          reference: inv.invoice_number || 'INV-REF',
-          payeeOrClient: invoiceClientName.get(inv.id),
-          date: inv.issue_date,
-          // Marked paid but no payment transaction here: still let it be matched at full value.
-          amount: balance > 0 ? balance : total,
-          reconciled: Boolean(inv.reconciled),
-          notes: `Invoice ${inv.invoice_number || ''}`,
-        };
-      }),
     ...rawTransactions.map((tx) => {
       const isInvoicePayment = Boolean(tx.invoice_id && tx.type === 'income');
       return {
@@ -237,6 +235,7 @@ async function ReconciliationCore() {
       coaAccounts={coaAccounts}
       reconciledBankRefs={Array.from(reconciledBankRefs)}
       vendors={vendors}
+      openInvoices={openInvoices}
     />
   );
   } catch (err: any) {

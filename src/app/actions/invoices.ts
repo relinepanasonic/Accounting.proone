@@ -1089,8 +1089,9 @@ export async function recordInvoicePayment(invoiceId: string, amount: number, pa
     revalidatePath('/invoices');
     revalidatePath(`/invoices/${invoiceId}`);
     revalidatePath('/ledger');
+    revalidatePath('/reconcile');
     
-    return { success: true };
+    return { success: true, transactionId: newTxId || null };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Error recording payment.' };
   }

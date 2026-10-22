@@ -1,4 +1,5 @@
 import React, { Suspense } from 'react';
+import { CashReceivedTable, type CashRow } from '@/components/invoices/CashReceivedTable';
 import { assignableWorkspaces } from '@/lib/workspaces/assignable';
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
@@ -32,7 +33,7 @@ async function InvoicesTableServer({ activeTab }: { activeTab: string }) {
       .order('created_at', { ascending: false }),
     supabase
       .from('transactions')
-      .select('id, description, amount, transaction_date, category')
+      .select('id, description, amount, transaction_date, category, invoice_id, bank_reference, reconciled')
       .eq('workspace_id', activeWorkspaceId)
       .eq('type', 'income')
       .order('transaction_date', { ascending: false }),
@@ -146,10 +147,42 @@ async function InvoicesTableServer({ activeTab }: { activeTab: string }) {
         })
       : [];
 
-  let combined = [];
-  if (activeTab === 'direct') combined = displayIncomeTx;
-  else if (activeTab === 'all') combined = [...displayIncomeTx, ...displayPaymentTx];
-  else combined = displayInvoices;
+  // Cash Received = all the money that came in: payments of invoices and direct income (both are income records).
+  // Direct Income = the part without an invoice. An invoice matched with the bank in the old way (no cash record) is added once.
+  if (activeTab === 'direct' || activeTab === 'all') {
+    const invById = new Map<string, any>((invoices || []).map((i: any) => [i.id, i]));
+    const rows: CashRow[] = (incomeTx || []).map((tx: any) => {
+      const inv = tx.invoice_id ? invById.get(tx.invoice_id) : null;
+      const clientObj = inv ? (Array.isArray(inv.clients) ? inv.clients[0] : inv.clients) : null;
+      return {
+        id: tx.id,
+        date: String(tx.transaction_date || '').slice(0, 10),
+        source: tx.invoice_id ? ('invoice' as const) : ('direct' as const),
+        client: tx.invoice_id ? mask.name(clientObj?.name, inv?.assigned_workspace_id, 'Client') : tx.description || 'Direct income',
+        invoiceNumber: inv?.invoice_number || '',
+        description: tx.description || '',
+        category: tx.category || '',
+        amount: Number(tx.amount || 0),
+        matched: Boolean(tx.reconciled && String(tx.bank_reference || '').startsWith('BANK-REF:')),
+      };
+    });
+    if (activeTab === 'all') {
+      const paidInvoices = new Set((incomeTx || []).map((t: any) => t.invoice_id).filter(Boolean));
+      const seen = new Set<string>();
+      for (const je of paymentJEs || []) {
+        const inv = invById.get(je.reference_id);
+        if (!inv || paidInvoices.has(inv.id)) continue; // only the old direct invoice matches: payments with a cash record are above
+        const key = `${je.reference_id}|${je.credit_amount}|${String(je.transaction_date).slice(0, 10)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const clientObj = Array.isArray(inv.clients) ? inv.clients[0] : inv.clients;
+        rows.push({ id: je.id, date: String(je.transaction_date || '').slice(0, 10), source: 'legacy', client: mask.name(clientObj?.name, inv.assigned_workspace_id, 'Client'), invoiceNumber: inv.invoice_number || '', description: String(je.description || ''), category: 'Invoice payment', amount: Number(je.credit_amount || 0), matched: true });
+      }
+    }
+    return <CashReceivedTable rows={rows} mode={activeTab === 'direct' ? 'direct' : 'all'} />;
+  }
+
+  const combined = displayInvoices;
 
   const finalInvoices = combined.sort(
     (a, b) => new Date(b.rawIssueDate || 0).getTime() - new Date(a.rawIssueDate || 0).getTime()

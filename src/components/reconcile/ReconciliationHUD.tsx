@@ -2,23 +2,23 @@
 import { formatIndoDate } from '@/lib/utils';
 import { DatePickerUI } from '@/components/ui/DatePickerUI';
 
-import React, { useEffect, useState, useTransition } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  UploadCloud,
   CheckCircle2,
-  FileSpreadsheet,
   Sparkles,
   ChevronDown,
   ChevronRight,
+  ArrowLeft,
   ArrowRight,
-  ChevronUp,
+  Receipt,
+  FileText,
+  Banknote,
 } from 'lucide-react';
 import { reconcileRecord, quickResolveAndReconcile, unreconcileRecord } from '@/app/actions/reconcile';
 import { createClientRecord } from '@/app/actions/settings';
 import { recordInvoicePayment } from '@/app/actions/invoices';
 import { relinkBankBook, releaseBankRef } from '@/app/actions/bank-book';
-import { saveBankStatement, type BankBookLineInput } from '@/app/actions/bank-book';
 import { RupiahInput } from '@/components/ui/RupiahInput';
 
 export interface UnreconciledSystemRecord {
@@ -81,10 +81,42 @@ interface ReconciliationHUDProps {
   coaAccounts?: COAAccountMinimal[];
   reconciledBankRefs?: string[];
   vendors?: { id: string; name: string }[];
-  /** Invoices that still have a balance: the window "Record invoice payment" turns a payment into a cash record to match. */
+  /** Invoices that still have a balance (Invoice Unpaid). */
   openInvoices?: OpenInvoice[];
   /** The left side: the lines of Buku Bank that are not matched yet. */
   bookLines?: BookLine[];
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+const rp = (n: number) => `Rp ${Math.round(Math.abs(n)).toLocaleString('id-ID')}`;
+const signed = (n: number) => `${n >= 0 ? '+' : '-'}${rp(n)}`;
+
+/** One month filter per side: month (or all months) and year. */
+function MonthFilter({ month, year, years, onChange }: { month: number; year: number; years: number[]; onChange: (month: number, year: number) => void }) {
+  const cls = 'rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-[11px] font-bold text-zinc-200 outline-none focus:border-[#d4af37]/60';
+  return (
+    <div className="flex items-center gap-1.5">
+      <select value={month} onChange={(e) => onChange(Number(e.target.value), year)} className={cls} aria-label="Month">
+        <option value={0}>All months</option>
+        {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+      </select>
+      <select value={year} onChange={(e) => onChange(month, Number(e.target.value))} className={cls} aria-label="Year">
+        {years.map((y) => <option key={y} value={y}>{y}</option>)}
+      </select>
+    </div>
+  );
+}
+
+/** A segmented toggle (All | In | Out ...). */
+function Segment<T extends string>({ value, options, onChange }: { value: T; options: Array<{ key: T; label: string; tone?: 'gold' | 'green' | 'red' | 'blue' }>; onChange: (v: T) => void }) {
+  const tone = { gold: 'bg-[#d4af37]/20 text-[#f5d77f]', green: 'bg-emerald-500/20 text-emerald-400', red: 'bg-red-500/20 text-red-400', blue: 'bg-sky-500/20 text-sky-300' };
+  return (
+    <div className="flex rounded-lg border border-zinc-800 bg-zinc-950 p-0.5">
+      {options.map((o) => (
+        <button key={o.key} type="button" onClick={() => onChange(o.key)} className={`rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide transition-all ${value === o.key ? tone[o.tone || 'gold'] : 'text-zinc-500 hover:text-zinc-300'}`}>{o.label}</button>
+      ))}
+    </div>
+  );
 }
 
 export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccounts = [], reconciledBankRefs = [], vendors = [], openInvoices = [], bookLines = [] }: ReconciliationHUDProps) {
@@ -94,9 +126,10 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   const [selectedBankId, setSelectedBankId] = useState<string | null>(null);
   const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
 
-  // Record invoice payment: the invoice is not matched with the bank; its payment becomes a cash record, and that is matched.
-  const [rightTab, setRightTab] = useState<'cash' | 'unpaid' | 'matched'>('cash');
+  // Right side: Cash Received | Invoice Unpaid | Expenses | Matched
+  const [rightTab, setRightTab] = useState<'cash' | 'unpaid' | 'expenses' | 'matched'>('cash');
   const [dirFilter, setDirFilter] = useState<'all' | 'in' | 'out'>('all');
+  const [activeFilterTab, setActiveFilterTab] = useState<'all' | 'matched' | 'unmatched'>('all');
   const [paySearch, setPaySearch] = useState('');
   const [payPartial, setPayPartial] = useState<Record<string, number | ''>>({});
   const [payBusy, setPayBusy] = useState<string | null>(null);
@@ -104,6 +137,8 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   const [pendingSelect, setPendingSelect] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  // "No match?" on a bank card: create the missing record (expense, direct income or an invoice payment) in a window.
+  const [noMatchMode, setNoMatchMode] = useState<'expense' | 'income' | 'invoice' | null>(null);
   const [quickCategory, setQuickCategory] = useState<string>('');
   const [quickVendorName, setQuickVendorName] = useState('');
   const [quickVendorId, setQuickVendorId] = useState<string | undefined>(undefined);
@@ -115,18 +150,18 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   const [quickNotes, setQuickNotes] = useState('');
   const [coaDropdownOpen, setCoaDropdownOpen] = useState(false);
   const [expandedCoaGroups, setExpandedCoaGroups] = useState<Record<string, boolean>>({});
-  const [showQuickForm, setShowQuickForm] = useState(false);
+  const showQuickForm = noMatchMode === 'expense' || noMatchMode === 'income';
+  const setShowQuickForm = (open: boolean) => { if (!open) setNoMatchMode(null); };
 
   const [activeBankId, setActiveBankId] = useState<string>(bankAccounts.length > 0 ? bankAccounts[0].id : '');
-  const activeBank = bankAccounts.find(b => b.id === activeBankId);
-  const bankFormat = activeBank?.bank_name?.toLowerCase().includes('bca') ? 'bca_business' : 'jago';
-  
-  const currentMonth = new Date().getMonth() + 1;
-  const currentYear = new Date().getFullYear();
-  const [filterMonth, setFilterMonth] = useState<number>(currentMonth);
-  const [filterYear, setFilterYear] = useState<number>(currentYear);
-  const [activeFilterTab, setActiveFilterTab] = useState<'all' | 'matched' | 'unmatched'>('all');
-  const [showReconciled, setShowReconciled] = useState(false);
+  const activeBank = bankAccounts.find((b) => b.id === activeBankId);
+
+  // One month filter per side (0 = all months).
+  const now = new Date();
+  const [bankMonth, setBankMonth] = useState<number>(now.getMonth() + 1);
+  const [bankYear, setBankYear] = useState<number>(now.getFullYear());
+  const [sysMonth, setSysMonth] = useState<number>(now.getMonth() + 1);
+  const [sysYear, setSysYear] = useState<number>(now.getFullYear());
   const [reconciledRefs, setReconciledRefs] = useState<string[]>(reconciledBankRefs);
   const [optionsDialog, setOptionsDialog] = useState<{
     title: string;
@@ -150,8 +185,8 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   const activeBankLine = bankLines.find((b) => b.id === selectedBankId);
 
   useEffect(() => { setRecordsList(systemRecords); }, [systemRecords]);
-  // Left side = Buku Bank: the open lines of the chosen bank account (and of the month shown first).
-  const feedStarted = React.useRef(false);
+  // Left side = Buku Bank: the open lines of the chosen bank account. Both sides open on the month of the first open line.
+  const feedStarted = useRef(false);
   useEffect(() => {
     const feed: BankLine[] = bookLines
       .filter((l) => l.bankAccountId === activeBankId)
@@ -161,15 +196,31 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
     if (!feedStarted.current && feed.length > 0) {
       feedStarted.current = true;
       const d = new Date(feed[0].date);
-      if (!isNaN(d.getTime())) { setFilterMonth(d.getMonth() + 1); setFilterYear(d.getFullYear()); }
+      if (!isNaN(d.getTime())) { setBankMonth(d.getMonth() + 1); setBankYear(d.getFullYear()); setSysMonth(d.getMonth() + 1); setSysYear(d.getFullYear()); }
     }
   }, [bookLines, activeBankId]);
   useEffect(() => {
     if (pendingSelect && recordsList.some((r) => r.id === pendingSelect)) { setSelectedRecordIds([pendingSelect]); setPendingSelect(null); }
   }, [pendingSelect, recordsList]);
 
+  const years = useMemo(() => {
+    const ys = new Set<number>([now.getFullYear()]);
+    for (const l of bookLines) ys.add(Number(l.date.slice(0, 4)));
+    for (const r of recordsList) { const y = Number(String(r.date).slice(0, 4)); if (y > 2000) ys.add(y); }
+    return Array.from(ys).filter((y) => y > 2000).sort((a, b) => b - a);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookLines, recordsList]);
+
+  const inMonth = (date: string, month: number, year: number) => {
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return false;
+    return d.getFullYear() === year && (month === 0 || d.getMonth() + 1 === month);
+  };
+
+  // Record the payment of an unpaid invoice (System side, Invoice Unpaid): it becomes a cash record to match.
   const payOneInvoice = (inv: OpenInvoice, amount: number) => {
     if (!(amount > 0)) { setPayError('Fill the amount of the payment.'); return; }
+    if (amount > inv.balance + 0.5) { setPayError(`The payment is more than the balance of ${inv.number} (${rp(inv.balance)}).`); return; }
     setPayError('');
     setPayBusy(inv.id);
     const bankId = activeBank && !String(activeBank.id).startsWith('temp-') ? activeBank.id : undefined;
@@ -182,19 +233,37 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
       router.refresh();
     });
   };
-  const payShown = React.useMemo(() => {
-    const q = paySearch.trim().toLowerCase();
-    const line = activeBankLine && activeBankLine.amount > 0 ? activeBankLine : null;
-    const score = (i: OpenInvoice) => (line ? (Math.abs(i.balance - line.amount) < 1 ? 2 : 0) + payeeSimilarity(line.sourceDestination, i.client) * 1.5 : 0);
-    return openInvoices
-      .filter((i) => !q || `${i.client} ${i.number}`.toLowerCase().includes(q))
-      .sort((a, b) => score(b) - score(a) || b.date.localeCompare(a.date))
-      .slice(0, 60);
-  }, [openInvoices, paySearch, activeBankLine]);
+
+  // "No match?" > invoice: the bank amount is the payment. It is recorded and matched with this bank line at once.
+  const payInvoiceFromBankLine = (inv: OpenInvoice) => {
+    if (!activeBankLine) return;
+    const amount = Math.abs(activeBankLine.amount);
+    if (amount > inv.balance + 0.5) { setPayError(`The bank amount (${rp(amount)}) is more than the balance of ${inv.number} (${rp(inv.balance)}).`); return; }
+    setPayError('');
+    setPayBusy(inv.id);
+    const line = activeBankLine;
+    const bankId = activeBank && !String(activeBank.id).startsWith('temp-') ? activeBank.id : undefined;
+    const ref = `BANK-REF:${line.date}:${line.amount}:${line.sourceDestination}`;
+    void (async () => {
+      try {
+        const res: any = await recordInvoicePayment(inv.id, amount, toIsoDate(line.date) || line.date, 'Bank Transfer', `Bank ${line.sourceDestination}`.slice(0, 80), undefined, bankId);
+        if (!res?.success || !res.transactionId) { setPayError(res?.error || 'Could not record the payment.'); return; }
+        await reconcileRecord(res.transactionId, 'income', ref, activeBankId, undefined, false, undefined, toIsoDate(line.date));
+        setBankLines((prev) => prev.filter((b) => b.id !== line.id));
+        setSelectedBankId(null);
+        setNoMatchMode(null);
+        void relinkBankBook().finally(() => router.refresh());
+      } catch (err: any) {
+        setPayError(err?.message || 'Could not record the payment.');
+      } finally {
+        setPayBusy(null);
+      }
+    })();
+  };
 
   // One suggestion per bank line, and each system record is suggested at most once:
   // all same-amount pairs are scored, then assigned best score first.
-  const suggestions = React.useMemo(() => {
+  const suggestions = useMemo(() => {
     const pairs: { lineId: string; record: UnreconciledSystemRecord; score: number }[] = [];
     for (const bankLine of bankLines) {
       for (const r of recordsList) {
@@ -226,9 +295,10 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   }
 
   const bestMatchRecord = activeBankLine ? findBestMatch(activeBankLine) : null;
-  const currentTargetRecordIds = selectedRecordIds.length > 0 ? selectedRecordIds : (bestMatchRecord ? [bestMatchRecord.id] : []);
+  // MATCH works on what you clicked: one bank card on the left and the card(s) on the right. A suggestion only shows a hint.
+  const currentTargetRecordIds = selectedRecordIds;
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (activeBankLine) {
       setQuickVendorName(activeBankLine.sourceDestination || '');
       setQuickVendorId(undefined);
@@ -238,11 +308,9 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
     }
   }, [activeBankLine]);
 
-  const filteredBankLines = React.useMemo(() => {
+  const filteredBankLines = useMemo(() => {
     return bankLines.filter((b) => {
-      const d = new Date(b.date);
-      const matchesMonth = d.getMonth() + 1 === filterMonth && d.getFullYear() === filterYear;
-      if (!matchesMonth) return false;
+      if (!inMonth(b.date, bankMonth, bankYear)) return false;
       if (dirFilter === 'in' && !(b.amount > 0)) return false;
       if (dirFilter === 'out' && !(b.amount < 0)) return false;
       const bm = findBestMatch(b);
@@ -251,115 +319,14 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
       return true;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bankLines, filterMonth, filterYear, activeFilterTab, dirFilter, recordsList]);
+  }, [bankLines, bankMonth, bankYear, activeFilterTab, dirFilter, recordsList]);
 
-  const [bookNotice, setBookNotice] = useState('');
-  /** Buku Bank: keep every line of the uploaded statement (the page /bank-book), whatever is reconciled already. */
-  const storeInBook = async (fileName: string, all: BankLine[]) => {
-    if (!activeBankId || all.length === 0) return;
-    const input: BankBookLineInput[] = all.map((l) => ({ date: l.date, sourceDestination: l.sourceDestination, transactionDetails: l.transactionDetails, notes: l.notes, rekFrom: l.rekFrom, amount: l.amount }));
-    const res = await saveBankStatement(activeBankId, fileName, input);
-    setBookNotice(res.success ? `Buku Bank: ${res.saved} new line(s) stored${res.skipped ? `, ${res.skipped} already there` : ''}.` : `Buku Bank: not stored. ${res.error || ''}`);
-  };
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    // Clear the input so the same file can be selected again
-    e.target.value = '';
-
-    if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
-      startTransition(async () => {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('bankFormat', bankFormat);
-        try {
-          const res = await fetch('/api/v1/reconcile/parse-pdf', { method: 'POST', body: formData });
-          const result = await res.json();
-          if (!result.success) {
-            alert('Failed to parse PDF:\n\n' + (result.error || 'Unknown error'));
-            return;
-          }
-          if (result.data && Array.isArray(result.data)) {
-            const reconciledSet = new Set(reconciledRefs);
-            void storeInBook(file.name, result.data.map((t: any, i: number) => ({ id: `pdf-${i}`, date: t.date, sourceDestination: t.sourceDestination || '', transactionDetails: t.transactionDetails || '', notes: t.notes || '', rekFrom: t.rekFrom || '', amount: Number(t.amount), balance: typeof t.balance === 'number' ? t.balance : undefined, time: t.time || undefined })));
-            const parsed: BankLine[] = result.data
-              .filter((t: any) => !reconciledSet.has(`BANK-REF:${t.date}:${t.amount}:${t.sourceDestination}`))
-              .map((t: any, i: number) => ({
-                id: `pdf-${i}-${t.date}-${t.amount}`,
-                date: t.date, sourceDestination: t.sourceDestination || '',
-                transactionDetails: t.transactionDetails || '', notes: t.notes || '',
-                rekFrom: t.rekFrom || '', amount: Number(t.amount),
-              }));
-            
-            if (parsed.length === 0) {
-              alert('All items in this statement have already been reconciled and filtered out!');
-              return;
-            }
-
-            const sorted = [...parsed].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-            setBankLines(sorted);
-            if (sorted.length > 0) {
-              setSelectedBankId(sorted[0].id);
-              const firstDate = new Date(sorted[0].date);
-              if (!isNaN(firstDate.getTime())) {
-                setFilterMonth(firstDate.getMonth() + 1);
-                setFilterYear(firstDate.getFullYear());
-              }
-            }
-          }
-        } catch (err) { console.error(err); alert('Failed to parse PDF.'); }
-      });
-    } else {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const text = ev.target?.result as string;
-        if (!text) return;
-        const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
-        const reconciledSet = new Set(reconciledRefs);
-        const parsed: BankLine[] = [];
-        const everyLine: BankLine[] = [];
-        for (let i = 1; i < lines.length; i++) {
-          const cols = lines[i].split(',');
-          if (cols.length < 3) continue;
-          const date = cols[0]?.trim();
-          const sourceDestination = cols[1]?.trim() || '';
-          const rawAmt = cols[2]?.trim().replace(/[^0-9.-]/g, '');
-          const amount = parseFloat(rawAmt);
-          if (!date || isNaN(amount)) continue;
-          everyLine.push({ id: `csv-${i}`, date, sourceDestination, transactionDetails: cols[3]?.trim() || '', notes: cols[4]?.trim() || '', rekFrom: cols[5]?.trim() || '', amount });
-          if (reconciledSet.has(`BANK-REF:${date}:${amount}:${sourceDestination}`)) continue;
-          parsed.push({ id: `csv-${i}-${date}-${amount}`, date, sourceDestination, transactionDetails: cols[3]?.trim() || '', notes: cols[4]?.trim() || '', rekFrom: cols[5]?.trim() || '', amount });
-        }
-        
-        void storeInBook(file.name, everyLine);
-        if (parsed.length === 0) {
-          alert('All items in this statement have already been reconciled and filtered out!');
-          return;
-        }
-
-        const sorted = [...parsed].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-        setBankLines(sorted);
-        if (sorted.length > 0) {
-          setSelectedBankId(sorted[0].id);
-          const firstDate = new Date(sorted[0].date);
-          if (!isNaN(firstDate.getTime())) {
-            setFilterMonth(firstDate.getMonth() + 1);
-            setFilterYear(firstDate.getFullYear());
-          }
-        }
-      };
-      reader.readAsText(file);
-    }
-  };
-
-  const handleMatchAndClear = async (overrideTargetId?: string) => {
-    const activeTargetIds = typeof overrideTargetId === 'string' ? [overrideTargetId] : currentTargetRecordIds;
+  const handleMatchAndClear = async () => {
+    const activeTargetIds = currentTargetRecordIds;
     if (!activeBankLine || activeTargetIds.length === 0) return;
     const targetRecords = recordsList.filter((r) => activeTargetIds.includes(r.id));
     if (targetRecords.length === 0) return;
-    
+
     const bankAmountAbs = Math.abs(activeBankLine.amount);
     const recordAmountAbs = Math.abs(targetRecords.reduce((sum, r) => sum + Math.abs(r.amount), 0));
     let shouldClearDiff = false;
@@ -396,7 +363,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
 
     if (bankAmountAbs !== recordAmountAbs && targetRecords.length === 1) {
       const diffAbs = recordAmountAbs - bankAmountAbs;
-      
+
       if (bankAmountAbs < recordAmountAbs && targetRecords[0].type === 'invoice') {
         const choice = await askOptions(
           'Invoice Amount Mismatch',
@@ -430,16 +397,16 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
       try {
         const uniqueRef = `BANK-REF:${activeBankLine.date}:${activeBankLine.amount}:${activeBankLine.sourceDestination}`;
         const taxWriteoffAmount = isTaxWriteoff ? recordAmountAbs - bankAmountAbs : undefined;
-        
+
         for (const targetRecord of targetRecords) {
           await reconcileRecord(
-            targetRecord.id, 
-            targetRecord.type, 
-            uniqueRef, 
-            activeBankId, 
+            targetRecord.id,
+            targetRecord.type,
+            uniqueRef,
+            activeBankId,
             multiAdjust
               ? (targetRecord.id === multiAdjust.recordId ? multiAdjust.newAmount : undefined)
-              : (shouldClearDiff || isPartialPayment || isTaxWriteoff) ? Math.abs(activeBankLine.amount) : undefined, 
+              : (shouldClearDiff || isPartialPayment || isTaxWriteoff) ? Math.abs(activeBankLine.amount) : undefined,
             isPartialPayment,
             taxWriteoffAmount,
             toIsoDate(activeBankLine.date)
@@ -521,226 +488,329 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
     finally { setIsQuickAddingVendor(false); }
   };
 
-  const filteredSystemRecords = React.useMemo(() => {
+  const payShown = useMemo(() => {
+    const q = paySearch.trim().toLowerCase();
+    const line = activeBankLine && activeBankLine.amount > 0 ? activeBankLine : null;
+    const score = (i: OpenInvoice) => (line ? (Math.abs(i.balance - line.amount) < 1 ? 2 : 0) + payeeSimilarity(line.sourceDestination, i.client) * 1.5 : 0);
+    return openInvoices
+      .filter((i) => !q || `${i.client} ${i.number}`.toLowerCase().includes(q))
+      .sort((a, b) => score(b) - score(a) || b.date.localeCompare(a.date))
+      .slice(0, 60);
+  }, [openInvoices, paySearch, activeBankLine]);
+
+  const filteredSystemRecords = useMemo(() => {
     let list = recordsList.filter((r) => {
+      if (!inMonth(r.date, sysMonth, sysYear)) return false;
       if (rightTab === 'matched') return Boolean(r.reconciled);
       if (r.reconciled) return false;
-      if (activeBankLine) {
-        if (activeBankLine.amount > 0) return r.type === 'invoice' || r.type === 'income';
-        else return r.type === 'expense' || r.type === 'payroll';
-      }
-      const d = new Date(r.date);
-      return d.getMonth() + 1 === filterMonth && d.getFullYear() === filterYear;
+      if (rightTab === 'expenses') return r.type === 'expense' || r.type === 'payroll';
+      return r.type === 'income' || r.type === 'invoice';
     });
-    if (rightTab === 'matched') {
-      list = list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 300);
-    } else if (activeBankLine) {
-      list = list.sort((a, b) => {
-        const aScore = (Math.abs(a.amount - Math.abs(activeBankLine.amount)) < 0.01 ? 1 : 0) + payeeSimilarity(activeBankLine.sourceDestination, a.payeeOrClient || a.reference);
-        const bScore = (Math.abs(b.amount - Math.abs(activeBankLine.amount)) < 0.01 ? 1 : 0) + payeeSimilarity(activeBankLine.sourceDestination, b.payeeOrClient || b.reference);
-        return bScore - aScore;
-      });
+    if (rightTab !== 'matched' && activeBankLine) {
+      const score = (r: UnreconciledSystemRecord) => (Math.abs(r.amount - Math.abs(activeBankLine.amount)) < 0.01 ? 1 : 0) + payeeSimilarity(activeBankLine.sourceDestination, r.payeeOrClient || r.reference);
+      list = list.sort((a, b) => score(b) - score(a));
     } else {
       list = list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }
-    return list;
-  }, [recordsList, rightTab, activeBankLine, filterMonth, filterYear]);
+    return list.slice(0, 300);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordsList, rightTab, activeBankLine, sysMonth, sysYear]);
+
+  // Counts for the tabs follow the month filter of the System side.
+  const tabCounts = useMemo(() => {
+    let cash = 0; let expenses = 0; let matched = 0;
+    for (const r of recordsList) {
+      if (!inMonth(r.date, sysMonth, sysYear)) continue;
+      if (r.reconciled) matched++;
+      else if (r.type === 'expense' || r.type === 'payroll') expenses++;
+      else cash++;
+    }
+    return { cash, expenses, matched, unpaid: openInvoices.length };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordsList, sysMonth, sysYear, openInvoices]);
 
   const bankAmt = activeBankLine ? Math.abs(activeBankLine.amount) : 0;
   const selectedRecords = recordsList.filter((r) => currentTargetRecordIds.includes(r.id));
   const systemAmt = selectedRecords.reduce((s, r) => s + Math.abs(r.amount), 0);
   const diff = systemAmt - bankAmt;
   const isExactMatch = bankAmt > 0 && Math.abs(diff) < 0.01;
-  const canMatch = !!activeBankLine && currentTargetRecordIds.length > 0;
+  // MATCH wakes up (gold) only with one card chosen on the left and at least one on the right.
+  const canMatch = !!activeBankLine && selectedRecords.length > 0;
+
+  const pickBankLine = (line: BankLine) => {
+    if (selectedBankId === line.id) { setSelectedBankId(null); return; }
+    setSelectedBankId(line.id);
+    // The right side follows the direction of the bank card.
+    if (line.amount > 0 && (rightTab === 'expenses')) setRightTab('cash');
+    if (line.amount < 0 && (rightTab === 'cash' || rightTab === 'unpaid')) setRightTab('expenses');
+    setSelectedRecordIds([]);
+  };
+
+  const openNoMatch = (line: BankLine, mode: 'expense' | 'income' | 'invoice') => {
+    setSelectedBankId(line.id);
+    setPayError('');
+    setPaySearch('');
+    setNoMatchMode(mode);
+  };
+
+  const label = 'block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1';
+  const field = 'w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#d4af37]';
+  const modalTitle = noMatchMode === 'expense' ? 'Create expense' : noMatchMode === 'income' ? 'Create direct income' : 'Record invoice payment';
+
+  const tabs: Array<{ key: typeof rightTab; label: string; count: number; tone?: 'gold' | 'green' | 'red' | 'blue' }> = [
+    { key: 'cash', label: 'Cash Received', count: tabCounts.cash, tone: 'gold' },
+    { key: 'unpaid', label: 'Invoice Unpaid', count: tabCounts.unpaid, tone: 'blue' },
+    { key: 'expenses', label: 'Expenses', count: tabCounts.expenses, tone: 'red' },
+    { key: 'matched', label: 'Matched', count: tabCounts.matched, tone: 'green' },
+  ];
+  const tabTone = { gold: 'bg-[#d4af37]/20 text-[#f5d77f]', green: 'bg-emerald-500/20 text-emerald-400', red: 'bg-red-500/20 text-red-400', blue: 'bg-sky-500/20 text-sky-300' };
+
+  const matchButton = (
+    <button
+      type="button"
+      disabled={!canMatch || isPending}
+      onClick={() => handleMatchAndClear()}
+      className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-extrabold uppercase tracking-wider transition-all ${canMatch ? 'gold-btn text-black shadow-[0_0_24px_rgba(212,175,55,0.45)]' : 'cursor-not-allowed border border-zinc-800 bg-zinc-900 text-zinc-600'}`}
+    >
+      <CheckCircle2 className="h-4 w-4" />{isPending ? '...' : 'MATCH'}
+    </button>
+  );
 
   return (
-    <div className="space-y-6">
-      {/* Controls Strip */}
-      <div className="flex flex-col md:flex-row gap-6 items-start md:items-center justify-between mb-8 p-6 gold-glass-panel rounded-2xl border border-[#d4af37]/20">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#d4af37] to-[#8a7322] p-0.5 shadow-[0_0_20px_rgba(212,175,55,0.4)]">
-            <div className="w-full h-full bg-black/80 rounded-[10px] flex items-center justify-center">
-              <FileSpreadsheet className="w-6 h-6 text-[#d4af37]" />
-            </div>
-          </div>
-          <h2 className="text-sm font-extrabold text-white uppercase tracking-wider">BANK RECONCILIATION</h2>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <select value={activeBankId} onChange={(e) => setActiveBankId(e.target.value)} className="bg-black/60 border border-[#d4af37]/30 text-[#f5d77f] text-xs font-bold rounded-lg px-3 py-2.5 outline-none focus:border-[#d4af37] font-mono min-w-[200px]">
-            {bankAccounts.length === 0 ? <option value="">Select Bank (None Registered)</option> : bankAccounts.map((b) => <option key={b.id} value={b.id}>{b.bank_name} | {b.account_number}{b.account_holder ? ` | ${b.account_holder}` : ''}</option>)}
-          </select>
-          
-          <div className="flex items-center gap-2 border border-zinc-700/50 rounded-lg p-1 bg-black/40">
-            <select value={filterMonth} onChange={(e) => setFilterMonth(Number(e.target.value))} className="bg-transparent text-white text-xs font-bold rounded px-2 py-1.5 outline-none hover:bg-zinc-800/50 cursor-pointer">
-              {Array.from({ length: 12 }).map((_, i) => <option key={i} value={i + 1}>{new Date(2000, i, 1).toLocaleString('default', { month: 'short' }).toUpperCase()}</option>)}
-            </select>
-            <input type="number" value={filterYear} onChange={(e) => setFilterYear(Number(e.target.value))} className="bg-transparent text-white text-xs font-bold font-mono rounded px-2 py-1.5 outline-none w-16 hover:bg-zinc-800/50" min="2000" max="2100" />
-          </div>
-          <a href="/bank-book" className="flex items-center gap-2 px-5 py-2.5 border border-zinc-700 rounded-full text-zinc-300 text-xs font-bold uppercase tracking-wider hover:border-[#d4af37]/60 hover:text-[#f5d77f] transition-all" title="Statements are uploaded in Buku Bank; the left side reads the lines from there">
-            <UploadCloud className="w-4 h-4" />
-            <span>Upload in Buku Bank</span>
-          </a>
-          {bookNotice && <span className="text-[11px] text-zinc-400">{bookNotice}</span>}
-        </div>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between rounded-2xl border border-[#d4af37]/20 px-5 py-4 gold-glass-panel">
+        <h2 className="text-sm font-extrabold uppercase tracking-wider text-white">Bank Reconciliation</h2>
+        <p className="hidden text-[11px] text-zinc-500 md:block">Pick one card on the left and one on the right, then press MATCH. Statements are uploaded once in Buku Bank.</p>
       </div>
 
-      {/* 3-Column Layout: Bank | Connector | System Records */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_160px_1fr] items-start h-[700px]">
+      {/* Mobile MATCH bar */}
+      <div className="sticky top-2 z-30 flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950/95 p-3 lg:hidden">
+        <div className="text-xs font-mono">
+          {canMatch ? (isExactMatch ? <span className="font-bold text-emerald-400">EXACT MATCH</span> : <span className="font-bold text-yellow-400">DIFF: {rp(diff)}</span>) : <span className="text-zinc-500">Pick 1 left + 1 right</span>}
+        </div>
+        <div className="w-32">{matchButton}</div>
+      </div>
 
-        {/* LEFT: Bank Statement Feed */}
-        <div className="gold-glass-panel rounded-2xl lg:rounded-r-none lg:border-r-0 p-6 flex flex-col h-full min-w-0">
-          <div className="flex flex-wrap items-center justify-between gap-2 pb-3 mb-4 border-b border-zinc-800">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[#d4af37]">BUKU BANK</h3>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex bg-zinc-950 rounded-lg p-1 border border-zinc-800">
-                {(['all', 'in', 'out'] as const).map((k) => (
-                  <button key={k} onClick={() => setDirFilter(k)} className={`px-2 py-1 text-[10px] rounded font-bold uppercase transition-all ${dirFilter === k ? (k === 'in' ? 'bg-emerald-500/20 text-emerald-400' : k === 'out' ? 'bg-red-500/20 text-red-400' : 'bg-[#d4af37]/20 text-[#f5d77f]') : 'text-zinc-500 hover:text-zinc-400'}`}>{k === 'all' ? 'ALL' : k}</button>
-                ))}
-              </div>
-              <div className="flex bg-zinc-950 rounded-lg p-1 border border-zinc-800">
-                <button onClick={() => setActiveFilterTab('all')} className={`px-2 py-1 text-[10px] rounded font-bold transition-all ${activeFilterTab === 'all' ? 'bg-[#d4af37]/20 text-[#f5d77f]' : 'text-zinc-500 hover:text-zinc-400'}`}>ALL</button>
-                <button onClick={() => setActiveFilterTab('matched')} className={`px-2 py-1 text-[10px] rounded font-bold transition-all ${activeFilterTab === 'matched' ? 'bg-emerald-500/20 text-emerald-400' : 'text-zinc-500 hover:text-zinc-400'}`}>MATCHED</button>
-                <button onClick={() => setActiveFilterTab('unmatched')} className={`px-2 py-1 text-[10px] rounded font-bold transition-all ${activeFilterTab === 'unmatched' ? 'bg-red-500/20 text-red-400' : 'text-zinc-500 hover:text-zinc-400'}`}>NOT FOUND</button>
-              </div>
-              <span className="text-[10px] font-mono text-zinc-400">{filteredBankLines.length} ITEMS</span>
-            </div>
+      <div className="grid grid-cols-1 gap-4 lg:h-[calc(100vh-230px)] lg:min-h-[560px] lg:grid-cols-[1fr_130px_1fr]">
+        {/* LEFT: Buku Bank */}
+        <section className="flex min-h-[420px] min-w-0 flex-col rounded-2xl border border-zinc-800 p-4 gold-glass-panel lg:min-h-0">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[#d4af37]">Buku Bank</h3>
+            <span className="font-mono text-[10px] text-zinc-500">{filteredBankLines.length} open</span>
           </div>
-          <div className="space-y-3 overflow-y-auto flex-1 pr-1">
+          <select value={activeBankId} onChange={(e) => { setActiveBankId(e.target.value); setSelectedBankId(null); }} className="mb-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 font-mono text-[11px] font-bold text-[#f5d77f] outline-none focus:border-[#d4af37]/60">
+            {bankAccounts.length === 0 ? <option value="">No bank registered</option> : bankAccounts.map((b) => <option key={b.id} value={b.id}>{b.bank_name} | {b.account_number}{b.account_holder ? ` | ${b.account_holder}` : ''}</option>)}
+          </select>
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <MonthFilter month={bankMonth} year={bankYear} years={years} onChange={(m, y) => { setBankMonth(m); setBankYear(y); }} />
+            <Segment value={dirFilter} onChange={setDirFilter} options={[{ key: 'all', label: 'All' }, { key: 'in', label: 'In', tone: 'green' }, { key: 'out', label: 'Out', tone: 'red' }]} />
+            <Segment value={activeFilterTab} onChange={setActiveFilterTab} options={[{ key: 'all', label: 'All' }, { key: 'matched', label: 'Matched', tone: 'green' }, { key: 'unmatched', label: 'Not Found', tone: 'red' }]} />
+          </div>
+
+          <div className="flex-1 space-y-2 overflow-y-auto pr-1">
             {filteredBankLines.length === 0 ? (
-              <div className="p-8 text-center text-zinc-500 font-mono text-xs border border-dashed border-zinc-800 rounded-xl space-y-2">
-                <div className="text-white font-bold">NO BANK FEED TRANSACTIONS</div>
-                <div className="text-[10px] text-zinc-400 font-sans">Buku Bank has no open line for {new Date(filterYear, filterMonth - 1, 1).toLocaleString('default', { month: 'long', year: 'numeric' })}</div>
+              <div className="rounded-xl border border-dashed border-zinc-800 p-8 text-center text-xs text-zinc-500">
+                {bankLines.length === 0 ? 'No open line in Buku Bank for this account. Upload a statement in Buku Bank.' : 'No line for these filters.'}
               </div>
-            ) : filteredBankLines.map((bank) => {
-              const isSelected = bank.id === selectedBankId;
-              const bm = findBestMatch(bank);
-              const pScore = bm ? payeeSimilarity(bank.sourceDestination, bm.payeeOrClient || bm.reference) : 0;
+            ) : filteredBankLines.map((line) => {
+              const isSel = selectedBankId === line.id;
+              const hint = findBestMatch(line);
               return (
-                <div key={bank.id} onClick={() => { setSelectedBankId(isSelected ? null : bank.id); setSelectedRecordIds([]); }}
-                  className={`cursor-pointer rounded-xl p-4 border transition-all duration-200 ${isSelected ? 'bg-[#d4af37]/15 border-[#f5d77f] shadow-[0_0_20px_rgba(212,175,55,0.25)]' : 'bg-zinc-950/60 border-zinc-800/80 hover:border-zinc-700'}`}>
-                  <div className="flex items-center justify-between text-xs font-mono mb-1">
-                    <span className="text-zinc-400">{formatIndoDate(bank.date)}</span>
-                    <div className="flex items-center gap-2">
-                      {bm ? (
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${pScore > 0.3 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
-                          {pScore > 0.3 ? '\u2605 BEST MATCH' : 'SUGGESTED'}
-                        </span>
-                      ) : <span className="bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded text-[10px] font-bold">NOT FOUND</span>}
-                      <span className={`font-bold ${bank.amount >= 0 ? 'text-[#f5d77f]' : 'text-red-400'}`}>
-                        {bank.amount >= 0 ? `+Rp ${bank.amount.toLocaleString('en-US')}` : `-Rp ${Math.abs(bank.amount).toLocaleString('en-US')}`}
-                      </span>
+                <div
+                  key={line.id}
+                  onClick={() => pickBankLine(line)}
+                  className={`cursor-pointer rounded-xl border p-3 transition-all ${isSel ? 'border-[#f5d77f] bg-[#d4af37]/15 shadow-[0_0_18px_rgba(212,175,55,0.22)]' : 'border-zinc-800/80 bg-zinc-950/60 hover:border-zinc-700'}`}
+                >
+                  <div className="flex items-center justify-between font-mono text-xs">
+                    <span className="text-zinc-400">{formatIndoDate(line.date)}</span>
+                    <span className={`font-bold ${line.amount > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{signed(line.amount)}</span>
+                  </div>
+                  <div className="mt-1 truncate text-xs font-medium text-white">{line.sourceDestination || '-'}</div>
+                  {(line.transactionDetails || line.notes) && <div className="mt-0.5 truncate text-[10px] text-zinc-500">{[line.transactionDetails, line.notes].filter(Boolean).join(' | ')}</div>}
+                  <div className="mt-2 flex items-center justify-between">
+                    {hint ? <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold text-emerald-400">Match found</span> : <span className="rounded-full bg-zinc-800/60 px-2 py-0.5 text-[9px] font-bold text-zinc-500">No match</span>}
+                    <div className="flex items-center gap-1">
+                      {line.amount < 0 ? (
+                        <button type="button" title="No match: create an expense" aria-label="Create expense" onClick={(e) => { e.stopPropagation(); openNoMatch(line, 'expense'); }} className="rounded-md border border-red-500/30 p-1 text-red-400 hover:bg-red-500/10"><Receipt className="h-3.5 w-3.5" /></button>
+                      ) : (
+                        <>
+                          <button type="button" title="No match: record an invoice payment" aria-label="Record invoice payment" onClick={(e) => { e.stopPropagation(); openNoMatch(line, 'invoice'); }} className="rounded-md border border-sky-500/30 p-1 text-sky-300 hover:bg-sky-500/10"><FileText className="h-3.5 w-3.5" /></button>
+                          <button type="button" title="No match: create a direct income" aria-label="Create direct income" onClick={(e) => { e.stopPropagation(); openNoMatch(line, 'income'); }} className="rounded-md border border-emerald-500/30 p-1 text-emerald-400 hover:bg-emerald-500/10"><Banknote className="h-3.5 w-3.5" /></button>
+                        </>
+                      )}
                     </div>
                   </div>
-                  <div className="text-sm font-sans text-white font-bold mt-2 break-words whitespace-normal">{bank.sourceDestination}</div>
-                  {(bank.notes || bank.transactionDetails) && <div className="text-xs text-zinc-500 mt-0.5 break-words whitespace-normal">{bank.notes || bank.transactionDetails}</div>}
-                  {bank.rekFrom && <div className="text-[10px] text-zinc-600 font-mono mt-0.5 break-all">{bank.rekFrom}</div>}
-                  {bm && (
-                    <div className="mt-2 pt-2 border-t border-zinc-800/80 flex items-center gap-1.5 text-[10px] font-mono text-[#f5d77f]">
-                      <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-                      <span className="truncate">\u2192 {bm.payeeOrClient || bm.reference}</span>
-                    </div>
-                  )}
                 </div>
               );
             })}
           </div>
+        </section>
+
+        {/* MIDDLE: match */}
+        <div className="hidden flex-col items-center justify-center gap-3 lg:flex">
+          <div className="w-full space-y-1 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 text-center font-mono text-[10px]">
+            <div className="text-zinc-500">BANK</div>
+            <div className="font-bold text-zinc-200">{activeBankLine ? rp(bankAmt) : '-'}</div>
+            <div className="pt-1 text-zinc-500">SYSTEM</div>
+            <div className="font-bold text-zinc-200">{selectedRecords.length > 0 ? rp(systemAmt) : '-'}</div>
+            {canMatch && (
+              <div className={`mt-1 rounded-md px-1 py-0.5 font-bold ${isExactMatch ? 'bg-emerald-500/10 text-emerald-400' : 'bg-yellow-400/10 text-yellow-400'}`}>
+                {isExactMatch ? 'EXACT' : `DIFF ${rp(diff)}`}
+              </div>
+            )}
+          </div>
+          {matchButton}
+          <ArrowRight className="h-4 w-4 text-zinc-700" />
         </div>
 
-        {/* MIDDLE: Connector with MATCH button */}
-        <div className="hidden lg:flex flex-col items-center justify-start bg-zinc-950/90 border border-zinc-800/60 border-x-0 h-full px-3 pt-12 gap-5 overflow-y-auto">
-          
-          <button
-            type="button"
-            disabled={!activeBankLine}
-            onClick={() => {
-              setSelectedRecordIds([]);
-              setShowQuickForm(true);
-            }}
-            className={`flex flex-col items-center gap-1 px-3 py-3 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all border w-full disabled:opacity-40 disabled:cursor-not-allowed text-center ${
-              activeBankLine && !canMatch
-                ? 'border-[#d4af37]/40 bg-[#d4af37]/10 text-[#f5d77f] hover:bg-[#d4af37]/20 shadow-[0_0_15px_rgba(212,175,55,0.15)] cursor-pointer'
-                : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:text-white hover:bg-zinc-900 hover:border-zinc-700'
-            }`}
-          >
-            <span>NO MATCH?</span>
-            <span className="text-[8px] font-mono opacity-60">Log Quick Entry</span>
-          </button>
-
-          <div className="w-8 h-[1px] bg-zinc-800 my-1"></div>
-
-          <button
-            type="button"
-            disabled={!canMatch || isPending}
-            onClick={() => handleMatchAndClear()}
-            className={`flex flex-col items-center gap-1.5 px-5 py-4 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all border w-full ${
-              canMatch
-                ? 'bg-gradient-to-b from-[#d4af37] to-[#8a7322] text-black border-[#f5d77f]/40 shadow-[0_0_20px_rgba(212,175,55,0.5)] hover:shadow-[0_0_30px_rgba(212,175,55,0.7)] hover:scale-105 cursor-pointer'
-                : 'bg-zinc-900 text-zinc-600 border-zinc-800 cursor-not-allowed'
-            }`}
-          >
-            <CheckCircle2 className="w-5 h-5" />
-            <span>{isPending ? '...' : 'MATCH'}</span>
-          </button>
-          {!canMatch && <div className="text-[9px] text-zinc-600 text-center font-mono px-2 leading-relaxed mb-2">SELECT<br />ONE EACH<br />SIDE</div>}
-
-          {canMatch && (
-            <div className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded-full border ${isExactMatch ? 'text-emerald-400 border-emerald-400/30 bg-emerald-400/10' : diff > 0 ? 'text-orange-400 border-orange-400/30 bg-orange-400/10' : 'text-blue-400 border-blue-400/30 bg-blue-400/10'}`}>
-              {isExactMatch ? 'EXACT' : `${diff > 0 ? '+' : ''}Rp ${Math.abs(diff).toLocaleString('id-ID')}`}
+        {/* RIGHT: System */}
+        <section className="flex min-h-[420px] min-w-0 flex-col rounded-2xl border border-zinc-800 p-4 gold-glass-panel lg:min-h-0">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[#d4af37]">System</h3>
+            <span className="font-mono text-[10px] text-zinc-500">{selectedRecords.length > 0 ? `${selectedRecords.length} selected` : ''}</span>
+          </div>
+          <div className="mb-2 grid grid-cols-2 gap-1 rounded-lg border border-zinc-800 bg-zinc-950 p-0.5 sm:grid-cols-4">
+            {tabs.map((t) => (
+              <button key={t.key} type="button" onClick={() => { setRightTab(t.key); setPayError(''); }} className={`rounded-md px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide transition-all ${rightTab === t.key ? tabTone[t.tone || 'gold'] : 'text-zinc-500 hover:text-zinc-300'}`}>
+                {t.label} <span className="font-mono opacity-70">{t.count}</span>
+              </button>
+            ))}
+          </div>
+          {rightTab !== 'unpaid' && (
+            <div className="mb-3">
+              <MonthFilter month={sysMonth} year={sysYear} years={years} onChange={(m, y) => { setSysMonth(m); setSysYear(y); }} />
             </div>
           )}
 
-          <div className="flex flex-col gap-2 w-full mt-2 items-center">
-            <div className="text-[9px] text-zinc-600 uppercase tracking-wider text-center">Bank</div>
-            <div className={`text-[11px] font-mono font-bold text-center leading-snug ${bankAmt > 0 ? 'text-[#f5d77f]' : 'text-zinc-700'}`}>
-              {bankAmt > 0 ? `Rp ${bankAmt.toLocaleString('id-ID')}` : '\u2014'}
+          {rightTab === 'unpaid' ? (
+            <div className="flex min-h-0 flex-1 flex-col">
+              <p className="mb-2 text-[11px] text-zinc-500">
+                {activeBankLine && activeBankLine.amount > 0 ? `Bank line: ${signed(activeBankLine.amount)} from ${activeBankLine.sourceDestination}. The closest invoices are on top.` : 'Choose an incoming bank card on the left to get suggestions.'}
+                {' '}Paid or Partial creates a cash record in Cash Received, ready to match.
+              </p>
+              <input value={paySearch} onChange={(e) => setPaySearch(e.target.value)} placeholder="Search client or invoice number" className="mb-3 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-sky-500/50" />
+              {payError && <div className="mb-3 rounded-lg border border-red-500/30 bg-red-500/5 p-2 text-xs text-red-300">{payError}</div>}
+              <div className="flex-1 space-y-2 overflow-y-auto pr-1">
+                {payShown.length === 0 && <div className="rounded-xl border border-dashed border-zinc-800 p-8 text-center text-xs text-zinc-500">No unpaid invoice found.</div>}
+                {payShown.map((i) => {
+                  const exact = Boolean(activeBankLine && activeBankLine.amount > 0 && Math.abs(i.balance - activeBankLine.amount) < 1);
+                  return (
+                    <div key={i.id} className={`rounded-xl border p-3 ${exact ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-zinc-800/80 bg-zinc-950/60'}`}>
+                      <div className="flex items-center justify-between font-mono text-xs">
+                        <span className="text-zinc-400">{formatIndoDate(i.date)} · {i.number}</span>
+                        <span className="font-bold text-[#f5d77f]">{rp(i.balance)}</span>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between gap-2">
+                        <span className="truncate text-xs font-medium text-white">{i.client}</span>
+                        {exact && <span className="shrink-0 rounded-full border border-emerald-500/40 px-1.5 py-0.5 text-[9px] font-bold text-emerald-400">SAME AMOUNT</span>}
+                      </div>
+                      {i.paid > 0 && <div className="text-[10px] text-zinc-600">paid {rp(i.paid)} of {rp(i.total)}</div>}
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <button disabled={payBusy !== null} onClick={() => payOneInvoice(i, i.balance)} className="rounded-lg border border-emerald-500/40 px-3 py-1.5 text-[11px] font-bold text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-40">{payBusy === i.id ? '...' : 'Paid'}</button>
+                        <input type="number" min={1} placeholder="Partial Rp" value={payPartial[i.id] ?? ''} onChange={(e) => setPayPartial({ ...payPartial, [i.id]: e.target.value === '' ? '' : Number(e.target.value) })} className="w-[110px] rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-right font-mono text-[11px] text-zinc-100 outline-none" />
+                        <button disabled={payBusy !== null || !payPartial[i.id]} onClick={() => payOneInvoice(i, Number(payPartial[i.id] || 0))} className="rounded-lg border border-sky-500/40 px-3 py-1.5 text-[11px] font-bold text-sky-300 hover:bg-sky-500/10 disabled:opacity-40">Partial</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-            
-            <div className="flex justify-center my-1"><ArrowRight className="w-4 h-4 text-zinc-700 rotate-90" /></div>
-            
-            <div className="text-[9px] text-zinc-600 uppercase tracking-wider text-center">System</div>
-            <div className={`text-[11px] font-mono font-bold text-center leading-snug ${systemAmt > 0 ? 'text-white' : 'text-zinc-700'}`}>
-              {systemAmt > 0 ? `Rp ${systemAmt.toLocaleString('id-ID')}` : '\u2014'}
+          ) : (
+            <div className="flex-1 space-y-2 overflow-y-auto pr-1">
+              {filteredSystemRecords.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-zinc-800 p-8 text-center text-xs text-zinc-500">
+                  {rightTab === 'matched' ? 'Nothing matched in this period.' : rightTab === 'expenses' ? 'No open expense in this period.' : 'No open cash received in this period.'}
+                </div>
+              ) : filteredSystemRecords.map((rec) => {
+                const isSelected = selectedRecordIds.includes(rec.id);
+                const isBest = bestMatchRecord?.id === rec.id;
+                const amountMatch = activeBankLine && Math.abs(rec.amount - Math.abs(activeBankLine.amount)) < 0.01;
+                return (
+                  <div
+                    key={rec.id}
+                    onClick={() => { if (!rec.reconciled) setSelectedRecordIds((prev) => prev.includes(rec.id) ? prev.filter((id) => id !== rec.id) : [...prev, rec.id]); }}
+                    className={`rounded-xl border p-3 transition-all ${rec.reconciled ? 'border-zinc-800/80 bg-zinc-950/60' : 'cursor-pointer'} ${isSelected ? 'border-[#f5d77f] bg-[#d4af37]/15 shadow-[0_0_18px_rgba(212,175,55,0.22)]' : isBest ? 'border-emerald-500/30 bg-emerald-500/5 hover:border-emerald-500/50' : 'border-zinc-800/80 bg-zinc-950/60 hover:border-zinc-700'}`}
+                  >
+                    <div className="flex items-center justify-between font-mono text-xs">
+                      <span className="text-zinc-400">{formatIndoDate(rec.date)}</span>
+                      <span className={`font-bold ${rec.amount > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{signed(rec.amount)}</span>
+                    </div>
+                    <div className="mt-1 flex items-center justify-between gap-2">
+                      <span className="truncate text-xs font-medium text-white">{rec.payeeOrClient || rec.reference}</span>
+                      <span className="shrink-0 rounded border border-[#d4af37]/20 bg-zinc-900 px-1.5 py-0.5 font-mono text-[9px] uppercase text-[#d4af37]">{rec.type}</span>
+                    </div>
+                    {rec.notes && <div className="mt-0.5 truncate text-[10px] text-zinc-500">{rec.notes}</div>}
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      {isBest && amountMatch && <span className="rounded-full bg-[#d4af37]/10 px-2 py-0.5 text-[9px] font-bold text-[#f5d77f]">Suggested</span>}
+                      {rec.reconciled && (
+                        <button type="button" disabled={isPending} onClick={(e) => { e.stopPropagation(); handleUndoMatch(rec); }} className="ml-auto rounded border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-red-300 hover:bg-red-500/20 disabled:opacity-40">Undo match</button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          </div>
-        </div>
+          )}
+        </section>
+      </div>
 
-        {/* RIGHT: System Records */}
-        <div className="gold-glass-panel rounded-2xl lg:rounded-l-none lg:border-l-0 p-6 flex flex-col h-full min-w-0">
-          <div className="flex items-center justify-between pb-3 mb-4 border-b border-zinc-800">
-            <div className="flex bg-zinc-950 rounded-lg p-1 border border-zinc-800">
-              {([['cash', 'Cash Received'], ['unpaid', 'Invoice Unpaid'], ['matched', 'Matched']] as const).map(([k, label]) => (
-                <button key={k} onClick={() => { setRightTab(k); setPayError(''); }} className={`px-3 py-1.5 text-[10px] rounded font-bold uppercase tracking-wider transition-all ${rightTab === k ? (k === 'unpaid' ? 'bg-sky-500/20 text-sky-300' : k === 'matched' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-[#d4af37]/20 text-[#f5d77f]') : 'text-zinc-500 hover:text-zinc-300'}`}>{label}</button>
-              ))}
+      {/* No match window: create the missing record for the chosen bank card */}
+      {noMatchMode && activeBankLine && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-2xl border border-[#d4af37]/30 p-5 gold-glass-panel">
+            <div className="mb-4 flex items-center gap-3">
+              <button type="button" onClick={() => setNoMatchMode(null)} className="rounded-lg border border-zinc-700 p-2 text-zinc-300 hover:border-[#d4af37]/60 hover:text-[#f5d77f]" aria-label="Back to bank reconcile" title="Back to bank reconcile"><ArrowLeft className="h-4 w-4" /></button>
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold text-[#f5d77f]">{modalTitle}</h3>
+                <p className="truncate font-mono text-[11px] text-zinc-500">{formatIndoDate(activeBankLine.date)} · {signed(activeBankLine.amount)} · {activeBankLine.sourceDestination}</p>
+              </div>
             </div>
-            <span className="text-[10px] font-mono text-zinc-400">{rightTab === 'unpaid' ? `${openInvoices.length} UNPAID` : rightTab === 'matched' ? `${recordsList.filter((r) => r.reconciled).length} MATCHED` : `${recordsList.filter((r) => !r.reconciled).length} OPEN`}</span>
-          </div>
 
-          {/* Quick Log - collapsible */}
-          <div className="mb-4 pb-4 border-b border-zinc-800">
-            <button type="button" onClick={() => setShowQuickForm((v) => !v)}
-              className="flex items-center justify-between w-full text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-white transition-colors">
-              <span className="flex items-center gap-2"><Sparkles className="w-3.5 h-3.5 text-[#d4af37]" />Quick Log — no matching record?</span>
-              {showQuickForm ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
-            {showQuickForm && (
-              <div className="mt-4 space-y-3">
+            {noMatchMode === 'invoice' ? (
+              <div className="flex min-h-0 flex-1 flex-col">
+                <p className="mb-2 text-[11px] text-zinc-500">The bank amount is recorded as the payment of the invoice and matched with this bank card at once. The closest invoices are on top.</p>
+                <input value={paySearch} onChange={(e) => setPaySearch(e.target.value)} placeholder="Search client or invoice number" className="mb-3 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-sky-500/50" />
+                {payError && <div className="mb-3 rounded-lg border border-red-500/30 bg-red-500/5 p-2 text-xs text-red-300">{payError}</div>}
+                <div className="flex-1 space-y-2 overflow-y-auto pr-1">
+                  {payShown.length === 0 && <div className="rounded-xl border border-dashed border-zinc-800 p-8 text-center text-xs text-zinc-500">No unpaid invoice found.</div>}
+                  {payShown.map((i) => {
+                    const exact = Math.abs(i.balance - activeBankLine.amount) < 1;
+                    const tooBig = Math.abs(activeBankLine.amount) > i.balance + 0.5;
+                    return (
+                      <div key={i.id} className={`rounded-xl border p-3 ${exact ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-zinc-800/80 bg-zinc-950/60'}`}>
+                        <div className="flex items-center justify-between font-mono text-xs">
+                          <span className="text-zinc-400">{formatIndoDate(i.date)} · {i.number}</span>
+                          <span className="font-bold text-[#f5d77f]">{rp(i.balance)}</span>
+                        </div>
+                        <div className="mt-1 truncate text-xs font-medium text-white">{i.client}</div>
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <span className="text-[10px] text-zinc-500">{exact ? 'Same amount: invoice is paid in full' : tooBig ? 'Bank amount is more than the balance' : 'Partial payment'}</span>
+                          <button type="button" disabled={payBusy !== null || tooBig} onClick={() => payInvoiceFromBankLine(i)} className="rounded-lg border border-emerald-500/40 px-3 py-1.5 text-[11px] font-bold text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-40">{payBusy === i.id ? '...' : `Record ${rp(activeBankLine.amount)}`}</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3 overflow-y-auto pr-1">
                 <div className="relative">
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Vendor / Payee</label>
+                  <label className={label}>{noMatchMode === 'expense' ? 'Vendor / Payee' : 'Payer'}</label>
                   <input type="text" placeholder="Search or enter name..." value={quickVendorName}
                     onChange={(e) => { setQuickVendorName(e.target.value); setQuickVendorId(undefined); setVendorDropdownOpen(true); }}
                     onFocus={() => setVendorDropdownOpen(true)} onBlur={() => setTimeout(() => setVendorDropdownOpen(false), 200)}
-                    className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#d4af37]" />
+                    className={field} />
                   {vendorDropdownOpen && (
-                    <div className="absolute z-50 w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-xl shadow-xl max-h-48 overflow-y-auto top-[100%]">
+                    <div className="absolute top-[100%] z-50 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-zinc-700 bg-zinc-950 shadow-xl">
                       {Array.from(new Map(
                         localVendors
                           .filter((v) => v.name.toLowerCase().includes(quickVendorName.toLowerCase()))
                           .map((v) => [v.name.trim().toLowerCase(), v])
                       ).values()).map((v) => (
-                        <div key={v.id} onMouseDown={(e) => { e.preventDefault(); setQuickVendorName(v.name); setQuickVendorId(v.id); setVendorDropdownOpen(false); }} className="px-4 py-2.5 text-xs text-white hover:bg-[#d4af37]/20 cursor-pointer">{v.name}</div>
+                        <div key={v.id} onMouseDown={(e) => { e.preventDefault(); setQuickVendorName(v.name); setQuickVendorId(v.id); setVendorDropdownOpen(false); }} className="cursor-pointer px-4 py-2.5 text-xs text-white hover:bg-[#d4af37]/20">{v.name}</div>
                       ))}
                       {quickVendorName.trim() && !localVendors.some((v) => v.name.toLowerCase() === quickVendorName.toLowerCase()) && (
-                        <div onMouseDown={(e) => { e.preventDefault(); handleQuickAddVendor(); }} className="px-4 py-3 text-xs text-[#f5d77f] font-bold border-t border-zinc-800 hover:bg-[#d4af37]/20 cursor-pointer flex items-center gap-2">
+                        <div onMouseDown={(e) => { e.preventDefault(); handleQuickAddVendor(); }} className="flex cursor-pointer items-center gap-2 border-t border-zinc-800 px-4 py-3 text-xs font-bold text-[#f5d77f] hover:bg-[#d4af37]/20">
                           {isQuickAddingVendor ? <span className="animate-pulse">ADDING...</span> : <span>+ QUICK ADD: &ldquo;{quickVendorName}&rdquo;</span>}
                         </div>
                       )}
@@ -748,26 +818,26 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                   )}
                 </div>
                 <div className="relative">
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Category</label>
+                  <label className={label}>Category</label>
                   <input type="text" placeholder="Search category..." value={quickCategory}
                     onChange={(e) => { setQuickCategory(e.target.value); setCoaDropdownOpen(true); }}
                     onFocus={() => setCoaDropdownOpen(true)} onBlur={() => setTimeout(() => setCoaDropdownOpen(false), 200)}
-                    className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#d4af37]" />
+                    className={field} />
                   {coaDropdownOpen && (
-                    <div className="absolute z-50 w-full mt-1 bg-zinc-950 border border-zinc-700 rounded-xl shadow-xl max-h-48 overflow-y-auto top-[100%]">
+                    <div className="absolute top-[100%] z-50 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-zinc-700 bg-zinc-950 shadow-xl">
                       {Object.entries(coaAccounts.reduce((acc, curr) => { if (!acc[curr.account_type]) acc[curr.account_type] = []; acc[curr.account_type].push(curr); return acc; }, {} as Record<string, COAAccountMinimal[]>)).map(([type, accounts]) => {
                         const filtered = accounts.filter((a) => (a.account_code + ' - ' + a.account_name).toLowerCase().includes(quickCategory.toLowerCase()));
                         if (filtered.length === 0) return null;
                         const isExpanded = expandedCoaGroups[type] !== undefined ? expandedCoaGroups[type] : quickCategory.length > 0;
                         return (
                           <div key={type}>
-                            <div className="px-3 py-1.5 bg-zinc-900 text-[10px] font-bold text-zinc-500 uppercase tracking-wider sticky top-0 cursor-pointer flex items-center gap-1 hover:text-white"
+                            <div className="sticky top-0 flex cursor-pointer items-center gap-1 bg-zinc-900 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-white"
                               onMouseDown={(e) => { e.preventDefault(); setExpandedCoaGroups((prev) => ({ ...prev, [type]: !(prev[type] !== undefined ? prev[type] : quickCategory.length > 0) })); }}>
-                              {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}{type}
+                              {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}{type}
                             </div>
                             {isExpanded && filtered.map((coa) => (
                               <div key={coa.account_code} onMouseDown={(e) => { e.preventDefault(); setQuickCategory(coa.account_code + ' - ' + coa.account_name); setCoaDropdownOpen(false); }}
-                                className="px-4 py-2 text-xs text-zinc-300 hover:bg-[#d4af37]/20 hover:text-white cursor-pointer flex items-center gap-2">
+                                className="flex cursor-pointer items-center gap-2 px-4 py-2 text-xs text-zinc-300 hover:bg-[#d4af37]/20 hover:text-white">
                                 <span className="font-mono text-[#f5d77f]">{coa.account_code}</span><span>{coa.account_name}</span>
                               </div>
                             ))}
@@ -779,153 +849,48 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Date</label>
+                    <label className={label}>Date</label>
                     <DatePickerUI value={quickDate} onChange={setQuickDate} />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Amount</label>
-                    <RupiahInput placeholder="Rp 0" value={quickAmount} onChange={(e) => setQuickAmount(e.target.value === '' ? '' : Number(e.target.value))} className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-sm font-mono font-bold text-[#f5d77f] focus:outline-none focus:border-[#d4af37]" />
+                    <label className={label}>Amount</label>
+                    <RupiahInput placeholder="Rp 0" value={quickAmount} onChange={(e) => setQuickAmount(e.target.value === '' ? '' : Number(e.target.value))} className={`${field} font-mono font-bold text-[#f5d77f]`} />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Notes</label>
-                  <textarea rows={2} value={quickNotes} onChange={(e) => setQuickNotes(e.target.value)} className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#d4af37]" />
+                  <label className={label}>Notes</label>
+                  <textarea rows={2} value={quickNotes} onChange={(e) => setQuickNotes(e.target.value)} className={`${field} text-xs`} />
                 </div>
-                <div className="flex gap-2">
-                  <button type="button" disabled={isPending || !activeBankLine || activeBankLine.amount > 0} onClick={() => handleQuickResolve('expense')}
-                    className="flex-1 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider border border-red-400/30 text-red-400 bg-red-400/10 hover:bg-red-400/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
-                    {isPending ? '...' : '\u2212 EXPENSE'}
-                  </button>
-                  <button type="button" disabled={isPending || !activeBankLine || activeBankLine.amount < 0} onClick={() => handleQuickResolve('income')}
-                    className="flex-1 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider border border-emerald-400/30 text-emerald-400 bg-emerald-400/10 hover:bg-emerald-400/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
-                    {isPending ? '...' : '+ INCOME'}
-                  </button>
-                </div>
+                {noMatchMode === 'expense' ? (
+                  <button type="button" disabled={isPending || activeBankLine.amount > 0} onClick={() => handleQuickResolve('expense')} className="w-full rounded-xl border border-red-400/30 bg-red-400/10 py-3 text-xs font-bold uppercase tracking-wider text-red-400 hover:bg-red-400/20 disabled:cursor-not-allowed disabled:opacity-40">{isPending ? '...' : 'Save expense and match'}</button>
+                ) : (
+                  <button type="button" disabled={isPending || activeBankLine.amount < 0} onClick={() => handleQuickResolve('income')} className="w-full rounded-xl border border-emerald-400/30 bg-emerald-400/10 py-3 text-xs font-bold uppercase tracking-wider text-emerald-400 hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-40">{isPending ? '...' : 'Save direct income and match'}</button>
+                )}
               </div>
             )}
           </div>
-
-          {/* Mobile MATCH bar */}
-          <div className="flex lg:hidden items-center justify-between mb-4 p-3 bg-zinc-950/80 rounded-xl border border-zinc-800">
-            <div className="text-xs font-mono">
-              {canMatch ? isExactMatch ? <span className="text-emerald-400 font-bold">EXACT MATCH</span> : <span className="text-yellow-400 font-bold">DIFF: Rp {Math.abs(diff).toLocaleString('id-ID')}</span> : <span className="text-zinc-500">Select bank + system record</span>}
-            </div>
-            <button type="button" disabled={!canMatch || isPending} onClick={() => handleMatchAndClear()} className="gold-btn inline-flex items-center gap-2 px-5 py-2 rounded-full text-[10px] uppercase tracking-wider disabled:opacity-40">
-              <CheckCircle2 className="w-4 h-4" />{isPending ? '...' : 'MATCH'}
-            </button>
-          </div>
-
-          {rightTab === 'unpaid' && (
-            <div className="flex flex-1 min-h-0 flex-col">
-              <p className="mb-2 text-[11px] text-zinc-500">
-                {activeBankLine && activeBankLine.amount > 0
-                  ? `Bank line: +Rp ${activeBankLine.amount.toLocaleString('id-ID')} from ${activeBankLine.sourceDestination}. The closest invoices are on top.`
-                  : 'Choose an incoming bank line on the left to get suggestions. The payment is saved with the bank date.'}
-                {' '}Paid or Partial creates a cash record: it appears in Cash Received, ready to match.
-              </p>
-              <input value={paySearch} onChange={(e) => setPaySearch(e.target.value)} placeholder="Search client or invoice number" className="mb-3 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-sky-500/50" />
-              {payError && <div className="mb-3 rounded-lg border border-red-500/30 bg-red-500/5 p-2 text-xs text-red-300">{payError}</div>}
-              <div className="flex-1 space-y-2 overflow-y-auto pr-1">
-                {payShown.length === 0 && <div className="rounded-xl border border-dashed border-zinc-800 p-8 text-center font-mono text-xs text-zinc-500">No unpaid invoice found.</div>}
-                {payShown.map((i) => {
-                  const exact = Boolean(activeBankLine && activeBankLine.amount > 0 && Math.abs(i.balance - activeBankLine.amount) < 1);
-                  return (
-                    <div key={i.id} className={`rounded-xl border p-3 ${exact ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-zinc-800/80 bg-zinc-950/60'}`}>
-                      <div className="flex items-center justify-between text-xs font-mono">
-                        <span className="text-zinc-400">{formatIndoDate(i.date)} · {i.number}</span>
-                        <span className="font-bold text-[#f5d77f]">Rp {i.balance.toLocaleString('id-ID')}</span>
-                      </div>
-                      <div className="mt-1 flex items-center justify-between gap-2">
-                        <span className="truncate text-xs font-medium text-white">{i.client}</span>
-                        {exact && <span className="shrink-0 rounded-full border border-emerald-500/40 px-1.5 py-0.5 text-[9px] font-bold text-emerald-400">SAME AMOUNT</span>}
-                      </div>
-                      {i.paid > 0 && <div className="text-[10px] text-zinc-600">paid Rp {i.paid.toLocaleString('id-ID')} of Rp {i.total.toLocaleString('id-ID')}</div>}
-                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                        <button disabled={payBusy !== null} onClick={() => payOneInvoice(i, i.balance)} className="rounded-lg border border-emerald-500/40 px-3 py-1.5 text-[11px] font-bold text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-40">{payBusy === i.id ? '...' : 'Paid'}</button>
-                        <input type="number" min={1} placeholder="Partial Rp" value={payPartial[i.id] ?? ''} onChange={(e) => setPayPartial({ ...payPartial, [i.id]: e.target.value === '' ? '' : Number(e.target.value) })} className="w-[110px] rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-right font-mono text-[11px] text-zinc-100 outline-none" />
-                        <button disabled={payBusy !== null || !payPartial[i.id]} onClick={() => payOneInvoice(i, Number(payPartial[i.id] || 0))} className="rounded-lg border border-sky-500/40 px-3 py-1.5 text-[11px] font-bold text-sky-300 hover:bg-sky-500/10 disabled:opacity-40">Partial</button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Records list */}
-          <div className={`space-y-3 overflow-y-auto flex-1 pr-1 ${rightTab === 'unpaid' ? 'hidden' : ''}`}>
-            {filteredSystemRecords.length === 0 ? (
-              <div className="p-8 text-center text-zinc-500 font-mono text-xs border border-dashed border-zinc-800 rounded-xl space-y-2">
-                <div className="text-white font-bold">{rightTab === 'matched' ? 'NO MATCHED RECORDS' : 'NO OPEN RECORDS'}</div>
-                <div className="text-[10px] text-zinc-400 font-sans">
-                  {rightTab === 'matched' ? 'Nothing has been matched yet.' : activeBankLine ? `No ${activeBankLine.amount > 0 ? 'cash received' : 'expenses/payroll'} to match.` : 'All records are matched.'}
-                </div>
-              </div>
-            ) : filteredSystemRecords.map((rec) => {
-              const isSelected = currentTargetRecordIds.includes(rec.id);
-              const isBest = bestMatchRecord?.id === rec.id;
-              const amountMatch = activeBankLine && Math.abs(rec.amount - Math.abs(activeBankLine.amount)) < 0.01;
-              const pScore = activeBankLine ? payeeSimilarity(activeBankLine.sourceDestination, rec.payeeOrClient || rec.reference) : 0;
-              return (
-                <div key={rec.id}
-                  onClick={() => setSelectedRecordIds((prev) => prev.includes(rec.id) ? prev.filter((id) => id !== rec.id) : [...prev, rec.id])}
-                  className={`cursor-pointer rounded-xl p-4 border transition-all duration-200 ${isSelected ? 'bg-[#d4af37]/20 border-[#f5d77f] shadow-[0_0_20px_rgba(212,175,55,0.25)]' : isBest ? 'bg-emerald-500/5 border-emerald-500/30 hover:border-emerald-500/50' : 'bg-zinc-950/60 border-zinc-800/80 hover:border-zinc-700'}`}>
-                  <div className="flex items-center justify-between text-xs font-mono mb-2">
-                    <span className="text-zinc-400">{formatIndoDate(rec.date)}</span>
-                    <span className={`font-bold ${rec.amount > 0 ? 'text-[#f5d77f]' : 'text-red-400'}`}>
-                      {rec.amount > 0 ? `+Rp ${rec.amount.toLocaleString('en-US')}` : `-Rp ${Math.abs(rec.amount).toLocaleString('en-US')}`}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-sans text-white font-medium truncate">{rec.payeeOrClient || rec.reference}</span>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-900 text-[#d4af37] uppercase border border-[#d4af37]/20 shrink-0">{rec.type}</span>
-                  </div>
-                  {rec.notes && <div className="text-[10px] text-zinc-500 font-mono mt-1 truncate">{rec.notes}</div>}
-                  <div className="mt-2 flex items-center gap-2 flex-wrap">
-                    {rec.reconciled && <span className="text-emerald-500 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded text-[9px]">ALREADY CLEARED</span>}
-                    {rec.reconciled && (
-                      <button
-                        type="button"
-                        disabled={isPending}
-                        onClick={(e) => { e.stopPropagation(); handleUndoMatch(rec); }}
-                        className="ml-auto text-red-300 font-bold bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 px-2 py-0.5 rounded text-[9px] uppercase tracking-wider disabled:opacity-40"
-                      >
-                        Undo match
-                      </button>
-                    )}
-                    {isBest && amountMatch && pScore > 0.3 && <span className="text-[#f5d77f] font-bold bg-[#d4af37]/10 px-1.5 py-0.5 rounded text-[9px]">\u2605 BEST MATCH</span>}
-                    {isBest && amountMatch && pScore <= 0.3 && <span className="text-yellow-400 font-bold bg-yellow-400/10 px-1.5 py-0.5 rounded text-[9px]">SAME AMOUNT</span>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
         </div>
-      </div>
-      
-      {/* Luxurious Options Modal */}
+      )}
+
       {optionsDialog && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="gold-glass-panel rounded-2xl w-full max-w-md p-6 border border-[#d4af37]/30 shadow-[0_0_50px_rgba(212,175,55,0.15)] animate-in fade-in zoom-in-95 duration-200">
-            <h3 className="text-[#f5d77f] font-bold text-lg mb-4 flex items-center gap-2">
-              <Sparkles className="w-5 h-5" />
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-[#d4af37]/30 p-6 shadow-[0_0_50px_rgba(212,175,55,0.15)] gold-glass-panel">
+            <h3 className="mb-4 flex items-center gap-2 text-lg font-bold text-[#f5d77f]">
+              <Sparkles className="h-5 w-5" />
               {optionsDialog.title}
             </h3>
-            <div className="text-zinc-300 font-sans mb-8">
-              {optionsDialog.message}
-            </div>
-            <div className="flex flex-col gap-2 mt-4">
+            <div className="mb-8 font-sans text-zinc-300">{optionsDialog.message}</div>
+            <div className="mt-4 flex flex-col gap-2">
               {optionsDialog.buttons.map((btn) => (
-                <button 
+                <button
                   key={btn.value}
                   onClick={() => optionsDialog.onSelect(btn.value)}
-                  className={`w-full py-3 px-4 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${
-                    btn.isPrimary 
-                      ? 'gold-btn text-black shadow-[0_0_20px_rgba(212,175,55,0.4)] hover:shadow-[0_0_30px_rgba(212,175,55,0.6)]' 
+                  className={`w-full rounded-xl px-4 py-3 text-xs font-bold uppercase tracking-wider transition-all ${
+                    btn.isPrimary
+                      ? 'gold-btn text-black shadow-[0_0_20px_rgba(212,175,55,0.4)] hover:shadow-[0_0_30px_rgba(212,175,55,0.6)]'
                       : btn.isDanger
-                      ? 'border border-red-500/30 text-red-400 bg-red-500/10 hover:bg-red-500/20'
-                      : 'border border-zinc-700/50 text-zinc-300 bg-zinc-900/50 hover:bg-zinc-800'
+                      ? 'border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20'
+                      : 'border border-zinc-700/50 bg-zinc-900/50 text-zinc-300 hover:bg-zinc-800'
                   }`}
                 >
                   {btn.text}
@@ -935,14 +900,6 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
           </div>
         </div>
       )}
-
     </div>
   );
 }
-
-
-
-
-
-
-

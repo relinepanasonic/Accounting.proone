@@ -6,6 +6,7 @@ import { canEditBankBook } from '@/lib/auth/bank-book-editors';
 import { BankBookTable, type BankBookLine, type BankBookAccount } from '@/components/bank-book/BankBookTable';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60; // a heavy page may take more than the default 10 seconds on Vercel
 
 async function BankBookCore({ focusTx }: { focusTx: string }) {
   const supabase = await createClient();

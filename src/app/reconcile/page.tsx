@@ -10,6 +10,7 @@ import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { clientMask, HIDDEN_CLIENT } from '@/lib/auth/client-privacy';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60; // a heavy page may take more than the default 10 seconds on Vercel
 
 async function ReconciliationCore() {
   try {

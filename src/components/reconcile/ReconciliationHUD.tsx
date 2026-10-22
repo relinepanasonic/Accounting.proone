@@ -95,7 +95,8 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
 
   // Record invoice payment: the invoice is not matched with the bank; its payment becomes a cash record, and that is matched.
-  const [showPay, setShowPay] = useState(false);
+  const [rightTab, setRightTab] = useState<'cash' | 'unpaid' | 'matched'>('cash');
+  const [dirFilter, setDirFilter] = useState<'all' | 'in' | 'out'>('all');
   const [paySearch, setPaySearch] = useState('');
   const [payPartial, setPayPartial] = useState<Record<string, number | ''>>({});
   const [payBusy, setPayBusy] = useState<string | null>(null);
@@ -175,7 +176,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
     void recordInvoicePayment(inv.id, amount, activeBankLine?.date || new Date().toISOString().slice(0, 10), 'Bank Transfer', activeBankLine ? `Bank ${activeBankLine.sourceDestination}`.slice(0, 80) : undefined, undefined, bankId).then((res: any) => {
       setPayBusy(null);
       if (!res?.success) { setPayError(res?.error || 'Could not record the payment.'); return; }
-      setShowPay(false);
+      setRightTab('cash');
       setPaySearch('');
       if (res.transactionId) setPendingSelect(res.transactionId);
       router.refresh();
@@ -242,13 +243,15 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
       const d = new Date(b.date);
       const matchesMonth = d.getMonth() + 1 === filterMonth && d.getFullYear() === filterYear;
       if (!matchesMonth) return false;
+      if (dirFilter === 'in' && !(b.amount > 0)) return false;
+      if (dirFilter === 'out' && !(b.amount < 0)) return false;
       const bm = findBestMatch(b);
       if (activeFilterTab === 'matched') return !!bm;
       if (activeFilterTab === 'unmatched') return !bm;
       return true;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bankLines, filterMonth, filterYear, activeFilterTab, recordsList]);
+  }, [bankLines, filterMonth, filterYear, activeFilterTab, dirFilter, recordsList]);
 
   const [bookNotice, setBookNotice] = useState('');
   /** Buku Bank: keep every line of the uploaded statement (the page /bank-book), whatever is reconciled already. */
@@ -520,7 +523,8 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
 
   const filteredSystemRecords = React.useMemo(() => {
     let list = recordsList.filter((r) => {
-      if (!showReconciled && r.reconciled) return false;
+      if (rightTab === 'matched') return Boolean(r.reconciled);
+      if (r.reconciled) return false;
       if (activeBankLine) {
         if (activeBankLine.amount > 0) return r.type === 'invoice' || r.type === 'income';
         else return r.type === 'expense' || r.type === 'payroll';
@@ -528,7 +532,9 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
       const d = new Date(r.date);
       return d.getMonth() + 1 === filterMonth && d.getFullYear() === filterYear;
     });
-    if (activeBankLine) {
+    if (rightTab === 'matched') {
+      list = list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 300);
+    } else if (activeBankLine) {
       list = list.sort((a, b) => {
         const aScore = (Math.abs(a.amount - Math.abs(activeBankLine.amount)) < 0.01 ? 1 : 0) + payeeSimilarity(activeBankLine.sourceDestination, a.payeeOrClient || a.reference);
         const bScore = (Math.abs(b.amount - Math.abs(activeBankLine.amount)) < 0.01 ? 1 : 0) + payeeSimilarity(activeBankLine.sourceDestination, b.payeeOrClient || b.reference);
@@ -538,7 +544,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
       list = list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }
     return list;
-  }, [recordsList, showReconciled, activeBankLine, filterMonth, filterYear]);
+  }, [recordsList, rightTab, activeBankLine, filterMonth, filterYear]);
 
   const bankAmt = activeBankLine ? Math.abs(activeBankLine.amount) : 0;
   const selectedRecords = recordsList.filter((r) => currentTargetRecordIds.includes(r.id));
@@ -583,9 +589,14 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
 
         {/* LEFT: Bank Statement Feed */}
         <div className="gold-glass-panel rounded-2xl lg:rounded-r-none lg:border-r-0 p-6 flex flex-col h-full min-w-0">
-          <div className="flex items-center justify-between pb-3 mb-4 border-b border-zinc-800">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[#d4af37]">BANK STATEMENT FEED</h3>
-            <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-3 mb-4 border-b border-zinc-800">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[#d4af37]">BUKU BANK</h3>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex bg-zinc-950 rounded-lg p-1 border border-zinc-800">
+                {(['all', 'in', 'out'] as const).map((k) => (
+                  <button key={k} onClick={() => setDirFilter(k)} className={`px-2 py-1 text-[10px] rounded font-bold uppercase transition-all ${dirFilter === k ? (k === 'in' ? 'bg-emerald-500/20 text-emerald-400' : k === 'out' ? 'bg-red-500/20 text-red-400' : 'bg-[#d4af37]/20 text-[#f5d77f]') : 'text-zinc-500 hover:text-zinc-400'}`}>{k === 'all' ? 'ALL' : k}</button>
+                ))}
+              </div>
               <div className="flex bg-zinc-950 rounded-lg p-1 border border-zinc-800">
                 <button onClick={() => setActiveFilterTab('all')} className={`px-2 py-1 text-[10px] rounded font-bold transition-all ${activeFilterTab === 'all' ? 'bg-[#d4af37]/20 text-[#f5d77f]' : 'text-zinc-500 hover:text-zinc-400'}`}>ALL</button>
                 <button onClick={() => setActiveFilterTab('matched')} className={`px-2 py-1 text-[10px] rounded font-bold transition-all ${activeFilterTab === 'matched' ? 'bg-emerald-500/20 text-emerald-400' : 'text-zinc-500 hover:text-zinc-400'}`}>MATCHED</button>
@@ -638,18 +649,6 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
         {/* MIDDLE: Connector with MATCH button */}
         <div className="hidden lg:flex flex-col items-center justify-start bg-zinc-950/90 border border-zinc-800/60 border-x-0 h-full px-3 pt-12 gap-5 overflow-y-auto">
           
-          <button
-            type="button"
-            onClick={() => { setPayError(''); setShowPay(true); }}
-            className="flex flex-col items-center gap-1 px-3 py-3 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all border w-full text-center border-sky-500/40 bg-sky-500/10 text-sky-300 hover:bg-sky-500/20 cursor-pointer"
-            title="The bank is matched with cash records. Record the payment of an invoice first (Paid or Partial), then match it."
-          >
-            <span>INVOICE?</span>
-            <span className="text-[8px] font-mono opacity-70">Record Payment</span>
-          </button>
-
-          <div className="w-8 h-[1px] bg-zinc-800 my-1"></div>
-
           <button
             type="button"
             disabled={!activeBankLine}
@@ -708,14 +707,12 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
         {/* RIGHT: System Records */}
         <div className="gold-glass-panel rounded-2xl lg:rounded-l-none lg:border-l-0 p-6 flex flex-col h-full min-w-0">
           <div className="flex items-center justify-between pb-3 mb-4 border-b border-zinc-800">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[#d4af37]">SYSTEM RECORDS</h3>
-            <div className="flex items-center gap-2">
-              <label className="flex items-center gap-1.5 text-[10px] text-zinc-400 cursor-pointer">
-                <input type="checkbox" checked={showReconciled} onChange={(e) => setShowReconciled(e.target.checked)} className="accent-[#d4af37]" />
-                Show cleared
-              </label>
-              <span className="text-[10px] font-mono text-zinc-400">{recordsList.length} QUEUED</span>
+            <div className="flex bg-zinc-950 rounded-lg p-1 border border-zinc-800">
+              {([['cash', 'Cash Received'], ['unpaid', 'Invoice Unpaid'], ['matched', 'Matched']] as const).map(([k, label]) => (
+                <button key={k} onClick={() => { setRightTab(k); setPayError(''); }} className={`px-3 py-1.5 text-[10px] rounded font-bold uppercase tracking-wider transition-all ${rightTab === k ? (k === 'unpaid' ? 'bg-sky-500/20 text-sky-300' : k === 'matched' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-[#d4af37]/20 text-[#f5d77f]') : 'text-zinc-500 hover:text-zinc-300'}`}>{label}</button>
+              ))}
             </div>
+            <span className="text-[10px] font-mono text-zinc-400">{rightTab === 'unpaid' ? `${openInvoices.length} UNPAID` : rightTab === 'matched' ? `${recordsList.filter((r) => r.reconciled).length} MATCHED` : `${recordsList.filter((r) => !r.reconciled).length} OPEN`}</span>
           </div>
 
           {/* Quick Log - collapsible */}
@@ -818,13 +815,50 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
             </button>
           </div>
 
+          {rightTab === 'unpaid' && (
+            <div className="flex flex-1 min-h-0 flex-col">
+              <p className="mb-2 text-[11px] text-zinc-500">
+                {activeBankLine && activeBankLine.amount > 0
+                  ? `Bank line: +Rp ${activeBankLine.amount.toLocaleString('id-ID')} from ${activeBankLine.sourceDestination}. The closest invoices are on top.`
+                  : 'Choose an incoming bank line on the left to get suggestions. The payment is saved with the bank date.'}
+                {' '}Paid or Partial creates a cash record: it appears in Cash Received, ready to match.
+              </p>
+              <input value={paySearch} onChange={(e) => setPaySearch(e.target.value)} placeholder="Search client or invoice number" className="mb-3 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-sky-500/50" />
+              {payError && <div className="mb-3 rounded-lg border border-red-500/30 bg-red-500/5 p-2 text-xs text-red-300">{payError}</div>}
+              <div className="flex-1 space-y-2 overflow-y-auto pr-1">
+                {payShown.length === 0 && <div className="rounded-xl border border-dashed border-zinc-800 p-8 text-center font-mono text-xs text-zinc-500">No unpaid invoice found.</div>}
+                {payShown.map((i) => {
+                  const exact = Boolean(activeBankLine && activeBankLine.amount > 0 && Math.abs(i.balance - activeBankLine.amount) < 1);
+                  return (
+                    <div key={i.id} className={`rounded-xl border p-3 ${exact ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-zinc-800/80 bg-zinc-950/60'}`}>
+                      <div className="flex items-center justify-between text-xs font-mono">
+                        <span className="text-zinc-400">{formatIndoDate(i.date)} · {i.number}</span>
+                        <span className="font-bold text-[#f5d77f]">Rp {i.balance.toLocaleString('id-ID')}</span>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between gap-2">
+                        <span className="truncate text-xs font-medium text-white">{i.client}</span>
+                        {exact && <span className="shrink-0 rounded-full border border-emerald-500/40 px-1.5 py-0.5 text-[9px] font-bold text-emerald-400">SAME AMOUNT</span>}
+                      </div>
+                      {i.paid > 0 && <div className="text-[10px] text-zinc-600">paid Rp {i.paid.toLocaleString('id-ID')} of Rp {i.total.toLocaleString('id-ID')}</div>}
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <button disabled={payBusy !== null} onClick={() => payOneInvoice(i, i.balance)} className="rounded-lg border border-emerald-500/40 px-3 py-1.5 text-[11px] font-bold text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-40">{payBusy === i.id ? '...' : 'Paid'}</button>
+                        <input type="number" min={1} placeholder="Partial Rp" value={payPartial[i.id] ?? ''} onChange={(e) => setPayPartial({ ...payPartial, [i.id]: e.target.value === '' ? '' : Number(e.target.value) })} className="w-[110px] rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-right font-mono text-[11px] text-zinc-100 outline-none" />
+                        <button disabled={payBusy !== null || !payPartial[i.id]} onClick={() => payOneInvoice(i, Number(payPartial[i.id] || 0))} className="rounded-lg border border-sky-500/40 px-3 py-1.5 text-[11px] font-bold text-sky-300 hover:bg-sky-500/10 disabled:opacity-40">Partial</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Records list */}
-          <div className="space-y-3 overflow-y-auto flex-1 pr-1">
+          <div className={`space-y-3 overflow-y-auto flex-1 pr-1 ${rightTab === 'unpaid' ? 'hidden' : ''}`}>
             {filteredSystemRecords.length === 0 ? (
               <div className="p-8 text-center text-zinc-500 font-mono text-xs border border-dashed border-zinc-800 rounded-xl space-y-2">
-                <div className="text-white font-bold">NO SYSTEM RECORDS</div>
+                <div className="text-white font-bold">{rightTab === 'matched' ? 'NO MATCHED RECORDS' : 'NO OPEN RECORDS'}</div>
                 <div className="text-[10px] text-zinc-400 font-sans">
-                  {activeBankLine ? `No ${activeBankLine.amount > 0 ? 'income/invoices' : 'expenses/payroll'} to match.` : 'All records are cleared.'}
+                  {rightTab === 'matched' ? 'Nothing has been matched yet.' : activeBankLine ? `No ${activeBankLine.amount > 0 ? 'cash received' : 'expenses/payroll'} to match.` : 'All records are matched.'}
                 </div>
               </div>
             ) : filteredSystemRecords.map((rec) => {
@@ -871,55 +905,6 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
       </div>
       
       {/* Luxurious Options Modal */}
-      {showPay && (
-        <div className="fixed inset-0 z-[9500] flex items-center justify-center bg-black/70 p-4" onClick={() => setShowPay(false)}>
-          <div className="w-full max-w-3xl rounded-2xl border border-sky-500/30 bg-[#0e0f14] p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-3 flex items-start justify-between gap-4">
-              <div>
-                <h3 className="text-sm font-extrabold uppercase tracking-wider text-sky-300">Record invoice payment</h3>
-                <p className="mt-0.5 text-[11px] text-zinc-500">
-                  {activeBankLine && activeBankLine.amount > 0
-                    ? `Bank line: +Rp ${activeBankLine.amount.toLocaleString('id-ID')} from ${activeBankLine.sourceDestination}. The closest invoices are on top.`
-                    : 'Choose an incoming bank line first to get suggestions. The payment is saved with the bank date.'}
-                </p>
-                <p className="mt-0.5 text-[11px] text-zinc-600">Paid or Partial creates a cash record (Cash Received) with that amount. Then select it on the right and press MATCH.</p>
-              </div>
-              <button onClick={() => setShowPay(false)} className="text-zinc-500 hover:text-zinc-200">✕</button>
-            </div>
-            <input value={paySearch} onChange={(e) => setPaySearch(e.target.value)} placeholder="Search client or invoice number" className="mb-3 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-sky-500/50" />
-            {payError && <div className="mb-3 rounded-lg border border-red-500/30 bg-red-500/5 p-2 text-xs text-red-300">{payError}</div>}
-            <div className="max-h-[55vh] overflow-auto rounded-xl border border-zinc-800">
-              <table className="w-full text-left text-xs">
-                <thead className="sticky top-0 bg-zinc-900 text-[10px] uppercase tracking-wider text-zinc-400">
-                  <tr><th className="px-3 py-2 font-bold">Client</th><th className="px-3 py-2 font-bold">Invoice</th><th className="px-3 py-2 font-bold">Date</th><th className="px-3 py-2 text-right font-bold">Balance</th><th className="px-3 py-2 font-bold">Payment</th></tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-800/60">
-                  {payShown.length === 0 && <tr><td colSpan={5} className="p-6 text-center text-zinc-500">No open invoice found.</td></tr>}
-                  {payShown.map((i) => {
-                    const exact = Boolean(activeBankLine && activeBankLine.amount > 0 && Math.abs(i.balance - activeBankLine.amount) < 1);
-                    return (
-                      <tr key={i.id} className={exact ? 'bg-emerald-500/5' : ''}>
-                        <td className="px-3 py-2 font-semibold text-zinc-100">{i.client}{exact && <span className="ml-2 rounded-full border border-emerald-500/40 px-1.5 py-0.5 text-[9px] font-bold text-emerald-400">SAME AMOUNT</span>}</td>
-                        <td className="whitespace-nowrap px-3 py-2 font-mono text-zinc-400">{i.number}</td>
-                        <td className="whitespace-nowrap px-3 py-2 font-mono text-zinc-500">{formatIndoDate(i.date)}</td>
-                        <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-[#f5d77f]">Rp {i.balance.toLocaleString('id-ID')}{i.paid > 0 && <div className="text-[9px] text-zinc-600">paid {i.paid.toLocaleString('id-ID')} of {i.total.toLocaleString('id-ID')}</div>}</td>
-                        <td className="px-3 py-2">
-                          <div className="flex items-center gap-1.5">
-                            <button disabled={payBusy !== null} onClick={() => payOneInvoice(i, i.balance)} className="rounded-lg border border-emerald-500/40 px-2.5 py-1.5 text-[11px] font-bold text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-40">{payBusy === i.id ? '...' : 'Paid'}</button>
-                            <input type="number" min={1} placeholder="Partial Rp" value={payPartial[i.id] ?? ''} onChange={(e) => setPayPartial({ ...payPartial, [i.id]: e.target.value === '' ? '' : Number(e.target.value) })} className="w-[110px] rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-right font-mono text-[11px] text-zinc-100 outline-none" />
-                            <button disabled={payBusy !== null || !payPartial[i.id]} onClick={() => payOneInvoice(i, Number(payPartial[i.id] || 0))} className="rounded-lg border border-sky-500/40 px-2.5 py-1.5 text-[11px] font-bold text-sky-300 hover:bg-sky-500/10 disabled:opacity-40">Partial</button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
       {optionsDialog && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="gold-glass-panel rounded-2xl w-full max-w-md p-6 border border-[#d4af37]/30 shadow-[0_0_50px_rgba(212,175,55,0.15)] animate-in fade-in zoom-in-95 duration-200">

@@ -7,8 +7,9 @@ import { ReconcileTabs } from '@/components/reconcile/ReconcileTabs';
 import { UnpaidInvoiceTable, type UnpaidInvoice } from '@/components/reconcile/UnpaidInvoiceTable';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60; // a heavy page may take more than the default 10 seconds on Vercel
 
-async function UnpaidCore() {
+async function loadUnpaid() {
   const supabase = await createClient();
   const { activeWorkspaceId, userEmail, availableWorkspaces } = await getAuthenticatedWorkspaceContext(supabase);
   const mask = clientMask({ userEmail, availableWorkspaces });
@@ -43,6 +44,21 @@ async function UnpaidCore() {
     .filter((i) => i.balance > 0 && !['draft', 'cancelled', 'void', 'canceled', 'paid'].includes(i.status));
 
   return <UnpaidInvoiceTable rows={rows} banks={(banks || []).map((b: any) => ({ id: b.id as string, name: `${b.bank_name || 'Bank'} | ${b.account_number || ''}` }))} />;
+}
+
+/** A failure shows what failed instead of a blank crash page. */
+async function UnpaidCore() {
+  try {
+    return await loadUnpaid();
+  } catch (err: any) {
+    console.error('[UnpaidInvoice] failed:', err);
+    return (
+      <div className="gold-glass-panel rounded-2xl p-8 text-center">
+        <p className="mb-2 font-mono text-xs font-bold uppercase text-red-400">Page load error</p>
+        <p className="break-all font-mono text-xs text-zinc-300">{err?.message || String(err)}</p>
+      </div>
+    );
+  }
 }
 
 export default function UnpaidInvoicePage() {

@@ -74,7 +74,7 @@ export function DashboardTopNumbers({ telemetry }: { telemetry: DashboardTelemet
               <div className="text-xs text-cyan-500/60 font-mono mt-1">{note}</div>
               <div className="text-[10.5px] text-zinc-500 font-mono mt-1">Overhead {formatRupiah(telemetry.monthlyCost)} / month</div>
             </div>
-            <CardExtras extra={telemetry.cards?.coverage} color="#22d3ee" />
+            <CardExtras extra={telemetry.cards?.coverage} color="#22d3ee" ratio />
           </div>
         );
       })()}

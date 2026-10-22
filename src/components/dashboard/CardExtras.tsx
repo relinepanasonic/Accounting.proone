@@ -44,7 +44,7 @@ function Sparkline({ values, color }: { values: number[]; color: string }) {
 }
 
 /** Under a card's number: its mini chart and the small per-company numbers (ProOne, PLIG...). */
-export function CardExtras({ extra, color, count }: { extra?: CardExtra; color: string; count?: boolean }) {
+export function CardExtras({ extra, color, count, ratio }: { extra?: CardExtra; color: string; count?: boolean; ratio?: boolean }) {
   if (!extra) return null;
   const hasTrend = extra.series.some((v) => v !== 0);
   return (
@@ -55,7 +55,7 @@ export function CardExtras({ extra, color, count }: { extra?: CardExtra; color: 
           {extra.split.map((s) => (
             <div key={s.code} className="flex items-center justify-between font-mono text-[10.5px] leading-tight">
               <span className="text-zinc-500">{s.code}</span>
-              <span className="text-zinc-300">{count ? Math.round(s.value) : rp(s.value)}</span>
+              <span className="text-zinc-300">{ratio ? (s.value > 0 ? `${s.value.toFixed(2)}x` : '-') : count ? Math.round(s.value) : rp(s.value)}</span>
             </div>
           ))}
         </div>

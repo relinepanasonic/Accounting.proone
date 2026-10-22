@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { withoutProspects } from '@/lib/sales/prospects';
 import { clientMask } from '@/lib/auth/client-privacy';
-import { PT_WORKSPACE_ID, workspaceCode } from '@/lib/workspaces/known';
+import { PT_WORKSPACE_ID, PROF_WORKSPACE_ID, workspaceCode } from '@/lib/workspaces/known';
 import { SALARY_ACCOUNT_CODES_PUBLIC } from '@/lib/data/dashboard-constants';
 
 /**
@@ -435,7 +435,8 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
   // Total Cash is the Buku Bank total of the period (opening saldo + cash in - cash out of the stored statements) when statements are uploaded.
   // A client-only view has no bank lines (the bank is not tied to clients), so it keeps the figure above.
   if (!clientName) {
-    const bookWorkspaces = combined ? (workspaceIds as string[]) : [A];
+    // ProOne and PLIG are shown side by side: the ProOne dashboard also reads the PLIG bank.
+    const bookWorkspaces = combined ? (workspaceIds as string[]) : A === PROF_WORKSPACE_ID ? [A, PT_WORKSPACE_ID] : [A];
     const periodEnd = monthFilter === null ? `${currentYear}-12-31` : `${currentYear}-${String(monthFilter + 1).padStart(2, '0')}-${String(new Date(currentYear, monthFilter + 1, 0).getDate()).padStart(2, '0')}`;
     const bookLines: { workspace_id: string; bank_account_id: string; date: string; txn_time: string | null; amount: number; balance: number | null }[] = [];
     for (let from = 0; from < 50000; from += 1000) {
@@ -538,24 +539,41 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
   };
 
   function buildCards(): Record<CardKey, CardExtra> {
+    // ProOne always on top, then PLIG, then the others by size.
+    const RANK: Record<string, number> = { ProOne: 0, PLIG: 1, NW: 2, DOA: 3 };
+    const byCompany = (a: { code: string; value: number }, b: { code: string; value: number }) => (RANK[a.code] ?? 9) - (RANK[b.code] ?? 9) || b.value - a.value;
     const toSplit = (m: Map<string, number>, f: (code: string, v: number) => number = (_c, v) => v) =>
-      Array.from(m.entries()).map(([code, v]) => ({ code, value: f(code, v) })).sort((a, b) => b.value - a.value);
+      Array.from(m.entries()).map(([code, v]) => ({ code, value: f(code, v) })).sort(byCompany);
+    // The cards that always show ProOne and PLIG (when in this dashboard), even with a zero.
+    const scopeCodes = new Set(queryWorkspaceIds.map((id) => codeOf(id)));
+    const withBoth = (rows: { code: string; value: number }[]) => {
+      const out = [...rows];
+      for (const c of ['ProOne', 'PLIG']) if (scopeCodes.has(c) && !out.some((x) => x.code === c)) out.push({ code: c, value: 0 });
+      return out.sort(byCompany);
+    };
     const months = monthFilter === null ? Math.max(1, recognizedMonths) : 1;
-    const recSplit = Array.from(recognizedSplit.entries()).map(([code, arr]) => ({ code, value: monthFilter === null ? arr.reduce((a, b) => a + b, 0) / months : arr[monthFilter] || 0 })).filter((x) => x.value > 0.5).sort((a, b) => b.value - a.value);
+    const recSplit = Array.from(recognizedSplit.entries()).map(([code, arr]) => ({ code, value: monthFilter === null ? arr.reduce((a, b) => a + b, 0) / months : arr[monthFilter] || 0 })).filter((x) => x.value > 0.5).sort(byCompany);
+    // Coverage per company: its MRR over its monthly overhead.
+    const costDiv = monthFilter === null ? Math.max(1, costMonths) : 1;
+    const coverageSplit = withBoth(Array.from(new Set([...recSplit.map((x) => x.code), ...split.cost.keys()])).map((code) => {
+      const mrr = recSplit.find((x) => x.code === code)?.value || 0;
+      const oh = (split.cost.get(code) || 0) / costDiv;
+      return { code, value: oh > 0 ? mrr / oh : 0 };
+    }));
     const orderSeries = bucketRevenue.map((v: number, i: number) => (bucketCount[i] ? v / bucketCount[i] : 0));
     return {
       revenue: { series: bucketRevenue, labels, split: toSplit(split.revenue) },
       paid: { series: bucketPaid, labels, split: toSplit(split.paid) },
       avgMonthly: { series: monthFilter === null ? recognized : bucketRevenue, labels, split: recSplit },
       avgOrder: { series: orderSeries, labels, split: toSplit(split.revenue, (c, v) => (countByCode.get(c) ? v / (countByCode.get(c) as number) : 0)) },
-      clients: { series: bucketClients.map((x) => x.size), labels, split: Array.from(clientsByCode.entries()).map(([code, set]) => ({ code, value: set.size })).sort((a, b) => b.value - a.value) },
+      clients: { series: bucketClients.map((x) => x.size), labels, split: Array.from(clientsByCode.entries()).map(([code, set]) => ({ code, value: set.size })).sort(byCompany) },
       cogs: { series: bucketCogs, labels, split: toSplit(split.cogs) },
       cost: { series: bucketCost, labels, split: toSplit(split.cost) },
       salary: { series: bucketSalary, labels, split: toSplit(split.salary) },
-      cash: { series: liveCashBalance, labels, split: toSplit(split.cash) },
-      ar: { series: bucketAr, labels, split: toSplit(split.ar) },
+      cash: { series: liveCashBalance, labels, split: withBoth(toSplit(split.cash)) },
+      ar: { series: bucketAr, labels, split: withBoth(toSplit(split.ar)) },
       expenses: { series: bucketExpenses, labels, split: toSplit(split.expenses) },
-      coverage: { series: monthFilter === null ? recognized.map((v: number, i: number) => (bucketCost[i] > 0 ? v / bucketCost[i] : 0)) : [], labels, split: [] },
+      coverage: { series: monthFilter === null ? recognized.map((v: number, i: number) => (bucketCost[i] > 0 ? v / bucketCost[i] : 0)) : [], labels, split: coverageSplit },
     };
   }
 

@@ -55,7 +55,7 @@ const workdays = (from: string, to: string) => {
 type Db = ReturnType<typeof createAdminClient>;
 
 async function salesSection(db: Db, plan: ReportPlan) {
-  const { data: deals } = await db.from('crm_deals').select('salesman_name, created_at, proposal_sent_at, last_followup_at, invoice_generated_at');
+  const { data: deals } = await db.from('crm_deals').select('salesman_name, stage, created_at, invoice_generated_at');
   const { data: members } = await db.from('workspace_members').select('user_id').eq('role', 'sales');
   const ids = Array.from(new Set((members || []).map((m: any) => m.user_id)));
   const { data: profs } = ids.length ? await db.from('profiles').select('id, full_name').in('id', ids) : { data: [] as any[] };
@@ -63,8 +63,9 @@ async function salesSection(db: Db, plan: ReportPlan) {
   const count = (name: string, from: string, to: string) => {
     const mine = (deals || []).filter((d: any) => String(d.salesman_name || '').trim() === name);
     return {
-      leads: mine.filter((d: any) => inRange(dayOf(d.created_at), from, to)).length,
-      contacts: mine.filter((d: any) => inRange(dayOf(d.proposal_sent_at), from, to) || inRange(dayOf(d.last_followup_at), from, to)).length,
+      // New Contacts = the leads the salesman entered in the period; New Leads = those still waiting at the Lead stage (not contacted yet).
+      leads: mine.filter((d: any) => inRange(dayOf(d.created_at), from, to) && d.stage === 'Lead').length,
+      contacts: mine.filter((d: any) => inRange(dayOf(d.created_at), from, to)).length,
       invoices: mine.filter((d: any) => inRange(dayOf(d.invoice_generated_at), from, to)).length,
     };
   };

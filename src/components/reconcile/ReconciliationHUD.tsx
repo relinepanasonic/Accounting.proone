@@ -225,7 +225,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
     setPayError('');
     setPayBusy(inv.id);
     const bankId = activeBank && !String(activeBank.id).startsWith('temp-') ? activeBank.id : undefined;
-    void recordInvoicePayment(inv.id, amount, activeBankLine?.date || new Date().toISOString().slice(0, 10), 'Bank Transfer', activeBankLine ? `Bank ${activeBankLine.sourceDestination}`.slice(0, 80) : undefined, undefined, bankId).then((res: any) => {
+    void recordInvoicePayment(inv.id, amount, activeBankLine?.date || new Date().toISOString().slice(0, 10), 'Bank Transfer', activeBankLine ? `Bank ${activeBankLine.sourceDestination}`.slice(0, 80) : undefined, undefined, bankId, true).then((res: any) => {
       setPayBusy(null);
       if (!res?.success) { setPayError(res?.error || 'Could not record the payment.'); return; }
       setRightTab('cash');
@@ -247,7 +247,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
     const ref = `BANK-REF:${line.date}:${line.amount}:${line.sourceDestination}`;
     void (async () => {
       try {
-        const res: any = await recordInvoicePayment(inv.id, amount, toIsoDate(line.date) || line.date, 'Bank Transfer', `Bank ${line.sourceDestination}`.slice(0, 80), undefined, bankId);
+        const res: any = await recordInvoicePayment(inv.id, amount, toIsoDate(line.date) || line.date, 'Bank Transfer', `Bank ${line.sourceDestination}`.slice(0, 80), undefined, bankId, true);
         if (!res?.success || !res.transactionId) { setPayError(res?.error || 'Could not record the payment.'); return; }
         const rec: any = await reconcileRecord(res.transactionId, 'income', ref, activeBankId, undefined, false, undefined, toIsoDate(line.date));
         if (rec?.success === false) { setPayError(`Payment recorded but not matched: ${rec.error}`); return; }

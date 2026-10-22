@@ -155,15 +155,10 @@ async function reconcileRecordCore(
     }
   }
 
-  revalidatePath('/payroll');
-  revalidatePath('/reconcile');
-  revalidatePath('/invoices');
-  revalidatePath('/expenses');
-  revalidatePath('/');
   return { success: true };
 }
 
-export async function quickResolveAndReconcile(
+async function quickResolveCore(
   type: 'expense' | 'income',
   category: string,
   amount: number,
@@ -257,10 +252,6 @@ export async function quickResolveAndReconcile(
     }
   }
 
-  revalidatePath('/reconcile');
-  revalidatePath('/invoices');
-  revalidatePath('/expenses');
-  revalidatePath('/');
   return { success: true, transactionId: data.id };
 }
 
@@ -270,12 +261,21 @@ export async function quickResolveAndReconcile(
  * Quick Log (they only exist because of that match) are deleted with their ledger lines.
  * Not restored: a total or amount that was adjusted during the match, and the original payment date.
  */
+/** The reconcile screen refreshes itself (router.refresh): no revalidatePath here, it made the server render the heavy page again inside the action, which failed with a hidden error. */
 /** A failed match answers with its message (a thrown error is hidden in production and left the screen silent). */
 export async function reconcileRecord(...args: Parameters<typeof reconcileRecordCore>): Promise<{ success: boolean; error?: string }> {
   try {
     return await reconcileRecordCore(...args);
   } catch (e: any) {
     return { success: false, error: e?.message || 'Could not match.' };
+  }
+}
+
+export async function quickResolveAndReconcile(...args: Parameters<typeof quickResolveCore>): Promise<{ success: boolean; transactionId?: string; error?: string }> {
+  try {
+    return await quickResolveCore(...args);
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Could not save.' };
   }
 }
 
@@ -371,11 +371,5 @@ export async function unreconcileRecord(recordId: string, recordType: 'invoice' 
     }
   }
 
-  revalidatePath('/payroll');
-  revalidatePath('/reconcile');
-  revalidatePath('/invoices');
-  revalidatePath('/expenses');
-  revalidatePath('/ledger');
-  revalidatePath('/');
   return { success: true, deleted, bankReference: bankReference && bankReference.startsWith('BANK-REF:') ? bankReference : null };
 }

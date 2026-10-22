@@ -981,7 +981,7 @@ export async function deleteInvoice(invoiceId: string) {
 /**
  * Server Action: Record Payment against an Invoice
  */
-export async function recordInvoicePayment(invoiceId: string, amount: number, paymentDate: string, paymentMethod: string, reference?: string, transferToWorkspaceId?: string, bankAccountId?: string) {
+export async function recordInvoicePayment(invoiceId: string, amount: number, paymentDate: string, paymentMethod: string, reference?: string, transferToWorkspaceId?: string, bankAccountId?: string, skipRevalidate?: boolean) {
   try {
     const supabase = await createClient();
     {
@@ -1086,10 +1086,13 @@ export async function recordInvoicePayment(invoiceId: string, amount: number, pa
     await syncInvoiceToNewWave(invoiceId, supabase);
     if (newStatus === 'paid') await onInvoicePaid(createServiceClient(), invoiceId);
 
-    revalidatePath('/invoices');
-    revalidatePath(`/invoices/${invoiceId}`);
-    revalidatePath('/ledger');
-    revalidatePath('/reconcile');
+    // A caller that refreshes its own screen passes skipRevalidate: a revalidation makes the server render the open page again inside the action, which failed on the heavy Bank Reconcile page.
+    if (!skipRevalidate) {
+      revalidatePath('/invoices');
+      revalidatePath(`/invoices/${invoiceId}`);
+      revalidatePath('/ledger');
+      revalidatePath('/reconcile');
+    }
     
     return { success: true, transactionId: newTxId || null };
   } catch (err: any) {

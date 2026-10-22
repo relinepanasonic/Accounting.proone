@@ -63,7 +63,7 @@ export function UnpaidInvoiceTable({ rows, banks }: { rows: UnpaidInvoice[]; ban
     setNotice(null);
     setBusy(r.id);
     start(async () => {
-      const res: any = await recordInvoicePayment(r.id, amount, payDate, 'Bank Transfer', undefined, undefined, bankId && !bankId.startsWith('temp-') ? bankId : undefined);
+      const res: any = await recordInvoicePayment(r.id, amount, payDate, 'Bank Transfer', undefined, undefined, bankId && !bankId.startsWith('temp-') ? bankId : undefined, true);
       setBusy(null);
       if (!res?.success) { setNotice({ ok: false, text: res?.error || 'Could not record the payment.' }); return; }
       setNotice({ ok: true, text: `${r.number}: ${rp(amount)} recorded as ${amount >= r.balance - 0.5 ? 'Paid' : 'Partial payment'}. It is now in Cash Received: match it in Reconcile.` });

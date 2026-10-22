@@ -103,7 +103,8 @@ export function InvoicePaymentModal({
         'Manual Payment', 
         undefined, // reference
         undefined, // workspaces are separate: no inter-company transfer
-        bankId
+        bankId,
+        true // this window calls router.refresh() itself
       );
       
       if (res.success) {

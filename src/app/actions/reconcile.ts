@@ -122,6 +122,11 @@ async function reconcileRecordCore(
             await supabase.from('journal_entries').update({ transaction_date: bankDate }).eq('reference_id', recordId).eq('reference_type', 'payment_tx');
           }
         }
+        // Any cash record (an invoice payment, a direct income, an expense): the bank date is the real payment date.
+        if (bankDate) {
+          updateData.transaction_date = bankDate;
+          await supabase.from('journal_entries').update({ transaction_date: bankDate }).eq('reference_id', recordId);
+        }
       }
 
     const { error } = await supabase

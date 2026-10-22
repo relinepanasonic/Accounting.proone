@@ -40,6 +40,19 @@ export async function relinkBankBook(): Promise<{ success: boolean; linked?: num
   }
 }
 
+/** An undone match: the Buku Bank lines carrying that bank reference are open again. */
+export async function releaseBankRef(ref: string): Promise<{ success: boolean }> {
+  try {
+    const supabase = await createClient();
+    const ctx = await getAuthenticatedWorkspaceContext(supabase);
+    if (!FINANCE_ROLES.includes(ctx.role) || !ref) return { success: false };
+    await supabase.from('bank_statement_lines').update({ status: 'unreconciled', transaction_id: null, invoice_id: null, bank_ref: null }).eq('workspace_id', ctx.activeWorkspaceId).eq('bank_ref', ref);
+    return { success: true };
+  } catch {
+    return { success: false };
+  }
+}
+
 export interface BankLineConnection {
   kind: 'expense' | 'income' | 'invoice';
   title: string;

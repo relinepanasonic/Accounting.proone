@@ -17,6 +17,7 @@ import {
 import { reconcileRecord, quickResolveAndReconcile, unreconcileRecord } from '@/app/actions/reconcile';
 import { createClientRecord } from '@/app/actions/settings';
 import { recordInvoicePayment } from '@/app/actions/invoices';
+import { relinkBankBook, releaseBankRef } from '@/app/actions/bank-book';
 import { saveBankStatement, type BankBookLineInput } from '@/app/actions/bank-book';
 import { RupiahInput } from '@/components/ui/RupiahInput';
 
@@ -71,6 +72,7 @@ function toIsoDate(value: string): string | undefined {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+export interface BookLine { id: string; bankAccountId: string; date: string; counterparty: string; details: string; notes: string; rekFrom: string; amount: number }
 export interface OpenInvoice { id: string; number: string; client: string; date: string; total: number; paid: number; balance: number }
 
 interface ReconciliationHUDProps {
@@ -81,9 +83,11 @@ interface ReconciliationHUDProps {
   vendors?: { id: string; name: string }[];
   /** Invoices that still have a balance: the window "Record invoice payment" turns a payment into a cash record to match. */
   openInvoices?: OpenInvoice[];
+  /** The left side: the lines of Buku Bank that are not matched yet. */
+  bookLines?: BookLine[];
 }
 
-export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccounts = [], reconciledBankRefs = [], vendors = [], openInvoices = [] }: ReconciliationHUDProps) {
+export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccounts = [], reconciledBankRefs = [], vendors = [], openInvoices = [], bookLines = [] }: ReconciliationHUDProps) {
   const router = useRouter();
   const [bankLines, setBankLines] = useState<BankLine[]>([]);
   const [recordsList, setRecordsList] = useState<UnreconciledSystemRecord[]>(systemRecords);
@@ -145,6 +149,20 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   const activeBankLine = bankLines.find((b) => b.id === selectedBankId);
 
   useEffect(() => { setRecordsList(systemRecords); }, [systemRecords]);
+  // Left side = Buku Bank: the open lines of the chosen bank account (and of the month shown first).
+  const feedStarted = React.useRef(false);
+  useEffect(() => {
+    const feed: BankLine[] = bookLines
+      .filter((l) => l.bankAccountId === activeBankId)
+      .map((l) => ({ id: l.id, date: l.date, sourceDestination: l.counterparty, transactionDetails: l.details, notes: l.notes, rekFrom: l.rekFrom, amount: l.amount }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+    setBankLines(feed);
+    if (!feedStarted.current && feed.length > 0) {
+      feedStarted.current = true;
+      const d = new Date(feed[0].date);
+      if (!isNaN(d.getTime())) { setFilterMonth(d.getMonth() + 1); setFilterYear(d.getFullYear()); }
+    }
+  }, [bookLines, activeBankId]);
   useEffect(() => {
     if (pendingSelect && recordsList.some((r) => r.id === pendingSelect)) { setSelectedRecordIds([pendingSelect]); setPendingSelect(null); }
   }, [pendingSelect, recordsList]);
@@ -425,6 +443,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
           );
         }
         setBankLines((prev) => prev.filter((b) => b.id !== activeBankLine.id));
+        void relinkBankBook().finally(() => router.refresh());
         if (isPartialPayment) {
           setRecordsList((prev) => prev.map((r) => activeTargetIds.includes(r.id) ? { ...r, amount: r.amount > 0 ? r.amount - bankAmountAbs : r.amount + bankAmountAbs } : r));
         } else {
@@ -464,13 +483,9 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
         const ref = res.bankReference;
         if (ref) {
           setReconciledRefs((prev) => prev.filter((r) => r !== ref));
-          const m = ref.match(/^BANK-REF:([^:]+):([^:]+):([\s\S]*)$/);
-          if (m) {
-            const restored: BankLine = { id: `undo-${ref}`, date: m[1], sourceDestination: m[3], transactionDetails: '', notes: '', rekFrom: '', amount: Number(m[2]) };
-            setBankLines((prev) => (prev.some((b) => b.id === restored.id) ? prev : [...prev, restored].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())));
-          }
+          void releaseBankRef(ref).finally(() => router.refresh());
         }
-        await askOptions('Match undone', ref ? 'The bank line is back in the feed on the left.' : 'The record is open again. Upload the bank statement again to see its bank line.', [{ text: 'Close', value: 'close', isPrimary: true }]);
+        await askOptions('Match undone', ref ? 'The bank line is back in the feed on the left.' : 'The record is open again.', [{ text: 'Close', value: 'close', isPrimary: true }]);
       } catch (err) {
         console.error(err);
       }
@@ -485,6 +500,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
         const finalDescription = (quickVendorName ? quickVendorName + ' | ' : '') + quickNotes;
         await quickResolveAndReconcile(type, quickCategory, Number(quickAmount) || Math.abs(activeBankLine.amount), quickDate || activeBankLine.date, finalDescription || 'Quick Resolve', uniqueBankRef, activeBankId, quickVendorId);
         setBankLines((prev) => prev.filter((b) => b.id !== activeBankLine.id));
+        void relinkBankBook().finally(() => router.refresh());
         setSelectedBankId(null);
         setQuickCategory(''); setQuickVendorName(''); setQuickVendorId(undefined); setQuickNotes(''); setShowQuickForm(false);
       } catch (err) { console.error(err); alert('Failed to save. Please try again.'); }
@@ -554,12 +570,10 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
             </select>
             <input type="number" value={filterYear} onChange={(e) => setFilterYear(Number(e.target.value))} className="bg-transparent text-white text-xs font-bold font-mono rounded px-2 py-1.5 outline-none w-16 hover:bg-zinc-800/50" min="2000" max="2100" />
           </div>
-          <label className="relative flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-transparent via-[#d4af37]/10 to-transparent border border-[#d4af37]/40 rounded-full text-[#f5d77f] text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-[#d4af37]/20 hover:border-[#d4af37] transition-all">
+          <a href="/bank-book" className="flex items-center gap-2 px-5 py-2.5 border border-zinc-700 rounded-full text-zinc-300 text-xs font-bold uppercase tracking-wider hover:border-[#d4af37]/60 hover:text-[#f5d77f] transition-all" title="Statements are uploaded in Buku Bank; the left side reads the lines from there">
             <UploadCloud className="w-4 h-4" />
-            <span>Upload Bank Statement</span>
-            <input type="file" accept=".csv,.pdf" className="hidden" onChange={handleFileUpload} disabled={isPending} />
-            {isPending && <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center"><div className="w-4 h-4 border-2 border-[#f5d77f] border-t-transparent rounded-full animate-spin" /></div>}
-          </label>
+            <span>Upload in Buku Bank</span>
+          </a>
           {bookNotice && <span className="text-[11px] text-zinc-400">{bookNotice}</span>}
         </div>
       </div>
@@ -584,7 +598,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
             {filteredBankLines.length === 0 ? (
               <div className="p-8 text-center text-zinc-500 font-mono text-xs border border-dashed border-zinc-800 rounded-xl space-y-2">
                 <div className="text-white font-bold">NO BANK FEED TRANSACTIONS</div>
-                <div className="text-[10px] text-zinc-400 font-sans">Upload a statement for {new Date(filterYear, filterMonth - 1, 1).toLocaleString('default', { month: 'long', year: 'numeric' })}</div>
+                <div className="text-[10px] text-zinc-400 font-sans">Buku Bank has no open line for {new Date(filterYear, filterMonth - 1, 1).toLocaleString('default', { month: 'long', year: 'numeric' })}</div>
               </div>
             ) : filteredBankLines.map((bank) => {
               const isSelected = bank.id === selectedBankId;

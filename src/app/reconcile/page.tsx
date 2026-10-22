@@ -1,4 +1,5 @@
 import React, { Suspense } from 'react';
+import { ReconcileTabs } from '@/components/reconcile/ReconcileTabs';
 import { ShieldAlert, CheckSquare } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import {
@@ -64,7 +65,7 @@ async function ReconciliationCore() {
   ] = await Promise.all([
     supabase
       .from('invoices')
-      .select('id, invoice_number, total_amount, amount_paid, issue_date, clients(name), reconciled, workspace_id, assigned_workspace_id')
+      .select('id, invoice_number, status, total_amount, amount_paid, issue_date, due_date, clients(name), reconciled, workspace_id, assigned_workspace_id')
       .eq('workspace_id', activeWorkspaceId)
       // Removed reconciled filter so user can match already-reconciled items to bank statement
       .order('issue_date', { ascending: false }),
@@ -111,6 +112,26 @@ async function ReconciliationCore() {
     supabase
       .from('journal_entries').select('description').eq('workspace_id', activeWorkspaceId).eq('reference_type', 'bank_match').ilike('description', '%BANK-REF%')
   ]);
+
+  // The left side: the lines of Buku Bank that are not matched yet (upload the statements there).
+  const bookLines: any[] = [];
+  for (let from = 0; from < 20000; from += 1000) {
+    const { data, error } = await supabase
+      .from('bank_statement_lines')
+      .select('id, bank_account_id, date, counterparty, description, details, notes, rek_from, amount, status')
+      .eq('workspace_id', activeWorkspaceId)
+      .neq('status', 'reconciled')
+      .neq('amount', 0)
+      .order('date', { ascending: true })
+      .range(from, from + 999);
+    if (error) break; // the Buku Bank tables are not there yet: the left side stays empty
+    bookLines.push(...(data || []));
+    if (!data || data.length < 1000) break;
+  }
+  const bookLinesForScreen = bookLines.map((l: any) => ({
+    id: l.id as string, bankAccountId: l.bank_account_id as string, date: String(l.date).slice(0, 10),
+    counterparty: (l.counterparty || l.description || '') as string, details: (l.details || '') as string, notes: (l.notes || '') as string, rekFrom: (l.rek_from || '') as string, amount: Number(l.amount || 0),
+  }));
 
   const rawInvoices = invoicesRes.data || [];
   const rawTransactions = transactionsRes.data || [];
@@ -236,6 +257,7 @@ async function ReconciliationCore() {
       reconciledBankRefs={Array.from(reconciledBankRefs)}
       vendors={vendors}
       openInvoices={openInvoices}
+      bookLines={bookLinesForScreen}
     />
   );
   } catch (err: any) {
@@ -253,6 +275,7 @@ async function ReconciliationCore() {
 export default function BankReconciliationPage() {
   return (
     <div className="max-w-[1500px] mx-auto px-6 py-8 space-y-6">
+      <ReconcileTabs active="reconcile" />
       <div className="pb-4 border-b border-[#d4af37]/20">
         <h1 className="text-lg font-extrabold tracking-wider uppercase text-white flex items-center gap-2">
           <CheckSquare className="w-5 h-5 text-[#d4af37]" />

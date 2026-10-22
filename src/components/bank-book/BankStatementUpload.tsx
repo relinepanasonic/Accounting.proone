@@ -71,7 +71,9 @@ export function BankStatementUpload({ banks }: { banks: BankBookAccount[] }) {
         setNotice({ ok: true, text: lastOnly ? `${file.name}: last saldo kept (${lines[0].date}).` : `${file.name}: ${res.saved} new line(s) stored${res.skipped ? `, ${res.skipped} were already there` : ''}.` });
         router.refresh();
       } catch (err: any) {
-        setNotice({ ok: false, text: err?.message || 'Upload failed.' });
+        // Production hides the real message of a server error. It usually means this page is older than the deployed version: reload it.
+        const msg = String(err?.message || '');
+        setNotice({ ok: false, text: /Server Components render|Failed to find Server Action|digest/i.test(msg) ? 'The server could not take this upload. The page may be out of date after an update: reload it (Ctrl+Shift+R) and upload again. If it happens again, tell Claude the file name.' : msg || 'Upload failed.' });
       }
     });
   };

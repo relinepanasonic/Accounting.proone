@@ -540,6 +540,39 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recordsList, sysMonth, sysYear, openInvoices]);
 
+  // One bank transfer can pay several records (Saboen Jan + Saboen Feb + Boomboo Jan = one transfer of Rp 4.500.000).
+  // Look for 2 to 4 open records of the same direction whose amounts add up to the bank amount; names found in the bank text rank first.
+  const comboSuggestion = useMemo(() => {
+    if (!activeBankLine || activeBankLine.reconciled) return null;
+    const target = Math.round(Math.abs(activeBankLine.amount));
+    const incoming = activeBankLine.amount > 0;
+    const text = `${activeBankLine.sourceDestination} ${activeBankLine.transactionDetails} ${activeBankLine.notes}`.toLowerCase();
+    const nameHits = (r: UnreconciledSystemRecord) => String(r.payeeOrClient || r.reference).toLowerCase().split(/s+/).filter((w) => w.length > 3 && text.includes(w)).length;
+    const pool = recordsList
+      .filter((r) => !r.reconciled && Math.abs(r.amount) > 0 && Math.round(Math.abs(r.amount)) < target && (incoming ? (r.type === 'income' || r.type === 'invoice') : (r.type === 'expense' || r.type === 'payroll')))
+      .map((r) => ({ r, hits: nameHits(r), amt: Math.round(Math.abs(r.amount)) }))
+      .sort((a, b) => b.hits - a.hits)
+      .slice(0, 40);
+    if (pool.length < 2) return null;
+    let best: { ids: string[]; score: number } | null = null;
+    let steps = 0;
+    const walk = (start: number, picked: typeof pool, sum: number) => {
+      if (steps++ > 60000) return;
+      if (sum === target && picked.length >= 2) {
+        const score = picked.reduce((a, p) => a + p.hits, 0) - picked.length * 0.01;
+        if (!best || score > best.score) best = { ids: picked.map((p) => p.r.id), score };
+        return;
+      }
+      if (picked.length >= 4 || sum >= target) return;
+      for (let i = start; i < pool.length; i++) walk(i + 1, [...picked, pool[i]], sum + pool[i].amt);
+    };
+    walk(0, [], 0);
+    return best ? (best as { ids: string[]; score: number }).ids : null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBankLine, recordsList]);
+  const comboRecords = comboSuggestion ? recordsList.filter((r) => comboSuggestion.includes(r.id)) : [];
+  const comboChosen = comboSuggestion ? comboSuggestion.every((id) => selectedRecordIds.includes(id)) && selectedRecordIds.length === comboSuggestion.length : false;
+
   const bankAmt = activeBankLine ? Math.abs(activeBankLine.amount) : 0;
   const selectedRecords = recordsList.filter((r) => currentTargetRecordIds.includes(r.id));
   const systemAmt = selectedRecords.reduce((s, r) => s + Math.abs(r.amount), 0);
@@ -694,6 +727,22 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
               ? <input value={paySearch} onChange={(e) => setPaySearch(e.target.value)} placeholder="Search client or invoice number" className="h-9 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 text-[11px] text-zinc-100 outline-none focus:border-sky-500/50" />
               : <MonthFilter month={sysMonth} year={sysYear} years={years} onChange={(m, y) => { setSysMonth(m); setSysYear(y); }} />}
           </div>
+
+          {comboRecords.length > 1 && !comboChosen && rightTab !== 'unpaid' && rightTab !== 'matched' && (
+            <div className="mb-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3">
+              <div className="text-[11px] font-bold text-emerald-400">One transfer for {comboRecords.length} records</div>
+              <div className="mt-1 text-[11px] text-zinc-300">{comboRecords.map((x) => `${x.payeeOrClient || x.reference} (${formatIndoDate(x.date)}, ${rp(x.amount)})`).join(' + ')} = {rp(bankAmt)}</div>
+              <button type="button" onClick={() => { setSelectedRecordIds(comboRecords.map((x) => x.id)); setSysMonth(0); setRightTab(activeBankLine && activeBankLine.amount < 0 ? 'expenses' : 'cash'); }} className="mt-2 rounded-lg border border-emerald-500/40 px-3 py-1 text-[11px] font-bold text-emerald-300 hover:bg-emerald-500/10">Select these {comboRecords.length}</button>
+            </div>
+          )}
+          {selectedRecords.length > 0 && rightTab !== 'unpaid' && (
+            <div className="mb-3 flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Selected</span>
+              {selectedRecords.map((x) => (
+                <button key={x.id} type="button" onClick={() => setSelectedRecordIds((prev) => prev.filter((id) => id !== x.id))} title="Remove from the selection" className="rounded-full border border-[#d4af37]/40 bg-[#d4af37]/10 px-2 py-0.5 text-[10px] font-bold text-[#f5d77f] hover:bg-[#d4af37]/20">{x.payeeOrClient || x.reference} · {formatIndoDate(x.date)} · {rp(x.amount)} ×</button>
+              ))}
+            </div>
+          )}
 
           {rightTab === 'unpaid' ? (
             <div className="flex min-h-0 flex-1 flex-col">

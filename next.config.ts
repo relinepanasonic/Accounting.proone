@@ -7,7 +7,7 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  serverExternalPackages: ['pdf2json'],
+  serverExternalPackages: ['pdf2json', '@react-pdf/renderer'],
   experimental: {
     serverActions: {
       bodySizeLimit: '10mb'

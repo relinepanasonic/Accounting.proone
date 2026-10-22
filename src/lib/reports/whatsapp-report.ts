@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { loadErpDashboards } from '@/lib/api/erp-report';
 import { getDashboardUploadLogRange, getRelineUploadLogRange, jakartaDay } from '@/lib/integrations/dashboard-uploads';
+import { reportFiles } from '@/lib/reports/report-files';
 import { normalizeLogs, buildPerformance, type LogRow, type AssignedStore } from '@/lib/integrations/upload-performance';
 
 /**
@@ -15,12 +16,12 @@ export type ReportKind = 'daily' | 'weekly' | 'monthly' | 'none';
 export interface ReportPlan { kind: ReportKind; from: string; to: string; prevFrom: string; prevTo: string }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-const addDays = (day: string, n: number) => jakartaDay(new Date(new Date(`${day}T12:00:00+07:00`).getTime() + n * 86400000));
+export const addDays = (day: string, n: number) => jakartaDay(new Date(new Date(`${day}T12:00:00+07:00`).getTime() + n * 86400000));
 const weekday = (day: string) => new Date(`${day}T12:00:00+07:00`).getUTCDay(); // 0 = Sunday
-const dmy = (day: string) => `${day.slice(8, 10)} ${MONTHS[Number(day.slice(5, 7)) - 1]} ${day.slice(2, 4)}`;
-const rp = (n: number) => `${n < 0 ? '-' : ''}Rp ${Math.round(Math.abs(n)).toLocaleString('id-ID')}`;
-const dayOf = (ts: string | null | undefined) => (ts ? jakartaDay(new Date(ts)) : '');
-const inRange = (day: string, from: string, to: string) => !!day && day >= from && day <= to;
+export const dmy = (day: string) => `${day.slice(8, 10)} ${MONTHS[Number(day.slice(5, 7)) - 1]} ${day.slice(2, 4)}`;
+export const rp = (n: number) => `${n < 0 ? '-' : ''}Rp ${Math.round(Math.abs(n)).toLocaleString('id-ID')}`;
+export const dayOf = (ts: string | null | undefined) => (ts ? jakartaDay(new Date(ts)) : '');
+export const inRange = (day: string, from: string, to: string) => !!day && day >= from && day <= to;
 const daysBetween = (from: string, to: string) => Math.round((new Date(`${to}T12:00:00+07:00`).getTime() - new Date(`${from}T12:00:00+07:00`).getTime()) / 86400000) + 1;
 const lastDayOfMonth = (year: number, month1: number) => new Date(Date.UTC(year, month1, 0)).getUTCDate();
 
@@ -54,7 +55,7 @@ const workdays = (from: string, to: string) => {
 
 type Db = ReturnType<typeof createAdminClient>;
 
-async function salesSection(db: Db, plan: ReportPlan) {
+export async function salesSection(db: Db, plan: ReportPlan) {
   const { data: deals } = await db.from('crm_deals').select('salesman_name, stage, created_at, invoice_generated_at');
   const { data: members } = await db.from('workspace_members').select('user_id').eq('role', 'sales');
   const ids = Array.from(new Set((members || []).map((m: any) => m.user_id)));
@@ -72,7 +73,7 @@ async function salesSection(db: Db, plan: ReportPlan) {
   return Array.from(names).sort().map((name) => ({ name, now: count(name, plan.from, plan.to), before: count(name, plan.prevFrom, plan.prevTo) }));
 }
 
-async function adminSection(db: Db, plan: ReportPlan, today: string) {
+export async function adminSection(db: Db, plan: ReportPlan, today: string) {
   // Late needs a look back of two weeks even for a short period.
   const logFrom = plan.from < addDays(today, -14) ? plan.from : addDays(today, -14);
   const [prof, reline] = await Promise.all([getDashboardUploadLogRange(logFrom, today), getRelineUploadLogRange(logFrom, today)]);
@@ -100,7 +101,7 @@ async function adminSection(db: Db, plan: ReportPlan, today: string) {
   return { lines, errors, fo: { count: foInPeriod.length, clients: new Set(foInPeriod.map((f: any) => f.client_name)).size } };
 }
 
-async function advertiserSection(db: Db, plan: ReportPlan) {
+export async function advertiserSection(db: Db, plan: ReportPlan) {
   const { data: asg } = await db.from('client_assignments').select('client_id, user_id').eq('job', 'advertising');
   const userIds = Array.from(new Set((asg || []).map((a: any) => a.user_id)));
   const { data: profs } = userIds.length ? await db.from('profiles').select('id, full_name').in('id', userIds) : { data: [] as any[] };
@@ -117,7 +118,7 @@ async function advertiserSection(db: Db, plan: ReportPlan) {
   }).sort((a, b) => a.name.localeCompare(b.name));
 }
 
-async function todoSection(db: Db, today: string) {
+export async function todoSection(db: Db, today: string) {
   const { data: neg } = await db.from('crm_deals').select('title, lead_name, clients(name)').eq('neg_acc_status', 'requested');
   const { data: visits } = await db.from('lead_visits').select('client_name, salesman_name, agenda, visit_at').gte('visit_at', `${today}T00:00:00+07:00`).lte('visit_at', `${addDays(today, 3)}T23:59:59+07:00`).order('visit_at', { ascending: true }).limit(8);
   const { data: tasks } = await db.from('staff_tasks').select('title, assigned_to, due_date, status').neq('status', 'done').order('due_date', { ascending: true, nullsFirst: false }).limit(8);
@@ -130,7 +131,7 @@ async function todoSection(db: Db, today: string) {
   };
 }
 
-async function accountingSection(db: Db, plan: ReportPlan) {
+export async function accountingSection(db: Db, plan: ReportPlan) {
   const year = Number(plan.to.slice(0, 4));
   const month = Number(plan.to.slice(5, 7)) - 1;
   const { total } = await loadErpDashboards({ year, month, onlyTotal: true });
@@ -148,7 +149,7 @@ async function accountingSection(db: Db, plan: ReportPlan) {
   return { ...base, newCustomers, recurringCustomers };
 }
 
-async function profAdvice(kind: ReportKind, facts: unknown): Promise<string> {
+export async function profAdvice(kind: ReportKind, facts: unknown): Promise<string> {
   try {
     const res: any = await new Anthropic().messages.create({
       model: 'claude-sonnet-5-5',
@@ -165,11 +166,13 @@ async function profAdvice(kind: ReportKind, facts: unknown): Promise<string> {
   }
 }
 
-export async function buildWhatsAppReport(todayOverride?: string) {
-  const today = todayOverride && /^\d{4}-\d{2}-\d{2}$/.test(todayOverride) ? todayOverride : jakartaDay(new Date());
-  const plan = planReport(today);
-  if (plan.kind === 'none') return { send: false, kind: plan.kind, date: today, text: '' };
+export const resolveToday = (override?: string) => (override && /^\d{4}-\d{2}-\d{2}$/.test(override) ? override : jakartaDay(new Date()));
 
+/** Everything the report says, counted once: the WhatsApp text and the PDF both read it. */
+export async function gatherReportData(todayOverride?: string) {
+  const today = resolveToday(todayOverride);
+  const plan = planReport(today);
+  if (plan.kind === 'none') return null;
   const db = createAdminClient();
   const [sales, admin, advertisers, todo, acc] = await Promise.all([
     salesSection(db, plan).catch(() => null),
@@ -178,6 +181,15 @@ export async function buildWhatsAppReport(todayOverride?: string) {
     todoSection(db, today).catch(() => null),
     accountingSection(db, plan).catch(() => null),
   ]);
+  const advice = await profAdvice(plan.kind, { periode: `${plan.from} s/d ${plan.to}`, sales, admin, advertisers, todo, accounting: acc });
+  return { today, plan, sales, admin, advertisers, todo, acc, advice };
+}
+export type ReportData = NonNullable<Awaited<ReturnType<typeof gatherReportData>>>;
+
+export async function buildWhatsAppReport(todayOverride?: string) {
+  const data = await gatherReportData(todayOverride);
+  if (!data) return { send: false, kind: 'none' as ReportKind, date: resolveToday(todayOverride), text: '' };
+  const { today, plan, sales, admin, advertisers, todo, acc, advice } = data;
 
   const daily = plan.kind === 'daily';
   const title = daily
@@ -240,8 +252,10 @@ export async function buildWhatsAppReport(todayOverride?: string) {
     out.push(`  Coverage Ratio      : ${acc.monthlyOverhead > 0 ? `${acc.coverage.toFixed(2)}x` : '-'}`);
   }
 
-  const advice = await profAdvice(plan.kind, { periode: `${plan.from} s/d ${plan.to}`, sales, admin, advertisers, todo, accounting: acc });
   if (advice) { out.push(''); out.push('*Saran Prof*'); out.push(advice); }
 
-  return { send: true, kind: plan.kind, date: today, from: plan.from, to: plan.to, text: out.join('\n') };
+  // Weekly and monthly: the PDFs go to Google Drive (Make.com) and the WhatsApp message is only the headline and the links.
+  const files = reportFiles(plan, today);
+  const headline = daily ? '' : [title, 'Laporan lengkap dengan grafik (PDF):'].join('\n');
+  return { send: true, kind: plan.kind, date: today, from: plan.from, to: plan.to, text: out.join('\n'), headline, files };
 }

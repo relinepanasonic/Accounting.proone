@@ -16,7 +16,9 @@ export async function GET(request: Request) {
   try {
     const date = new URL(request.url).searchParams.get('date') || undefined;
     const res = await buildWhatsAppReport(date);
-    return NextResponse.json({ ...res, chars: res.text.length }, { headers: { 'Cache-Control': 'no-store' } });
+    const origin = new URL(request.url).origin;
+    const files = ((res as any).files || []).map((f: any) => ({ ...f, url: `${origin}/api/v1/erp/report-pdf?company=${f.company}&date=${res.date}` }));
+    return NextResponse.json({ ...res, files, chars: res.text.length }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (err: any) {
     console.error('whatsapp report failed', err);
     return NextResponse.json({ error: 'Report failed' }, { status: 500, headers: { 'Cache-Control': 'no-store' } });

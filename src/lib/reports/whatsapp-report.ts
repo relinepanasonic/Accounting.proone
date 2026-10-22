@@ -78,17 +78,22 @@ async function adminSection(db: Db, plan: ReportPlan, today: string) {
   const { rows, assigned, errors } = normalizeLogs(prof, reline);
   const inPeriod = rows.filter((r: LogRow) => inRange(r.day, plan.from, plan.to));
   const perf = buildPerformance(rows, assigned, new Date(`${today}T12:00:00+07:00`));
-  const admins = Array.from(new Set([...assigned.map((a: AssignedStore) => a.pic), ...inPeriod.map((r: LogRow) => r.admin)].filter(Boolean))).sort();
+  // The admins of this ERP (role admin) are the ones reported. The upload apps may spell the name longer ("Vani" / "Vani Admin"): match on the first name.
+  const { data: adminMembers } = await db.from('workspace_members').select('user_id').eq('role', 'admin');
+  const adminIds = Array.from(new Set((adminMembers || []).map((m: any) => m.user_id)));
+  const { data: adminProfiles } = adminIds.length ? await db.from('profiles').select('id, full_name').in('id', adminIds) : { data: [] as any[] };
+  const admins = Array.from(new Set((adminProfiles || []).map((p: any) => String(p.full_name || '').trim()).filter(Boolean))).sort();
+  const sameAdmin = (name: string, other: string) => { const a = name.toLowerCase().split(/s+/)[0]; const b = String(other || '').toLowerCase(); return !!a && (b === a || b.startsWith(a + ' ')); };
 
   const { data: fo } = await db.from('fake_order_projects').select('client_name, start_date');
   const foInPeriod = (fo || []).filter((f: any) => inRange(String(f.start_date || '').slice(0, 10), plan.from, plan.to));
 
   const lines = admins.map((name) => {
-    const mine = inPeriod.filter((r: LogRow) => r.admin === name);
+    const mine = inPeriod.filter((r: LogRow) => sameAdmin(name, r.admin));
     const files = mine.reduce((s: number, r: LogRow) => s + Math.max(1, r.files.length), 0);
-    const stores = assigned.filter((a: AssignedStore) => a.pic === name).map((a: AssignedStore) => a.store.toLowerCase());
+    const stores = assigned.filter((a: AssignedStore) => sameAdmin(name, a.pic)).map((a: AssignedStore) => a.store.toLowerCase());
     const uploadedStores = new Set(mine.map((r: LogRow) => r.store.toLowerCase()).filter((s: string) => stores.includes(s)));
-    const mp = perf.filter((p) => p.pic === name);
+    const mp = perf.filter((p) => sameAdmin(name, p.pic));
     return { name, files, total: stores.length, uploaded: uploadedStores.size, onSchedule: mp.filter((p) => p.status === 'on_schedule').length, late: mp.filter((p) => p.status === 'late').map((p) => p.store) };
   });
   return { lines, errors, fo: { count: foInPeriod.length, clients: new Set(foInPeriod.map((f: any) => f.client_name)).size } };
@@ -146,9 +151,9 @@ async function profAdvice(kind: ReportKind, facts: unknown): Promise<string> {
   try {
     const res: any = await new Anthropic().messages.create({
       model: 'claude-sonnet-5-5',
-      max_tokens: 500,
+      max_tokens: 900,
       system: 'Kamu Prof, penasihat bisnis Profesor Online group (Prof Toko Online, PT Pintu Langit, New Wave, Dream of AI). Tulis 2 sampai 4 saran singkat dalam Bahasa Indonesia untuk pemilik, dari data laporan. ' +
-        'Format: satu baris per saran, diawali "- ", teks biasa untuk WhatsApp, tanpa markdown. Pakai hanya angka yang ada di data, jangan mengarang. Sebut nama divisi atau orangnya bila perlu. Jangan menyebut AI.',
+        'Format: satu baris per saran, diawali "- ", teks biasa untuk WhatsApp, tanpa markdown. Pakai hanya angka yang ada di data, jangan mengarang. Sebut nama divisi atau orangnya bila perlu. Setiap saran maksimal 200 karakter, tanpa istilah teknis seperti s1/s2 (tulis sesi 1 / sesi 2). Jangan menyebut AI.',
       messages: [{ role: 'user', content: `Jenis laporan: ${kind}\nDATA:\n${JSON.stringify(facts)}` }],
     });
     let text = '';

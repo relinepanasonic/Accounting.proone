@@ -62,7 +62,7 @@ export interface ClientRow {
 const HIDDEN_STATUS = ['draft', 'void', 'cancelled', 'canceled'];
 const NO_LINES: RequestItem = { product_id: null, name: '(no product lines)', quantity: 1, unit_price: 0, scale: null, duration_type: 'none', duration_value: 0, deliverable_unit: null };
 
-type LoadOpts = { salesmanId?: string; clientIds?: Set<string>; archived?: 'hide' | 'only'; maskName: (name: string | null | undefined, assignedWorkspaceId?: string | null) => string };
+type LoadOpts = { salesmanId?: string; clientIds?: Set<string>; archived?: 'hide' | 'only' | 'all'; maskName: (name: string | null | undefined, assignedWorkspaceId?: string | null) => string };
 
 async function loadInvoiceRows(db: Db, workspaceId: string, opts: LoadOpts): Promise<ClientRow[]> {
   // client_paid_date needs one migration; without it the table still works with the automatic paid date.
@@ -180,12 +180,12 @@ async function loadInvoiceRows(db: Db, workspaceId: string, opts: LoadOpts): Pro
     let churnDate: string | null = null;
     if (override === 'churn') { lifecycle = 'churn'; churnDate = inv.client_status_at || today; }
     else if (override === 'freeze') lifecycle = 'freeze';
-    else if (!isDeal || !start || start > today) lifecycle = 'scheduled';
+    else if (!start || start > today) lifecycle = 'scheduled';
     else if (projectEnd && projectEnd < today) { lifecycle = 'churn'; churnDate = projectEnd; }
     else lifecycle = 'active';
     // A churned client stays in Client until the end of that month, then moves to the Churn page.
     const archived = lifecycle === 'churn' && !!churnDate && churnDate.slice(0, 7) < today.slice(0, 7);
-    if (opts.archived === 'only' ? !archived : archived) continue;
+    if (opts.archived === 'only' ? !archived : opts.archived === 'all' ? false : archived) continue;
     lines.forEach((it, i) => {
       const terms = start ? computeProjectTerms([it], start) : { endDate: null, deliverables: [] };
       rows.push({

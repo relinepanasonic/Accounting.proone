@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { buildPerformance, normalizeLogs, weekStart, type LogRow } from './upload-performance';
+import { buildPerformance, buildMonthTable, kindsOf, normalizeLogs, weekStart, type LogRow } from './upload-performance';
 
-const row = (id: string, day: string, store: string, project: LogRow['project'] = 'reline'): LogRow => ({ id, at: `${day}T05:00:00.000Z`, day, project, admin: 'Vani', store, type: 'SPOS', month: 'Oktober', files: [] });
+const row = (id: string, day: string, store: string, project: LogRow['project'] = 'reline'): LogRow => ({ id, at: `${day}T05:00:00.000Z`, day, project, admin: 'Vani', store, type: 'SPOS', month: 'Oktober', files: [], tags: [], owner: '' });
 
 describe('upload performance', () => {
   it('weeks start on Monday (Jakarta)', () => {
@@ -37,5 +37,21 @@ describe('upload performance', () => {
     const { errors, rows } = normalizeLogs({ ok: false, error: 'refused' }, { ok: true, days: [], admins: [], uploads: [{ id: 'r', uploadedAt: '2026-10-20T05:00:00.000Z', type: 'SPOS', admin: 'Vani', store: 'X', workspace: 'Reline Project 1.0' }] });
     expect(errors).toEqual(['Profesor Dashboard: refused']);
     expect(rows).toHaveLength(1);
+  });
+});
+
+describe('month table', () => {
+  it('maps uploads to the kinds of a store', () => {
+    expect(kindsOf({ project: 'profesor', type: 'Ads Performance', tags: ['Inkubasi', 'Ads Performance'] }).sort()).toEqual(['adsInkubasi', 'adsTotal']);
+    expect(kindsOf({ project: 'profesor', type: 'Store Performance', tags: ['Product Performance'] })).toEqual(['product']);
+    expect(kindsOf({ project: 'reline', type: 'Demographic · Shipping', tags: [] })).toEqual(['shipping']);
+    expect(kindsOf({ project: 'alpha', type: 'Earning', tags: [] })).toEqual(['earning']);
+  });
+  it('counts uploads per block of the month and keeps future blocks empty', () => {
+    const now = new Date('2026-10-21T03:00:00Z'); // 21 Oct
+    const rows = [row('1', '2026-10-02', 'A'), row('2', '2026-10-05', 'A'), row('3', '2026-10-20', 'A'), row('4', '2026-09-30', 'A')];
+    const [a] = buildMonthTable(rows, [], 2026, 10, () => 'Acme', now);
+    expect(a.client).toBe('Acme');
+    expect(a.weeks).toEqual([2, 0, 1, null, null]); // the 22nd and the 29th are still to come
   });
 });

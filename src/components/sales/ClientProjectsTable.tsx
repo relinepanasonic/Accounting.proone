@@ -4,6 +4,7 @@ import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { setClientHandler, setClientStatus, setProjectStart, updateClientNames } from '@/app/actions/sales-flow';
 import type { ClientRow } from '@/lib/sales/client-table';
+import { SortArrows } from '@/components/ui/SortArrows';
 
 const field = 'rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-100 focus:border-[#d4af37]/50 focus:outline-none [color-scheme:dark]';
 const dmy = (d: string | null) => (d ? new Date(`${d}T12:00:00Z`).toLocaleDateString('id-ID', { timeZone: 'UTC', day: '2-digit', month: 'short', year: 'numeric' }) : '');
@@ -111,7 +112,6 @@ function StartCell({ row, canEdit }: { row: ClientRow; canEdit: boolean }) {
   const [error, setError] = useState('');
   const [pending, start] = useTransition();
   if (!row.invoiceId) return <span className="text-zinc-600">-</span>;
-  if (!row.isDeal) return <span className="text-[11px] text-zinc-600">after payment</span>;
   if (!canEdit) return <span className="text-zinc-300">{dmy(row.start) || '-'}</span>;
   return (
     <div>
@@ -132,7 +132,7 @@ function StartCell({ row, canEdit }: { row: ClientRow; canEdit: boolean }) {
         }}
         className={`${field} ${row.start ? '' : 'border-amber-500/50'}`}
       />
-      {!row.start && <div className="mt-1 text-[10px] text-amber-300">Pick the start date</div>}
+      {!row.start && <div className="mt-1 text-[10px] text-amber-300">Pick the start date{!row.isDeal ? ' (not paid yet)' : ''}</div>}
       {row.start && row.startAuto && <div className="mt-1 text-[10px] text-zinc-500">from the invoice project date</div>}
       {error && <div className="mt-1 text-[10px] text-red-400">{error}</div>}
     </div>
@@ -185,17 +185,46 @@ export function ClientProjectsTable({
   const assign = Boolean(advertisers && admins);
   const [search, setSearch] = useState('');
   const [onlyOpen, setOnlyOpen] = useState(false);
+  const [sort, setSort] = useState<{ key: string; asc: boolean } | null>(null);
+  const nameOf = (list: Person[] | undefined, id: string | null) => list?.find((p) => p.id === id)?.name || '';
+  const sortValue = (g: ClientRow[], key: string): string => {
+    const r = g[0];
+    switch (key) {
+      case 'paid': return r.paidAt || '';
+      case 'start': return r.start || '';
+      case 'end': return r.end || '';
+      case 'client': return r.clientName.toLowerCase();
+      case 'salesman': return (r.salesman || '').toLowerCase();
+      case 'brand': return (r.brand || '').toLowerCase();
+      case 'store': return (r.store || '').toLowerCase();
+      case 'product': return r.product.toLowerCase();
+      case 'status': return r.lifecycle;
+      case 'advertiser': return nameOf(advertisers, r.advertiserId).toLowerCase();
+      case 'admin': return nameOf(admins, r.adminId).toLowerCase();
+      default: return '';
+    }
+  };
+  const toggleSort = (key: string) => setSort((p) => (p?.key === key ? { key, asc: !p.asc } : { key, asc: true }));
+  const Th = ({ k, children }: { k: string; children: React.ReactNode }) => (
+    <th className="px-3 py-3 font-bold">
+      <button onClick={() => toggleSort(k)} className={`inline-flex items-center gap-1.5 uppercase tracking-wider hover:text-zinc-200 ${sort?.key === k ? 'text-[#f5d77f]' : ''}`}>
+        {children}<SortArrows dir={sort?.key === k ? (sort.asc ? 'asc' : 'desc') : null} />
+      </button>
+    </th>
+  );
   const all: ClientRow[][] = [];
   for (const r of rows) {
     if (r.groupIndex === 0) all.push([r]);
     else all[all.length - 1]?.push(r);
   }
   const q = search.trim().toLowerCase();
-  const groups = all.filter((g) => {
+  const filteredGroups = all.filter((g) => {
     if (onlyOpen && g[0].advertiserId && g[0].adminId) return false;
     if (!q) return true;
     return g.some((r) => [r.clientName, r.brand, r.store, r.product, r.invoiceNumber || ''].some((t) => t.toLowerCase().includes(q)));
   });
+  // A sorted list keeps the products of one invoice together (the group moves as one).
+  const groups = sort ? [...filteredGroups].sort((a, b) => sortValue(a, sort.key).localeCompare(sortValue(b, sort.key)) * (sort.asc ? 1 : -1)) : filteredGroups;
 
   return (
     <div className="space-y-3">
@@ -212,17 +241,17 @@ export function ClientProjectsTable({
       <table className="w-full text-left text-sm">
         <thead className="border-b border-[#d4af37]/10 bg-zinc-900/50 text-[11px] uppercase tracking-wider text-zinc-400">
           <tr>
-            {!hidePaid && <th className="px-3 py-3 font-bold">Paid Date</th>}
-            <th className="px-3 py-3 font-bold">Start Project</th>
-            <th className="px-3 py-3 font-bold">End Project</th>
-            <th className="px-3 py-3 font-bold">Client</th>
-            {showSalesman && <th className="px-3 py-3 font-bold">Salesman</th>}
-            <th className="px-3 py-3 font-bold">Brand Name</th>
-            <th className="px-3 py-3 font-bold">Store Name</th>
-            <th className="px-3 py-3 font-bold">Product</th>
-            {showStatus && <th className="px-3 py-3 font-bold">Status</th>}
-            {assign && <th className="px-3 py-3 font-bold">Advertiser</th>}
-            {assign && <th className="px-3 py-3 font-bold">Admin</th>}
+            {!hidePaid && <Th k="paid">Paid Date</Th>}
+            <Th k="start">Start Project</Th>
+            <Th k="end">End Project</Th>
+            <Th k="client">Client</Th>
+            {showSalesman && <Th k="salesman">Salesman</Th>}
+            <Th k="brand">Brand Name</Th>
+            <Th k="store">Store Name</Th>
+            <Th k="product">Product</Th>
+            {showStatus && <Th k="status">Status</Th>}
+            {assign && <Th k="advertiser">Advertiser</Th>}
+            {assign && <Th k="admin">Admin</Th>}
           </tr>
         </thead>
         {groups.length === 0 && (

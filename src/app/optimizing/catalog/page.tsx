@@ -43,7 +43,7 @@ export default async function OptimizingCatalogPage() {
   const productList = products && products.length > 0 ? products : fallbackCatalog;
 
   return (
-    <div className="max-w-[1500px] mx-auto px-6 py-8">
+    <div className="mx-auto max-w-[1500px] px-3 py-4">
       <CatalogTable
         initialProducts={productList}
         canEdit={FINANCE_ROLES.includes(role)}

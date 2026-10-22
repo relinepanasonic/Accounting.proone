@@ -7,13 +7,26 @@ import { getAuthenticatedWorkspaceContext, FINANCE_ROLES } from '@/lib/auth/work
 
 const BUCKET = 'fake-order-proofs';
 const MAX_PROOF_BYTES = 5 * 1024 * 1024;
-const MIGRATION_HINT = 'Run supabase/migrations/20261017_fake_order_projects.sql in Supabase first.';
+const MIGRATION_HINT = 'Run supabase/migrations/20261017_fake_order_projects.sql and 20261018_fake_order_proof_review.sql in Supabase first.';
 
-export interface FakeOrderRow { id: string; projectId: string | null; clientId: string | null; clientName: string; orderNo: string; buyerName: string; total: number; proofUrl: string; createdAt: string }
+export interface FakeOrderRow { id: string; projectId: string | null; clientId: string | null; clientName: string; orderNo: string; buyerName: string; total: number; proofUrl: string; proofReviewUrl: string; createdAt: string }
 export interface FakeOrderProject { id: string; clientId: string | null; clientName: string; invoiceId: string | null; invoiceNumber: string; productName: string; startDate: string; finishedAt: string | null }
 
 type Result = { success: boolean; error?: string };
 const isMissing = (e: { code?: string; message: string }) => e.code === '42P01' || e.code === '42703' || /fake_order_projects|project_id/.test(e.message);
+
+/** Upload one proof image; returns its link, null when no file was chosen, or an error text. */
+async function uploadProof(file: FormDataEntryValue | null, workspaceId: string): Promise<{ url: string | null; error?: string }> {
+  if (!(file instanceof File) || file.size === 0) return { url: null };
+  if (!file.type.startsWith('image/')) return { url: null, error: 'A proof must be an image (screenshot).' };
+  if (file.size > MAX_PROOF_BYTES) return { url: null, error: 'A proof is bigger than 5 MB.' };
+  const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5) || 'png';
+  const path = `${workspaceId}/${crypto.randomUUID()}.${ext}`;
+  const admin = createAdminClient();
+  const { error } = await admin.storage.from(BUCKET).upload(path, Buffer.from(await file.arrayBuffer()), { contentType: file.type, upsert: false });
+  if (error) return { url: null, error: /bucket/i.test(error.message) ? 'Run supabase/migrations/20261016_fake_orders.sql in Supabase first.' : error.message };
+  return { url: admin.storage.from(BUCKET).getPublicUrl(path).data.publicUrl };
+}
 
 async function allowed() {
   const supabase = await createClient();
@@ -96,22 +109,14 @@ export async function addFakeOrder(formData: FormData): Promise<Result> {
     if (!project) return { success: false, error: 'That project is not in this company.' };
     if (project.finished_at) return { success: false, error: 'That project is finished.' };
 
-    let proofUrl: string | null = null;
-    const file = formData.get('proof');
-    if (file instanceof File && file.size > 0) {
-      if (!file.type.startsWith('image/')) return { success: false, error: 'The proof must be an image (screenshot).' };
-      if (file.size > MAX_PROOF_BYTES) return { success: false, error: 'The proof is bigger than 5 MB.' };
-      const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5) || 'png';
-      const path = `${ctx.activeWorkspaceId}/${crypto.randomUUID()}.${ext}`;
-      const admin = createAdminClient();
-      const { error: upErr } = await admin.storage.from(BUCKET).upload(path, Buffer.from(await file.arrayBuffer()), { contentType: file.type, upsert: false });
-      if (upErr) return { success: false, error: /bucket/i.test(upErr.message) ? 'Run supabase/migrations/20261016_fake_orders.sql in Supabase first.' : upErr.message };
-      proofUrl = admin.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
-    }
+    const va = await uploadProof(formData.get('proofVa'), ctx.activeWorkspaceId);
+    if (va.error) return { success: false, error: va.error };
+    const review = await uploadProof(formData.get('proofReview'), ctx.activeWorkspaceId);
+    if (review.error) return { success: false, error: review.error };
 
     const { error } = await supabase.from('fake_orders').insert({
       workspace_id: ctx.activeWorkspaceId, project_id: project.id, client_id: project.client_id, client_name: project.client_name, order_no: orderNo,
-      buyer_name: buyerName || null, total, proof_url: proofUrl, created_by: ctx.userId,
+      buyer_name: buyerName || null, total, proof_url: va.url, proof_review_url: review.url, created_by: ctx.userId,
     });
     if (error) return { success: false, error: isMissing(error) ? MIGRATION_HINT : error.message };
     return { success: true };
@@ -124,14 +129,13 @@ export async function deleteFakeOrder(id: string): Promise<Result> {
   try {
     const { supabase, ctx, ok } = await allowed();
     if (!ok) return { success: false, error: 'Not allowed.' };
-    const { data: row } = await supabase.from('fake_orders').select('proof_url').eq('id', id).eq('workspace_id', ctx.activeWorkspaceId).maybeSingle();
+    const { data: row } = await supabase.from('fake_orders').select('proof_url, proof_review_url').eq('id', id).eq('workspace_id', ctx.activeWorkspaceId).maybeSingle();
     const { data, error } = await supabase.from('fake_orders').delete().eq('id', id).eq('workspace_id', ctx.activeWorkspaceId).select('id');
     if (error) return { success: false, error: error.message };
     if (!data || data.length === 0) return { success: false, error: 'Not found.' };
     const marker = `/${BUCKET}/`;
-    if (row?.proof_url && row.proof_url.includes(marker)) {
-      await createAdminClient().storage.from(BUCKET).remove([row.proof_url.split(marker)[1]]).catch(() => undefined);
-    }
+    const files = [row?.proof_url, (row as any)?.proof_review_url].filter((u): u is string => Boolean(u && u.includes(marker))).map((u) => u.split(marker)[1]);
+    if (files.length) await createAdminClient().storage.from(BUCKET).remove(files).catch(() => undefined);
     return { success: true };
   } catch (e: any) {
     return { success: false, error: e?.message || 'Could not delete.' };

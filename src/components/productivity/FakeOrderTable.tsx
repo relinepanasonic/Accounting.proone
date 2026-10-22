@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Plus, Trash2, Loader2, ImageIcon, X, Check, RotateCcw } from 'lucide-react';
 import { SortArrows } from '@/components/ui/SortArrows';
+import { RupiahInput } from '@/components/ui/RupiahInput';
 import {
   addFakeOrder, deleteFakeOrder, createFakeOrderProject, finishFakeOrderProject, reopenFakeOrderProject, deleteFakeOrderProject,
   type FakeOrderRow, type FakeOrderProject,
@@ -35,6 +36,7 @@ export function FakeOrderBoard({ mode, projects, orders, candidates, migrationMi
   const [projectFilter, setProjectFilter] = useState('');
   const [search, setSearch] = useState('');
   const [proofView, setProofView] = useState('');
+  const [totalInput, setTotalInput] = useState<number>(0);
   const [psort, setPsort] = useState<{ key: PSort; asc: boolean }>({ key: 'start', asc: false });
   const [osort, setOsort] = useState<{ key: OSort; asc: boolean }>({ key: 'client', asc: true });
   const active = mode === 'active';
@@ -90,7 +92,7 @@ export function FakeOrderBoard({ mode, projects, orders, candidates, migrationMi
   const submitOrder = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const data = new FormData(e.currentTarget);
-    run(() => addFakeOrder(data), () => { orderForm.current?.reset(); setShowOrder(false); });
+    run(() => addFakeOrder(data), () => { orderForm.current?.reset(); setTotalInput(0); setShowOrder(false); });
   };
 
   const PTh = ({ k, children, right }: { k: PSort; children: React.ReactNode; right?: boolean }) => (
@@ -198,7 +200,7 @@ export function FakeOrderBoard({ mode, projects, orders, candidates, migrationMi
 
         {active && showOrder && (
           <form ref={orderForm} onSubmit={submitOrder} className="grid gap-3 rounded-2xl border border-[#d4af37]/30 bg-[#0e0f14] p-4 sm:grid-cols-2 lg:grid-cols-6">
-            <label className={`${lab} lg:col-span-2`}>Client / project
+            <label className={`${lab} lg:col-span-3`}>Client / project
               <select name="projectId" required value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)} className={`${field} mt-1 block w-full`}>
                 <option value="">Choose the project</option>
                 {projects.map((p) => <option key={p.id} value={p.id}>{p.clientName} · {p.productName}</option>)}
@@ -206,8 +208,12 @@ export function FakeOrderBoard({ mode, projects, orders, candidates, migrationMi
             </label>
             <label className={lab}>No Fake Order<input name="orderNo" required className={`${field} mt-1 block w-full`} /></label>
             <label className={lab}>Buyer name<input name="buyerName" className={`${field} mt-1 block w-full`} /></label>
-            <label className={lab}>Total (Rp)<input name="total" inputMode="numeric" required className={`${field} mt-1 block w-full text-right font-mono`} /></label>
-            <label className={lab}>Proof (image)<input name="proof" type="file" accept="image/*" className={`${field} mt-1 block w-full text-xs`} /></label>
+            <label className={lab}>Total (Rp)
+              <input type="hidden" name="total" value={totalInput} />
+              <RupiahInput value={totalInput} onValueChange={setTotalInput} className={`${field} mt-1 block w-full text-right font-mono`} />
+            </label>
+            <label className={lab}>Proof VA (image)<input name="proofVa" type="file" accept="image/*" className={`${field} mt-1 block w-full text-xs`} /></label>
+            <label className={lab}>Proof Review (image)<input name="proofReview" type="file" accept="image/*" className={`${field} mt-1 block w-full text-xs`} /></label>
             <div className="flex items-center gap-3 sm:col-span-2 lg:col-span-6">
               <button disabled={pending} className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/40 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50">{pending && <Loader2 className="h-4 w-4 animate-spin" />} Save</button>
             </div>
@@ -218,13 +224,13 @@ export function FakeOrderBoard({ mode, projects, orders, candidates, migrationMi
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="border-b border-[#d4af37]/10 bg-zinc-900/50 text-[10px] text-zinc-400">
-                <tr><OTh k="client">Client</OTh><OTh k="orderNo">No Fake Order</OTh><OTh k="buyer">Buyer name</OTh><OTh k="total" right>Total</OTh><th className="px-3 py-3 font-bold uppercase tracking-wider">Proof</th>{active && <th className="px-3 py-3" />}</tr>
+                <tr>{!projectFilter && <OTh k="client">Client</OTh>}<OTh k="orderNo">No Fake Order</OTh><OTh k="buyer">Buyer name</OTh><OTh k="total" right>Total</OTh><th className="px-3 py-3 font-bold uppercase tracking-wider">Proof VA</th><th className="px-3 py-3 font-bold uppercase tracking-wider">Proof Review</th>{active && <th className="px-3 py-3" />}</tr>
               </thead>
               <tbody className="divide-y divide-zinc-800/50">
-                {filteredOrders.length === 0 && <tr><td colSpan={active ? 6 : 5} className="p-8 text-center text-zinc-500">No fake order yet.</td></tr>}
+                {filteredOrders.length === 0 && <tr><td colSpan={(projectFilter ? 5 : 6) + (active ? 1 : 0)} className="p-8 text-center text-zinc-500">No fake order yet.</td></tr>}
                 {filteredOrders.map((o) => (
                   <tr key={o.id} className="hover:bg-zinc-900/30">
-                    <td className="px-3 py-3 font-semibold text-zinc-100">{o.clientName}{o.projectId && projectById.get(o.projectId) ? <div className="text-[10px] font-normal text-zinc-600">{projectById.get(o.projectId)!.productName}</div> : null}</td>
+                    {!projectFilter && <td className="px-3 py-3 font-semibold text-zinc-100">{o.clientName}{o.projectId && projectById.get(o.projectId) ? <div className="text-[10px] font-normal text-zinc-600">{projectById.get(o.projectId)!.productName}</div> : null}</td>}
                     <td className="whitespace-nowrap px-3 py-3 font-mono text-[#f5d77f]">{o.orderNo}</td>
                     <td className="px-3 py-3 text-zinc-300">{o.buyerName || '-'}</td>
                     <td className="whitespace-nowrap px-3 py-3 text-right font-mono text-zinc-100">{rp(o.total)}</td>
@@ -236,12 +242,20 @@ export function FakeOrderBoard({ mode, projects, orders, candidates, migrationMi
                         </button>
                       ) : <span className="inline-flex items-center gap-1 text-zinc-700"><ImageIcon className="h-3.5 w-3.5" /> none</span>}
                     </td>
+                    <td className="px-3 py-3">
+                      {o.proofReviewUrl ? (
+                        <button onClick={() => setProofView(o.proofReviewUrl)} title="Open the proof">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={o.proofReviewUrl} alt="proof" className="h-9 w-9 rounded border border-zinc-700 object-cover" />
+                        </button>
+                      ) : <span className="inline-flex items-center gap-1 text-zinc-700"><ImageIcon className="h-3.5 w-3.5" /> none</span>}
+                    </td>
                     {active && <td className="px-3 py-3 text-right"><button onClick={() => window.confirm(`Delete fake order ${o.orderNo}?`) && run(() => deleteFakeOrder(o.id))} disabled={pending} className="rounded-lg border border-red-500/30 p-1.5 text-red-400 hover:bg-red-500/10" title="Delete"><Trash2 className="h-3.5 w-3.5" /></button></td>}
                   </tr>
                 ))}
               </tbody>
               {filteredOrders.length > 0 && (
-                <tfoot><tr className="border-t border-zinc-700/80 bg-zinc-900/30"><td className="px-3 py-3 font-bold uppercase tracking-wider text-zinc-400" colSpan={3}>{filteredOrders.length} fake order(s)</td><td className="px-3 py-3 text-right font-mono font-bold text-[#f5d77f]">{rp(ordersTotal)}</td><td colSpan={active ? 2 : 1} /></tr></tfoot>
+                <tfoot><tr className="border-t border-zinc-700/80 bg-zinc-900/30"><td className="px-3 py-3 font-bold uppercase tracking-wider text-zinc-400" colSpan={projectFilter ? 2 : 3}>{filteredOrders.length} fake order(s)</td><td className="px-3 py-3 text-right font-mono font-bold text-[#f5d77f]">{rp(ordersTotal)}</td><td colSpan={active ? 3 : 2} /></tr></tfoot>
               )}
             </table>
           </div>

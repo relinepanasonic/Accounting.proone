@@ -117,26 +117,27 @@ export function CatalogTable({ initialProducts, canEdit, workspaces, activeWorks
       {error && <p className="flex items-center justify-between rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">{error}<button onClick={() => setError('')} aria-label="Dismiss"><X className="h-3.5 w-3.5" /></button></p>}
 
       <div className="overflow-x-auto rounded-xl border border-[#d4af37]/20 bg-[#0e0f14] shadow-xl">
-        <table className="w-full min-w-[900px] table-fixed text-left">
+        <table className="w-full table-fixed text-left">
           <colgroup>
             {showWorkspace && <col style={{ width: '10%' }} />}
-            <col style={{ width: '24%' }} />
-            <col style={{ width: '32%' }} />
-            <col style={{ width: '14%' }} />
-            <col style={{ width: '8%' }} />
-            <col style={{ width: '12%' }} />
-            {canEdit && <col style={{ width: '10%' }} />}
+            <col style={{ width: '22%' }} />
+            <col style={{ width: '30%' }} />
+            <col style={{ width: '13%' }} />
+            <col style={{ width: '7%' }} />
+            <col style={{ width: '9%' }} />
+            <col style={{ width: '13%' }} />
+            {canEdit && <col style={{ width: '70px' }} />}
           </colgroup>
           <thead className="border-b border-[#d4af37]/10 bg-zinc-900/50 text-[11px] uppercase tracking-wider text-zinc-400">
             <tr>
-              {showWorkspace && <th className="px-3 py-3 font-bold">Company</th>}
-              <th className="px-3 py-3 font-bold">Product</th>
-              <th className="px-3 py-3 font-bold">Description</th>
-              <th className="px-3 py-3 font-bold text-right">Unit Price</th>
-              <th className="px-3 py-3 font-bold">Qty</th>
-              <th className="px-3 py-3 font-bold" title="month / day / week / year give the project length; pc, video... are amounts to deliver">Unit (length)</th>
-              <th className="px-3 py-3 font-bold text-right" title="Unit Price x Qty">Price</th>
-              {canEdit && <th className="px-3 py-3 font-bold text-right">Actions</th>}
+              {showWorkspace && <th className="px-2 py-2.5 font-bold">Company</th>}
+              <th className="px-2 py-2.5 font-bold">Product</th>
+              <th className="px-2 py-2.5 font-bold">Description</th>
+              <th className="px-2 py-2.5 font-bold text-right">Unit Price</th>
+              <th className="px-2 py-2.5 font-bold">Qty</th>
+              <th className="px-2 py-2.5 font-bold" title="month / day / week / year give the project length; pc, video... are amounts to deliver">Unit (length)</th>
+              <th className="px-2 py-2.5 font-bold text-right" title="Unit Price x Qty">Price</th>
+              {canEdit && <th className="px-2 py-2.5 font-bold text-right">Actions</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800/50">
@@ -144,7 +145,7 @@ export function CatalogTable({ initialProducts, canEdit, workspaces, activeWorks
             {shown.map((row) => (
               <tr key={row.id} className={row._new ? 'bg-[#d4af37]/[0.06]' : 'hover:bg-zinc-900/30'}>
                 {showWorkspace && (
-                  <td className="px-2 py-2 align-top">
+                  <td className="px-2 py-1 align-top">
                     {row._new ? (
                       <select className={box} value={row.workspace_id || ''} onChange={(e) => patchLocal(row.id, { workspace_id: e.target.value })}>
                         {pickable.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
@@ -154,10 +155,10 @@ export function CatalogTable({ initialProducts, canEdit, workspaces, activeWorks
                     )}
                   </td>
                 )}
-                <td className="px-2 py-2 align-top">
+                <td className="px-2 py-1 align-top">
                   <input className={`${cell} font-semibold`} value={row.name} disabled={!canEdit} placeholder="Product name" onChange={(e) => patchLocal(row.id, { name: e.target.value })} onBlur={() => save(row)} />
                 </td>
-                <td className="px-2 py-2 align-top">
+                <td className="px-2 py-1 align-top">
                   {descOpen === row.id || row._new ? (
                     <textarea
                       className={`${cell} min-h-[70px]`} rows={3} value={row.description || ''} disabled={!canEdit} placeholder="One line per bullet"
@@ -167,28 +168,27 @@ export function CatalogTable({ initialProducts, canEdit, workspaces, activeWorks
                     />
                   ) : (
                     <button type="button" disabled={!canEdit} onClick={() => setDescOpen(row.id)} className="w-full rounded-md px-2 py-1.5 text-left text-[11px] leading-snug text-zinc-400 hover:bg-zinc-900 disabled:hover:bg-transparent">
-                      {row.description ? <span className="line-clamp-3 whitespace-pre-line">{row.description}</span> : <span className="text-zinc-600">{canEdit ? 'Add description' : '-'}</span>}
+                      {row.description ? <span className="line-clamp-2 whitespace-pre-line">{row.description}</span> : <span className="text-zinc-600">{canEdit ? 'Add description' : '-'}</span>}
                     </button>
                   )}
                 </td>
-                <td className="px-2 py-2 align-top">
+                <td className="px-2 py-1 align-top">
                   <input
                     className={`${cell} text-right font-mono`} inputMode="numeric" disabled={!canEdit}
                     value={row.unit_price ? String(row.unit_price) : ''} placeholder="0" title={rp(Number(row.unit_price))}
                     onChange={(e) => patchLocal(row.id, { unit_price: Number(e.target.value.replace(/[^\d]/g, '')) })}
                     onBlur={() => save(row)}
                   />
-                  <div className="px-2 text-right text-[10px] text-zinc-600">{rp(Number(row.unit_price))}</div>
                 </td>
-                <td className="px-2 py-2 align-top">
+                <td className="px-2 py-1 align-top">
                   <input className={`${cell} text-center`} type="number" min={1} disabled={!canEdit} value={row.quantity ?? 1} onChange={(e) => patchLocal(row.id, { quantity: Number(e.target.value) })} onBlur={() => save(row)} />
                 </td>
-                <td className="px-2 py-2 align-top">
+                <td className="px-2 py-1 align-top">
                   <input className={cell} disabled={!canEdit} value={row.scale || ''} placeholder="pc" onChange={(e) => patchLocal(row.id, { scale: e.target.value })} onBlur={() => save(row)} />
                 </td>
-                <td className="px-3 py-4 align-top text-right font-mono text-xs font-bold text-[#f5d77f] whitespace-nowrap">{rp((Number(row.unit_price) || 0) * (Number(row.quantity) || 1))}</td>
+                <td className="px-2 py-2 align-top text-right font-mono text-xs font-bold text-[#f5d77f] whitespace-nowrap">{rp((Number(row.unit_price) || 0) * (Number(row.quantity) || 1))}</td>
                 {canEdit && (
-                  <td className="px-2 py-2 align-top text-right whitespace-nowrap">
+                  <td className="px-2 py-1 align-top text-right whitespace-nowrap">
                     {busy === row.id ? <Loader2 className="ml-auto h-4 w-4 animate-spin text-zinc-500" /> : row._new ? (
                       <span className="inline-flex gap-1">
                         <button onClick={() => saveNew(row)} className="inline-flex items-center gap-1 rounded-md bg-[#d4af37] px-2.5 py-1.5 text-[11px] font-bold text-black"><Check className="h-3.5 w-3.5" /> Save</button>

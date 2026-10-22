@@ -29,8 +29,11 @@ export async function loadFakeOrderBoard(mode: 'active' | 'finished') {
 
   let orders: FakeOrderRow[] = [];
   if (projects.length > 0) {
-    const { data } = await supabase.from('fake_orders').select('id, project_id, client_id, client_name, order_no, buyer_name, total, proof_url, created_at').eq('workspace_id', activeWorkspaceId).in('project_id', projects.map((p) => p.id)).order('created_at', { ascending: false });
-    orders = (data || []).map((r: any) => ({ id: r.id, projectId: r.project_id, clientId: r.client_id, clientName: r.client_name || '', orderNo: r.order_no || '', buyerName: r.buyer_name || '', total: Number(r.total || 0), proofUrl: r.proof_url || '', createdAt: r.created_at }));
+    const orderQuery = (cols: string) => supabase.from('fake_orders').select(cols).eq('workspace_id', activeWorkspaceId).in('project_id', projects.map((p) => p.id)).order('created_at', { ascending: false });
+    // proof_review_url needs the 20261018 migration; without it the orders still show.
+    let { data, error } = (await orderQuery('id, project_id, client_id, client_name, order_no, buyer_name, total, proof_url, proof_review_url, created_at')) as any;
+    if (error) ({ data } = (await orderQuery('id, project_id, client_id, client_name, order_no, buyer_name, total, proof_url, created_at')) as any);
+    orders = (data || []).map((r: any) => ({ id: r.id, projectId: r.project_id, clientId: r.client_id, clientName: r.client_name || '', orderNo: r.order_no || '', buyerName: r.buyer_name || '', total: Number(r.total || 0), proofUrl: r.proof_url || '', proofReviewUrl: r.proof_review_url || '', createdAt: r.created_at }));
   }
 
   // Invoices of Prof and of PT Pintu (assigned to this company) with Friends Order or Paket Optimize Shopee New Store, not started yet.

@@ -571,7 +571,7 @@ export async function setProjectStart(invoiceId: string, startDate: string): Pro
   const { data: inv } = await db.from('invoices').select('id, invoice_number, client_id, status').eq('id', invoiceId).or(invoiceScope(ctx.activeWorkspaceId)).maybeSingle();
   if (!inv) return { success: false, error: 'Invoice not found.' };
   const { data: deal } = await db.from('crm_deals').select('*').eq('invoice_id', invoiceId).eq('workspace_id', ctx.activeWorkspaceId).maybeSingle();
-  if (String(inv.status).toLowerCase() !== 'paid' && deal?.stage !== 'Deal') return { success: false, error: 'The project can start once the invoice is paid or approved.' };
+  // The start date can be put by hand before the invoice is paid: the project then runs while the payment is still open.
 
   const items = await dealItems(db, ctx.activeWorkspaceId, { id: deal?.id || null, invoice_id: invoiceId });
   const { endDate, deliverables } = computeProjectTerms(items, startDate);

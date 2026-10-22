@@ -104,7 +104,7 @@ export default async function OptimizingClientsPage({ searchParams }: { searchPa
 
   const mask = clientMask({ userEmail: ctx.userEmail, availableWorkspaces: ctx.availableWorkspaces });
   const db = createAdminClient();
-  const rows = await loadClientRows(db, ctx.activeWorkspaceId, { archived: tab === 'churn' ? 'only' : 'hide', includeAll: true, maskName: (name, ws) => mask.name(name, ws, 'Client') });
+  const rows = await loadClientRows(db, ctx.activeWorkspaceId, { archived: tab === 'churn' ? 'only' : 'all', includeAll: true, maskName: (name, ws) => mask.name(name, ws, 'Client') });
   const handlers = owner ? await loadHandlers(db, ctx.activeWorkspaceId) : null;
 
   return (

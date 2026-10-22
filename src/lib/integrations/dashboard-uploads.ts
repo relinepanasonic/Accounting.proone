@@ -21,18 +21,23 @@ export const getRelineUploadLog = (days = 7) =>
 const addDays = (day: string, n: number) => jakartaDay(new Date(new Date(`${day}T12:00:00+07:00`).getTime() + n * 86400000));
 
 export async function fetchUploadLog(days: number, keyName: string, apiKey: string | undefined, baseUrl: string): Promise<DashboardUploadLogResult> {
+  const dayList = Array.from({ length: days }).map((_, i) => jakartaDay(new Date(Date.now() - i * 86400000)));
+  return fetchUploadLogRange(dayList[dayList.length - 1], dayList[0], keyName, apiKey, baseUrl);
+}
+
+/** The log for any period (inclusive Jakarta days). Ranges longer than 60 days are asked for in several calls. */
+export async function fetchUploadLogRange(from: string, to: string, keyName: string, apiKey: string | undefined, baseUrl: string): Promise<DashboardUploadLogResult> {
   if (!apiKey) return { ok: false, error: `${keyName} is not set.` };
 
   const base = baseUrl.replace(/\/$/, '');
-  const dayList = Array.from({ length: days }).map((_, i) => jakartaDay(new Date(Date.now() - i * 86400000)));
+  const dayList: string[] = [];
+  for (let d = to; d >= from && dayList.length < 400; d = addDays(d, -1)) dayList.push(d);
 
-  // Ranges longer than 60 days are asked for in several calls, oldest chunk first.
   const chunks: Array<{ from: string; to: string }> = [];
-  const oldest = dayList[dayList.length - 1];
-  for (let from = oldest; from <= dayList[0]; ) {
-    const to = addDays(from, MAX_RANGE_DAYS - 1);
-    chunks.push({ from, to: to > dayList[0] ? dayList[0] : to });
-    from = addDays(from, MAX_RANGE_DAYS);
+  for (let f = from; f <= to; ) {
+    const t = addDays(f, MAX_RANGE_DAYS - 1);
+    chunks.push({ from: f, to: t > to ? to : t });
+    f = addDays(f, MAX_RANGE_DAYS);
   }
 
   try {
@@ -43,7 +48,7 @@ export async function fetchUploadLog(days: number, keyName: string, apiKey: stri
         headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
         next: { revalidate: CACHE_SECONDS },
         redirect: 'manual',
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(15000),
       });
       // A redirect means the app's login middleware caught the request (endpoint missing or not exempted).
       if (res.status >= 300 && res.status < 400) {
@@ -62,3 +67,8 @@ export async function fetchUploadLog(days: number, keyName: string, apiKey: stri
     return { ok: false, error: err?.name === 'TimeoutError' ? 'The API timed out.' : 'Could not reach the API.' };
   }
 }
+
+export const getDashboardUploadLogRange = (from: string, to: string) =>
+  fetchUploadLogRange(from, to, 'DASHBOARD_API_KEY', process.env.DASHBOARD_API_KEY, process.env.DASHBOARD_API_URL || 'https://dashboard.profesoronline.id');
+export const getRelineUploadLogRange = (from: string, to: string) =>
+  fetchUploadLogRange(from, to, 'RELINE_API_KEY', process.env.RELINE_API_KEY, process.env.RELINE_API_URL || 'https://reline.profesoronline.id');

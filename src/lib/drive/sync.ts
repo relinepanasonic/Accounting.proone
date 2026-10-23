@@ -6,7 +6,7 @@ import { workspaceCode } from '@/lib/workspaces/known';
  * confirms each one, so the table drive_sync (migration 20261023) always knows what is already there.
  */
 export type DriveFolder = 'Invoice' | 'Tax' | 'Proof';
-export interface DriveItem { key: string; kind: 'invoice' | 'faktur' | 'bukti'; folder: DriveFolder; name: string }
+export interface DriveItem { key: string; kind: 'invoice' | 'faktur' | 'bukti'; folder: DriveFolder; name: string; /** Company code (ProOne, PLIG, NW, DOA): invoices go to Invoice/<company>. */ company: string }
 
 const safe = (s: string) => s.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
 const clientOf = (i: any) => String((Array.isArray(i.clients) ? i.clients[0]?.name : i.clients?.name) || '').trim();
@@ -47,12 +47,12 @@ export async function pendingDriveItems(limit = 20): Promise<{ items: DriveItem[
     db.from('invoices').select('id, invoice_number, issue_date, created_at, status, workspace_id, clients(name)').eq('is_quotation', false).order('issue_date', { ascending: true }).range(from, from + 999));
   const issued = invoices.filter((i) => !['draft', 'cancelled', 'canceled', 'void'].includes(String(i.status || '').toLowerCase()));
 
-  const all: DriveItem[] = issued.map((i) => ({ key: `invoice:${i.id}`, kind: 'invoice', folder: 'Invoice', name: `${safe(`${dateOf(i)} ${codeOf(i)} ${i.invoice_number} ${clientOf(i)}`)}.pdf` }));
+  const all: DriveItem[] = issued.map((i) => ({ key: `invoice:${i.id}`, kind: 'invoice', folder: 'Invoice', company: codeOf(i), name: `${safe(`${dateOf(i)} ${codeOf(i)} ${i.invoice_number} ${clientOf(i)}`)}.pdf` }));
 
   for (const [col, kind, label] of [['faktur_pajak_url', 'faktur', 'Faktur Pajak'], ['bukti_potong_url', 'bukti', 'Bukti Potong']] as const) {
     const rows = await allRows((from) =>
       db.from('invoices').select('id, invoice_number, issue_date, created_at, workspace_id, clients(name)').not(col, 'is', null).range(from, from + 999));
-    for (const i of rows) all.push({ key: `${kind}:${i.id}`, kind, folder: 'Tax', name: `${safe(`${label} ${codeOf(i)} ${i.invoice_number} ${clientOf(i)}`)}.pdf` });
+    for (const i of rows) all.push({ key: `${kind}:${i.id}`, kind, folder: 'Tax', company: codeOf(i), name: `${safe(`${label} ${codeOf(i)} ${i.invoice_number} ${clientOf(i)}`)}.pdf` });
   }
 
   // Already copied.
@@ -81,4 +81,11 @@ export async function confirmDriveItem(key: string, kind: string, name: string, 
   const db: Db = createAdminClient();
   const { error } = await db.from('drive_sync').upsert({ key, kind, name, drive_file_id: driveFileId, synced_at: new Date().toISOString() });
   if (error) throw new Error(error.message);
+}
+
+/** The invoice PDFs already in Drive with the company they belong to (the code is the second word of the file name): used once to move them into Invoice/<company>. */
+export async function syncedInvoiceFiles(): Promise<Array<{ fileId: string; name: string; company: string }>> {
+  const db: Db = createAdminClient();
+  const rows = await allRows((from) => db.from('drive_sync').select('key, name, drive_file_id').eq('kind', 'invoice').range(from, from + 999));
+  return rows.filter((r) => r.drive_file_id).map((r) => ({ fileId: String(r.drive_file_id), name: String(r.name || ''), company: String(r.name || '').split(' ')[1] || '' }));
 }

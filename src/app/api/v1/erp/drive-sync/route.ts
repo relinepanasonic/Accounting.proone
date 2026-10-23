@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { authorizeErpApi } from '@/lib/api/erp-report';
-import { pendingDriveItems, confirmDriveItem } from '@/lib/drive/sync';
+import { pendingDriveItems, confirmDriveItem, syncedInvoiceFiles } from '@/lib/drive/sync';
 import { signedDocUrl } from '@/lib/reports/signed-url';
 
 export const runtime = 'nodejs';
@@ -17,6 +17,10 @@ export async function GET(request: Request) {
   if (!authorizeErpApi(request)) return new NextResponse(null, { status: 401, headers: noStore });
   try {
     const url = new URL(request.url);
+    if (url.searchParams.get('mode') === 'synced') {
+      const files = await syncedInvoiceFiles();
+      return NextResponse.json({ count: files.length, items: files }, { headers: noStore });
+    }
     const limit = Math.min(60, Math.max(1, Number(url.searchParams.get('limit')) || 20));
     const { items, remaining } = await pendingDriveItems(limit);
     return NextResponse.json({ count: items.length, remaining, items: items.map((i) => ({ ...i, url: signedDocUrl(url.origin, i.key) })) }, { headers: noStore });

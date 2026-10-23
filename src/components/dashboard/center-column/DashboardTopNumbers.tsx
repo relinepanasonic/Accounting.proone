@@ -58,23 +58,23 @@ export function DashboardTopNumbers({ telemetry }: { telemetry: DashboardTelemet
         <CardExtras extra={telemetry.cards?.avgMonthly} color="#60a5fa" />
       </div>
 
-      {/* Coverage: MRR against the monthly overhead */}
+      {/* BEP Ratio (break-even): MRR against the monthly overhead; 1.0 is the middle */}
       {(() => {
         const r = telemetry.coverageRatio;
         const tone = telemetry.monthlyCost <= 0 ? 'text-zinc-400' : r >= 1.5 ? 'text-emerald-400' : r >= 1 ? 'text-yellow-400' : 'text-red-400';
-        const note = telemetry.monthlyCost <= 0 ? 'No costs yet' : r >= 1.5 ? 'Comfortable' : r >= 1 ? 'Covered, thin margin' : 'MRR below overhead';
+        const note = telemetry.monthlyCost <= 0 ? 'No costs yet' : r >= 1.5 ? 'Well above break-even' : r >= 1 ? 'Just above break-even' : 'Below break-even';
         return (
-          <div className="gold-glass-panel rounded-2xl p-5 flex flex-col justify-between group" title="MRR divided by the monthly overhead (total costs per month). 1.0 = break-even">
+          <div className="gold-glass-panel rounded-2xl p-5 flex flex-col justify-between group" title="BEP ratio = MRR divided by the monthly overhead (total costs per month). 1.0 = break-even point (BEP): above it you earn, below it you lose">
             <div className="flex items-center gap-3 text-cyan-400 mb-3">
               <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20"><Gauge className="w-5 h-5" /></div>
-              <span className="text-[10px] font-extrabold tracking-widest uppercase text-cyan-300">Coverage</span>
+              <span className="text-[10px] font-extrabold tracking-widest uppercase text-cyan-300">BEP Ratio</span>
             </div>
             <div>
               <div className={`text-xl font-bold font-serif ${tone}`}>{telemetry.monthlyCost > 0 ? `${r.toFixed(2)}x` : '-'}</div>
               <div className="text-xs text-cyan-500/60 font-mono mt-1">{note}</div>
               <div className="text-[10.5px] text-zinc-500 font-mono mt-1">Overhead {formatRupiah(telemetry.monthlyCost)} / month</div>
             </div>
-            <CardExtras extra={telemetry.cards?.coverage} color="#22d3ee" ratio />
+            <CardExtras extra={telemetry.cards?.coverage} color="#22d3ee" ratio mid={1} />
           </div>
         );
       })()}

@@ -12,11 +12,16 @@ const rp = (n: number) => {
 };
 
 /** A smooth area line: the trend behind the number. */
-function Sparkline({ values, color }: { values: number[]; color: string }) {
+function Sparkline({ values, color, mid }: { values: number[]; color: string; mid?: number }) {
   const id = useId().replace(/:/g, '');
   const W = 120, H = 34, PAD = 3;
-  const max = Math.max(...values, 0);
-  const min = Math.min(...values, 0);
+  // With a mid value (break-even = 1.0) the chart is centred on it: the dashed line in the middle is 1.0, above is profit, below is loss.
+  let max = Math.max(...values, 0);
+  let min = Math.min(...values, 0);
+  if (mid !== undefined) {
+    const d = Math.max(0.5, ...values.map((v) => Math.abs(v - mid)));
+    max = mid + d; min = mid - d;
+  }
   const span = max - min || 1;
   const pts = values.map((v, i) => [PAD + (i * (W - PAD * 2)) / Math.max(1, values.length - 1), H - PAD - ((v - min) / span) * (H - PAD * 2)] as const);
   // smooth curve (Catmull-Rom to Bezier)
@@ -28,8 +33,10 @@ function Sparkline({ values, color }: { values: number[]; color: string }) {
     return `C${c1[0].toFixed(1)},${c1[1].toFixed(1)} ${c2[0].toFixed(1)},${c2[1].toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
   }).join(' ');
   const last = pts[pts.length - 1];
+  const midY = mid !== undefined ? H - PAD - ((mid - min) / span) * (H - PAD * 2) : null;
   return (
     <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="h-9 w-full" aria-hidden="true">
+      {midY !== null && <line x1={0} x2={W} y1={midY} y2={midY} stroke="#ffffff" strokeOpacity="0.35" strokeWidth="1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />}
       <defs>
         <linearGradient id={`g${id}`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={color} stopOpacity="0.35" />
@@ -44,12 +51,12 @@ function Sparkline({ values, color }: { values: number[]; color: string }) {
 }
 
 /** Under a card's number: its mini chart and the small per-company numbers (ProOne, PLIG...). */
-export function CardExtras({ extra, color, count, ratio }: { extra?: CardExtra; color: string; count?: boolean; ratio?: boolean }) {
+export function CardExtras({ extra, color, count, ratio, mid }: { extra?: CardExtra; color: string; count?: boolean; ratio?: boolean; mid?: number }) {
   if (!extra) return null;
   const hasTrend = extra.series.some((v) => v !== 0);
   return (
     <div className="mt-3">
-      <div className={hasTrend ? '' : 'opacity-30'}><Sparkline values={extra.series.length ? extra.series : [0, 0]} color={color} /></div>
+      <div className={hasTrend ? '' : 'opacity-30'}><Sparkline values={extra.series.length ? extra.series : [0, 0]} color={color} mid={mid} /></div>
       {extra.split.length > 1 && (
         <div className="mt-2 space-y-0.5 border-t border-white/5 pt-2">
           {extra.split.map((s) => (

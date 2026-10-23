@@ -249,7 +249,7 @@ export async function buildWhatsAppReport(todayOverride?: string) {
     out.push(`  A/R Total           : ${rp(acc.ar)}`);
     out.push(`  Overhead            : ${rp(acc.overhead)}`);
     out.push(`  MRR                 : ${rp(acc.mrr)}`);
-    out.push(`  Coverage Ratio      : ${acc.monthlyOverhead > 0 ? `${acc.coverage.toFixed(2)}x` : '-'}`);
+    out.push(`  BEP Ratio           : ${acc.monthlyOverhead > 0 ? `${acc.coverage.toFixed(2)}x` : '-'}`);
   }
 
   if (advice) { out.push(''); out.push('*Saran Prof*'); out.push(advice); }

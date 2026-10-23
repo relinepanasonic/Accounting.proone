@@ -103,9 +103,11 @@ function BarChart({ labels, series, w = 232, h = 110 }: { labels: string[]; seri
   );
 }
 
-function LineChart({ labels, values, color, w = 232, h = 100, fmt = short }: { labels: string[]; values: number[]; color: string; w?: number; h?: number; fmt?: (n: number) => string }) {
+function LineChart({ labels, values, color, w = 232, h = 100, fmt = short, mid }: { labels: string[]; values: number[]; color: string; w?: number; h?: number; fmt?: (n: number) => string; mid?: number }) {
   const left = 34, bottom = 14, top = 6;
-  const { lo, hi, span } = axis(Math.min(...values, 0), Math.max(...values, 0));
+  let { lo, hi, span } = axis(Math.min(...values, 0), Math.max(...values, 0));
+  // With a mid value (break-even = 1.0) the chart is centred on it.
+  if (mid !== undefined) { const d = Math.max(0.5, ...values.map((v) => Math.abs(v - mid))); lo = mid - d; hi = mid + d; span = hi - lo; }
   const plotH = h - bottom - top;
   const step = (w - left - 6) / Math.max(1, values.length - 1);
   const pts = values.map((v, i) => [left + step * i, top + plotH - ((v - lo) / span) * plotH] as const);
@@ -261,7 +263,7 @@ export function ReportDocument({ data, company }: { data: ReportData; company: C
           <Kpi label="A/R Total" value={rp(n.ar)} tone={AMBER} />
           <Kpi label="Overhead" value={rp(n.overhead)} />
           <Kpi label="MRR" value={rp(n.mrr)} />
-          <Kpi label="Coverage Ratio" value={n.monthlyOverhead > 0 ? `${n.coverage.toFixed(2)}x` : '-'} tone={n.monthlyOverhead > 0 ? (n.coverage >= 1 ? GREEN : RED) : MUTED} />
+          <Kpi label="BEP Ratio" value={n.monthlyOverhead > 0 ? `${n.coverage.toFixed(2)}x` : '-'} tone={n.monthlyOverhead > 0 ? (n.coverage >= 1 ? GREEN : RED) : MUTED} />
           <Kpi label="New Customer" value={String(company.newCustomers)} />
           <Kpi label="Recurring Customer" value={String(company.recurringCustomers)} />
         </View>
@@ -287,8 +289,8 @@ export function ReportDocument({ data, company }: { data: ReportData; company: C
           <Card title="A/R (per month)">
             <BarChart labels={labels} series={[{ name: 'A/R', color: AMBER, values: upto(t.cards?.ar.series || []) }]} />
           </Card>
-          <Card title="Coverage ratio (MRR / overhead)">
-            <LineChart labels={labels} values={upto(t.cards?.coverage.series || [])} color={GREEN} fmt={(v) => `${v.toFixed(1)}x`} />
+          <Card title="BEP ratio (MRR / overhead) - dashed line = 1.0">
+            <LineChart labels={labels} values={upto(t.cards?.coverage.series || [])} color={GREEN} fmt={(v) => `${v.toFixed(1)}x`} mid={1} />
           </Card>
           <Card title="Top expenses">
             <HBarChart items={t.topExpenses.slice(0, 6).map((e) => ({ label: e.name, value: e.amount }))} color={RED} />

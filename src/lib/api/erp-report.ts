@@ -96,7 +96,7 @@ export async function buildErpReport() {
 
   const t = total!;
   const y = yearTotal!;
-  const cov = y.monthlyCost <= 0 ? '' : y.coverageRatio >= 1.5 ? 'aman' : y.coverageRatio >= 1 ? 'tipis' : 'di bawah overhead';
+  const cov = y.monthlyCost <= 0 ? '' : y.coverageRatio >= 1.5 ? 'aman' : y.coverageRatio >= 1 ? 'tipis, di atas BEP' : 'di bawah BEP';
   const missing = [
     ...(uploads.profesorToko.ok ? uploads.profesorToko.notUploaded.map((n) => `- ${n} (Profesor Toko)`) : ['- Log Profesor Toko tidak bisa dibaca']),
     ...(uploads.reline.ok ? uploads.reline.notUploaded.map((n) => `- ${n} (Reline)`) : ['- Log Reline tidak bisa dibaca']),
@@ -105,7 +105,7 @@ export async function buildErpReport() {
     `Pagi ${dayLabel(today)}`,
     '',
     `MRR ${jt(y.avgMonthlyRevenue)} | Overhead ${jt(y.monthlyCost)}`,
-    y.monthlyCost > 0 ? `Coverage ${y.coverageRatio.toFixed(2)}x (${cov})` : 'Coverage: belum ada biaya tercatat',
+    y.monthlyCost > 0 ? `BEP Ratio ${y.coverageRatio.toFixed(2)}x (${cov})` : 'BEP Ratio: belum ada biaya tercatat',
     `Kas ${jt(t.totalCashFlow)} | Piutang ${jt(t.totalAR)}`,
     '',
     overdue.length ? `Perlu ditagih (${overdue.length} lewat jatuh tempo, ${jt(overdueTotal)})` : 'Tidak ada invoice lewat jatuh tempo',

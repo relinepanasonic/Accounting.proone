@@ -274,7 +274,8 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     }
 
     if (!isTargetPeriod(d)) continue;
-    if (st === 'cancelled') continue;
+    // A draft is not issued yet: it is neither revenue nor money to collect.
+    if (st === 'cancelled' || st === 'draft') continue;
 
     details.invoices.push({ id: inv.id, number: inv.invoice_number, client: nameOf(inv), date: d, status: st, total: amt, paid: Number(inv.amount_paid || 0) });
     totalRevenue += amt;
@@ -335,7 +336,7 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
   for (const inv of invoices) {
     if (clientName && nameOf(inv) !== clientName) continue;
     const st = (inv.status || 'draft').toLowerCase();
-    if (st === 'cancelled') continue;
+    if (st === 'cancelled' || st === 'draft') continue;
     const total = Number(inv.total_amount || 0);
     const start = new Date(String(inv.issue_date || inv.created_at).slice(0, 10) + 'T12:00:00Z');
     if (Number.isNaN(start.getTime())) continue;
@@ -345,12 +346,19 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     for (const l of lines) spread(inv.workspace_id, start, (Number(l.amount || 0) / sum) * total, lengthFromQuantity(Number(l.quantity || 0), l.scale));
   }
 
-  let newClientCount = 0;
-  for (const c of clientName ? [] : clients) {
-    if (isTargetPeriod(c.created_at)) {
-      newClientCount++;
-    }
+  // A new client is one whose first issued invoice falls in the period, so new clients are always part of the active clients.
+  // (Counting rows of the client list also counted vendors and contacts that never bought.)
+  const firstInvoiceDay = new Map<string, string>();
+  for (const inv of invoices) {
+    const st = (inv.status || 'draft').toLowerCase();
+    if (st === 'cancelled' || st === 'draft' || !inv.client_id) continue;
+    if (clientName && nameOf(inv) !== clientName) continue;
+    const day = String(inv.issue_date || inv.created_at).slice(0, 10);
+    const cur = firstInvoiceDay.get(inv.client_id);
+    if (!cur || day < cur) firstInvoiceDay.set(inv.client_id, day);
   }
+  let newClientCount = 0;
+  for (const day of firstInvoiceDay.values()) if (isTargetPeriod(day)) newClientCount++;
 
   // Cash out: bank transactions that were reconciled (cash view only; costs below come from the ledger).
   for (const tx of transactions) {

@@ -29,7 +29,7 @@ export function DashboardBottomNumbers({ telemetry }: { telemetry: DashboardTele
       </div>
 
       {/* Expenses: costs that are not COGS */}
-      <div onClick={() => open('cost')} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') open('cost'); }} title="Click for the details" className="cursor-pointer gold-glass-panel rounded-2xl p-5 flex flex-col justify-between group">
+      <div onClick={() => open('expenses')} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') open('expenses'); }} title="Click for the details" className="cursor-pointer gold-glass-panel rounded-2xl p-5 flex flex-col justify-between group">
         <div className="flex items-center gap-3 text-orange-400 mb-3">
           <div className="p-2 rounded-xl bg-orange-500/10 border border-orange-500/20 group-hover:bg-orange-500/20 transition-colors">
             <Receipt className="w-5 h-5" />

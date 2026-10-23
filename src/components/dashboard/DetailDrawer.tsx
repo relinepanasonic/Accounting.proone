@@ -5,13 +5,13 @@ import { X } from 'lucide-react';
 import { SALARY_ACCOUNT_CODES_PUBLIC as SALARY_CODES } from '@/lib/data/dashboard-constants';
 import type { DashboardDetails } from '@/lib/data/dashboard';
 
-export type DetailKind = 'revenue' | 'paid' | 'avgMonthly' | 'avgOrder' | 'clients' | 'cogs' | 'cost' | 'salary' | 'cash' | 'ar';
+export type DetailKind = 'revenue' | 'paid' | 'avgMonthly' | 'avgOrder' | 'clients' | 'cogs' | 'expenses' | 'cost' | 'salary' | 'cash' | 'ar';
 
 const rp = (n: number) => `${n < 0 ? '-' : ''}Rp ${Math.round(Math.abs(n)).toLocaleString('id-ID')}`;
 const day = (d: string | null) => (d ? new Date(d).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta', day: '2-digit', month: 'short', year: 'numeric' }) : '-');
 const TITLE: Record<DetailKind, string> = {
   revenue: 'Total Revenue: billed invoices', paid: 'Paid Revenue: paid invoices', avgMonthly: 'MRR: invoices by month', avgOrder: 'Avg Order Value: invoices',
-  clients: 'Clients with invoices', cogs: 'Total COGS: ledger lines', cost: 'Total Cost: ledger lines', salary: 'Total Salary: accounts 5020 + 6001', cash: 'Total Cash: money in and out', ar: 'Total A/R: unpaid balances',
+  clients: 'Clients with invoices', cogs: 'Total COGS: ledger lines (accounts 5xxx)', expenses: 'Expenses: ledger lines without COGS (accounts 6xxx to 9xxx)', cost: 'Total Cost: ledger lines', salary: 'Total Salary: accounts 5020 + 6001', cash: 'Total Cash: money in and out', ar: 'Total A/R: unpaid balances',
 };
 
 const th = 'px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500';
@@ -54,7 +54,7 @@ export function useDetailDrawer(details?: DashboardDetails) {
       return { total: list.reduce((s, c) => s + c.amount, 0), head: ['Date', 'What', 'Amount'], rows: list.map((c) => [day(c.date), c.label, rp(c.amount)]), right: [2] };
     }
     // cost-side kinds: grouped per account, then the lines
-    const lines = details.costs.filter((c) => (kind === 'cogs' ? c.cogs : kind === 'salary' ? SALARY_CODES.includes(c.code) : true) && has(c.account, c.code));
+    const lines = details.costs.filter((c) => (kind === 'cogs' ? c.cogs : kind === 'expenses' ? !c.cogs : kind === 'salary' ? SALARY_CODES.includes(c.code) : true) && has(c.account, c.code));
     const byAcc = new Map<string, number>();
     for (const l of lines) byAcc.set(`${l.code} - ${l.account}`, (byAcc.get(`${l.code} - ${l.account}`) || 0) + l.amount);
     const rows = Array.from(byAcc.entries()).sort((a, b) => b[1] - a[1]);

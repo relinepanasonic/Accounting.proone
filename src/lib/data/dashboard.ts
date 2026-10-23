@@ -63,7 +63,8 @@ export interface DashboardTelemetry {
     balance: number[];
   };
 
-  topExpenses: Array<{ name: string; amount: number }>;
+  /** Overhead by account: COGS (5xxx) and expenses (6xxx to 9xxx) together, biggest first. */
+  topOverhead: Array<{ name: string; amount: number }>;
   topClients: Array<{ name: string; revenue: number }>;
   /** What was paid to each vendor in the period (expense transactions), biggest first. */
   topVendors: Array<{ name: string; amount: number }>;
@@ -406,11 +407,9 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     if (SALARY_ACCOUNT_CODES.includes(code)) { totalSalary += amt; addSplit('salary', line.workspace_id, amt); if (bIdx !== -1) bucketSalary[bIdx] += amt; } // already inside COGS / expenses: informational
 
     details.costs.push({ date: String(line.transaction_date).slice(0, 10), code, account: coa?.name || 'Account', amount: amt, cogs: isCogs });
-    // Top 10 Expenses lists the expenses only: COGS (accounts 5xxx) has its own card, so it must not be in this list.
-    if (!isCogs) {
-      const label = `${code} - ${coa?.name || 'Account'}`;
-      expenseCoaMap.set(label, (expenseCoaMap.get(label) || 0) + amt);
-    }
+    // Top 10 Overhead: every cost account, COGS and expenses together (the Overhead card is COGS + Expenses).
+    const label = `${code} - ${coa?.name || 'Account'}`;
+    expenseCoaMap.set(label, (expenseCoaMap.get(label) || 0) + amt);
   }
 
   const avgOrderValue = invoiceCount > 0 ? totalRevenue / invoiceCount : 0;
@@ -501,7 +500,7 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     liveCashBalance[i] = runningCash;
   }
 
-  const topExpenses = Array.from(expenseCoaMap.entries())
+  const topOverhead = Array.from(expenseCoaMap.entries())
     .map(([name, amount]) => ({ name, amount }))
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 10);
@@ -594,7 +593,7 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
       labels,
       balance: liveCashBalance,
     },
-    topExpenses,
+    topOverhead,
     topClients,
     topVendors,
     topSales,

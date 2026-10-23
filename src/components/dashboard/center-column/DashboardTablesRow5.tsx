@@ -157,15 +157,15 @@ export function DashboardTablesRow5({ telemetry }: { telemetry: DashboardTelemet
             <ListCollapse className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-sm font-extrabold uppercase tracking-widest text-white">Top 10 Expenses</h3>
-            <p className="text-[10px] text-zinc-500 font-mono mt-0.5">By Chart of Accounts</p>
+            <h3 className="text-sm font-extrabold uppercase tracking-widest text-white">Top 10 Overhead</h3>
+            <p className="text-[10px] text-zinc-500 font-mono mt-0.5">COGS + Expenses, by Chart of Accounts</p>
           </div>
         </div>
         <div className="space-y-3">
-          {telemetry.topExpenses.length === 0 ? (
-            <div className="text-center text-zinc-500 text-xs py-10 font-mono">NO EXPENSES RECORDED</div>
+          {telemetry.topOverhead.length === 0 ? (
+            <div className="text-center text-zinc-500 text-xs py-10 font-mono">NO COSTS RECORDED</div>
           ) : (
-            telemetry.topExpenses.map((v, idx) => (
+            telemetry.topOverhead.map((v, idx) => (
               <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-[#0b0c10]/50 border border-zinc-800/50 hover:border-zinc-700 transition-colors">
                 <div className="flex items-center gap-3 min-w-0">
                   <span className="text-[#d4af37] font-bold text-xs w-4 shrink-0">{idx + 1}.</span>

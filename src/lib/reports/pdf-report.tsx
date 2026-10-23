@@ -292,8 +292,8 @@ export function ReportDocument({ data, company }: { data: ReportData; company: C
           <Card title="BEP ratio (MRR / overhead) - dashed line = 1.0">
             <LineChart labels={labels} values={upto(t.cards?.coverage.series || [])} color={GREEN} fmt={(v) => `${v.toFixed(1)}x`} mid={1} />
           </Card>
-          <Card title="Top expenses">
-            <HBarChart items={t.topExpenses.slice(0, 6).map((e) => ({ label: e.name, value: e.amount }))} color={RED} />
+          <Card title="Top overhead (COGS + expenses)">
+            <HBarChart items={t.topOverhead.slice(0, 6).map((e) => ({ label: e.name, value: e.amount }))} color={RED} />
           </Card>
           <Card title="Top clients (revenue)">
             <HBarChart items={t.topClients.slice(0, 6).map((c) => ({ label: c.name, value: c.revenue }))} color={GOLD} />

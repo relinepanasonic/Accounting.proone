@@ -3,11 +3,12 @@
 import React from 'react';
 import type { DashboardTelemetry } from '@/lib/data/dashboard';
 import { formatRupiah } from '@/lib/utils';
-import { Users, ShoppingCart } from 'lucide-react';
+import { Users, ShoppingCart, Store, ListCollapse } from 'lucide-react';
 
 export function DashboardTablesRow5({ telemetry }: { telemetry: DashboardTelemetry }) {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
+    <>
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
       
       {/* Top 10 Clients */}
       <div className="gold-glass-panel rounded-2xl p-6 border border-[#d4af37]/10 relative">
@@ -92,5 +93,62 @@ export function DashboardTablesRow5({ telemetry }: { telemetry: DashboardTelemet
       </div>
 
     </div>
+
+    {/* Under the clients and products: Top 10 Vendors (left) and Top 10 Expenses (right) */}
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
+      <div className="gold-glass-panel rounded-2xl p-6 border border-[#d4af37]/10 relative">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
+            <Store className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-sm font-extrabold uppercase tracking-widest text-white">Top 10 Vendors</h3>
+            <p className="text-[10px] text-zinc-500 font-mono mt-0.5">By Amount Paid</p>
+          </div>
+        </div>
+        <div className="space-y-3">
+          {telemetry.topVendors.length === 0 ? (
+            <div className="text-center text-zinc-500 text-xs py-10 font-mono">NO VENDOR PAYMENTS RECORDED</div>
+          ) : (
+            telemetry.topVendors.map((v, idx) => (
+              <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-[#0b0c10]/50 border border-zinc-800/50 hover:border-zinc-700 transition-colors">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="text-[#d4af37] font-bold text-xs w-4 shrink-0">{idx + 1}.</span>
+                  <span className="text-zinc-200 text-xs font-bold uppercase truncate">{v.name}</span>
+                </div>
+                <span className="text-rose-400 font-mono text-xs shrink-0 ml-2">{formatRupiah(v.amount)}</span>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+      <div className="gold-glass-panel rounded-2xl p-6 border border-[#d4af37]/10 relative">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-2 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400">
+            <ListCollapse className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-sm font-extrabold uppercase tracking-widest text-white">Top 10 Expenses</h3>
+            <p className="text-[10px] text-zinc-500 font-mono mt-0.5">By Chart of Accounts</p>
+          </div>
+        </div>
+        <div className="space-y-3">
+          {telemetry.topExpenses.length === 0 ? (
+            <div className="text-center text-zinc-500 text-xs py-10 font-mono">NO EXPENSES RECORDED</div>
+          ) : (
+            telemetry.topExpenses.map((v, idx) => (
+              <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-[#0b0c10]/50 border border-zinc-800/50 hover:border-zinc-700 transition-colors">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="text-[#d4af37] font-bold text-xs w-4 shrink-0">{idx + 1}.</span>
+                  <span className="text-zinc-200 text-xs font-bold uppercase truncate">{v.name}</span>
+                </div>
+                <span className="text-rose-400 font-mono text-xs shrink-0 ml-2">{formatRupiah(v.amount)}</span>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+    </>
   );
 }

@@ -3,16 +3,22 @@
 import React from 'react';
 import type { DashboardTelemetry } from '@/lib/data/dashboard';
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, ReferenceLine
 } from 'recharts';
 import { formatRupiah } from '@/lib/utils';
-import { Wallet, ListCollapse } from 'lucide-react';
+import { Wallet, Gauge } from 'lucide-react';
 
 export function DashboardChartsRow4({ telemetry }: { telemetry: DashboardTelemetry }) {
   const cashData = telemetry.liveCash.labels.map((label, idx) => ({
     name: label,
     Balance: telemetry.liveCash.balance[idx],
   }));
+
+  // BEP ratio (MRR / overhead) per month; the middle of the chart is 1.0, the break-even line.
+  const bepSeries = telemetry.cards?.coverage?.series || [];
+  const bepLabels = telemetry.cards?.coverage?.labels || [];
+  const bepData = bepSeries.map((v, i) => ({ name: bepLabels[i] || String(i + 1), Ratio: Number(v.toFixed(2)) }));
+  const bepDev = Math.max(0.5, ...bepSeries.map((v) => Math.abs(v - 1)));
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -75,34 +81,35 @@ export function DashboardChartsRow4({ telemetry }: { telemetry: DashboardTelemet
         </div>
       </div>
 
-      {/* Top 10 Expenses by COA */}
+      {/* BEP Ratio chart: 1.0 is the middle */}
       <div className="gold-glass-panel rounded-2xl p-6 border border-[#d4af37]/10 relative">
         <div className="flex items-center gap-3 mb-6">
-          <div className="p-2 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400">
-            <ListCollapse className="w-5 h-5" />
+          <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+            <Gauge className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-sm font-extrabold uppercase tracking-widest text-white">Top 10 Expenses</h3>
-            <p className="text-[10px] text-zinc-500 font-mono mt-0.5">By Chart of Accounts</p>
+            <h3 className="text-sm font-extrabold uppercase tracking-widest text-white">BEP Ratio</h3>
+            <p className="text-[10px] text-zinc-500 font-mono mt-0.5">MRR / Overhead per month. Dashed line = 1.0 (break-even): above earns, below loses</p>
           </div>
         </div>
-        
-        <div className="h-64 overflow-y-auto pr-2 custom-scrollbar">
-          <div className="space-y-3">
-            {telemetry.topExpenses.length === 0 ? (
-              <div className="text-center text-zinc-500 text-xs py-10 font-mono">NO EXPENSES RECORDED</div>
-            ) : (
-              telemetry.topExpenses.map((exp, idx) => (
-                <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-[#0b0c10]/50 border border-zinc-800/50 hover:border-zinc-700 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <span className="text-[#d4af37] font-bold text-xs w-4">{idx + 1}.</span>
-                    <span className="text-zinc-200 text-xs font-bold uppercase">{exp.name}</span>
-                  </div>
-                  <span className="text-rose-400 font-mono text-xs">{formatRupiah(exp.amount)}</span>
-                </div>
-              ))
-            )}
-          </div>
+
+        <div className="h-64">
+          {bepData.length === 0 ? (
+            <div className="flex h-full items-center justify-center text-center text-xs text-zinc-500 font-mono">
+              Choose All months to see the BEP ratio per month.{telemetry.monthlyCost > 0 ? ` Now: ${telemetry.coverageRatio.toFixed(2)}x` : ''}
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={bepData} margin={{ top: 0, right: 8, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+                <XAxis dataKey="name" stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} />
+                <YAxis stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} domain={[1 - bepDev, 1 + bepDev]} tickFormatter={(v) => `${Number(v).toFixed(1)}x`} />
+                <ReferenceLine y={1} stroke="#ffffff" strokeOpacity={0.5} strokeDasharray="4 4" label={{ value: '1.0', fill: '#a1a1aa', fontSize: 10, position: 'insideTopRight' }} />
+                <Tooltip formatter={(v: any) => [`${Number(v).toFixed(2)}x`, 'BEP ratio']} contentStyle={{ background: '#0e0f14', border: '1px solid rgba(212,175,55,0.3)', borderRadius: 12, fontSize: 12 }} />
+                <Line type="monotone" dataKey="Ratio" stroke="#22d3ee" strokeWidth={2} dot={{ r: 2 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </div>
 

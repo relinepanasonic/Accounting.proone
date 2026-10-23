@@ -104,12 +104,12 @@ export function DashboardTopNumbers({ telemetry }: { telemetry: DashboardTelemet
         </div>
         <div className="flex items-end justify-between">
           <div>
-            <div className="text-2xl font-bold font-serif text-white">{telemetry.activeClientCount}</div>
-            <div className="text-[10px] text-orange-500/50 font-mono mt-1 uppercase tracking-wider">Active</div>
+            <div className="text-2xl font-bold font-serif text-white">+{telemetry.newClientCount}</div>
+            <div className="text-[10px] text-orange-500/50 font-mono mt-1 uppercase tracking-wider">New</div>
           </div>
           <div className="text-right">
-            <div className="text-lg font-bold font-serif text-white">+{telemetry.newClientCount}</div>
-            <div className="text-[10px] text-zinc-500 font-mono mt-1 uppercase tracking-wider">New</div>
+            <div className="text-lg font-bold font-serif text-white">{telemetry.activeClientCount}</div>
+            <div className="text-[10px] text-zinc-500 font-mono mt-1 uppercase tracking-wider">Active</div>
           </div>
         </div>
         <CardExtras extra={telemetry.cards?.clients} color="#fb923c" count />

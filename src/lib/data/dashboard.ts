@@ -65,6 +65,8 @@ export interface DashboardTelemetry {
 
   topExpenses: Array<{ name: string; amount: number }>;
   topClients: Array<{ name: string; revenue: number }>;
+  /** What was paid to each vendor in the period (expense transactions), biggest first. */
+  topVendors: Array<{ name: string; amount: number }>;
   topProducts: Array<{ name: string; sold: number; revenue: number }>;
 
   /** For the filter bar: years that have data, and the client names (masked) of these workspaces. */
@@ -144,8 +146,10 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
   // The bank transactions. assigned_workspace_id needs one migration; without it nothing is assigned.
   const fetchTransactions = async () => {
     const q = (cols: string) => supabase.from('transactions').select(cols).in('workspace_id', queryWorkspaceIds);
-    const r: any = await q('id, description, amount, due_date, category, reconciled, workspace_id, assigned_workspace_id');
+    const r: any = await q('id, description, amount, due_date, transaction_date, type, client_id, category, reconciled, workspace_id, assigned_workspace_id');
     if (!r.error) return r;
+    const r2: any = await q('id, description, amount, due_date, transaction_date, type, client_id, category, reconciled, workspace_id');
+    if (!r2.error) return r2;
     return q('id, description, amount, due_date, category, reconciled, workspace_id');
   };
 
@@ -497,6 +501,25 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 10);
 
+  // Top vendors: the expense transactions of the period, by the vendor's name (the client_id of the transaction, or the "Vendor | note" text of a quick expense).
+  const vendorTotals = new Map<string, number>();
+  if (!clientName) {
+    const vendorName = new Map<string, string>();
+    const { data: vendorRows } = await supabase.from('clients').select('id, name').in('workspace_id', queryWorkspaceIds).eq('contact_type', 'vendor').range(0, 4999);
+    for (const v of (vendorRows || []) as any[]) vendorName.set(v.id, String(v.name || '').trim());
+    for (const tx of transactions) {
+      if (tx.type !== 'expense') continue;
+      if (!isTargetPeriod(tx.transaction_date || tx.due_date)) continue;
+      const text = String(tx.description || '');
+      const name = (tx.client_id && vendorName.get(tx.client_id)) || (text.includes(' | ') ? text.split(' | ')[0].trim() : '') || 'No vendor';
+      vendorTotals.set(name, (vendorTotals.get(name) || 0) + Number(tx.amount || 0));
+    }
+  }
+  const topVendors = Array.from(vendorTotals.entries())
+    .map(([name, amount]) => ({ name, amount }))
+    .sort((a, b) => (a.name === 'No vendor' ? 1 : b.name === 'No vendor' ? -1 : b.amount - a.amount))
+    .slice(0, 10);
+
   const topClients = Array.from(clientRevenueMap.entries())
     .map(([name, revenue]) => ({ name, revenue }))
     .sort((a, b) => b.revenue - a.revenue)
@@ -537,6 +560,7 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     },
     topExpenses,
     topClients,
+    topVendors,
     topProducts,
     availableYears: Array.from(yearsSeen).sort((a, b) => b - a),
     clientNames,

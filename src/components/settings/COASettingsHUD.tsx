@@ -589,15 +589,15 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [], active
             
             {/* Table */}
             <div className="flex-1 overflow-auto bg-black/20">
-              <table className="w-full text-left border-collapse">
+              <table className="w-full min-w-[760px] text-left border-collapse">
                 <thead className="sticky top-0 bg-[#0f1115] border-b border-[#d4af37]/20 z-10 shadow-md">
                   <tr>
-                    <th className="px-6 py-4 text-[10px] font-black tracking-widest text-[#d4af37] uppercase">Date</th>
+                    <th className="whitespace-nowrap px-4 py-4 text-[10px] font-black tracking-widest text-[#d4af37] uppercase">Date</th>
                     <th className="px-6 py-4 text-[10px] font-black tracking-widest text-[#d4af37] uppercase">Description</th>
-                    <th className="px-6 py-4 text-[10px] font-black tracking-widest text-[#d4af37] uppercase">Ref / Status</th>
-                    <th className="px-6 py-4 text-[10px] font-black tracking-widest text-emerald-400 uppercase text-right">Cash In</th>
-                    <th className="px-6 py-4 text-[10px] font-black tracking-widest text-rose-400 uppercase text-right">Cash Out</th>
-                    <th className="px-6 py-4 text-[10px] font-black tracking-widest text-white uppercase text-right">Balance</th>
+                    <th className="whitespace-nowrap px-4 py-4 text-[10px] font-black tracking-widest text-[#d4af37] uppercase">Ref / Status</th>
+                    <th className="whitespace-nowrap px-4 py-4 text-[10px] font-black tracking-widest text-emerald-400 uppercase text-right">Cash In</th>
+                    <th className="whitespace-nowrap px-4 py-4 text-[10px] font-black tracking-widest text-rose-400 uppercase text-right">Cash Out</th>
+                    <th className="whitespace-nowrap px-4 py-4 text-[10px] font-black tracking-widest text-white uppercase text-right">Balance</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800/50">
@@ -628,22 +628,22 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [], active
                       // For now we just show the line amounts
                       return (
                         <tr key={entry.id} className="hover:bg-white/[0.02] transition-colors">
-                          <td className="px-6 py-3 text-xs font-mono text-zinc-400">
+                          <td className="whitespace-nowrap px-4 py-3 text-xs font-mono text-zinc-400">
                             {formatIndoDate(entry.transaction_date)}
                           </td>
-                          <td className="px-6 py-3 text-sm text-white">
+                          <td className="px-4 py-3 text-sm text-white">
                             {entry.description || '-'}
                           </td>
-                          <td className="px-6 py-3 text-xs font-mono text-zinc-500 uppercase">
+                          <td className="whitespace-nowrap px-4 py-3 text-xs font-mono text-zinc-500 uppercase">
                             {entry.reference_type}
                           </td>
-                          <td className="px-6 py-3 text-sm font-mono text-emerald-400 text-right">
+                          <td className="whitespace-nowrap px-4 py-3 text-sm font-mono text-emerald-400 text-right">
                             {entry.debit_amount > 0 ? formatCurrency(entry.debit_amount) : '-'}
                           </td>
-                          <td className="px-6 py-3 text-sm font-mono text-rose-400 text-right">
+                          <td className="whitespace-nowrap px-4 py-3 text-sm font-mono text-rose-400 text-right">
                             {entry.credit_amount > 0 ? formatCurrency(entry.credit_amount) : '-'}
                           </td>
-                          <td className="px-6 py-3 text-sm font-mono text-zinc-300 text-right">
+                          <td className="whitespace-nowrap px-4 py-3 text-sm font-mono text-zinc-300 text-right">
                             {/* Running Balance placeholder */}
                             -
                           </td>

@@ -14,6 +14,8 @@ const day = (v: any) => {
 const rp = (n: number) => `${n < 0 ? '-' : ''}Rp ${Math.round(Math.abs(n)).toLocaleString('id-ID')}`;
 
 export interface InvoicePdfData {
+  /** A paid invoice is a RECEIPT (kuitansi): same data, titled Receipt, marked PAID, with the payments and without the bank details. */
+  docType?: 'INVOICE' | 'RECEIPT';
   number: string;
   issueDate: string;
   dueDate: string;
@@ -61,7 +63,9 @@ const W = [44, 10, 18, 12, 16]; // description, qty, unit price, discount, total
 
 export function InvoicePdf({ d }: { d: InvoicePdfData }) {
   const balance = Math.max(0, d.grandTotal - d.paid);
-  const paidFull = d.grandTotal > 0 && balance <= 0.5;
+  const receipt = d.docType === 'RECEIPT';
+  const paidFull = receipt || (d.grandTotal > 0 && balance <= 0.5);
+  const lastPaid = d.payments.length ? d.payments[d.payments.length - 1].date : '';
   const tone = paidFull ? { backgroundColor: '#d1fae5', color: '#065f46' } : d.paid > 0 ? { backgroundColor: '#fef3c7', color: '#92400e' } : { backgroundColor: '#e5e7eb', color: '#374151' };
   return (
     <Document title={d.number} author={d.company.name}>
@@ -74,7 +78,7 @@ export function InvoicePdf({ d }: { d: InvoicePdfData }) {
             {[d.company.phone, d.company.email, d.company.website].filter(Boolean).length ? <Text style={st.small}>{[d.company.phone, d.company.email, d.company.website].filter(Boolean).join('  |  ')}</Text> : null}
           </View>
           <View>
-            <Text style={st.title}>INVOICE</Text>
+            <Text style={st.title}>{receipt ? 'RECEIPT' : 'INVOICE'}</Text>
             <Text style={[st.right, st.bold, { marginTop: 3 }]}>{d.number}</Text>
             <Text style={[st.badge, tone]}>{paidFull ? 'PAID' : d.paid > 0 ? 'PARTIALLY PAID' : String(d.status || 'UNPAID').toUpperCase()}</Text>
           </View>
@@ -92,7 +96,7 @@ export function InvoicePdf({ d }: { d: InvoicePdfData }) {
           <View style={[st.box, { marginRight: 0, flex: 0.7 }]}>
             <Text style={st.label}>DETAILS</Text>
             <Text>Invoice date: <Text style={st.bold}>{day(d.issueDate)}</Text></Text>
-            <Text style={{ marginTop: 2 }}>Due date: <Text style={st.bold}>{day(d.dueDate)}</Text></Text>
+            {receipt ? <Text style={{ marginTop: 2 }}>Paid on: <Text style={st.bold}>{day(lastPaid || d.issueDate)}</Text></Text> : <Text style={{ marginTop: 2 }}>Due date: <Text style={st.bold}>{day(d.dueDate)}</Text></Text>}
           </View>
         </View>
 
@@ -128,12 +132,12 @@ export function InvoicePdf({ d }: { d: InvoicePdfData }) {
 
         {d.payments.length > 0 && (
           <View style={{ marginTop: 14 }} wrap={false}>
-            <Text style={st.label}>PAYMENTS RECEIVED</Text>
+            <Text style={st.label}>{receipt ? 'PAYMENT RECEIVED - THANK YOU' : 'PAYMENTS RECEIVED'}</Text>
             {d.payments.map((p, i) => <Text key={i} style={{ marginBottom: 1 }}>{day(p.date)}  -  {rp(p.amount)}</Text>)}
           </View>
         )}
 
-        {d.banks.length > 0 && (
+        {!receipt && d.banks.length > 0 && (
           <View style={{ marginTop: 14 }} wrap={false}>
             <Text style={st.label}>PAYMENT TO</Text>
             {d.banks.map((b, i) => <Text key={i} style={{ marginBottom: 1 }}><Text style={st.bold}>{b.bank}</Text>  {b.number}  {b.holder ? `a.n. ${b.holder}` : ''}</Text>)}

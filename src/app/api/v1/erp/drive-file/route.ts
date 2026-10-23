@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 /**
- * GET /api/v1/erp/drive-file?key=invoice:<id> | faktur:<id> | bukti:<id>: the file itself (the invoice as a PDF, or the uploaded tax document).
+ * GET /api/v1/erp/drive-file?key=invoice:<id>[:sig] | receipt:<id>[:sig] | faktur:<id> | bukti:<id>: the file itself (the invoice as a PDF, or the uploaded tax document).
  * Bearer key, or the short-lived signed link from drive-sync (&exp=...&sig=...).
  */
 export async function GET(request: Request) {
@@ -20,10 +20,10 @@ export async function GET(request: Request) {
   try {
     const [kind, id] = key.split(':');
     const db = createAdminClient();
-    if (kind === 'invoice' && id) {
+    if ((kind === 'invoice' || kind === 'receipt') && id) {
       const data = await loadInvoicePdfData(db, id);
       if (!data) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
-      const pdf = await renderInvoicePdf(data);
+      const pdf = await renderInvoicePdf({ ...data, docType: kind === 'receipt' ? 'RECEIPT' : 'INVOICE' });
       return new NextResponse(new Uint8Array(pdf), { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="${data.fileName}"`, 'Cache-Control': 'no-store' } });
     }
     if ((kind === 'faktur' || kind === 'bukti') && id) {

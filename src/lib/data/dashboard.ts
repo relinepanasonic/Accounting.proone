@@ -446,6 +446,8 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
       addSplit('cash', tx.workspace_id, -Number(tx.amount || 0));
     }
   }
+  // The Live Cash chart follows Buku Bank too (set below when statements exist): its last point is the Total Cash number.
+  let bookCashSeries: number[] | null = null;
   let totalCashFlow = openingCash + paidRevenue - transactions.filter(t => isTargetPeriod(t.due_date) && t.reconciled).reduce((s, t) => s + Number(t.amount), 0);
 
   // Total Cash is the Buku Bank total of the period (opening saldo + cash in - cash out of the stored statements) when statements are uploaded.
@@ -471,6 +473,8 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
       // Per bank: the opening is the saldo of the last line before the period (the total of the month before); a bank whose statements carry
       // no saldo starts from the sum of its earlier lines. Then add the cash in and out of the period. The cards of each company use the same rule.
       let bookTotal = 0;
+      let bookOpening = 0;
+      const bucketNet: number[] = new Array(numBuckets).fill(0);
       const perCompany = new Map<string, number>();
       const banks = Array.from(new Set(bookLines.map((l) => l.bank_account_id)));
       for (const id of banks) {
@@ -483,10 +487,15 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
         else if (before.length === 0 && ofBank[0] && ofBank[0].balance !== null && ofBank[0].balance !== undefined) opening = Number(ofBank[0].balance) - Number(ofBank[0].amount);
         else opening = before.reduce((sum, l) => sum + Number(l.amount || 0), 0);
         const total = opening + inPeriod.reduce((sum, l) => sum + Number(l.amount || 0), 0);
+        bookOpening += opening;
+        for (const l of inPeriod) { const bi = getBucketIndex(String(l.date).slice(0, 10)); if (bi !== -1) bucketNet[bi] += Number(l.amount || 0); }
         bookTotal += total;
         perCompany.set(ofBank[0].workspace_id, (perCompany.get(ofBank[0].workspace_id) || 0) + total);
       }
       totalCashFlow = bookTotal;
+      // Balance at the end of each month (or week): the opening of the period plus the cash in and out up to then.
+      let running = bookOpening;
+      bookCashSeries = bucketNet.map((n) => (running += n));
       split.cash.clear();
       for (const [wsId, v] of perCompany) addSplit('cash', wsId, v);
     }
@@ -497,7 +506,7 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
   let runningCash = openingCash;
   for (let i = 0; i < numBuckets; i++) {
     runningCash += bucketCashFlow[i];
-    liveCashBalance[i] = runningCash;
+    liveCashBalance[i] = bookCashSeries ? bookCashSeries[i] : runningCash;
   }
 
   const topOverhead = Array.from(expenseCoaMap.entries())

@@ -67,6 +67,8 @@ export interface DashboardTelemetry {
   topClients: Array<{ name: string; revenue: number }>;
   /** What was paid to each vendor in the period (expense transactions), biggest first. */
   topVendors: Array<{ name: string; amount: number }>;
+  /** Revenue of the period per salesman (the project's Sales column, else the pipeline card), biggest first. */
+  topSales: Array<{ name: string; revenue: number; invoices: number }>;
   topProducts: Array<{ name: string; sold: number; revenue: number }>;
 
   /** For the filter bar: years that have data, and the client names (masked) of these workspaces. */
@@ -520,6 +522,37 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     .sort((a, b) => (a.name === 'No vendor' ? 1 : b.name === 'No vendor' ? -1 : b.amount - a.amount))
     .slice(0, 10);
 
+  // Top sales: the revenue of the period per salesman. The Sales column of the project (invoices.sales_name, needs one migration)
+  // wins; else the salesman of the pipeline card; else "Not assigned".
+  const salesOfInvoice = new Map<string, string>();
+  if (!clientName) {
+    const ids = invoices.map((i: any) => i.id);
+    for (let i = 0; i < ids.length; i += 200) {
+      const chunk = ids.slice(i, i + 200);
+      const [dealRes, nameRes] = await Promise.all([
+        supabase.from('crm_deals').select('invoice_id, salesman_name').in('invoice_id', chunk),
+        supabase.from('invoices').select('id, sales_name').in('id', chunk).not('sales_name', 'is', null),
+      ]);
+      for (const d of ((dealRes as any).data || []) as any[]) if (d.invoice_id && d.salesman_name) salesOfInvoice.set(d.invoice_id, String(d.salesman_name).trim());
+      if (!(nameRes as any).error) for (const n of ((nameRes as any).data || []) as any[]) if (n.sales_name) salesOfInvoice.set(n.id, String(n.sales_name).trim());
+    }
+  }
+  const salesTotals = new Map<string, { revenue: number; invoices: number }>();
+  for (const inv of clientName ? [] : invoices) {
+    const st = String(inv.status || 'draft').toLowerCase();
+    if (st === 'cancelled' || st === 'draft') continue;
+    if (!isTargetPeriod(inv.issue_date || inv.created_at)) continue;
+    const name = salesOfInvoice.get(inv.id) || 'Not assigned';
+    const cur = salesTotals.get(name) || { revenue: 0, invoices: 0 };
+    cur.revenue += Number(inv.total_amount || 0);
+    cur.invoices++;
+    salesTotals.set(name, cur);
+  }
+  const topSales = Array.from(salesTotals.entries())
+    .map(([name, v]) => ({ name, revenue: v.revenue, invoices: v.invoices }))
+    .sort((a, b) => (a.name === 'Not assigned' ? 1 : b.name === 'Not assigned' ? -1 : b.revenue - a.revenue))
+    .slice(0, 10);
+
   const topClients = Array.from(clientRevenueMap.entries())
     .map(([name, revenue]) => ({ name, revenue }))
     .sort((a, b) => b.revenue - a.revenue)
@@ -561,6 +594,7 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     topExpenses,
     topClients,
     topVendors,
+    topSales,
     topProducts,
     availableYears: Array.from(yearsSeen).sort((a, b) => b - a),
     clientNames,

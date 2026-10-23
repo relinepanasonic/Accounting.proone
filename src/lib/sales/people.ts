@@ -19,3 +19,6 @@ export async function loadHandlers(db: Db, workspaceId: string): Promise<{ adver
       .sort((a: Person, b: Person) => a.name.localeCompare(b.name));
   return { advertisers: pick('advertiser'), admins: pick('admin') };
 }
+
+/** The salesmen a project can be assigned to (Sales column of the Client table, Top Sales on the dashboard). Add a name here when a new salesman joins. */
+export const SALES_PEOPLE = ["Nico", "Herlan"];

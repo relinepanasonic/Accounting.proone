@@ -680,3 +680,13 @@ export async function setClientStatus(invoiceId: string, status: 'auto' | 'freez
   revalidatePath('/optimizing/clients');
   return { success: true };
 }
+
+/** Accounting or an owner assigns a project (invoice) to a salesman by hand: the Sales column of the Client table and the Top Sales numbers. */
+export async function setInvoiceSales(invoiceId: string, name: string | null): Promise<Result> {
+  const a = await actor();
+  if (!a || !FINANCE.includes(a.ctx.role)) return { success: false, error: 'Only Accounting, Admin and the owners can assign the sales.' };
+  const value = name ? String(name).trim().slice(0, 60) : null;
+  const { error } = await a.db.from('invoices').update({ sales_name: value || null }).eq('id', invoiceId).or(invoiceScope(a.ctx.activeWorkspaceId));
+  if (error) return { success: false, error: error.code === '42703' || /sales_name/.test(error.message) ? 'Run supabase/migrations/20261024_invoice_sales.sql in Supabase first.' : error.message };
+  return { success: true };
+}

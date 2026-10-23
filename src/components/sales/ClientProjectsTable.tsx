@@ -2,7 +2,8 @@
 
 import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { setClientHandler, setClientStatus, setProjectStart, updateClientNames } from '@/app/actions/sales-flow';
+import { setClientHandler, setClientStatus, setProjectStart, updateClientNames, setInvoiceSales } from '@/app/actions/sales-flow';
+import { SALES_PEOPLE } from '@/lib/sales/people';
 import type { ClientRow } from '@/lib/sales/client-table';
 import { SortArrows } from '@/components/ui/SortArrows';
 
@@ -44,6 +45,38 @@ function NameCells({ row, canEdit }: { row: ClientRow; canEdit: boolean }) {
         {canEdit ? <input value={store} onChange={(e) => setStore(e.target.value)} onBlur={save} placeholder="Store name" className={cls} /> : <span className="text-zinc-200">{row.store || '-'}</span>}
       </td>
     </>
+  );
+}
+
+/** Who sold this project: a dropdown for the owners and Accounting, saved at once. */
+function SalesCell({ row }: { row: ClientRow }) {
+  const router = useRouter();
+  const [value, setValue] = useState(row.salesman);
+  const [error, setError] = useState('');
+  const [pending, start] = useTransition();
+  const list = value && !SALES_PEOPLE.includes(value) ? [...SALES_PEOPLE, value] : SALES_PEOPLE;
+  return (
+    <div>
+      <select
+        value={value}
+        disabled={pending}
+        onChange={(e) => {
+          const next = e.target.value;
+          const prev = value;
+          setValue(next);
+          setError('');
+          start(async () => {
+            const res = await setInvoiceSales(row.invoiceId, next || null);
+            if (!res.success) { setValue(prev); setError(res.error || 'Could not save.'); } else router.refresh();
+          });
+        }}
+        className={`${field} min-w-[110px]`}
+      >
+        <option value="">Not assigned</option>
+        {list.map((n) => <option key={n} value={n}>{n}</option>)}
+      </select>
+      {error && <div className="mt-1 max-w-[170px] text-[10px] text-red-400">{error}</div>}
+    </div>
   );
 }
 
@@ -172,7 +205,7 @@ function HandlerSelect({ clientId, job, current, people }: { clientId: string; j
 }
 
 export function ClientProjectsTable({
-  rows, showStatus, canEditStart, canEditNames, canEditPaid = false, canEditStatus = false, hidePaid = false, showSalesman = false, advertisers, admins,
+  rows, showStatus, canEditStart, canEditNames, canEditPaid = false, canEditStatus = false, canEditSales = false, hidePaid = false, showSalesman = false, advertisers, admins,
 }: {
   rows: ClientRow[];
   showStatus: boolean;
@@ -182,6 +215,8 @@ export function ClientProjectsTable({
   canEditPaid?: boolean;
   /** Accounting sets Freeze / Churn by hand. */
   canEditStatus?: boolean;
+  /** Owners and Accounting assign who sold each project (the Sales column becomes a dropdown). */
+  canEditSales?: boolean;
   /** Advertiser / Admin tabs: no Paid Date column. */
   hidePaid?: boolean;
   /** Sales tabs: which salesman got the client. */
@@ -253,7 +288,7 @@ export function ClientProjectsTable({
             <Th k="start">Start Project</Th>
             <Th k="end">End Project</Th>
             <Th k="client">Client</Th>
-            {showSalesman && <Th k="salesman">Salesman</Th>}
+            {(showSalesman || canEditSales) && <Th k="salesman">Sales</Th>}
             <Th k="brand">PIC</Th>
             <Th k="store">Store Name</Th>
             <Th k="product">Product</Th>
@@ -284,7 +319,7 @@ export function ClientProjectsTable({
                     {row.invoiceNumber && <div className="font-mono text-[10px] font-normal text-zinc-500">{row.invoiceNumber}</div>}
                   </td>
                 )}
-                {i === 0 && showSalesman && <td rowSpan={g.length} className="px-3 py-3 align-top whitespace-nowrap text-zinc-300">{row.salesman || <span className="text-zinc-600">-</span>}</td>}
+                {i === 0 && (showSalesman || canEditSales) && <td rowSpan={g.length} className="px-3 py-3 align-top whitespace-nowrap text-zinc-300">{canEditSales ? <SalesCell row={row} /> : row.salesman || <span className="text-zinc-600">-</span>}</td>}
                 {i === 0 && <NameCells row={row} canEdit={canEditNames} />}
                 <td className="min-w-[260px] px-3 py-3 text-zinc-200">
                   {row.product}

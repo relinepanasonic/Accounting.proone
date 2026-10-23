@@ -54,7 +54,7 @@ export interface ClientRow {
   isDeal: boolean;
   advertiserId: string | null;
   adminId: string | null;
-  /** The salesman who got this client (from the pipeline card). */
+  /** The salesman who sold this project: set by hand (invoices.sales_name), else the salesman of the pipeline card. */
   salesman: string;
   groupSize: number;
   groupIndex: number;
@@ -81,7 +81,8 @@ async function loadInvoiceRows(db: Db, workspaceId: string, opts: LoadOpts): Pro
   };
   if (opts.clientIds && opts.clientIds.size === 0) return [];
   const base = 'id, invoice_number, status, client_id, issue_date, created_at, assigned_workspace_id, notes';
-  let { data: allInvoices, error } = await invoiceQuery(`${base}, client_paid_date, client_status, client_status_at`);
+  let { data: allInvoices, error } = await invoiceQuery(`${base}, client_paid_date, client_status, client_status_at, sales_name`);
+  if (error) ({ data: allInvoices, error } = await invoiceQuery(`${base}, client_paid_date, client_status, client_status_at`));
   if (error) ({ data: allInvoices, error } = await invoiceQuery(`${base}, client_paid_date`));
   if (error) ({ data: allInvoices, error } = await invoiceQuery(base));
   if (error || !allInvoices?.length) return [];
@@ -229,7 +230,7 @@ async function loadInvoiceRows(db: Db, workspaceId: string, opts: LoadOpts): Pro
         invoiceNumber: inv.invoice_number || null,
         status: inv.status || null,
         isDeal,
-        salesman: deal?.salesman_name || '',
+        salesman: inv.sales_name || deal?.salesman_name || '',
         advertiserId: handler(inv.client_id, 'advertising'),
         adminId: handler(inv.client_id, 'admin'),
         groupSize: lines.length,

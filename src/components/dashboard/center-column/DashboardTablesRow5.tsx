@@ -3,7 +3,7 @@
 import React from 'react';
 import type { DashboardTelemetry } from '@/lib/data/dashboard';
 import { formatRupiah } from '@/lib/utils';
-import { Users, ShoppingCart, Store, ListCollapse } from 'lucide-react';
+import { Users, ShoppingCart, Store, ListCollapse, Trophy } from 'lucide-react';
 
 export function DashboardTablesRow5({ telemetry }: { telemetry: DashboardTelemetry }) {
   return (
@@ -92,6 +92,35 @@ export function DashboardTablesRow5({ telemetry }: { telemetry: DashboardTelemet
         </div>
       </div>
 
+    </div>
+
+    {/* Top Sales: who sold the revenue of the period (the Sales column of Optimizing > Clients) */}
+    <div className="gold-glass-panel rounded-2xl p-6 border border-[#d4af37]/10 relative mb-6">
+      <div className="flex items-center gap-3 mb-6">
+        <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+          <Trophy className="w-5 h-5" />
+        </div>
+        <div>
+          <h3 className="text-sm font-extrabold uppercase tracking-widest text-white">Top Sales</h3>
+          <p className="text-[10px] text-zinc-500 font-mono mt-0.5">By Revenue Sold (assign the sales in Optimizing &gt; Clients)</p>
+        </div>
+      </div>
+      <div className="space-y-3">
+        {telemetry.topSales.length === 0 ? (
+          <div className="text-center text-zinc-500 text-xs py-10 font-mono">NO SALES IN THIS PERIOD</div>
+        ) : (
+          telemetry.topSales.map((s, idx) => (
+            <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-[#0b0c10]/50 border border-zinc-800/50 hover:border-zinc-700 transition-colors">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="text-[#d4af37] font-bold text-xs w-4 shrink-0">{idx + 1}.</span>
+                <span className={`text-xs font-bold uppercase truncate ${s.name === 'Not assigned' ? 'text-zinc-500' : 'text-zinc-200'}`}>{s.name}</span>
+                <span className="text-[10px] text-zinc-500 font-mono shrink-0">{s.invoices} invoice{s.invoices === 1 ? '' : 's'}</span>
+              </div>
+              <span className="text-emerald-400 font-mono text-xs shrink-0 ml-2">{formatRupiah(s.revenue)}</span>
+            </div>
+          ))
+        )}
+      </div>
     </div>
 
     {/* Under the clients and products: Top 10 Vendors (left) and Top 10 Expenses (right) */}

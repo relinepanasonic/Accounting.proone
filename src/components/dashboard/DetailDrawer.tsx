@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
-import { X } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, X } from 'lucide-react';
 import { SALARY_ACCOUNT_CODES_PUBLIC as SALARY_CODES } from '@/lib/data/dashboard-constants';
 import type { DashboardDetails } from '@/lib/data/dashboard';
 
@@ -23,6 +23,22 @@ export function useDetailDrawer(details?: DashboardDetails) {
   const [search, setSearch] = useState('');
 
   const open = (k: DetailKind) => { setSearch(''); setKind(k); };
+
+  // The drawer is a step in the browser history: the phone's Back button (or gesture) closes it and lands on the same dashboard,
+  // with the same Year / Month / Company filters, instead of leaving the page.
+  const close = useCallback(() => {
+    if (typeof window !== 'undefined' && window.history.state?.detailDrawer) window.history.back();
+    else setKind(null);
+  }, []);
+  useEffect(() => {
+    if (!kind) return;
+    window.history.pushState({ ...(window.history.state || {}), detailDrawer: true }, '');
+    const onPop = () => setKind(null);
+    window.addEventListener('popstate', onPop);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { window.removeEventListener('popstate', onPop); document.body.style.overflow = prev; };
+  }, [kind]);
 
   const content = useMemo(() => {
     if (!kind || !details) return null;
@@ -62,14 +78,17 @@ export function useDetailDrawer(details?: DashboardDetails) {
   }, [kind, details, search]);
 
   const element = kind && content ? (
-    <div className="fixed inset-0 z-[80] flex justify-end bg-black/60" onClick={() => setKind(null)}>
+    <div className="fixed inset-0 z-[80] flex justify-end bg-black/60" onClick={close}>
       <div className="flex h-full w-full max-w-2xl flex-col border-l border-[#d4af37]/20 bg-[#0b0c10]" onClick={(e) => e.stopPropagation()}>
+        <button type="button" onClick={close} className="flex items-center gap-2 border-b border-zinc-800 bg-zinc-950 px-4 py-3 text-left text-sm font-bold text-[#f5d77f] hover:bg-zinc-900">
+          <ArrowLeft className="h-5 w-5" /> Back to Accounting
+        </button>
         <div className="flex items-start justify-between gap-3 border-b border-zinc-800 p-4">
           <div>
             <h2 className="font-serif text-lg font-extrabold text-zinc-100">{TITLE[kind]}</h2>
             <p className="mt-1 text-xs text-zinc-500">{content.rows.length} row{content.rows.length === 1 ? '' : 's'} · total <b className="text-[#f5d77f]">{rp(content.total)}</b></p>
           </div>
-          <button onClick={() => setKind(null)} aria-label="Close" className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white"><X className="h-5 w-5" /></button>
+          <button onClick={close} aria-label="Close" className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white"><X className="h-5 w-5" /></button>
         </div>
         <div className="border-b border-zinc-800 p-3">
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search" className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-100 focus:border-[#d4af37]/60 focus:outline-none" />

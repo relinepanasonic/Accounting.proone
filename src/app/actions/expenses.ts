@@ -58,7 +58,7 @@ export async function createExpense(payload: CreateExpensePayload) {
   // If category is a Fixed Asset account (starts with '12'), also register it in the Fixed Assets module
   const isFixedAsset = debitAccountCode.startsWith('12');
   if (isFixedAsset) {
-    const { error: assetErr } = await supabase.from('fixed_assets').insert({
+    const { data: assetRow, error: assetErr } = await supabase.from('fixed_assets').insert({
       workspace_id: activeWorkspaceId,
       asset_name: payload.vendor,
       category: payload.category,
@@ -68,9 +68,12 @@ export async function createExpense(payload: CreateExpensePayload) {
       useful_life_years: 1,
       // annual_depreciation is a GENERATED column in Postgres, do NOT pass it
       status: 'active'
-    });
+    }).select('id').single();
     if (assetErr) {
       console.error('Failed to insert fixed asset:', assetErr);
+    } else if (assetRow?.id) {
+      // The Schedule Expense of the asset: the first payment is posted now, the others on their day.
+      try { const { syncAssetSchedules } = await import('@/lib/assets/sync'); await syncAssetSchedules(supabase, { workspaceId: activeWorkspaceId, assetId: assetRow.id }); } catch (e) { console.error('asset schedule', e); }
     }
   }
 

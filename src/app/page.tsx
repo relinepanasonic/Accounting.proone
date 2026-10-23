@@ -38,29 +38,18 @@ export default async function CyberneticAccountingDashboardRSC({ searchParams }:
   const activeWorkspaceName = wsContext.activeWorkspaceName || 'Professor Toko Online HQ';
   const supabase = await createClient();
 
-  // Check if depreciation needs running
-  const today = new Date();
-  const currentMonthStr = today.toISOString().slice(0, 7); // '2026-08'
-  const { data: assets } = await supabase
-    .from('fixed_assets')
-    .select('id, annual_depreciation')
-    .eq('workspace_id', wsContext.activeWorkspaceId)
-    .eq('status', 'active');
-  
+  // The Schedule Expense of the assets: warn only when a payment is due (its day has come) and is not in the ledger yet.
   let needsDepreciation = false;
-  if (assets && assets.length > 0) {
-    const { data: existingDepr } = await supabase
-      .from('journal_entries')
+  {
+    const today = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
+    const { data: dueLines, error } = await supabase
+      .from('asset_schedule')
       .select('id')
       .eq('workspace_id', wsContext.activeWorkspaceId)
-      .like('reference_id', `depr-%-${currentMonthStr}`)
+      .is('posted_at', null)
+      .lte('due_date', today)
       .limit(1);
-    
-    if (!existingDepr || existingDepr.length === 0) {
-      if (assets.some((a: any) => Number(a.annual_depreciation) > 0)) {
-        needsDepreciation = true;
-      }
-    }
+    if (!error && dueLines && dueLines.length > 0) needsDepreciation = true;
   }
 
   return (

@@ -12,7 +12,7 @@ export function RunDepreciationButton() {
     startTransition(async () => {
       const res = await runMonthlyDepreciation();
       if (res.success) {
-        setResultMsg({ type: 'success', text: `Success! Posted ${res.processedCount} depreciation entries.` });
+        setResultMsg({ type: 'success', text: res.processedCount ? `Posted ${res.processedCount} payment(s) of the Schedule Expense.` : 'The Schedule Expense is up to date.' });
         setTimeout(() => setResultMsg(null), 5000);
       } else {
         setResultMsg({ type: 'error', text: res.error || 'Failed to run depreciation.' });
@@ -33,7 +33,7 @@ export function RunDepreciationButton() {
         className="px-6 py-2.5 rounded-xl bg-zinc-900 border border-[#d4af37]/40 text-[#f5d77f] font-bold uppercase tracking-wider text-[11px] hover:bg-[#d4af37] hover:text-black hover:shadow-[0_0_15px_rgba(212,175,55,0.4)] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
       >
         {isPending ? <span className="animate-spin text-lg leading-none">⟳</span> : <PlayCircle className="w-4 h-4" />}
-        <span>{isPending ? 'Processing...' : 'Run Monthly Depreciation'}</span>
+        <span>{isPending ? 'Syncing...' : 'Sync Schedule Expense'}</span>
       </button>
     </div>
   );

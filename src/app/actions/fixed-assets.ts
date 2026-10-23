@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { revalidatePath } from 'next/cache';
+import { syncAssetSchedules } from '@/lib/assets/sync';
 
 export async function updateFixedAsset(id: string, payload: any) {
   try {
@@ -23,7 +24,11 @@ export async function updateFixedAsset(id: string, payload: any) {
 
     if (error) throw new Error(error.message);
 
+    // The months, cost or salvage may have changed: the unposted payments of the Schedule Expense are spread again.
+    await syncAssetSchedules(supabase, { workspaceId: activeWorkspaceId, assetId: id });
+
     revalidatePath('/assets');
+    revalidatePath('/assets/schedule');
     revalidatePath(`/assets/${id}/edit`);
     return { success: true };
   } catch (err: any) {
@@ -57,6 +62,11 @@ export async function deleteFixedAsset(id: string) {
       }
     }
 
+    {
+      const { createAdminClient } = await import('@/lib/api/supabase-admin');
+      await createAdminClient().from('journal_entries').delete().eq('reference_id', id).eq('reference_type', 'depreciation');
+    }
+
     const { error } = await supabase
       .from('fixed_assets')
       .delete()
@@ -74,112 +84,23 @@ export async function deleteFixedAsset(id: string) {
   }
 }
 
+/**
+ * Syncs the Schedule Expense of this company's assets: makes missing schedules, spreads edited ones again and posts every payment that is due.
+ * Replaces the old month-end engine (one engine only, so nothing is posted twice).
+ */
 export async function runMonthlyDepreciation() {
   try {
     const supabase = await createClient();
     const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
-
-    // Get all active fixed assets (case-insensitive to handle 'Active' or 'active')
-    const { data: assets, error: fetchError } = await supabase
-      .from('fixed_assets')
-      .select('*')
-      .eq('workspace_id', activeWorkspaceId)
-      .ilike('status', 'active');
-
-    if (fetchError) throw new Error(fetchError.message);
-    if (!assets || assets.length === 0) return { success: true, processedCount: 0 };
-
-
-    // Get mappings to find Depreciation Expense Account (6100) and Acc Depr (120x)
-    // For simplicity, usually depreciation goes to 6100 (Depreciation Expense) and credit to Accum Depr
-    const { data: mappings } = await supabase.from('workspace_mappings').select('*').eq('workspace_id', activeWorkspaceId);
-    
-    // You typically credit an accumulated depreciation account (e.g. 1202) and debit depreciation expense (e.g. 6100).
-    const deprExpenseAccount = mappings?.find((m: any) => m.mapping_type === 'DEPRECIATION_EXPENSE')?.account_code || '6100';
-    const accDeprAccount = mappings?.find((m: any) => m.mapping_type === 'ACCUMULATED_DEPRECIATION')?.account_code || '1202';
-
-    let processedCount = 0;
-    const today = new Date();
-
-    for (const asset of assets) {
-      const annualDepr = Number(asset.annual_depreciation) || 0;
-      if (annualDepr <= 0) continue;
-
-      const monthlyDepr = annualDepr / 12;
-
-      // Fetch all existing depreciation journal entries for this asset
-      const { data: existingEntries, error: fetchEntryErr } = await supabase
-        .from('journal_entries')
-        .select('transaction_date')
-        .eq('workspace_id', activeWorkspaceId)
-        .eq('reference_id', asset.id)
-        .eq('reference_type', 'depreciation');
-
-      if (fetchEntryErr) {
-        console.error('Failed to fetch existing entries for asset', asset.id, fetchEntryErr);
-        continue;
-      }
-
-      // Keep track of which months have already been depreciated
-      const loggedMonths = new Set((existingEntries || []).map(e => e.transaction_date.substring(0, 7)));
-
-      // Determine the start month (from purchase_date) and end month (current month)
-      let purchaseDate = new Date(asset.purchase_date || asset.created_at);
-      if (isNaN(purchaseDate.getTime())) purchaseDate = new Date();
-
-      const startDate = new Date(purchaseDate.getFullYear(), purchaseDate.getMonth(), 1);
-      const endDate = new Date(today.getFullYear(), today.getMonth(), 1);
-
-      let currentDate = new Date(startDate);
-      
-      // Loop month by month to retroactively fill any missed depreciation
-      while (currentDate <= endDate) {
-        const yyyy = currentDate.getFullYear();
-        const mm = String(currentDate.getMonth() + 1).padStart(2, '0');
-        const monthKey = `${yyyy}-${mm}`; // e.g., '2026-08'
-
-        if (!loggedMonths.has(monthKey)) {
-          // Log depreciation for this missing month
-          
-          // Check if fully depreciated (book value <= salvage value)
-          // For now, we will post it and let accountants adjust if it over-depreciates.
-          
-          // Use the last day of the month for the journal entry date
-          const lastDayOfMonth = new Date(yyyy, currentDate.getMonth() + 1, 0).getDate();
-          const txDateStr = `${monthKey}-${String(lastDayOfMonth).padStart(2, '0')}`;
-          
-          const description = `Monthly Depreciation - ${asset.asset_name} (${monthKey})`;
-
-          const { error: insertError } = await supabase.from('journal_entries').insert([
-            { workspace_id: activeWorkspaceId, account_code: deprExpenseAccount, transaction_date: txDateStr, debit_amount: monthlyDepr, credit_amount: 0, description, reference_id: asset.id, reference_type: 'depreciation' },
-            { workspace_id: activeWorkspaceId, account_code: accDeprAccount, transaction_date: txDateStr, debit_amount: 0, credit_amount: monthlyDepr, description, reference_id: asset.id, reference_type: 'depreciation' }
-          ]);
-          
-          if (insertError) {
-            console.error('Failed to insert depreciation for asset', asset.id, monthKey, insertError);
-          } else {
-            processedCount++;
-          }
-        }
-        
-        currentDate.setMonth(currentDate.getMonth() + 1);
-      }
-    }
-
-    // Save the last run time
-    const { createAdminClient } = await import('@/lib/api/supabase-admin');
-    const adminClient = createAdminClient();
-    
-    // We can store a metadata record in workspace settings to track the last run month.
-    // For now, we'll just check journal entries to see if it was run.
-    
+    const res = await syncAssetSchedules(supabase, { workspaceId: activeWorkspaceId });
+    if (!res.ok) return { success: false, error: res.error || 'Could not sync the schedule.' };
     revalidatePath('/assets');
+    revalidatePath('/assets/schedule');
     revalidatePath('/ledger');
     revalidatePath('/');
-    
-    return { success: true, processedCount };
+    return { success: true, processedCount: res.posted, created: res.created };
   } catch (err: any) {
-    return { success: false, error: err?.message || 'Error running depreciation' };
+    return { success: false, error: err?.message || 'Error syncing the schedule' };
   }
 }
 

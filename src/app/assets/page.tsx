@@ -7,6 +7,7 @@ import { RunDepreciationButton } from '@/components/assets/RunDepreciationButton
 
 import { AssetRowActions } from '@/components/assets/AssetRowActions';
 import { AssetRowWithHistory } from '@/components/assets/AssetRowWithHistory';
+import { AssetTabs } from '@/components/assets/AssetTabs';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,6 +34,14 @@ async function FixedAssetsRegistry() {
     .eq('workspace_id', activeWorkspaceId)
     .order('asset_name', { ascending: true });
 
+  // What the Schedule Expense already posted per asset (the book value is the cost minus it). Without the schedule table: the old estimate.
+  const postedByAsset = new Map<string, number>();
+  const scheduled = new Set<string>();
+  {
+    const { data: lines, error } = await supabase.from('asset_schedule').select('asset_id, amount, posted_at').eq('workspace_id', activeWorkspaceId).limit(5000);
+    if (!error) for (const l of lines || []) { scheduled.add(l.asset_id); if (l.posted_at) postedByAsset.set(l.asset_id, (postedByAsset.get(l.asset_id) || 0) + Number(l.amount)); }
+  }
+
   const displayRecords: FixedAssetRecord[] =
     records && records.length > 0
       ? records.map((r) => {
@@ -40,7 +49,9 @@ async function FixedAssetsRegistry() {
           const annualDepr = Number(r.annual_depreciation || 0);
           
           let currentBookValue = initialValue;
-          if (r.purchase_date && annualDepr > 0) {
+          if (scheduled.has(r.id)) {
+            currentBookValue = Math.max(Number(r.salvage_value || 0), initialValue - (postedByAsset.get(r.id) || 0));
+          } else if (r.purchase_date && annualDepr > 0) {
             const purchaseDate = new Date(r.purchase_date);
             const now = new Date();
             // Calculate months elapsed
@@ -137,6 +148,8 @@ export default function AssetsPage() {
         </div>
         <RunDepreciationButton />
       </div>
+
+      <AssetTabs active="assets" />
 
       <Suspense
         fallback={

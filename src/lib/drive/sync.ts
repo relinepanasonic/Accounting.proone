@@ -84,8 +84,8 @@ export async function confirmDriveItem(key: string, kind: string, name: string, 
 }
 
 /** The invoice PDFs already in Drive with the company they belong to (the code is the second word of the file name): used once to move them into Invoice/<company>. */
-export async function syncedInvoiceFiles(): Promise<Array<{ fileId: string; name: string; company: string }>> {
+export async function syncedInvoiceFiles(limit = 1000): Promise<Array<{ fileId: string; name: string; company: string }>> {
   const db: Db = createAdminClient();
-  const rows = await allRows((from) => db.from('drive_sync').select('key, name, drive_file_id').eq('kind', 'invoice').range(from, from + 999));
-  return rows.filter((r) => r.drive_file_id).map((r) => ({ fileId: String(r.drive_file_id), name: String(r.name || ''), company: String(r.name || '').split(' ')[1] || '' }));
+  const rows = await allRows((from) => db.from('drive_sync').select('key, name, drive_file_id').eq('kind', 'invoice').order('synced_at', { ascending: true }).range(from, from + 999));
+  return rows.filter((r) => r.drive_file_id).slice(0, limit).map((r) => ({ fileId: String(r.drive_file_id), name: String(r.name || ''), company: String(r.name || '').split(' ')[1] || '' }));
 }

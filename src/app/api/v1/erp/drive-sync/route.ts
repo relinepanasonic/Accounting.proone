@@ -18,7 +18,7 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     if (url.searchParams.get('mode') === 'synced') {
-      const files = await syncedInvoiceFiles();
+      const files = await syncedInvoiceFiles(Math.max(1, Number(url.searchParams.get('limit')) || 1000));
       return NextResponse.json({ count: files.length, items: files }, { headers: noStore });
     }
     const limit = Math.min(60, Math.max(1, Number(url.searchParams.get('limit')) || 20));

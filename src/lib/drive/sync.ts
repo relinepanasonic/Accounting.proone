@@ -12,7 +12,8 @@ import { workspaceCode } from '@/lib/workspaces/known';
  * The key of a document is "<invoice|receipt>:<invoice id>:<8 characters of its content>": a changed invoice has a new key, so it is pending again.
  * (Older rows were saved as "invoice:<invoice id>"; they count as version 0 of the invoice.)
  */
-export type DriveFolder = 'Invoice' | 'Tax' | 'Proof';
+/** Receipt is the folder Invoice/Receipt (with a folder per company inside). */
+export type DriveFolder = 'Invoice' | 'Receipt' | 'Tax' | 'Proof';
 export interface DriveItem { key: string; kind: 'invoice' | 'receipt' | 'faktur' | 'bukti'; folder: DriveFolder; name: string; /** Company code (ProOne, PLIG, NW, DOA): invoices go to Invoice/<company>. */ company: string }
 
 const safe = (s: string) => s.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -90,7 +91,7 @@ export async function pendingDriveItems(limit = 20): Promise<{ items: DriveItem[
     if (!paid && keys.has(`invoice:${i.id}`)) continue;
     const n = versions(kind, i.id);
     const base = safe(`${dateOf(i)} ${codeOf(i)} ${i.invoice_number} ${clientOf(i)}`);
-    all.push({ key: `${kind}:${i.id}:${sig}`, kind, folder: 'Invoice', company: codeOf(i), name: `${base}${paid ? ' Receipt' : ''}${n > 0 ? ` ed-${n}` : ''}.pdf` });
+    all.push({ key: `${kind}:${i.id}:${sig}`, kind, folder: paid ? 'Receipt' : 'Invoice', company: codeOf(i), name: `${base}${paid ? ' Receipt' : ''}${n > 0 ? ` ed-${n}` : ''}.pdf` });
   }
 
   // Tax documents (once each).
@@ -125,8 +126,8 @@ export async function confirmDriveItem(key: string, kind: string, name: string, 
 }
 
 /** The invoice PDFs already in Drive with the company they belong to (the code is the second word of the file name): used once to move them into Invoice/<company>. */
-export async function syncedInvoiceFiles(limit = 1000): Promise<Array<{ fileId: string; name: string; company: string }>> {
+export async function syncedInvoiceFiles(limit = 1000, kind?: string): Promise<Array<{ fileId: string; name: string; company: string }>> {
   const db: Db = createAdminClient();
-  const rows = await allRows((from) => db.from('drive_sync').select('key, name, drive_file_id').in('kind', ['invoice', 'receipt']).order('synced_at', { ascending: true }).range(from, from + 999));
+  const rows = await allRows((from) => db.from('drive_sync').select('key, name, drive_file_id').in('kind', kind === 'receipt' || kind === 'invoice' ? [kind] : ['invoice', 'receipt']).order('synced_at', { ascending: true }).range(from, from + 999));
   return rows.filter((r) => r.drive_file_id).slice(0, limit).map((r) => ({ fileId: String(r.drive_file_id), name: String(r.name || ''), company: String(r.name || '').split(' ')[1] || '' }));
 }

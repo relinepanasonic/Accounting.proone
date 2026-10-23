@@ -49,7 +49,7 @@ export default async function ProductivityPage({ searchParams }: { searchParams:
           {[
             { href: '/productivity/admin', name: 'Admin Division', icon: <Shield className="w-4 h-4" /> },
             { href: '/productivity/advertiser', name: 'Advertiser Division', icon: <Megaphone className="w-4 h-4" /> },
-            { href: '/productivity/pabrik-sosmed', name: 'Pabrik Sosmed', icon: <Smartphone className="w-4 h-4" /> },
+            { href: '/productivity/pabrik-sosmed', name: 'Dream of AI', icon: <Smartphone className="w-4 h-4" /> },
           ].map((d) => (
             <Link key={d.href} href={d.href} className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-[#0e0f14] px-4 py-3 text-sm text-zinc-300 hover:border-[#d4af37]/50 hover:text-white transition-colors">
               <span className="text-[#d4af37]">{d.icon}</span>{d.name}

@@ -36,7 +36,7 @@ export function ProductDropdown({ products, value, onChange, placeholder = 'Sele
   const groupedProducts = useMemo(() => {
     const groups: Record<string, CatalogProductOption[]> = {
       'Store Management': [],
-      'Pabrik Sosmed': [],
+      'Dream of AI': [],
       'Advertising & Ads': [],
       'Services & Add-ons': [],
       'Others': []
@@ -47,14 +47,16 @@ export function ProductDropdown({ products, value, onChange, placeholder = 'Sele
     filtered.forEach(p => {
       const name = p.name.toLowerCase();
       // Use explicit category if available in the future, otherwise guess
-      const cat = (p as any).category;
+      // Products saved with the old category name "Pabrik Sosmed" belong to Dream of AI.
+      const rawCat = (p as any).category;
+      const cat = rawCat === 'Pabrik Sosmed' ? 'Dream of AI' : rawCat;
       if (cat && groups[cat] !== undefined) {
         if (!groups[cat]) groups[cat] = [];
         groups[cat].push(p);
       } else if (name.includes('shopee') || name.includes('store') || name.includes('etalase') || name.includes('renewal')) {
         groups['Store Management'].push(p);
       } else if (name.includes('tiktok') || name.includes('reels') || name.includes('sosmed') || name.includes('instagram')) {
-        groups['Pabrik Sosmed'].push(p);
+        groups['Dream of AI'].push(p);
       } else if (name.includes('ads') || name.includes('meta') || name.includes('advertising')) {
         groups['Advertising & Ads'].push(p);
       } else if (name.includes('jasa') || name.includes('edit') || name.includes('foto') || name.includes('add on')) {

@@ -77,7 +77,7 @@ const MAIN_MODULES: NavEntry[] = [
   { type: 'link', name: 'Productivity', href: '/productivity', icon: <CheckSquare className="w-4 h-4" />, isActive: isProductivityPath },
   { type: 'group', name: 'Accounting', icon: <LayoutDashboard className="w-4 h-4" />, isActive: isAccountingPath, children: ACCOUNTING_CHILDREN },
   { type: 'group', name: 'Optimizing', icon: <TrendingUp className="w-4 h-4" />, isActive: isOptimizingPath, children: OPTIMIZING_CHILDREN },
-  { type: 'link', name: 'Pabrik Sosmed', href: '/productivity/pabrik-sosmed', icon: <Share2 className="w-4 h-4" />, isActive: isPabrikPath },
+  { type: 'link', name: 'Dream of AI', href: '/productivity/pabrik-sosmed', icon: <Share2 className="w-4 h-4" />, isActive: isPabrikPath },
   { type: 'link', name: 'HRD', href: '/payroll', icon: <Users className="w-4 h-4" />, isActive: isHrdPath },
 ];
 
@@ -159,7 +159,7 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
             { type: 'link', name: 'Productivity', href: '/productivity/me', icon: <Activity className="w-4 h-4" />, isActive: (p) => p.startsWith('/productivity/me') || p.startsWith('/productivity/tasks') || p.startsWith('/productivity/meetings') || p.startsWith('/productivity/stats') },
           ]
       : limited
-        ? [{ type: 'link', name: 'Pabrik Sosmed', href: '/productivity/pabrik-sosmed', icon: <Share2 className="w-4 h-4" />, isActive: isPabrikPath }]
+        ? [{ type: 'link', name: 'Dream of AI', href: '/productivity/pabrik-sosmed', icon: <Share2 className="w-4 h-4" />, isActive: isPabrikPath }]
         : MAIN_MODULES;
         
   const availableWorkspaces = workspaceContext?.availableWorkspaces || [];

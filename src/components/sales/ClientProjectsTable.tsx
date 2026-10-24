@@ -26,10 +26,11 @@ const COMPANIES = ['ProOne', 'Reline', 'Alpha', 'Lighting Solution'];
 
 /** The Store of a client is saved as "<Company> - <Store>" (e.g. "ProOne - Toko A"): it links the client to the store of Profesor Dashboard or Reline. */
 export function splitStore(value: string): { company: string; store: string } {
-  const m = /^\s*(ProOne|Reline|Alpha|Lighting Solution)\s+-\s+(.*)$/i.exec(value || '');
+  // "ProOne - Toko A", or just "ProOne -" when only the company is chosen so far.
+  const m = /^\s*(ProOne|Reline|Alpha|Lighting Solution)\s+-(?:\s+(.*))?\s*$/i.exec(value || '');
   if (!m) return { company: '', store: value || '' };
   const company = COMPANIES.find((c) => c.toLowerCase() === m[1].toLowerCase()) || m[1];
-  return { company, store: m[2] };
+  return { company, store: m[2] || '' };
 }
 
 /** Cells that belong to a whole invoice span all of its product rows: Company and Store. */
@@ -38,14 +39,16 @@ function NameCells({ row, canEdit, storeOptions }: { row: ClientRow; canEdit: bo
   const first = splitStore(row.store);
   const [company, setCompany] = useState(first.company);
   const [store, setStore] = useState(first.store);
+  const [error, setError] = useState('');
   const [, start] = useTransition();
   const save = (c: string, st: string) => {
-    // Both together ("ProOne - Toko A"), or an old plain store name when no company is chosen. A company alone is not saved yet.
-    const value = c && st.trim() ? `${c} - ${st.trim()}` : c ? '' : st.trim();
-    if (c && !st.trim()) return;
+    // Company and store together ("ProOne - Toko A"); a company alone is saved as "ProOne -"; no company keeps an old plain store name.
+    const value = c ? (st.trim() ? `${c} - ${st.trim()}` : `${c} -`) : st.trim();
     if (value === row.store) return;
+    setError('');
     start(async () => {
-      await updateClientNames(row.clientId, row.brand, value);
+      const res = await updateClientNames(row.clientId, row.brand, value);
+      if (!res.success) { setError(res.error || 'Could not save.'); setCompany(first.company); setStore(first.store); return; }
       router.refresh();
     });
   };
@@ -60,6 +63,7 @@ function NameCells({ row, canEdit, storeOptions }: { row: ClientRow; canEdit: bo
             {COMPANIES.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         ) : <span className="text-zinc-200">{company || '-'}</span>}
+        {error && <div className="mt-1 max-w-[170px] text-[10px] text-red-400">{error}</div>}
       </td>
       <td rowSpan={row.groupSize} className="px-3 py-3 align-top">
         {canEdit ? <input value={store} onChange={(e) => setStore(e.target.value)} onBlur={() => save(company, store)} placeholder="Store" list={listId} className={`${cls} min-w-[180px]`} /> : <span className="text-zinc-200">{store || '-'}</span>}

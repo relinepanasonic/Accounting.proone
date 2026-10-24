@@ -595,8 +595,8 @@ export function COASettingsHUD({ accounts, hasClearance, workspaces = [], active
                     <th className="whitespace-nowrap px-4 py-4 text-[10px] font-black tracking-widest text-[#d4af37] uppercase">Date</th>
                     <th className="px-6 py-4 text-[10px] font-black tracking-widest text-[#d4af37] uppercase">Description</th>
                     <th className="whitespace-nowrap px-4 py-4 text-[10px] font-black tracking-widest text-[#d4af37] uppercase">Ref / Status</th>
-                    <th className="whitespace-nowrap px-4 py-4 text-[10px] font-black tracking-widest text-emerald-400 uppercase text-right">Cash In</th>
-                    <th className="whitespace-nowrap px-4 py-4 text-[10px] font-black tracking-widest text-rose-400 uppercase text-right">Cash Out</th>
+                    <th className="whitespace-nowrap px-4 py-4 text-[10px] font-black tracking-widest text-emerald-400 uppercase text-right">Debit</th>
+                    <th className="whitespace-nowrap px-4 py-4 text-[10px] font-black tracking-widest text-rose-400 uppercase text-right">Credit</th>
                     <th className="whitespace-nowrap px-4 py-4 text-[10px] font-black tracking-widest text-white uppercase text-right">Balance</th>
                   </tr>
                 </thead>

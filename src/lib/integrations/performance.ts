@@ -160,7 +160,7 @@ export interface PerfView {
   labels: string[];
   totals: PerfTotals;
   buckets: PerfTotals[];
-  stores: Array<{ key: string; source: PerfSource; store: string; workspace: string; label: string; totals: PerfTotals; series: number[] }>;
+  stores: Array<{ key: string; source: PerfSource; store: string; workspace: string; label: string; totals: PerfTotals; cost: number[]; adSales: number[] }>;
 }
 
 /** The numbers of the dashboard for one year (or one month) and one store ('' = all). The store key is "<source>:<name>". */
@@ -170,16 +170,17 @@ export function buildView(rows: PerfRow[], year: number, month: number, storeKey
   const labels = bucketLabels(month);
   const totals = emptyTotals();
   const buckets = labels.map(() => emptyTotals());
-  const byStore = new Map<string, { source: PerfSource; store: string; workspace: string; label: string; totals: PerfTotals; series: number[] }>();
+  const byStore = new Map<string, { source: PerfSource; store: string; workspace: string; label: string; totals: PerfTotals; cost: number[]; adSales: number[] }>();
   // Baseline: the biggest value of each store (counted once per store, per bucket and for the whole period).
   const baseTotal = new Map<string, number>();
   for (const r of rows) {
     const b = bucketOf(r.periodStart, year, month);
     if (b < 0) continue;
     const key = storeKeyOf(r);
-    const s = byStore.get(key) || { source: r.source, store: r.store, workspace: r.workspace, label: storeLabel(r), totals: emptyTotals(), series: labels.map(() => 0) };
+    const s = byStore.get(key) || { source: r.source, store: r.store, workspace: r.workspace, label: storeLabel(r), totals: emptyTotals(), cost: labels.map(() => 0), adSales: labels.map(() => 0) };
     addRow(s.totals, r);
-    s.series[b] += r.sales;
+    s.cost[b] += r.ads.total.cost;
+    s.adSales[b] += r.ads.total.sales;
     byStore.set(key, s);
     s.totals.baselineSales = Math.max(s.totals.baselineSales, r.baselineSales);
     if (storeKey && key !== storeKey) continue;

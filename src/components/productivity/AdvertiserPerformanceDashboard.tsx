@@ -73,15 +73,24 @@ function AdsCard({ title, a, color }: { title: string; a: PerfAds; color: string
   );
 }
 
-function Spark({ values }: { values: number[] }) {
-  const max = Math.max(...values, 1);
+/** Mini chart of a store or advertiser: ads cost (gold) against ROAS (green), each on its own scale. */
+function Spark({ cost, adSales }: { cost: number[]; adSales: number[] }) {
   const w = 90, h = 24;
-  const pts = values.map((v, i) => `${(i * w) / Math.max(1, values.length - 1)},${h - (v / max) * (h - 2) - 1}`).join(' ');
-  return <svg width={w} height={h} aria-hidden="true"><polyline points={pts} fill="none" stroke={C.gold} strokeWidth="1.5" /></svg>;
+  const roasV = cost.map((c, i) => (c > 0 ? adSales[i] / c : 0));
+  const line = (values: number[]) => {
+    const max = Math.max(...values, 1);
+    return values.map((v, i) => `${(i * w) / Math.max(1, values.length - 1)},${h - (v / max) * (h - 2) - 1}`).join(' ');
+  };
+  return (
+    <svg width={w} height={h} aria-label="Ads cost (gold) and ROAS (green)">
+      <polyline points={line(cost)} fill="none" stroke={C.gold} strokeWidth="1.5" />
+      <polyline points={line(roasV)} fill="none" stroke={C.green} strokeWidth="1.5" />
+    </svg>
+  );
 }
 
 export interface StoreOption { key: string; label: string; source: 'dashboard' | 'reline' }
-export interface AdvertiserSummary { id: string; name: string; stores: number; totals: PerfTotals; series: number[] }
+export interface AdvertiserSummary { id: string; name: string; stores: number; totals: PerfTotals; cost: number[]; adSales: number[] }
 interface Person { id: string; name: string }
 
 /** Owners pick the advertiser of a store; the change is saved at once. */
@@ -194,7 +203,7 @@ export function AdvertiserPerformanceDashboard({ view, year, month, storeKey, ye
                       <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-zinc-300">{rp(a.totals.gmv)}</td>
                       <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-zinc-300">{rp(c)}</td>
                       <td className={`whitespace-nowrap px-3 py-2 text-right font-mono ${r >= 1 ? 'text-emerald-400' : 'text-red-400'}`}>{c > 0 ? `${r.toFixed(2)}x` : '-'}</td>
-                      <td className="px-3 py-2"><Spark values={a.series} /></td>
+                      <td className="px-3 py-2"><Spark cost={a.cost} adSales={a.adSales} /></td>
                     </tr>
                   );
                 })}
@@ -291,7 +300,7 @@ export function AdvertiserPerformanceDashboard({ view, year, month, storeKey, ye
                         <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-zinc-300">{int(s.totals.addToCart)}</td>
                         <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-zinc-300">{rp(c)}</td>
                         <td className={`whitespace-nowrap px-3 py-2 text-right font-mono ${r >= 1 ? 'text-emerald-400' : 'text-red-400'}`}>{c > 0 ? `${r.toFixed(2)}x` : '-'}</td>
-                        <td className="px-3 py-2"><Spark values={s.series} /></td>
+                        <td className="px-3 py-2"><Spark cost={s.cost} adSales={s.adSales} /></td>
                       </tr>
                     );
                   })}

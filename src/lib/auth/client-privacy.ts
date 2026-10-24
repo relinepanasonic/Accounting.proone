@@ -14,7 +14,7 @@ import { NEW_WAVE_WORKSPACE_ID } from '@/lib/workspaces/known';
 const PROTECTED_WORKSPACE_IDS = [NEW_WAVE_WORKSPACE_ID];
 
 /** Besides the founder and the workspace's own members. */
-const ALLOWED_VIEWER_EMAILS = ['lucyana.suryaputra@gmail.com'];
+const ALLOWED_VIEWER_EMAILS: string[] = [];
 
 export const HIDDEN_CLIENT = 'Hidden client';
 

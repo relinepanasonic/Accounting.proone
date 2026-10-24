@@ -33,7 +33,7 @@ describe('store performance', () => {
     expect(all.buckets[9].sales).toBe(40);
     expect(all.stores.map((s) => s.key)).toEqual(['dashboard:Store A', 'dashboard:Store B', 'reline:Dealer X']);
     expect(storeKeyOf({ source: 'reline', store: 'D', workspace: 'Alpha Project' })).toBe('reline:D|Alpha Project');
-    expect(all.stores[0].series[8]).toBe(100);
+    expect(all.stores[0].cost[8]).toBe(15);
     const one = buildView(rows, 2026, 0, 'reline:Dealer X');
     expect(one.totals.sales).toBe(7);
     expect(one.stores).toHaveLength(3);

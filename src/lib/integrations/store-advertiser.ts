@@ -6,6 +6,8 @@ type Db = any;
 
 /** Owners who also work as advertiser: they are in the Advertiser filter and can be assigned to stores. */
 export const ADVERTISER_OWNER_EMAILS = ['herlan180789@gmail.com'];
+/** Not an advertiser, even if an old assignment says so. */
+export const NOT_ADVERTISER_EMAILS = ['nicojapar@gmail.com'];
 
 export interface AdvertiserPerson { id: string; name: string }
 export interface StoreTeam { advertiserId: string | null; adminId: string | null; sales: string }
@@ -39,7 +41,10 @@ export function teamOf(map: StoreAdvertiserMap, storeKey: string, label: string,
 export const advertiserOf = (map: StoreAdvertiserMap, storeKey: string, label: string, store: string) => teamOf(map, storeKey, label, store).advertiserId;
 
 export async function loadStoreAdvertisers(db: Db): Promise<StoreAdvertiserMap> {
-  const { data: assignments } = await db.from('client_assignments').select('client_id, user_id, job').in('job', ['advertising', 'admin']).limit(10000);
+  const { data: notAdv } = await db.from('profiles').select('id').in('email', NOT_ADVERTISER_EMAILS);
+  const notAdvertiser = new Set<string>((notAdv || []).map((p: any) => p.id));
+  const { data: rawAssignments } = await db.from('client_assignments').select('client_id, user_id, job').in('job', ['advertising', 'admin']).limit(10000);
+  const assignments = (rawAssignments || []).filter((a: any) => !(a.job === 'advertising' && notAdvertiser.has(a.user_id)));
   const clientIds = Array.from(new Set((assignments || []).map((a: any) => a.client_id)));
   const clients: any[] = [];
   for (let i = 0; i < clientIds.length; i += 200) {
@@ -69,12 +74,13 @@ export async function loadStoreAdvertisers(db: Db): Promise<StoreAdvertiserMap> 
   // The people.
   const userIds = Array.from(new Set([...(assignments || []).map((a: any) => a.user_id), ...manual.values()]));
   const { data: members } = await db.from('workspace_members').select('user_id').eq('role', 'advertiser');
+  for (const id of notAdvertiser) { const i = userIds.indexOf(id); if (i >= 0 && !(assignments || []).some((a: any) => a.user_id === id)) userIds.splice(i, 1); }
   for (const m of members || []) if (!userIds.includes(m.user_id)) userIds.push(m.user_id);
   const { data: owners } = await db.from('profiles').select('id').in('email', ADVERTISER_OWNER_EMAILS);
   for (const o of owners || []) if (!userIds.includes(o.id)) userIds.push(o.id);
   const { data: profiles } = userIds.length ? await db.from('profiles').select('id, full_name, email').in('id', userIds) : { data: [] as any[] };
   const people = new Map<string, string>((profiles || []).map((p: any) => [p.id as string, String(p.full_name || p.email?.split('@')[0] || 'Staff')] as [string, string]));
-  const advertiserIds = new Set<string>([...(assignments || []).filter((a: any) => a.job === 'advertising').map((a: any) => a.user_id), ...manual.values(), ...(members || []).map((m: any) => m.user_id), ...(owners || []).map((o: any) => o.id)]);
+  const advertiserIds = new Set<string>([...(assignments || []).filter((a: any) => a.job === 'advertising').map((a: any) => a.user_id), ...Array.from(manual.values()).filter((id) => !notAdvertiser.has(id)), ...(members || []).map((m: any) => m.user_id), ...(owners || []).map((o: any) => o.id)]);
   const advertisers: AdvertiserPerson[] = Array.from(advertiserIds)
     .filter((id) => people.has(id))
     .map((id) => ({ id, name: people.get(id)! }))

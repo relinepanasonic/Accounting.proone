@@ -18,6 +18,8 @@ export interface PerfRow {
   source: PerfSource;
   /** Store name (Profesor Dashboard) or dealer name (Reline). */
   store: string;
+  /** Reline workspace of the row (the same store name can exist in two workspaces); empty for Profesor Dashboard. */
+  workspace: string;
   periodStart: string; // YYYY-MM-DD
   periodEnd: string;
   granularity: 'day' | 'week' | 'month';
@@ -53,6 +55,7 @@ export function normalizeRow(source: PerfSource, r: any): PerfRow | null {
   return {
     source,
     store,
+    workspace: String(r?.workspace || '').trim(),
     periodStart,
     periodEnd: String(r?.periodEnd || periodStart).slice(0, 10),
     granularity: r?.granularity === 'day' || r?.granularity === 'month' ? r.granularity : 'week',
@@ -73,7 +76,7 @@ export async function fetchPerformance(source: PerfSource, from: string, to: str
       headers: { Authorization: `Bearer ${key}`, Accept: 'application/json' },
       next: { revalidate: 300 },
       redirect: 'manual',
-      signal: AbortSignal.timeout(20000),
+      signal: AbortSignal.timeout(55000), // the first call after an upload takes about 30 seconds (the app rebuilds its weekly cache)
     });
     if (res.status === 404 || (res.status >= 300 && res.status < 400)) return { ok: false, error: 'The performance endpoint is not built yet in this app (see PERFORMANCE_API_PROMPT.md).' };
     if (res.status === 401) return { ok: false, error: `The app refused the key (401): ${keyName} here must equal ERP_API_KEY there.` };
@@ -99,9 +102,10 @@ export const emptyTotals = (): PerfTotals => ({
   ads: { gmvMax: emptyAds(), group: emptyAds(), independent: emptyAds() },
 });
 
+/** baselineSales is one number per store (month-start Panasonic sales), repeated on each of its rows: it is NOT added up here (see buildView). */
 export function addRow(t: PerfTotals, r: PerfRow) {
   t.sales += r.sales; t.gmv += r.gmv; t.traffic += r.traffic; t.addToCart += r.addToCart; t.orders += r.orders; t.itemsSold += r.itemsSold;
-  t.productViews += r.productViews; t.productClicks += r.productClicks; t.baselineSales += r.baselineSales; t.activeSales += r.activeSales;
+  t.productViews += r.productViews; t.productClicks += r.productClicks; t.activeSales += r.activeSales;
   for (const k of ['gmvMax', 'group', 'independent'] as const) {
     const a = t.ads[k]; const b = r.ads[k];
     a.cost += b.cost; a.sales += b.sales; a.views += b.views; a.clicks += b.clicks; a.addToCart += b.addToCart; a.orders += b.orders; a.itemsSold += b.itemsSold;
@@ -129,27 +133,41 @@ export interface PerfView {
   labels: string[];
   totals: PerfTotals;
   buckets: PerfTotals[];
-  stores: Array<{ key: string; source: PerfSource; store: string; totals: PerfTotals; series: number[] }>;
+  stores: Array<{ key: string; source: PerfSource; store: string; workspace: string; totals: PerfTotals; series: number[] }>;
 }
 
 /** The numbers of the dashboard for one year (or one month) and one store ('' = all). The store key is "<source>:<name>". */
+export const storeKeyOf = (r: Pick<PerfRow, 'source' | 'store' | 'workspace'>) => `${r.source}:${r.store}${r.workspace ? `|${r.workspace}` : ''}`;
+
 export function buildView(rows: PerfRow[], year: number, month: number, storeKey: string): PerfView {
   const labels = bucketLabels(month);
   const totals = emptyTotals();
   const buckets = labels.map(() => emptyTotals());
-  const byStore = new Map<string, { source: PerfSource; store: string; totals: PerfTotals; series: number[] }>();
+  const byStore = new Map<string, { source: PerfSource; store: string; workspace: string; totals: PerfTotals; series: number[] }>();
+  // Baseline: the biggest value of each store (counted once per store, per bucket and for the whole period).
+  const baseTotal = new Map<string, number>();
+  const baseBucket: Array<Map<string, number>> = labels.map(() => new Map());
   for (const r of rows) {
     const b = bucketOf(r.periodStart, year, month);
     if (b < 0) continue;
-    const key = `${r.source}:${r.store}`;
-    const s = byStore.get(key) || { source: r.source, store: r.store, totals: emptyTotals(), series: labels.map(() => 0) };
+    const key = storeKeyOf(r);
+    const s = byStore.get(key) || { source: r.source, store: r.store, workspace: r.workspace, totals: emptyTotals(), series: labels.map(() => 0) };
     addRow(s.totals, r);
     s.series[b] += r.sales;
     byStore.set(key, s);
+    s.totals.baselineSales = Math.max(s.totals.baselineSales, r.baselineSales);
     if (storeKey && key !== storeKey) continue;
     addRow(totals, r);
     addRow(buckets[b], r);
+    baseTotal.set(key, Math.max(baseTotal.get(key) || 0, r.baselineSales));
+    baseBucket[b].set(key, Math.max(baseBucket[b].get(key) || 0, r.baselineSales));
   }
+  const sum = (m: Map<string, number>) => Array.from(m.values()).reduce((a, v) => a + v, 0);
+  totals.baselineSales = sum(baseTotal);
+  // A week bucket shows its share of the month baseline (a month has about 4 weeks).
+  buckets.forEach((b, i) => { b.baselineSales = sum(baseBucket[i]) / (month ? 4 : 1); });
+  // Active sales: the app's own number when it sends one, else the sales.
+  if (totals.activeSales === 0) { totals.activeSales = totals.sales; buckets.forEach((b) => { b.activeSales = b.sales; }); }
   const stores = Array.from(byStore.entries()).map(([key, v]) => ({ key, ...v })).sort((a, b) => b.totals.sales - a.totals.sales);
   return { labels, totals, buckets, stores };
 }

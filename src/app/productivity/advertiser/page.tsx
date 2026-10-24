@@ -28,7 +28,7 @@ export default async function AdvertiserDashboardPage({ searchParams }: { search
     ...(reline.ok ? [] : [`Reline: ${reline.error}`]),
   ];
   const view = buildView(rows, year, month, storeKey);
-  const storeOptions: StoreOption[] = view.stores.map((s) => ({ key: s.key, label: s.store, source: s.source }));
+  const storeOptions: StoreOption[] = view.stores.map((s) => ({ key: s.key, label: s.workspace ? `${s.store} (${s.workspace})` : s.store, source: s.source }));
   const years = [thisYear, thisYear - 1];
 
   return (

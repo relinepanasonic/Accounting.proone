@@ -62,4 +62,13 @@ describe('store performance', () => {
     expect(v.totals.activeSales).toBe(100);
     expect(v.buckets[8].activeSales).toBe(100);
   });
+
+  it('uses the feed total for ads when it comes, and sums the three types when it does not', () => {
+    const withTotal = row({ ads: { total: { cost: 40, sales: 200, addToCart: 9 }, gmvMax: { cost: 10, sales: 60 }, group: { cost: 5, sales: 30 }, independent: { cost: 25, sales: 110 } } });
+    expect(withTotal.ads.total.cost).toBe(40);
+    expect(withTotal.ads.total.addToCart).toBe(9);
+    const sum = row({});
+    expect(sum.ads.total.cost).toBe(15);
+    expect(sum.ads.total.sales).toBe(90);
+  });
 });

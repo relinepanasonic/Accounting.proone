@@ -20,8 +20,8 @@ const short = (n: number) => {
 };
 const rp = (n: number) => `Rp ${short(n)}`;
 const int = (n: number) => Math.round(n).toLocaleString('id-ID');
-const costOf = (t: PerfTotals) => t.ads.gmvMax.cost + t.ads.group.cost + t.ads.independent.cost;
-const adSalesOf = (t: PerfTotals) => t.ads.gmvMax.sales + t.ads.group.sales + t.ads.independent.sales;
+const costOf = (t: PerfTotals) => t.ads.total.cost;
+const adSalesOf = (t: PerfTotals) => t.ads.total.sales;
 const ratio = (a: number, b: number) => (b > 0 ? a / b : 0);
 
 const tip = { contentStyle: { background: '#0e0f14', border: '1px solid rgba(212,175,55,0.3)', borderRadius: 12, fontSize: 12 } };
@@ -135,10 +135,8 @@ export function AdvertiserPerformanceDashboard({ view, year, month, storeKey, ye
     };
   });
   const hasData = view.stores.length > 0;
-  const adsAll: PerfAds = (['gmvMax', 'group', 'independent'] as const).reduce((s, k) => ({
-    cost: s.cost + t.ads[k].cost, sales: s.sales + t.ads[k].sales, views: s.views + t.ads[k].views, clicks: s.clicks + t.ads[k].clicks,
-    addToCart: s.addToCart + t.ads[k].addToCart, orders: s.orders + t.ads[k].orders, itemsSold: s.itemsSold + t.ads[k].itemsSold,
-  }), { cost: 0, sales: 0, views: 0, clicks: 0, addToCart: 0, orders: 0, itemsSold: 0 });
+  // All the ads of the store(s): the feed's own total (add to cart exists only there).
+  const adsAll: PerfAds = t.ads.total;
 
   return (
     <div className="space-y-5">

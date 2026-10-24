@@ -35,7 +35,8 @@ export interface PerfRow {
   productClicks: number;
   baselineSales: number;
   activeSales: number;
-  ads: { gmvMax: PerfAds; group: PerfAds; independent: PerfAds };
+  /** total = all ads of the store (Profesor Dashboard sends it; for Reline it is the sum of the three types). */
+  ads: { total: PerfAds; gmvMax: PerfAds; group: PerfAds; independent: PerfAds };
 }
 
 export type PerfResult = { ok: true; rows: PerfRow[] } | { ok: false; error: string };
@@ -46,6 +47,19 @@ const ads = (v: any): PerfAds => ({
   cost: num(v?.cost), sales: num(v?.sales), views: num(v?.views), clicks: num(v?.clicks),
   addToCart: num(v?.addToCart), orders: num(v?.orders), itemsSold: num(v?.itemsSold),
 });
+
+/**
+ * The ads of a row. The "total" block is the whole of the store's ads (use it for cost, sales and add to cart: the three types do not add up to
+ * it for add to cart, and Independent is "total minus the others"). A feed without "total" (Reline) gets the sum of the three types.
+ */
+function withTotal(a: any) {
+  const gmvMax = ads(a?.gmvMax); const group = ads(a?.group); const independent = ads(a?.independent);
+  const sum = [gmvMax, group, independent].reduce((t, x) => ({
+    cost: t.cost + x.cost, sales: t.sales + x.sales, views: t.views + x.views, clicks: t.clicks + x.clicks,
+    addToCart: t.addToCart + x.addToCart, orders: t.orders + x.orders, itemsSold: t.itemsSold + x.itemsSold,
+  }), emptyAds());
+  return { total: a?.total ? ads(a.total) : sum, gmvMax, group, independent };
+}
 
 /** One row of the endpoint, made safe (missing numbers are 0). */
 export function normalizeRow(source: PerfSource, r: any): PerfRow | null {
@@ -62,7 +76,7 @@ export function normalizeRow(source: PerfSource, r: any): PerfRow | null {
     sales: num(r?.sales), gmv: num(r?.gmv), traffic: num(r?.traffic), addToCart: num(r?.addToCart),
     orders: num(r?.orders), itemsSold: num(r?.itemsSold), productViews: num(r?.productViews), productClicks: num(r?.productClicks),
     baselineSales: num(r?.baselineSales), activeSales: num(r?.activeSales),
-    ads: { gmvMax: ads(r?.ads?.gmvMax), group: ads(r?.ads?.group), independent: ads(r?.ads?.independent) },
+    ads: withTotal(r?.ads),
   };
 }
 
@@ -107,26 +121,26 @@ export async function fetchPerformance(source: PerfSource, from: string, to: str
 export interface PerfTotals {
   sales: number; gmv: number; traffic: number; addToCart: number; orders: number; itemsSold: number;
   productViews: number; productClicks: number; baselineSales: number; activeSales: number;
-  ads: { gmvMax: PerfAds; group: PerfAds; independent: PerfAds };
+  ads: { total: PerfAds; gmvMax: PerfAds; group: PerfAds; independent: PerfAds };
 }
 
 export const emptyTotals = (): PerfTotals => ({
   sales: 0, gmv: 0, traffic: 0, addToCart: 0, orders: 0, itemsSold: 0, productViews: 0, productClicks: 0, baselineSales: 0, activeSales: 0,
-  ads: { gmvMax: emptyAds(), group: emptyAds(), independent: emptyAds() },
+  ads: { total: emptyAds(), gmvMax: emptyAds(), group: emptyAds(), independent: emptyAds() },
 });
 
 /** baselineSales is one number per store (month-start Panasonic sales), repeated on each of its rows: it is NOT added up here (see buildView). */
 export function addRow(t: PerfTotals, r: PerfRow) {
   t.sales += r.sales; t.gmv += r.gmv; t.traffic += r.traffic; t.addToCart += r.addToCart; t.orders += r.orders; t.itemsSold += r.itemsSold;
   t.productViews += r.productViews; t.productClicks += r.productClicks; t.activeSales += r.activeSales;
-  for (const k of ['gmvMax', 'group', 'independent'] as const) {
+  for (const k of ['total', 'gmvMax', 'group', 'independent'] as const) {
     const a = t.ads[k]; const b = r.ads[k];
     a.cost += b.cost; a.sales += b.sales; a.views += b.views; a.clicks += b.clicks; a.addToCart += b.addToCart; a.orders += b.orders; a.itemsSold += b.itemsSold;
   }
 }
 
-export const adsCost = (t: PerfTotals) => t.ads.gmvMax.cost + t.ads.group.cost + t.ads.independent.cost;
-export const adsSales = (t: PerfTotals) => t.ads.gmvMax.sales + t.ads.group.sales + t.ads.independent.sales;
+export const adsCost = (t: PerfTotals) => t.ads.total.cost;
+export const adsSales = (t: PerfTotals) => t.ads.total.sales;
 export const roas = (sales: number, cost: number) => (cost > 0 ? sales / cost : 0);
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
@@ -159,7 +173,6 @@ export function buildView(rows: PerfRow[], year: number, month: number, storeKey
   const byStore = new Map<string, { source: PerfSource; store: string; workspace: string; label: string; totals: PerfTotals; series: number[] }>();
   // Baseline: the biggest value of each store (counted once per store, per bucket and for the whole period).
   const baseTotal = new Map<string, number>();
-  const baseBucket: Array<Map<string, number>> = labels.map(() => new Map());
   for (const r of rows) {
     const b = bucketOf(r.periodStart, year, month);
     if (b < 0) continue;
@@ -173,12 +186,11 @@ export function buildView(rows: PerfRow[], year: number, month: number, storeKey
     addRow(totals, r);
     addRow(buckets[b], r);
     baseTotal.set(key, Math.max(baseTotal.get(key) || 0, r.baselineSales));
-    baseBucket[b].set(key, Math.max(baseBucket[b].get(key) || 0, r.baselineSales));
   }
   const sum = (m: Map<string, number>) => Array.from(m.values()).reduce((a, v) => a + v, 0);
   totals.baselineSales = sum(baseTotal);
-  // A week bucket shows its share of the month baseline (a month has about 4 weeks).
-  buckets.forEach((b, i) => { b.baselineSales = sum(baseBucket[i]) / (month ? 4 : 1); });
+  // The baseline is a snapshot of the store (it comes once per store): a flat reference line over the buckets. In the week view it is a quarter of it.
+  buckets.forEach((b) => { b.baselineSales = totals.baselineSales / (month ? 4 : 1); });
   // Active sales: the app's own number when it sends one, else the sales.
   if (totals.activeSales === 0) { totals.activeSales = totals.sales; buckets.forEach((b) => { b.activeSales = b.sales; }); }
   const stores = Array.from(byStore.entries()).map(([key, v]) => ({ key, ...v })).sort((a, b) => b.totals.sales - a.totals.sales);

@@ -22,27 +22,47 @@ const LIFE_LABEL: Record<string, string> = { active: 'Active', scheduled: 'Sched
 
 interface Person { id: string; name: string }
 
-/** Cells that belong to a whole invoice span all of its product rows. */
+const COMPANIES = ['ProOne', 'Reline', 'Alpha', 'Lighting Solution'];
+
+/** The Store of a client is saved as "<Company> - <Store>" (e.g. "ProOne - Toko A"): it links the client to the store of Profesor Dashboard or Reline. */
+export function splitStore(value: string): { company: string; store: string } {
+  const m = /^\s*(ProOne|Reline|Alpha|Lighting Solution)\s+-\s+(.*)$/i.exec(value || '');
+  if (!m) return { company: '', store: value || '' };
+  const company = COMPANIES.find((c) => c.toLowerCase() === m[1].toLowerCase()) || m[1];
+  return { company, store: m[2] };
+}
+
+/** Cells that belong to a whole invoice span all of its product rows: Company and Store. */
 function NameCells({ row, canEdit, storeOptions }: { row: ClientRow; canEdit: boolean; storeOptions?: string[] }) {
   const router = useRouter();
-  const [brand, setBrand] = useState(row.brand);
-  const [store, setStore] = useState(row.store);
+  const first = splitStore(row.store);
+  const [company, setCompany] = useState(first.company);
+  const [store, setStore] = useState(first.store);
   const [, start] = useTransition();
-  const save = () => {
-    if (brand === row.brand && store === row.store) return;
+  const save = (c: string, st: string) => {
+    // Both together ("ProOne - Toko A"), or an old plain store name when no company is chosen. A company alone is not saved yet.
+    const value = c && st.trim() ? `${c} - ${st.trim()}` : c ? '' : st.trim();
+    if (c && !st.trim()) return;
+    if (value === row.store) return;
     start(async () => {
-      await updateClientNames(row.clientId, brand, store);
+      await updateClientNames(row.clientId, row.brand, value);
       router.refresh();
     });
   };
   const cls = `${field} w-full min-w-[120px]`;
+  const listId = company ? `client-store-options-${company.replace(/\s+/g, '-')}` : undefined;
   return (
     <>
       <td rowSpan={row.groupSize} className="px-3 py-3 align-top">
-        {canEdit ? <input value={brand} onChange={(e) => setBrand(e.target.value)} onBlur={save} placeholder="PIC" className={cls} /> : <span className="text-zinc-200">{row.brand || '-'}</span>}
+        {canEdit ? (
+          <select value={company} onChange={(e) => { setCompany(e.target.value); save(e.target.value, store); }} className={cls}>
+            <option value="">-</option>
+            {COMPANIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        ) : <span className="text-zinc-200">{company || '-'}</span>}
       </td>
       <td rowSpan={row.groupSize} className="px-3 py-3 align-top">
-        {canEdit ? <input value={store} onChange={(e) => setStore(e.target.value)} onBlur={save} placeholder="Workspace - Store" list={storeOptions?.length ? 'client-store-options' : undefined} className={`${cls} min-w-[200px]`} /> : <span className="text-zinc-200">{row.store || '-'}</span>}
+        {canEdit ? <input value={store} onChange={(e) => setStore(e.target.value)} onBlur={() => save(company, store)} placeholder="Store" list={listId} className={`${cls} min-w-[180px]`} /> : <span className="text-zinc-200">{store || '-'}</span>}
       </td>
     </>
   );
@@ -221,7 +241,7 @@ export function ClientProjectsTable({
   hidePaid?: boolean;
   /** Sales tabs: which salesman got the client. */
   showSalesman?: boolean;
-  /** "Workspace - Store" of every store of Profesor Dashboard (ProOne) and Reline (Reline, Alpha, Lighting Solution): suggestions for the Store column. */
+  /** "Company - Store" of every store of Profesor Dashboard (ProOne) and Reline (Reline, Alpha, Lighting Solution): suggestions for the Store column. */
   storeOptions?: string[];
   /** Superadmin / founder only: dropdowns to assign who handles each client. */
   advertisers?: Person[];
@@ -240,8 +260,8 @@ export function ClientProjectsTable({
       case 'end': return r.end || '';
       case 'client': return r.clientName.toLowerCase();
       case 'salesman': return (r.salesman || '').toLowerCase();
-      case 'brand': return (r.brand || '').toLowerCase();
-      case 'store': return (r.store || '').toLowerCase();
+      case 'company': return splitStore(r.store).company.toLowerCase();
+      case 'store': return splitStore(r.store).store.toLowerCase();
       case 'product': return r.product.toLowerCase();
       case 'status': return r.lifecycle;
       case 'advertiser': return nameOf(advertisers, r.advertiserId).toLowerCase();
@@ -266,7 +286,7 @@ export function ClientProjectsTable({
   const filteredGroups = all.filter((g) => {
     if (onlyOpen && g[0].advertiserId && g[0].adminId) return false;
     if (!q) return true;
-    return g.some((r) => [r.clientName, r.brand, r.store, r.product, r.invoiceNumber || ''].some((t) => t.toLowerCase().includes(q)));
+    return g.some((r) => [r.clientName, r.store, r.product, r.invoiceNumber || ''].some((t) => t.toLowerCase().includes(q)));
   });
   // A sorted list keeps the products of one invoice together (the group moves as one).
   const groups = sort ? [...filteredGroups].sort((a, b) => sortValue(a, sort.key).localeCompare(sortValue(b, sort.key)) * (sort.asc ? 1 : -1)) : filteredGroups;
@@ -274,7 +294,7 @@ export function ClientProjectsTable({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search client, PIC, store, product or invoice" className={`${field} w-full max-w-sm py-1.5`} />
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search client, company, store, product or invoice" className={`${field} w-full max-w-sm py-1.5`} />
         {assign && (
           <label className="flex cursor-pointer items-center gap-2 text-xs text-zinc-400">
             <input type="checkbox" checked={onlyOpen} onChange={(e) => setOnlyOpen(e.target.checked)} className="accent-[#d4af37]" /> Only clients missing an advertiser or admin
@@ -282,7 +302,11 @@ export function ClientProjectsTable({
         )}
         <span className="text-[11px] text-zinc-500">{groups.length} row{groups.length === 1 ? '' : 's'}</span>
       </div>
-    {storeOptions?.length ? <datalist id="client-store-options">{storeOptions.map((o) => <option key={o} value={o} />)}</datalist> : null}
+    {COMPANIES.map((c) => (
+      <datalist key={c} id={`client-store-options-${c.replace(/\s+/g, '-')}`}>
+        {(storeOptions || []).filter((o) => splitStore(o).company === c).map((o) => <option key={o} value={splitStore(o).store} />)}
+      </datalist>
+    ))}
     <div className="overflow-x-auto rounded-xl border border-[#d4af37]/20 bg-[#0e0f14] shadow-xl">
       <table className="w-full text-left text-sm">
         <thead className="border-b border-[#d4af37]/10 bg-zinc-900/50 text-[11px] uppercase tracking-wider text-zinc-400">
@@ -292,8 +316,8 @@ export function ClientProjectsTable({
             <Th k="end">End Project</Th>
             <Th k="client">Client</Th>
             {(showSalesman || canEditSales) && <Th k="salesman">Sales</Th>}
-            <Th k="brand">PIC</Th>
-            <Th k="store">Workspace - Store</Th>
+            <Th k="company">Company</Th>
+            <Th k="store">Store</Th>
             <Th k="product">Product</Th>
             {showStatus && <Th k="status">Status</Th>}
             {assign && <Th k="advertiser">Advertiser</Th>}

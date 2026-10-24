@@ -269,7 +269,7 @@ export function AdvertiserPerformanceDashboard({ view, year, month, storeKey, ye
             ]} />
           </Panel>
 
-          <Panel title="Store Detail" sub="Every store of the period with its team. Link a store to a client in Optimizing > Clients (column Workspace - Store).">
+          <Panel title="Store Detail" sub="Every store of the period with its team. Link a store to a client in Optimizing > Clients (columns Company and Store).">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1040px] text-left text-xs">
                 <thead className="border-b border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-500">

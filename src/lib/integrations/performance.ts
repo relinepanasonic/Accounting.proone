@@ -66,7 +66,20 @@ export function normalizeRow(source: PerfSource, r: any): PerfRow | null {
   };
 }
 
-export async function fetchPerformance(source: PerfSource, from: string, to: string): Promise<PerfResult> {
+/**
+ * The workspace of a store as the ERP names it: everything from Profesor Dashboard is ProOne (the company); Reline has three workspaces.
+ * A store is written "<Workspace> - <Store>", for example "ProOne - Toko A" or "Alpha - Dealer X".
+ */
+export const WORKSPACE_LABELS = ['ProOne', 'Reline', 'Alpha', 'Lighting Solution'] as const;
+export function workspaceLabel(source: PerfSource, workspace: string): string {
+  if (source === 'dashboard') return 'ProOne';
+  if (/alpha/i.test(workspace)) return 'Alpha';
+  if (/light/i.test(workspace)) return 'Lighting Solution';
+  return 'Reline';
+}
+export const storeLabel = (r: Pick<PerfRow, 'source' | 'store' | 'workspace'>) => `${workspaceLabel(r.source, r.workspace)} - ${r.store}`;
+
+export async function fetchPerformance(source: PerfSource, from: string, to: string, timeoutMs = 55000): Promise<PerfResult> {
   const keyName = source === 'dashboard' ? 'DASHBOARD_API_KEY' : 'RELINE_API_KEY';
   const key = source === 'dashboard' ? process.env.DASHBOARD_API_KEY : process.env.RELINE_API_KEY;
   const base = (source === 'dashboard' ? process.env.DASHBOARD_API_URL || 'https://dashboard.profesoronline.id' : process.env.RELINE_API_URL || 'https://reline.profesoronline.id').replace(/\/$/, '');
@@ -76,7 +89,7 @@ export async function fetchPerformance(source: PerfSource, from: string, to: str
       headers: { Authorization: `Bearer ${key}`, Accept: 'application/json' },
       next: { revalidate: 300 },
       redirect: 'manual',
-      signal: AbortSignal.timeout(55000), // the first call after an upload takes about 30 seconds (the app rebuilds its weekly cache)
+      signal: AbortSignal.timeout(timeoutMs), // the first call after an upload takes about 30 seconds (the app rebuilds its weekly cache)
     });
     if (res.status === 404 || (res.status >= 300 && res.status < 400)) return { ok: false, error: 'The performance endpoint is not built yet in this app (see PERFORMANCE_API_PROMPT.md).' };
     if (res.status === 401) return { ok: false, error: `The app refused the key (401): ${keyName} here must equal ERP_API_KEY there.` };
@@ -133,7 +146,7 @@ export interface PerfView {
   labels: string[];
   totals: PerfTotals;
   buckets: PerfTotals[];
-  stores: Array<{ key: string; source: PerfSource; store: string; workspace: string; totals: PerfTotals; series: number[] }>;
+  stores: Array<{ key: string; source: PerfSource; store: string; workspace: string; label: string; totals: PerfTotals; series: number[] }>;
 }
 
 /** The numbers of the dashboard for one year (or one month) and one store ('' = all). The store key is "<source>:<name>". */
@@ -143,7 +156,7 @@ export function buildView(rows: PerfRow[], year: number, month: number, storeKey
   const labels = bucketLabels(month);
   const totals = emptyTotals();
   const buckets = labels.map(() => emptyTotals());
-  const byStore = new Map<string, { source: PerfSource; store: string; workspace: string; totals: PerfTotals; series: number[] }>();
+  const byStore = new Map<string, { source: PerfSource; store: string; workspace: string; label: string; totals: PerfTotals; series: number[] }>();
   // Baseline: the biggest value of each store (counted once per store, per bucket and for the whole period).
   const baseTotal = new Map<string, number>();
   const baseBucket: Array<Map<string, number>> = labels.map(() => new Map());
@@ -151,7 +164,7 @@ export function buildView(rows: PerfRow[], year: number, month: number, storeKey
     const b = bucketOf(r.periodStart, year, month);
     if (b < 0) continue;
     const key = storeKeyOf(r);
-    const s = byStore.get(key) || { source: r.source, store: r.store, workspace: r.workspace, totals: emptyTotals(), series: labels.map(() => 0) };
+    const s = byStore.get(key) || { source: r.source, store: r.store, workspace: r.workspace, label: storeLabel(r), totals: emptyTotals(), series: labels.map(() => 0) };
     addRow(s.totals, r);
     s.series[b] += r.sales;
     byStore.set(key, s);

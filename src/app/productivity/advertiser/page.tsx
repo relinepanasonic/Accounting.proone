@@ -4,8 +4,8 @@ import { createAdminClient } from '@/lib/api/supabase-admin';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { DivisionTabs } from '@/components/productivity/DivisionTabs';
 import { AdvertiserPerformanceDashboard, type StoreOption, type AdvertiserSummary } from '@/components/productivity/AdvertiserPerformanceDashboard';
-import { fetchPerformance, buildView, storeKeyOf } from '@/lib/integrations/performance';
-import { loadStoreAdvertisers, advertiserOf } from '@/lib/integrations/store-advertiser';
+import { fetchPerformance, buildView, storeKeyOf, storeLabel } from '@/lib/integrations/performance';
+import { loadStoreAdvertisers, teamOf } from '@/lib/integrations/store-advertiser';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -15,7 +15,7 @@ const pad = (n: number) => String(n).padStart(2, '0');
 /**
  * Advertiser > Dashboard: the store numbers of the two apps together. Profesor Dashboard reports per store, Reline per dealer
  * (no city or brand manager). Filters: year, month (then the charts go per week), Advertiser and Store.
- * Each store belongs to an advertiser: set by hand in the Store Detail table, else the advertiser of the client with that store name.
+ * Each store is linked to a client in the Clients table ("Workspace - Store"); the advertiser, admin and salesman of that client are the team of the store. The advertiser can also be set by hand in the Store Detail table.
  */
 export default async function AdvertiserDashboardPage({ searchParams }: { searchParams: Promise<{ year?: string; month?: string; store?: string; advertiser?: string }> }) {
   const sp = await searchParams;
@@ -44,13 +44,20 @@ export default async function AdvertiserDashboardPage({ searchParams }: { search
 
   // Whose store is it?
   const owners = new Map<string, string | null>();
-  for (const r of allRows) { const k = storeKeyOf(r); if (!owners.has(k)) owners.set(k, advertiserOf(map, k, r.store)); }
+  const teams: Record<string, { admin: string; sales: string }> = {};
+  for (const r of allRows) {
+    const k = storeKeyOf(r);
+    if (owners.has(k)) continue;
+    const t = teamOf(map, k, storeLabel(r), r.store);
+    owners.set(k, t.advertiserId);
+    teams[k] = { admin: t.adminId ? map.people.get(t.adminId) || '' : '', sales: t.sales };
+  }
   const rows = advertiserFilter
     ? allRows.filter((r) => { const o = owners.get(storeKeyOf(r)) || null; return advertiserFilter === 'none' ? o === null : o === advertiserFilter; })
     : allRows;
 
   const view = buildView(rows, year, month, storeKey);
-  const storeOptions: StoreOption[] = view.stores.map((s) => ({ key: s.key, label: s.workspace ? `${s.store} (${s.workspace})` : s.store, source: s.source }));
+  const storeOptions: StoreOption[] = view.stores.map((s) => ({ key: s.key, label: s.label, source: s.source }));
 
   // The job of each advertiser: the stores they handle and the numbers of those stores in this period.
   const everyone = [...map.advertisers.map((a) => ({ id: a.id, name: a.name })), { id: 'none', name: 'Not assigned' }];
@@ -68,7 +75,7 @@ export default async function AdvertiserDashboardPage({ searchParams }: { search
       <DivisionTabs base="/productivity/advertiser" active="dashboard" />
       <AdvertiserPerformanceDashboard
         view={view} year={year} month={month} storeKey={storeKey} years={[thisYear, thisYear - 1]} storeOptions={storeOptions} errors={errors}
-        advertiserFilter={advertiserFilter} advertisers={map.advertisers} summaries={summaries} assignedTo={assignedTo} canAssign={owner}
+        advertiserFilter={advertiserFilter} advertisers={map.advertisers} summaries={summaries} assignedTo={assignedTo} teams={teams} canAssign={owner}
         manualByHand={Array.from(map.manual.keys())} manualReady={map.manualReady}
       />
     </div>

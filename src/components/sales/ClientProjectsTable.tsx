@@ -23,7 +23,7 @@ const LIFE_LABEL: Record<string, string> = { active: 'Active', scheduled: 'Sched
 interface Person { id: string; name: string }
 
 /** Cells that belong to a whole invoice span all of its product rows. */
-function NameCells({ row, canEdit }: { row: ClientRow; canEdit: boolean }) {
+function NameCells({ row, canEdit, storeOptions }: { row: ClientRow; canEdit: boolean; storeOptions?: string[] }) {
   const router = useRouter();
   const [brand, setBrand] = useState(row.brand);
   const [store, setStore] = useState(row.store);
@@ -42,7 +42,7 @@ function NameCells({ row, canEdit }: { row: ClientRow; canEdit: boolean }) {
         {canEdit ? <input value={brand} onChange={(e) => setBrand(e.target.value)} onBlur={save} placeholder="PIC" className={cls} /> : <span className="text-zinc-200">{row.brand || '-'}</span>}
       </td>
       <td rowSpan={row.groupSize} className="px-3 py-3 align-top">
-        {canEdit ? <input value={store} onChange={(e) => setStore(e.target.value)} onBlur={save} placeholder="Store name" className={cls} /> : <span className="text-zinc-200">{row.store || '-'}</span>}
+        {canEdit ? <input value={store} onChange={(e) => setStore(e.target.value)} onBlur={save} placeholder="Workspace - Store" list={storeOptions?.length ? 'client-store-options' : undefined} className={`${cls} min-w-[200px]`} /> : <span className="text-zinc-200">{row.store || '-'}</span>}
       </td>
     </>
   );
@@ -205,7 +205,7 @@ function HandlerSelect({ clientId, job, current, people }: { clientId: string; j
 }
 
 export function ClientProjectsTable({
-  rows, showStatus, canEditStart, canEditNames, canEditPaid = false, canEditStatus = false, canEditSales = false, hidePaid = false, showSalesman = false, advertisers, admins,
+  rows, showStatus, canEditStart, canEditNames, canEditPaid = false, canEditStatus = false, canEditSales = false, hidePaid = false, showSalesman = false, advertisers, admins, storeOptions,
 }: {
   rows: ClientRow[];
   showStatus: boolean;
@@ -221,6 +221,8 @@ export function ClientProjectsTable({
   hidePaid?: boolean;
   /** Sales tabs: which salesman got the client. */
   showSalesman?: boolean;
+  /** "Workspace - Store" of every store of Profesor Dashboard (ProOne) and Reline (Reline, Alpha, Lighting Solution): suggestions for the Store column. */
+  storeOptions?: string[];
   /** Superadmin / founder only: dropdowns to assign who handles each client. */
   advertisers?: Person[];
   admins?: Person[];
@@ -280,6 +282,7 @@ export function ClientProjectsTable({
         )}
         <span className="text-[11px] text-zinc-500">{groups.length} row{groups.length === 1 ? '' : 's'}</span>
       </div>
+    {storeOptions?.length ? <datalist id="client-store-options">{storeOptions.map((o) => <option key={o} value={o} />)}</datalist> : null}
     <div className="overflow-x-auto rounded-xl border border-[#d4af37]/20 bg-[#0e0f14] shadow-xl">
       <table className="w-full text-left text-sm">
         <thead className="border-b border-[#d4af37]/10 bg-zinc-900/50 text-[11px] uppercase tracking-wider text-zinc-400">
@@ -290,7 +293,7 @@ export function ClientProjectsTable({
             <Th k="client">Client</Th>
             {(showSalesman || canEditSales) && <Th k="salesman">Sales</Th>}
             <Th k="brand">PIC</Th>
-            <Th k="store">Store Name</Th>
+            <Th k="store">Workspace - Store</Th>
             <Th k="product">Product</Th>
             {showStatus && <Th k="status">Status</Th>}
             {assign && <Th k="advertiser">Advertiser</Th>}
@@ -320,7 +323,7 @@ export function ClientProjectsTable({
                   </td>
                 )}
                 {i === 0 && (showSalesman || canEditSales) && <td rowSpan={g.length} className="px-3 py-3 align-top whitespace-nowrap text-zinc-300">{canEditSales ? <SalesCell row={row} /> : row.salesman || <span className="text-zinc-600">-</span>}</td>}
-                {i === 0 && <NameCells row={row} canEdit={canEditNames} />}
+                {i === 0 && <NameCells row={row} canEdit={canEditNames} storeOptions={storeOptions} />}
                 <td className="min-w-[260px] px-3 py-3 text-zinc-200">
                   {row.product}
                   {row.quantity > 1 && <span className="ml-1 text-xs text-zinc-500">x{row.quantity}</span>}

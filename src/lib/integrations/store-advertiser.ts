@@ -1,15 +1,18 @@
-// Which advertiser handles which store. Server-side only.
-// 1. By hand: a row of perf_store_advertiser (set in the Store Detail table).
-// 2. Automatic: the Clients table has a store name per client and an advertiser assigned to that client (job "advertising"):
-//    a performance store whose name equals the client's store name (or client name or brand) belongs to that advertiser.
+// Which advertiser, admin and salesman handle which store. Server-side only.
+// The Clients table links a client to a store ("ProOne - Toko A", "Alpha - Dealer X": workspace - store) and holds the advertiser, the admin
+// and (through the client's invoices) the salesman of that client. So a performance store belongs to the team of the client linked to it.
+// An advertiser can also be set by hand for a store (table perf_store_advertiser), which wins over the client link.
 type Db = any;
 
 export interface AdvertiserPerson { id: string; name: string }
+export interface StoreTeam { advertiserId: string | null; adminId: string | null; sales: string }
 
 export interface StoreAdvertiserMap {
   advertisers: AdvertiserPerson[];
-  /** Normalised client store / name / brand -> advertiser id. */
-  byName: Map<string, string>;
+  /** Every person with a name (advertisers, admins). */
+  people: Map<string, string>;
+  /** Normalised client store / name / brand -> its team. */
+  byName: Map<string, StoreTeam>;
   /** Store key -> advertiser id (by hand). */
   manual: Map<string, string>;
   manualReady: boolean;
@@ -18,12 +21,22 @@ export interface StoreAdvertiserMap {
 /** "Toko Elektronik A." and "toko elektronik a" are the same store. */
 export const nameKey = (s: string) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
 
-export function advertiserOf(map: StoreAdvertiserMap, storeKey: string, store: string): string | null {
-  return map.manual.get(storeKey) || map.byName.get(nameKey(store)) || null;
+/** "ProOne - Toko A" -> "tokoa" (the store without its workspace); a name without a workspace stays as it is. */
+export function withoutWorkspace(s: string): string {
+  const m = /^\s*(ProOne|Reline|Alpha|Lighting Solution)\s+-\s+(.+)$/i.exec(String(s || ''));
+  return m ? nameKey(m[2]) : '';
 }
 
+/** The team of a store: the client linked to "<workspace> - <store>" first, then a client whose store name is just the store. */
+export function teamOf(map: StoreAdvertiserMap, storeKey: string, label: string, store: string): StoreTeam {
+  const t = map.byName.get(nameKey(label)) || map.byName.get(nameKey(store)) || { advertiserId: null, adminId: null, sales: '' };
+  return { ...t, advertiserId: map.manual.get(storeKey) || t.advertiserId };
+}
+
+export const advertiserOf = (map: StoreAdvertiserMap, storeKey: string, label: string, store: string) => teamOf(map, storeKey, label, store).advertiserId;
+
 export async function loadStoreAdvertisers(db: Db): Promise<StoreAdvertiserMap> {
-  const { data: assignments } = await db.from('client_assignments').select('client_id, user_id').eq('job', 'advertising').limit(5000);
+  const { data: assignments } = await db.from('client_assignments').select('client_id, user_id, job').in('job', ['advertising', 'admin']).limit(10000);
   const clientIds = Array.from(new Set((assignments || []).map((a: any) => a.client_id)));
   const clients: any[] = [];
   for (let i = 0; i < clientIds.length; i += 200) {
@@ -34,31 +47,54 @@ export async function loadStoreAdvertisers(db: Db): Promise<StoreAdvertiserMap> 
   const { data: manualRows, error: manualErr } = await db.from('perf_store_advertiser').select('store_key, advertiser_id').limit(5000);
   const manual = new Map<string, string>(manualErr ? [] : (manualRows || []).map((r: any) => [r.store_key, r.advertiser_id] as [string, string]));
 
-  // The advertisers: everybody who has a client or a store.
+  // The latest salesman of each client: the Sales column of its newest invoice, else the salesman of its pipeline card.
+  const salesOf = new Map<string, string>();
+  for (let i = 0; i < clientIds.length; i += 200) {
+    const chunk = clientIds.slice(i, i + 200);
+    let { data: inv, error } = await db.from('invoices').select('id, client_id, sales_name, issue_date').in('client_id', chunk).eq('is_quotation', false).order('issue_date', { ascending: false });
+    if (error) ({ data: inv } = await db.from('invoices').select('id, client_id, issue_date').in('client_id', chunk).eq('is_quotation', false).order('issue_date', { ascending: false }));
+    const ids = (inv || []).map((x: any) => x.id);
+    const { data: deals } = ids.length ? await db.from('crm_deals').select('invoice_id, salesman_name').in('invoice_id', ids) : { data: [] as any[] };
+    const dealName = new Map<string, string>((deals || []).filter((d: any) => d.salesman_name).map((d: any) => [d.invoice_id, String(d.salesman_name)] as [string, string]));
+    for (const x of inv || []) {
+      if (salesOf.has(x.client_id)) continue;
+      const name = String(x.sales_name || dealName.get(x.id) || '').trim();
+      if (name) salesOf.set(x.client_id, name);
+    }
+  }
+
+  // The people.
   const userIds = Array.from(new Set([...(assignments || []).map((a: any) => a.user_id), ...manual.values()]));
   const { data: members } = await db.from('workspace_members').select('user_id').eq('role', 'advertiser');
   for (const m of members || []) if (!userIds.includes(m.user_id)) userIds.push(m.user_id);
   const { data: profiles } = userIds.length ? await db.from('profiles').select('id, full_name, email').in('id', userIds) : { data: [] as any[] };
-  const advertisers: AdvertiserPerson[] = (profiles || [])
-    .map((p: any) => ({ id: p.id as string, name: String(p.full_name || p.email?.split('@')[0] || 'Advertiser') }))
-    .sort((a: AdvertiserPerson, b: AdvertiserPerson) => a.name.localeCompare(b.name));
+  const people = new Map<string, string>((profiles || []).map((p: any) => [p.id as string, String(p.full_name || p.email?.split('@')[0] || 'Staff')] as [string, string]));
+  const advertiserIds = new Set<string>([...(assignments || []).filter((a: any) => a.job === 'advertising').map((a: any) => a.user_id), ...manual.values(), ...(members || []).map((m: any) => m.user_id)]);
+  const advertisers: AdvertiserPerson[] = Array.from(advertiserIds)
+    .filter((id) => people.has(id))
+    .map((id) => ({ id, name: people.get(id)! }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
-  // Names -> advertiser; when a name has several advertisers the one with the most clients wins.
-  const votes = new Map<string, Map<string, number>>();
+  // Names -> team. When a name has several candidates the one with the most clients wins.
   const clientById = new Map<string, any>(clients.map((c) => [c.id, c]));
+  const votes = new Map<string, { adv: Map<string, number>; adm: Map<string, number>; sales: Map<string, number> }>();
+  const bump = (m: Map<string, number>, k: string | undefined) => { if (k) m.set(k, (m.get(k) || 0) + 1); };
   for (const a of assignments || []) {
     const c = clientById.get(a.client_id);
     if (!c) continue;
-    for (const raw of [c.store_name, c.company_name, c.name]) {
-      const k = nameKey(raw);
-      if (!k) continue;
-      const v = votes.get(k) || new Map<string, number>();
-      v.set(a.user_id, (v.get(a.user_id) || 0) + 1);
+    // The linked store ("ProOne - Toko A", or just "Toko A" for an old entry) by its full text; the client brand and name as a last resort.
+    // A "Workspace - Store" is never matched by the bare store name: the same store name can exist in two workspaces.
+    const names = [nameKey(c.store_name), nameKey(c.company_name), nameKey(c.name)].filter(Boolean);
+    for (const k of new Set(names)) {
+      const v = votes.get(k) || { adv: new Map(), adm: new Map(), sales: new Map() };
+      if (a.job === 'advertising') bump(v.adv, a.user_id); else bump(v.adm, a.user_id);
+      bump(v.sales, salesOf.get(a.client_id));
       votes.set(k, v);
     }
   }
-  const byName = new Map<string, string>();
-  for (const [k, v] of votes) byName.set(k, Array.from(v.entries()).sort((x, y) => y[1] - x[1])[0][0]);
+  const top = (m: Map<string, number>) => (m.size ? Array.from(m.entries()).sort((x, y) => y[1] - x[1])[0][0] : '');
+  const byName = new Map<string, StoreTeam>();
+  for (const [k, v] of votes) byName.set(k, { advertiserId: top(v.adv) || null, adminId: top(v.adm) || null, sales: top(v.sales) });
 
-  return { advertisers, byName, manual, manualReady: !manualErr };
+  return { advertisers, people, byName, manual, manualReady: !manualErr };
 }

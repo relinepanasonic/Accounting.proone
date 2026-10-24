@@ -115,9 +115,9 @@ function AdvertiserCell({ storeKey, current, advertisers, canAssign, byHand }: {
   );
 }
 
-export function AdvertiserPerformanceDashboard({ view, year, month, storeKey, years, storeOptions, errors, advertiserFilter, advertisers, summaries, assignedTo, canAssign, manualByHand }: {
+export function AdvertiserPerformanceDashboard({ view, year, month, storeKey, years, storeOptions, errors, advertiserFilter, advertisers, summaries, assignedTo, teams, canAssign, manualByHand }: {
   view: PerfView; year: number; month: number; storeKey: string; years: number[]; storeOptions: StoreOption[]; errors: string[];
-  advertiserFilter: string; advertisers: Person[]; summaries: AdvertiserSummary[]; assignedTo: Record<string, string>; canAssign: boolean; manualByHand: string[]; manualReady: boolean;
+  advertiserFilter: string; advertisers: Person[]; summaries: AdvertiserSummary[]; assignedTo: Record<string, string>; teams: Record<string, { admin: string; sales: string }>; canAssign: boolean; manualByHand: string[]; manualReady: boolean;
 }) {
   const router = useRouter();
   const go = (y: number, m: number, st: string, adv: string = advertiserFilter) => router.push(`/productivity/advertiser?year=${y}&month=${m}${adv ? `&advertiser=${encodeURIComponent(adv)}` : ''}${st ? `&store=${encodeURIComponent(st)}` : ''}`);
@@ -269,20 +269,21 @@ export function AdvertiserPerformanceDashboard({ view, year, month, storeKey, ye
             ]} />
           </Panel>
 
-          <Panel title="Store Detail" sub="Every store (Profesor Dashboard) and dealer (Reline) in the period">
+          <Panel title="Store Detail" sub="Every store of the period with its team. Link a store to a client in Optimizing > Clients (column Workspace - Store).">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[980px] text-left text-xs">
+              <table className="w-full min-w-[1040px] text-left text-xs">
                 <thead className="border-b border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-500">
-                  <tr><th className="px-3 py-2">Store</th><th className="px-3 py-2">Source</th><th className="px-3 py-2">Advertiser</th><th className="px-3 py-2 text-right">Sales</th><th className="px-3 py-2 text-right">Total GMV</th><th className="px-3 py-2 text-right">Traffic</th><th className="px-3 py-2 text-right">In-Cart</th><th className="px-3 py-2 text-right">Ads Cost</th><th className="px-3 py-2 text-right">ROAS</th><th className="px-3 py-2">Trend</th></tr>
+                  <tr><th className="px-3 py-2">Workspace - Store</th><th className="px-3 py-2">Advertiser</th><th className="px-3 py-2">Admin</th><th className="px-3 py-2">Sales</th><th className="px-3 py-2 text-right">Sales</th><th className="px-3 py-2 text-right">Total GMV</th><th className="px-3 py-2 text-right">Traffic</th><th className="px-3 py-2 text-right">In-Cart</th><th className="px-3 py-2 text-right">Ads Cost</th><th className="px-3 py-2 text-right">ROAS</th><th className="px-3 py-2">Trend</th></tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800/60">
                   {view.stores.map((s) => {
                     const c = costOf(s.totals); const r = ratio(adSalesOf(s.totals), c);
                     return (
                       <tr key={s.key} onClick={() => go(year, month, s.key === storeKey ? '' : s.key)} className={`cursor-pointer hover:bg-zinc-900/40 ${s.key === storeKey ? 'bg-[#d4af37]/10' : ''}`}>
-                        <td className="px-3 py-2 font-semibold text-white">{s.store}</td>
-                        <td className="px-3 py-2 text-zinc-500">{s.source === 'dashboard' ? 'Dashboard' : 'Reline'}</td>
+                        <td className="px-3 py-2 font-semibold text-white">{s.label}</td>
                         <td className="px-3 py-2"><AdvertiserCell storeKey={s.key} current={assignedTo[s.key] || ''} advertisers={advertisers} canAssign={canAssign} byHand={manualByHand.includes(s.key)} /></td>
+                        <td className="px-3 py-2 text-zinc-300">{teams[s.key]?.admin || <span className="text-zinc-600">-</span>}</td>
+                        <td className="px-3 py-2 text-zinc-300">{teams[s.key]?.sales || <span className="text-zinc-600">-</span>}</td>
                         <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-[#f5d77f]">{rp(s.totals.sales)}</td>
                         <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-zinc-300">{rp(s.totals.gmv)}</td>
                         <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-zinc-300">{int(s.totals.traffic)}</td>

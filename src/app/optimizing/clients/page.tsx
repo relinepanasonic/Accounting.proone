@@ -9,6 +9,7 @@ import { withoutProspects } from '@/lib/sales/prospects';
 import { loadClientRows } from '@/lib/sales/client-table';
 import { loadHandlers } from '@/lib/sales/people';
 import { ClientProjectsTable } from '@/components/sales/ClientProjectsTable';
+import { fetchPerformance, storeLabel } from '@/lib/integrations/performance';
 import { ContactCrmManager, type ClientRecord } from '@/components/settings/ContactCrmManager';
 
 export const dynamic = 'force-dynamic';
@@ -107,13 +108,18 @@ export default async function OptimizingClientsPage({ searchParams }: { searchPa
   const rows = await loadClientRows(db, ctx.activeWorkspaceId, { archived: tab === 'churn' ? 'only' : 'all', includeAll: true, maskName: (name, ws) => mask.name(name, ws, 'Client') });
   const handlers = owner ? await loadHandlers(db, ctx.activeWorkspaceId) : null;
 
+  // The stores of the two apps (this year), to pick "Workspace - Store" for each client. A short wait: if an app is slow, the box still takes typed text.
+  const year = new Date(Date.now() + 7 * 3600000).getUTCFullYear();
+  const [dashStores, relineStores] = await Promise.all([fetchPerformance('dashboard', `${year}-01-01`, `${year}-12-31`, 8000), fetchPerformance('reline', `${year}-01-01`, `${year}-12-31`, 8000)]);
+  const storeOptions = Array.from(new Set([...(dashStores.ok ? dashStores.rows : []), ...(relineStores.ok ? relineStores.rows : [])].map((r) => storeLabel(r)))).sort((a, b) => a.localeCompare(b));
+
   return (
     <div className="p-4 lg:p-8 space-y-6 animate-in fade-in zoom-in-95 duration-300">
       <div>
         <h1 className="text-2xl font-extrabold text-zinc-100 font-serif">Optimizing · Clients</h1>
       </div>
       {TabBar}
-      <ClientProjectsTable rows={rows} showStatus canEditStart canEditNames canEditPaid canEditStatus canEditSales={owner} advertisers={handlers?.advertisers} admins={handlers?.admins} />
+      <ClientProjectsTable rows={rows} showStatus canEditStart canEditNames canEditPaid canEditStatus canEditSales={owner} advertisers={handlers?.advertisers} admins={handlers?.admins} storeOptions={storeOptions} />
     </div>
   );
 }

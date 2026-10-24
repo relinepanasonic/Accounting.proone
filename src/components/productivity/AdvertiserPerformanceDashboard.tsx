@@ -1,7 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { setStoreAdvertiser } from '@/app/actions/store-advertiser';
 import {
   ResponsiveContainer, ComposedChart, BarChart, LineChart, AreaChart, Area, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts';
@@ -80,12 +81,46 @@ function Spark({ values }: { values: number[] }) {
 }
 
 export interface StoreOption { key: string; label: string; source: 'dashboard' | 'reline' }
+export interface AdvertiserSummary { id: string; name: string; stores: number; totals: PerfTotals; series: number[] }
+interface Person { id: string; name: string }
 
-export function AdvertiserPerformanceDashboard({ view, year, month, storeKey, years, storeOptions, errors }: {
+/** Owners pick the advertiser of a store; the change is saved at once. */
+function AdvertiserCell({ storeKey, current, advertisers, canAssign, byHand }: { storeKey: string; current: string; advertisers: Person[]; canAssign: boolean; byHand: boolean }) {
+  const router = useRouter();
+  const [value, setValue] = useState(current);
+  const [error, setError] = useState('');
+  const [pending, start] = useTransition();
+  const name = advertisers.find((a) => a.id === value)?.name || '';
+  if (!canAssign) return <span className={name ? 'text-zinc-200' : 'text-zinc-600'}>{name || 'Not assigned'}</span>;
+  return (
+    <div onClick={(e) => e.stopPropagation()}>
+      <select
+        value={value}
+        disabled={pending}
+        onChange={(e) => {
+          const next = e.target.value; const prev = value; setValue(next); setError('');
+          start(async () => {
+            const res = await setStoreAdvertiser(storeKey, next || null);
+            if (!res.success) { setValue(prev); setError(res.error || 'Could not save.'); } else router.refresh();
+          });
+        }}
+        className={`rounded-md border bg-zinc-900 px-2 py-1 text-[11px] text-zinc-100 focus:outline-none ${byHand ? 'border-[#d4af37]/50' : 'border-zinc-800'}`}
+        title={byHand ? 'Set by hand' : name ? 'Matched from the Clients table' : 'Not assigned'}
+      >
+        <option value="">Not assigned</option>
+        {advertisers.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+      </select>
+      {error && <div className="mt-1 max-w-[180px] text-[10px] text-red-400">{error}</div>}
+    </div>
+  );
+}
+
+export function AdvertiserPerformanceDashboard({ view, year, month, storeKey, years, storeOptions, errors, advertiserFilter, advertisers, summaries, assignedTo, canAssign, manualByHand }: {
   view: PerfView; year: number; month: number; storeKey: string; years: number[]; storeOptions: StoreOption[]; errors: string[];
+  advertiserFilter: string; advertisers: Person[]; summaries: AdvertiserSummary[]; assignedTo: Record<string, string>; canAssign: boolean; manualByHand: string[]; manualReady: boolean;
 }) {
   const router = useRouter();
-  const go = (y: number, m: number, s: string) => router.push(`/productivity/advertiser?year=${y}&month=${m}${s ? `&store=${encodeURIComponent(s)}` : ''}`);
+  const go = (y: number, m: number, st: string, adv: string = advertiserFilter) => router.push(`/productivity/advertiser?year=${y}&month=${m}${adv ? `&advertiser=${encodeURIComponent(adv)}` : ''}${st ? `&store=${encodeURIComponent(st)}` : ''}`);
   const t = view.totals;
   const cost = costOf(t);
   const sel = 'rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs font-bold text-zinc-200 outline-none focus:border-[#d4af37]/60';
@@ -113,6 +148,11 @@ export function AdvertiserPerformanceDashboard({ view, year, month, storeKey, ye
           <option value={0}>All months</option>
           {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
         </select>
+        <select value={advertiserFilter} onChange={(e) => go(year, month, '', e.target.value)} className={sel} aria-label="Advertiser">
+          <option value="">Advertiser: all</option>
+          {advertisers.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          <option value="none">Not assigned</option>
+        </select>
         <select value={storeKey} onChange={(e) => go(year, month, e.target.value)} className={`${sel} min-w-[220px]`} aria-label="Store">
           <option value="">Store: all</option>
           <optgroup label="Profesor Dashboard">{storeOptions.filter((s) => s.source === 'dashboard').map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}</optgroup>
@@ -134,6 +174,34 @@ export function AdvertiserPerformanceDashboard({ view, year, month, storeKey, ye
         <Kpi label="Ads Cost" value={rp(cost)} />
         <Kpi label="ROAS" value={cost > 0 ? `${ratio(adSalesOf(t), cost).toFixed(2)}x` : '-'} tone={ratio(adSalesOf(t), cost) >= 1 ? 'text-emerald-400' : 'text-white'} sub="ads sales / ads cost" />
       </div>
+
+      {summaries.length > 0 && (
+        <Panel title="Advertiser Job" sub="The stores each advertiser handles and what those stores did in this period. Click a row to filter.">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left text-xs">
+              <thead className="border-b border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-500">
+                <tr><th className="px-3 py-2">Advertiser</th><th className="px-3 py-2 text-right">Stores</th><th className="px-3 py-2 text-right">Sales</th><th className="px-3 py-2 text-right">Total GMV</th><th className="px-3 py-2 text-right">Ads Cost</th><th className="px-3 py-2 text-right">ROAS</th><th className="px-3 py-2">Trend</th></tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800/60">
+                {summaries.map((a) => {
+                  const c = costOf(a.totals); const r = ratio(adSalesOf(a.totals), c);
+                  return (
+                    <tr key={a.id} onClick={() => go(year, month, '', advertiserFilter === a.id ? '' : a.id)} className={`cursor-pointer hover:bg-zinc-900/40 ${advertiserFilter === a.id ? 'bg-[#d4af37]/10' : ''}`}>
+                      <td className={`px-3 py-2 font-semibold ${a.id === 'none' ? 'text-zinc-500' : 'text-white'}`}>{a.name}</td>
+                      <td className="px-3 py-2 text-right font-mono text-zinc-300">{a.stores}</td>
+                      <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-[#f5d77f]">{rp(a.totals.sales)}</td>
+                      <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-zinc-300">{rp(a.totals.gmv)}</td>
+                      <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-zinc-300">{rp(c)}</td>
+                      <td className={`whitespace-nowrap px-3 py-2 text-right font-mono ${r >= 1 ? 'text-emerald-400' : 'text-red-400'}`}>{c > 0 ? `${r.toFixed(2)}x` : '-'}</td>
+                      <td className="px-3 py-2"><Spark values={a.series} /></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+      )}
 
       {!hasData ? (
         <div className="gold-glass-panel rounded-2xl p-10 text-center text-sm text-zinc-500">No performance data for this period yet.</div>
@@ -203,9 +271,9 @@ export function AdvertiserPerformanceDashboard({ view, year, month, storeKey, ye
 
           <Panel title="Store Detail" sub="Every store (Profesor Dashboard) and dealer (Reline) in the period">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[860px] text-left text-xs">
+              <table className="w-full min-w-[980px] text-left text-xs">
                 <thead className="border-b border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-500">
-                  <tr><th className="px-3 py-2">Store</th><th className="px-3 py-2">Source</th><th className="px-3 py-2 text-right">Sales</th><th className="px-3 py-2 text-right">Total GMV</th><th className="px-3 py-2 text-right">Traffic</th><th className="px-3 py-2 text-right">In-Cart</th><th className="px-3 py-2 text-right">Ads Cost</th><th className="px-3 py-2 text-right">ROAS</th><th className="px-3 py-2">Trend</th></tr>
+                  <tr><th className="px-3 py-2">Store</th><th className="px-3 py-2">Source</th><th className="px-3 py-2">Advertiser</th><th className="px-3 py-2 text-right">Sales</th><th className="px-3 py-2 text-right">Total GMV</th><th className="px-3 py-2 text-right">Traffic</th><th className="px-3 py-2 text-right">In-Cart</th><th className="px-3 py-2 text-right">Ads Cost</th><th className="px-3 py-2 text-right">ROAS</th><th className="px-3 py-2">Trend</th></tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800/60">
                   {view.stores.map((s) => {
@@ -214,6 +282,7 @@ export function AdvertiserPerformanceDashboard({ view, year, month, storeKey, ye
                       <tr key={s.key} onClick={() => go(year, month, s.key === storeKey ? '' : s.key)} className={`cursor-pointer hover:bg-zinc-900/40 ${s.key === storeKey ? 'bg-[#d4af37]/10' : ''}`}>
                         <td className="px-3 py-2 font-semibold text-white">{s.store}</td>
                         <td className="px-3 py-2 text-zinc-500">{s.source === 'dashboard' ? 'Dashboard' : 'Reline'}</td>
+                        <td className="px-3 py-2"><AdvertiserCell storeKey={s.key} current={assignedTo[s.key] || ''} advertisers={advertisers} canAssign={canAssign} byHand={manualByHand.includes(s.key)} /></td>
                         <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-[#f5d77f]">{rp(s.totals.sales)}</td>
                         <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-zinc-300">{rp(s.totals.gmv)}</td>
                         <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-zinc-300">{int(s.totals.traffic)}</td>

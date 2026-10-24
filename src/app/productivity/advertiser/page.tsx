@@ -69,7 +69,7 @@ export default async function AdvertiserDashboardPage({ searchParams }: { search
   const summaries: AdvertiserSummary[] = everyone.map((a) => {
     const mine = allRows.filter((r) => (a.id === 'none' ? (owners.get(storeKeyOf(r)) || null) === null : owners.get(storeKeyOf(r)) === a.id));
     const v = buildView(mine, year, month, '');
-    return { id: a.id, name: a.name, stores: v.stores.length, totals: v.totals, cost: v.buckets.map(adsCost), adSales: v.buckets.map(adsSales) };
+    return { id: a.id, name: a.name, stores: v.stores.length, totals: v.totals, sales: v.buckets.map((b) => b.sales), cost: v.buckets.map(adsCost), adSales: v.buckets.map(adsSales) };
   }).filter((s) => s.stores > 0 || s.id !== 'none');
 
   const assignedTo: Record<string, string> = {};

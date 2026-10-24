@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/api/supabase-admin';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { DivisionTabs } from '@/components/productivity/DivisionTabs';
 import { AdvertiserPerformanceDashboard, type StoreOption, type AdvertiserSummary } from '@/components/productivity/AdvertiserPerformanceDashboard';
-import { fetchPerformance, buildView, storeKeyOf, storeLabel } from '@/lib/integrations/performance';
+import { fetchPerformance, buildView, storeKeyOf, storeLabel, workspaceLabel, WORKSPACE_LABELS } from '@/lib/integrations/performance';
 import { loadStoreAdvertisers, teamOf } from '@/lib/integrations/store-advertiser';
 
 export const dynamic = 'force-dynamic';
@@ -15,7 +15,7 @@ export const maxDuration = 60;
  * (no city or brand manager). Filters: year, month (then the charts go per week), Advertiser and Store.
  * Each store is linked to a client in the Clients table ("Workspace - Store"); the advertiser, admin and salesman of that client are the team of the store. The advertiser can also be set by hand in the Store Detail table.
  */
-export default async function AdvertiserDashboardPage({ searchParams }: { searchParams: Promise<{ year?: string; month?: string; store?: string; advertiser?: string }> }) {
+export default async function AdvertiserDashboardPage({ searchParams }: { searchParams: Promise<{ year?: string; month?: string; store?: string; advertiser?: string; company?: string }> }) {
   const sp = await searchParams;
   const supabase = await createClient();
   const ctx = await getAuthenticatedWorkspaceContext(supabase);
@@ -25,6 +25,7 @@ export default async function AdvertiserDashboardPage({ searchParams }: { search
   const year = Number(sp?.year) > 2000 ? Number(sp.year) : thisYear;
   const month = Number(sp?.month) >= 1 && Number(sp?.month) <= 12 ? Number(sp.month) : 0;
   const storeKey = String(sp?.store || '');
+  const companyFilter = String(sp?.company || ''); // '' = all, else ProOne / Reline / Alpha / Lighting Solution
   const advertiserFilter = String(sp?.advertiser || ''); // '' = all, 'none' = not assigned, else a user id
   // The whole year every time (one call, about 2 seconds): the month and its weeks are cut here, and the baseline snapshot of a store is never lost.
   const from = `${year}-01-01`;
@@ -51,9 +52,14 @@ export default async function AdvertiserDashboardPage({ searchParams }: { search
     owners.set(k, t.advertiserId);
     teams[k] = { admin: t.adminId ? map.people.get(t.adminId) || '' : '', sales: t.sales };
   }
-  const rows = advertiserFilter
-    ? allRows.filter((r) => { const o = owners.get(storeKeyOf(r)) || null; return advertiserFilter === 'none' ? o === null : o === advertiserFilter; })
-    : allRows;
+  const companies = WORKSPACE_LABELS.filter((c) => allRows.some((r) => workspaceLabel(r.source, r.workspace) === c)) as string[];
+  // Company first, then the stores of that company.
+  const rows = allRows.filter((r) => {
+    if (companyFilter && workspaceLabel(r.source, r.workspace) !== companyFilter) return false;
+    if (!advertiserFilter) return true;
+    const o = owners.get(storeKeyOf(r)) || null;
+    return advertiserFilter === 'none' ? o === null : o === advertiserFilter;
+  });
 
   const view = buildView(rows, year, month, storeKey);
   const storeOptions: StoreOption[] = view.stores.map((s) => ({ key: s.key, label: s.label, source: s.source }));
@@ -74,7 +80,7 @@ export default async function AdvertiserDashboardPage({ searchParams }: { search
       <DivisionTabs base="/productivity/advertiser" active="dashboard" />
       <AdvertiserPerformanceDashboard
         view={view} year={year} month={month} storeKey={storeKey} years={[thisYear, thisYear - 1]} storeOptions={storeOptions} errors={errors}
-        advertiserFilter={advertiserFilter} advertisers={map.advertisers} summaries={summaries} assignedTo={assignedTo} teams={teams} canAssign={owner}
+        advertiserFilter={advertiserFilter} companyFilter={companyFilter} companies={companies} advertisers={map.advertisers} summaries={summaries} assignedTo={assignedTo} teams={teams} canAssign={owner}
         manualByHand={Array.from(map.manual.keys())} manualReady={map.manualReady}
       />
     </div>

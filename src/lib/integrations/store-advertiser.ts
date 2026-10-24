@@ -4,6 +4,9 @@
 // An advertiser can also be set by hand for a store (table perf_store_advertiser), which wins over the client link.
 type Db = any;
 
+/** Owners who also work as advertiser: they are in the Advertiser filter and can be assigned to stores. */
+export const ADVERTISER_OWNER_EMAILS = ['herlan180789@gmail.com'];
+
 export interface AdvertiserPerson { id: string; name: string }
 export interface StoreTeam { advertiserId: string | null; adminId: string | null; sales: string }
 
@@ -67,9 +70,11 @@ export async function loadStoreAdvertisers(db: Db): Promise<StoreAdvertiserMap> 
   const userIds = Array.from(new Set([...(assignments || []).map((a: any) => a.user_id), ...manual.values()]));
   const { data: members } = await db.from('workspace_members').select('user_id').eq('role', 'advertiser');
   for (const m of members || []) if (!userIds.includes(m.user_id)) userIds.push(m.user_id);
+  const { data: owners } = await db.from('profiles').select('id').in('email', ADVERTISER_OWNER_EMAILS);
+  for (const o of owners || []) if (!userIds.includes(o.id)) userIds.push(o.id);
   const { data: profiles } = userIds.length ? await db.from('profiles').select('id, full_name, email').in('id', userIds) : { data: [] as any[] };
   const people = new Map<string, string>((profiles || []).map((p: any) => [p.id as string, String(p.full_name || p.email?.split('@')[0] || 'Staff')] as [string, string]));
-  const advertiserIds = new Set<string>([...(assignments || []).filter((a: any) => a.job === 'advertising').map((a: any) => a.user_id), ...manual.values(), ...(members || []).map((m: any) => m.user_id)]);
+  const advertiserIds = new Set<string>([...(assignments || []).filter((a: any) => a.job === 'advertising').map((a: any) => a.user_id), ...manual.values(), ...(members || []).map((m: any) => m.user_id), ...(owners || []).map((o: any) => o.id)]);
   const advertisers: AdvertiserPerson[] = Array.from(advertiserIds)
     .filter((id) => people.has(id))
     .map((id) => ({ id, name: people.get(id)! }))

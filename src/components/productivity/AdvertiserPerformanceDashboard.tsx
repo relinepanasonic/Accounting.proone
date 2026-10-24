@@ -115,12 +115,12 @@ function AdvertiserCell({ storeKey, current, advertisers, canAssign, byHand }: {
   );
 }
 
-export function AdvertiserPerformanceDashboard({ view, year, month, storeKey, years, storeOptions, errors, advertiserFilter, advertisers, summaries, assignedTo, teams, canAssign, manualByHand }: {
+export function AdvertiserPerformanceDashboard({ view, year, month, storeKey, years, storeOptions, errors, advertiserFilter, companyFilter, companies, advertisers, summaries, assignedTo, teams, canAssign, manualByHand }: {
   view: PerfView; year: number; month: number; storeKey: string; years: number[]; storeOptions: StoreOption[]; errors: string[];
-  advertiserFilter: string; advertisers: Person[]; summaries: AdvertiserSummary[]; assignedTo: Record<string, string>; teams: Record<string, { admin: string; sales: string }>; canAssign: boolean; manualByHand: string[]; manualReady: boolean;
+  advertiserFilter: string; companyFilter: string; companies: string[]; advertisers: Person[]; summaries: AdvertiserSummary[]; assignedTo: Record<string, string>; teams: Record<string, { admin: string; sales: string }>; canAssign: boolean; manualByHand: string[]; manualReady: boolean;
 }) {
   const router = useRouter();
-  const go = (y: number, m: number, st: string, adv: string = advertiserFilter) => router.push(`/productivity/advertiser?year=${y}&month=${m}${adv ? `&advertiser=${encodeURIComponent(adv)}` : ''}${st ? `&store=${encodeURIComponent(st)}` : ''}`);
+  const go = (y: number, m: number, st: string, adv: string = advertiserFilter, co: string = companyFilter) => router.push(`/productivity/advertiser?year=${y}&month=${m}${adv ? `&advertiser=${encodeURIComponent(adv)}` : ''}${co ? `&company=${encodeURIComponent(co)}` : ''}${st ? `&store=${encodeURIComponent(st)}` : ''}`);
   const t = view.totals;
   const cost = costOf(t);
   const sel = 'rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs font-bold text-zinc-200 outline-none focus:border-[#d4af37]/60';
@@ -151,10 +151,13 @@ export function AdvertiserPerformanceDashboard({ view, year, month, storeKey, ye
           {advertisers.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           <option value="none">Not assigned</option>
         </select>
+        <select value={companyFilter} onChange={(e) => go(year, month, '', advertiserFilter, e.target.value)} className={sel} aria-label="Company">
+          <option value="">Company: all</option>
+          {companies.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
         <select value={storeKey} onChange={(e) => go(year, month, e.target.value)} className={`${sel} min-w-[220px]`} aria-label="Store">
           <option value="">Store: all</option>
-          <optgroup label="Profesor Dashboard">{storeOptions.filter((s) => s.source === 'dashboard').map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}</optgroup>
-          <optgroup label="Reline (dealer)">{storeOptions.filter((s) => s.source === 'reline').map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}</optgroup>
+          {storeOptions.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
         </select>
       </div>
 

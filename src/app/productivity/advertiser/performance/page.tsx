@@ -64,11 +64,12 @@ export default async function AdvertiserStorePerformancePage({ searchParams }: {
   // The Input Log of the clients linked to these stores ("Company - Store" in the Clients table, or an old plain store name).
   const db = createAdminClient();
   const span = range || { from: `${year}-01-01`, to: `${year}-12-31` };
-  const { data: linked } = await db.from('clients').select('id, store_name').not('store_name', 'is', null).limit(10000);
+  const { data: linked } = await db.from('clients').select('id, name, store_name').not('store_name', 'is', null).limit(10000);
   const clientsOfName = new Map<string, string[]>();
   for (const c of linked || []) { const k = nameKey(c.store_name); if (k) clientsOfName.set(k, [...(clientsOfName.get(k) || []), c.id]); }
   const clientsOf = (label: string, store: string) => Array.from(new Set([...(clientsOfName.get(nameKey(label)) || []), ...(clientsOfName.get(nameKey(store)) || [])]));
-  const wanted = Array.from(new Set(view.stores.flatMap((s) => clientsOf(s.label, s.store))));
+  // Every linked client is read: one whose store is not in the feed (yet) still gets a card for its Input Log.
+  const wanted = Array.from(new Set((linked || []).map((c: any) => c.id as string)));
   const reports: InputReport[] = [];
   // Session 1 of the day after the period still belongs to its last day.
   const toPlusOne = new Date(Date.parse(`${span.to}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
@@ -97,6 +98,31 @@ export default async function AdvertiserStorePerformancePage({ searchParams }: {
     input: inp && any ? { modal: pick(inp.modal), biaya: pick(inp.biaya), biayaBudgeted: pick(inp.biayaBudgeted), penjualan: pick(inp.penjualan), target: pick(inp.target) } : null,
   });
   }).sort(sortByName);
+
+  // Linked clients with an Input Log but no store in the feed: a card with the Input Log boxes only (GMV and Ads Cost vs ROAS stay empty).
+  const covered = new Set(view.stores.flatMap((s) => clientsOf(s.label, s.store)));
+  const loose = (linked || []).filter((c: any) => !covered.has(c.id) && days.has(c.id));
+  if (loose.length && !storeKey) {
+    const { data: adv } = await db.from('client_assignments').select('client_id, user_id').eq('job', 'advertising').in('client_id', loose.map((c: any) => c.id));
+    const advOf = new Map<string, string>((adv || []).map((a: any) => [a.client_id as string, a.user_id as string]));
+    for (const c of loose as any[]) {
+      const who = advOf.get(c.id) || null;
+      const co = /^\s*(ProOne|Reline|Alpha|Lighting Solution)\b/i.exec(String(c.store_name))?.[1] || '';
+      if (companyFilter && co.toLowerCase() !== companyFilter.toLowerCase()) continue;
+      if (!owner && (!ctx.userId || who !== ctx.userId)) continue;
+      if (advertiserFilter && (advertiserFilter === 'none' ? who !== null : who !== advertiserFilter)) continue;
+      const inp = inputSeries([days.get(c.id)!], view.labels.length, dayBucket);
+      if (![...inp.modal, ...inp.biaya, ...inp.penjualan].some((v) => v > 0)) continue;
+      const zero = view.labels.map(() => 0);
+      cards.push({
+        key: `client:${c.id}`, name: c.name || c.store_name, label: String(c.store_name).replace(/\s*-\s*$/, ''),
+        advertiser: who ? map.people.get(who) || '' : '', labels: pick(view.labels), gmv: pick(zero), cost: pick(zero), adSales: pick(zero),
+        totals: { gmv: 0, cost: 0, adSales: 0 },
+        input: { modal: pick(inp.modal), biaya: pick(inp.biaya), biayaBudgeted: pick(inp.biayaBudgeted), penjualan: pick(inp.penjualan), target: pick(inp.target) },
+      });
+    }
+    cards.sort(sortByName);
+  }
 
   return (
     <div className="p-4 lg:p-8 space-y-6 animate-in fade-in zoom-in-95 duration-300">

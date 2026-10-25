@@ -275,7 +275,7 @@ export function AdvertiserLogDetail({
           <div>
             <h2 className="text-lg font-extrabold text-white">{log.client_name}</h2>
             <p className="text-xs text-zinc-400 mt-1">
-              {new Date(log.report_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })} ·{' '}
+              {new Date(log.report_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })} ·{' '}
               <span className="text-[#d4af37] font-mono">{log.advertiser_name}</span>
             </p>
           </div>

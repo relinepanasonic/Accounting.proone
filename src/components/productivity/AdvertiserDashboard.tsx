@@ -361,7 +361,7 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
             {clients.find(c => c.id === initialClient)?.name}
           </h2>
           <div className="text-zinc-500 text-sm flex gap-2">
-            <span>{new Date(initialDate).toLocaleDateString()}</span>
+            <span>{new Date(initialDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
             <span>&bull;</span>
             <span>Sesi {initialSession}</span>
           </div>

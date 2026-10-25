@@ -273,7 +273,7 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
                       <RecommendationChips recs={log.recs} />
                     </td>
                     <td className="px-6 py-4 text-xs font-mono text-zinc-500">
-                      <div>{new Date(log.created_at).toLocaleDateString()}</div>
+                      <div>{new Date(log.created_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
                       <div>{new Date(log.created_at).toLocaleTimeString()}</div>
                     </td>
                     <td className="px-6 py-4 text-right">

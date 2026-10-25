@@ -80,10 +80,17 @@ describe('store performance', () => {
     expect(six.bucket('2026-08-31')).toBe(-1);
     const rows = [{ periodStart: '2026-09-07' }, { periodStart: '2026-09-14' }, { periodStart: '2026-10-05' }];
     const short = rangeBuckets(rows, '2026-09-01', '2026-09-30');
-    expect(short.labels).toEqual(['07 Sep', '14 Sep']);
+    expect(short.labels).toEqual(['01 Sep 2026', '07 Sep 2026', '14 Sep 2026']);
     expect(short.bucket('2026-10-05')).toBe(-1);
     const long = rangeBuckets(rows, '2026-08-15', '2026-12-31');
     expect(long.labels).toEqual(['Agu 26', 'Sep 26', 'Okt 26', 'Nov 26', 'Des 26']);
     expect(long.bucket('2026-10-05')).toBe(2);
+  });
+
+  it('a one-day range with no weekly row still has a bucket for the Input Log day', () => {
+    const one = rangeBuckets([{ periodStart: '2026-09-28' }, { periodStart: '2026-10-05' }], '2026-10-01', '2026-10-01');
+    expect(one.labels).toEqual(['01 Okt 2026']);
+    expect(one.dayBucket('2026-10-01')).toBe(0);
+    expect(one.dayBucket('2026-10-02')).toBe(-1);
   });
 });

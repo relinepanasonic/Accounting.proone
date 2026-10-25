@@ -191,10 +191,13 @@ export function rangeBuckets(rows: Array<Pick<PerfRow, 'periodStart'>>, from: st
   if (days > 62) {
     const keys: string[] = [];
     for (let d = new Date(`${from.slice(0, 7)}-01T00:00:00Z`); d.toISOString().slice(0, 7) <= to.slice(0, 7); d.setUTCMonth(d.getUTCMonth() + 1)) keys.push(d.toISOString().slice(0, 7));
-    return { labels: keys.map((k) => `${MONTHS[Number(k.slice(5, 7)) - 1]} ${k.slice(2, 4)}`), bucket: (p: string) => (inside(p) ? keys.indexOf(p.slice(0, 7)) : -1), baseDiv: 1 };
+    const bucket = (p: string) => (inside(p) ? keys.indexOf(p.slice(0, 7)) : -1);
+    return { labels: keys.map((k) => `${MONTHS[Number(k.slice(5, 7)) - 1]} ${k.slice(2, 4)}`), bucket, dayBucket: bucket, baseDiv: 1 };
   }
   const keys = Array.from(new Set(rows.map((r) => r.periodStart).filter(inside))).sort();
-  return { labels: keys.map((k) => `${k.slice(8, 10)} ${MONTHS[Number(k.slice(5, 7)) - 1]}`), bucket: (p: string) => (inside(p) ? keys.indexOf(p) : -1), baseDiv: 4 };
+  // A single day (the Input Log) goes to the week that started on or before it.
+  const dayBucket = (d: string) => { if (!inside(d) || !keys.length) return -1; let i = 0; while (i + 1 < keys.length && keys[i + 1] <= d) i++; return i; };
+  return { labels: keys.map((k) => `${k.slice(8, 10)} ${MONTHS[Number(k.slice(5, 7)) - 1]}`), bucket: (p: string) => (inside(p) ? keys.indexOf(p) : -1), dayBucket, baseDiv: 4 };
 }
 
 /** The numbers per bucket (any labels and any bucket function) and per store. A row with bucket -1 is left out. */

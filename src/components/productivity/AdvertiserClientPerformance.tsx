@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { ResponsiveContainer, ComposedChart, AreaChart, Area, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-const C = { gold: '#d4af37', green: '#10b981', red: '#f87171' };
+const C = { gold: '#d4af37', green: '#10b981', red: '#f87171', blue: '#60a5fa' };
 
 const short = (n: number) => {
   const a = Math.abs(n); const s = n < 0 ? '-' : '';
@@ -34,11 +34,13 @@ export interface ClientCard {
   cost: number[];
   adSales: number[];
   totals: { gmv: number; cost: number; adSales: number };
+  /** From the Input Log of the linked client; null = nothing typed in this period. */
+  input: { modal: number[]; biaya: number[]; biayaBudgeted: number[]; penjualan: number[]; target: number[] } | null;
 }
 interface Option { key: string; label: string }
 
 /** One box of a client: a chart and its numbers per period underneath. */
-function Box({ title, sub, chart, rows, labels }: { title: string; sub: string; chart: React.ReactNode; rows: Array<{ name: string; color: string; values: string[] }>; labels: string[] }) {
+function Box({ title, sub, chart, rows, labels }: { title: string; sub: string; chart: React.ReactNode; rows: Array<{ name: string; color: string; values: Array<string | { v: string; cls: string }> }>; labels: string[] }) {
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-3">
       <div className="flex items-baseline justify-between gap-2"><span className="text-xs font-extrabold text-white">{title}</span><span className="text-[10px] text-zinc-500">{sub}</span></div>
@@ -50,13 +52,84 @@ function Box({ title, sub, chart, rows, labels }: { title: string; sub: string; 
             {rows.map((r) => (
               <tr key={r.name} className="border-t border-zinc-900">
                 <td className="whitespace-nowrap py-1 pr-2 font-bold" style={{ color: r.color }}>{r.name}</td>
-                {r.values.map((v, i) => <td key={i} className="whitespace-nowrap px-1.5 py-1 text-right font-mono text-zinc-300">{v}</td>)}
+                {r.values.map((v, i) => <td key={i} className={`whitespace-nowrap px-1.5 py-1 text-right font-mono ${typeof v === 'string' ? 'text-zinc-300' : v.cls}`}>{typeof v === 'string' ? v : v.v}</td>)}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
     </div>
+  );
+}
+
+function Empty({ title }: { title: string }) {
+  return (
+    <div className="rounded-xl border border-dashed border-zinc-800 bg-zinc-950/40 p-3">
+      <span className="text-xs font-extrabold text-white">{title}</span>
+      <div className="flex h-36 items-center justify-center text-center text-[11px] text-zinc-600">No Input Log in this period<br />(or the client is not linked to this store)</div>
+    </div>
+  );
+}
+
+/** Boxes 3 and 4: what the advertiser typed. Spend and sales are yesterday's (session 1); budget and target are the last placement of the day. */
+function InputBoxes({ c }: { c: ClientCard }) {
+  const i = c.input;
+  if (!i) return <><Empty title="Modal Harian vs Biaya Iklan" /><Empty title="Penjualan vs Biaya Iklan" /></>;
+  const data = c.labels.map((name, k) => ({
+    name, modal: i.modal[k], biaya: i.biaya[k], penjualan: i.penjualan[k],
+    target: i.target[k] ? Number(i.target[k].toFixed(2)) : null, roas: i.biaya[k] ? Number(ratio(i.penjualan[k], i.biaya[k]).toFixed(2)) : null,
+  }));
+  const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` : '-');
+  return (
+    <>
+      <Box
+        title="Modal Harian vs Biaya Iklan" sub="budget used · target vs actual ROAS" labels={c.labels}
+        chart={
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={data}><CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} /><XAxis dataKey="name" {...axis} />
+              <YAxis yAxisId="l" {...axis} tickFormatter={short} width={42} /><YAxis yAxisId="r" orientation="right" {...axis} tickFormatter={(v) => `${v}x`} width={32} />
+              <Tooltip {...tip} formatter={(v: any, n: any) => (String(n).includes('ROAS') ? `${v}x` : rp(Number(v)))} />
+              <Bar yAxisId="l" dataKey="modal" name="Modal Harian" fill={C.blue} radius={[3, 3, 0, 0]} />
+              <Bar yAxisId="l" dataKey="biaya" name="Biaya Iklan" fill={C.red} radius={[3, 3, 0, 0]} />
+              <Line yAxisId="r" dataKey="target" name="Target ROAS" stroke={C.gold} strokeWidth={1.5} strokeDasharray="4 3" dot={data.length === 1} connectNulls />
+              <Line yAxisId="r" dataKey="roas" name="ROAS Aktual" stroke={C.gold} strokeWidth={2} dot={data.length === 1} connectNulls />
+            </ComposedChart>
+          </ResponsiveContainer>
+        }
+        rows={[
+          { name: 'Modal Harian', color: C.blue, values: i.modal.map(short) },
+          { name: 'Biaya Iklan', color: C.red, values: i.biaya.map(short) },
+          { name: 'Terpakai', color: '#a1a1aa', values: i.modal.map((m, k) => pct(i.biayaBudgeted[k], m)) },
+          { name: 'Target ROAS', color: C.gold, values: i.target.map((t) => (t ? `${t.toFixed(2)}x` : '-')) },
+          {
+            name: 'ROAS Aktual', color: C.gold,
+            values: i.biaya.map((b, k) => {
+              const r = ratio(i.penjualan[k], b);
+              return { v: x(r, b), cls: !b || !i.target[k] ? 'text-zinc-300' : r >= i.target[k] ? 'text-emerald-400' : 'text-red-400' };
+            }),
+          },
+        ]}
+      />
+      <Box
+        title="Penjualan vs Biaya Iklan" sub="from the Input Log" labels={c.labels}
+        chart={
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={data}><CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} /><XAxis dataKey="name" {...axis} />
+              <YAxis yAxisId="l" {...axis} tickFormatter={short} width={42} /><YAxis yAxisId="r" orientation="right" {...axis} tickFormatter={(v) => `${v}x`} width={32} />
+              <Tooltip {...tip} formatter={(v: any, n: any) => (n === 'ROAS' ? `${v}x` : rp(Number(v)))} />
+              <Bar yAxisId="l" dataKey="penjualan" name="Penjualan" fill={C.green} radius={[3, 3, 0, 0]} />
+              <Bar yAxisId="l" dataKey="biaya" name="Biaya Iklan" fill={C.red} radius={[3, 3, 0, 0]} />
+              <Line yAxisId="r" dataKey="roas" name="ROAS" stroke={C.gold} strokeWidth={2} dot={data.length === 1} connectNulls />
+            </ComposedChart>
+          </ResponsiveContainer>
+        }
+        rows={[
+          { name: 'Penjualan', color: C.green, values: i.penjualan.map(short) },
+          { name: 'Biaya Iklan', color: C.red, values: i.biaya.map(short) },
+          { name: 'ROAS', color: C.gold, values: i.biaya.map((b, k) => x(ratio(i.penjualan[k], b), b)) },
+        ]}
+      />
+    </>
   );
 }
 
@@ -76,7 +149,7 @@ function Card({ c }: { c: ClientCard }) {
           <div><div className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">ROAS</div><div className="font-mono text-xs font-bold text-[#d4af37]">{x(roas, c.totals.cost)}</div></div>
         </div>
       </div>
-      <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+      <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-4">
         <Box
           title="GMV" sub="per period" labels={c.labels}
           chart={
@@ -106,6 +179,7 @@ function Card({ c }: { c: ClientCard }) {
             { name: 'ROAS', color: C.gold, values: c.cost.map((v, i) => x(ratio(c.adSales[i], v), v)) },
           ]}
         />
+        <InputBoxes c={c} />
       </div>
     </div>
   );

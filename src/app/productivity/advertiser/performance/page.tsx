@@ -5,6 +5,9 @@ import { DivisionTabs } from '@/components/productivity/DivisionTabs';
 import { AdvertiserClientPerformance, type ClientCard } from '@/components/productivity/AdvertiserClientPerformance';
 import { buildView, buildBuckets, rangeBuckets, bucketOf, adsCost, adsSales, storeKeyOf, workspaceLabel, WORKSPACE_LABELS } from '@/lib/integrations/performance';
 import { loadStorePerformance } from '@/lib/integrations/store-performance';
+import { nameKey } from '@/lib/integrations/store-advertiser';
+import { createAdminClient } from '@/lib/api/supabase-admin';
+import { inputByDay, inputSeries, type InputReport } from '@/lib/advertiser/input-series';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -12,6 +15,8 @@ export const maxDuration = 60;
 /**
  * Advertiser > Performance: every client (store) with two boxes, GMV on the left and Ads Cost vs ROAS on the right, sorted by name.
  * Filters: year, month, week (inside the month) or a date range, advertiser, company and store; picking a store hides the other clients.
+ * Two more boxes come from the Input Log of the client linked to the store: Modal Harian vs Biaya Iklan (with Target vs actual ROAS)
+ * and Penjualan vs Biaya Iklan vs ROAS.
  * Founder and superadmin see every client; an advertiser only the stores they handle.
  */
 export default async function AdvertiserStorePerformancePage({ searchParams }: { searchParams: Promise<{ year?: string; month?: string; week?: string; store?: string; advertiser?: string; company?: string; from?: string; to?: string }> }) {
@@ -56,7 +61,30 @@ export default async function AdvertiserStorePerformancePage({ searchParams }: {
   const view = viewOf(inWeek);
   const pick = <T,>(a: T[]) => (week && !rb ? [a[week - 1]] : a);
 
-  const cards: ClientCard[] = view.stores.map((s) => ({
+  // The Input Log of the clients linked to these stores ("Company - Store" in the Clients table, or an old plain store name).
+  const db = createAdminClient();
+  const span = range || { from: `${year}-01-01`, to: `${year}-12-31` };
+  const { data: linked } = await db.from('clients').select('id, store_name').not('store_name', 'is', null).limit(10000);
+  const clientsOfName = new Map<string, string[]>();
+  for (const c of linked || []) { const k = nameKey(c.store_name); if (k) clientsOfName.set(k, [...(clientsOfName.get(k) || []), c.id]); }
+  const clientsOf = (label: string, store: string) => Array.from(new Set([...(clientsOfName.get(nameKey(label)) || []), ...(clientsOfName.get(nameKey(store)) || [])]));
+  const wanted = Array.from(new Set(view.stores.flatMap((s) => clientsOf(s.label, s.store))));
+  const reports: InputReport[] = [];
+  // Session 1 of the day after the period still belongs to its last day.
+  const toPlusOne = new Date(Date.parse(`${span.to}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
+  for (let i = 0; i < wanted.length; i += 200) {
+    const { data } = await db.from('advertiser_reports').select('client_id, report_date, session, data_inkubasi, data_group, data_mandiri')
+      .in('client_id', wanted.slice(i, i + 200)).gte('report_date', span.from).lte('report_date', toPlusOne);
+    reports.push(...((data || []) as InputReport[]));
+  }
+  const days = inputByDay(reports);
+  const dayBucket = rb ? rb.dayBucket : (d: string) => bucketOf(d, year, month);
+
+  const cards: ClientCard[] = view.stores.map((s) => {
+    const mine = clientsOf(s.label, s.store).map((id) => days.get(id)).filter((m): m is NonNullable<typeof m> => !!m);
+    const inp = mine.length ? inputSeries(mine, view.labels.length, dayBucket) : null;
+    const any = inp && [...inp.modal, ...inp.biaya, ...inp.penjualan].some((v) => v > 0);
+    return ({
     key: s.key,
     name: nameOf(s.key, s.store),
     label: s.label,
@@ -66,7 +94,9 @@ export default async function AdvertiserStorePerformancePage({ searchParams }: {
     cost: pick(s.cost),
     adSales: pick(s.adSales),
     totals: { gmv: s.totals.gmv, cost: adsCost(s.totals), adSales: adsSales(s.totals) },
-  })).sort(sortByName);
+    input: inp && any ? { modal: pick(inp.modal), biaya: pick(inp.biaya), biayaBudgeted: pick(inp.biayaBudgeted), penjualan: pick(inp.penjualan), target: pick(inp.target) } : null,
+  });
+  }).sort(sortByName);
 
   return (
     <div className="p-4 lg:p-8 space-y-6 animate-in fade-in zoom-in-95 duration-300">

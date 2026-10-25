@@ -1,5 +1,5 @@
 // The store numbers of both feeds with the team of each store, cut to what the viewer may see. Server-side only.
-// Founder and superadmin see every store; anyone else only the stores they handle (as advertiser or admin).
+// Founder and superadmin see every store; an advertiser only the stores they handle. (The admin division has no access to these pages: see proxy.ts.)
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { fetchPerformance, storeKeyOf, storeLabel, type PerfRow } from '@/lib/integrations/performance';
 import { loadStoreAdvertisers, teamOf, type StoreAdvertiserMap } from '@/lib/integrations/store-advertiser';
@@ -34,20 +34,18 @@ export async function loadStorePerformance(year: number, viewer: { userId: strin
 
   // Whose store is it?
   const owners = new Map<string, string | null>();
-  const admins = new Map<string, string | null>();
   const teams: Record<string, StoreTeamNames> = {};
   for (const r of allRows) {
     const k = storeKeyOf(r);
     if (owners.has(k)) continue;
     const t = teamOf(map, k, storeLabel(r), r.store);
     owners.set(k, t.advertiserId);
-    admins.set(k, t.adminId);
     teams[k] = { advertiserId: t.advertiserId, admin: t.adminId ? map.people.get(t.adminId) || '' : '', sales: t.sales, client: t.client };
   }
 
   const owner = viewer.role === 'superadmin' || viewer.role === 'founder';
   const rows = owner
     ? allRows
-    : allRows.filter((r) => { const k = storeKeyOf(r); return !!viewer.userId && (owners.get(k) === viewer.userId || admins.get(k) === viewer.userId); });
+    : allRows.filter((r) => !!viewer.userId && owners.get(storeKeyOf(r)) === viewer.userId);
   return { rows, errors, map, owners, teams, owner };
 }

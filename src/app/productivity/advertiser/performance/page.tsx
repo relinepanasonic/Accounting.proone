@@ -12,7 +12,7 @@ export const maxDuration = 60;
 /**
  * Advertiser > Performance: every client (store) with two boxes, GMV on the left and Ads Cost vs ROAS on the right, sorted by name.
  * Filters: year, month, week (inside the month), advertiser and store; picking a store hides the other clients.
- * Founder and superadmin see every client; an advertiser or admin only the stores they handle.
+ * Founder and superadmin see every client; an advertiser only the stores they handle.
  */
 export default async function AdvertiserStorePerformancePage({ searchParams }: { searchParams: Promise<{ year?: string; month?: string; week?: string; store?: string; advertiser?: string }> }) {
   const sp = await searchParams;

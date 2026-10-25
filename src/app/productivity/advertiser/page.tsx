@@ -12,7 +12,7 @@ export const maxDuration = 60;
 /**
  * Advertiser > Dashboard: the store numbers of the two apps together. Profesor Dashboard reports per store, Reline per dealer
  * (no city or brand manager). Filters: year, month (then the charts go per week), Company and Store.
- * Founder and superadmin see every store; an advertiser or admin only the stores they handle.
+ * Founder and superadmin see every store; an advertiser only the stores they handle.
  * Each store is linked to a client in the Clients table ("Workspace - Store"); the advertiser, admin and salesman of that client are the team of the store. The advertiser can also be set by hand in the Store Detail table.
  */
 export default async function AdvertiserDashboardPage({ searchParams }: { searchParams: Promise<{ year?: string; month?: string; store?: string; advertiser?: string; company?: string }> }) {
@@ -26,7 +26,7 @@ export default async function AdvertiserDashboardPage({ searchParams }: { search
   const storeKey = String(sp?.store || '');
   const companyFilter = String(sp?.company || ''); // '' = all, else ProOne / Reline / Alpha / Lighting Solution
   const advertiserFilter = String(sp?.advertiser || ''); // '' = all, 'none' = not assigned, else a user id
-  // Founder and superadmin see every store; an advertiser or admin only their own.
+  // Founder and superadmin see every store; an advertiser only their own.
   const { rows: allRows, errors, map, owners, teams, owner } = await loadStorePerformance(year, { userId: ctx.userId, role: ctx.role });
 
   const companies = WORKSPACE_LABELS.filter((c) => allRows.some((r) => workspaceLabel(r.source, r.workspace) === c)) as string[];

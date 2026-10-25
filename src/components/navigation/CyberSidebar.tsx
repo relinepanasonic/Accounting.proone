@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { WorkspaceSwitcher } from '@/components/layout/WorkspaceSwitcher';
 import type { WorkspaceContextInfo } from '@/lib/auth/workspace-context';
+import { isFounderEmail } from '@/lib/auth/founders';
 import {
   LayoutDashboard,
   ArrowUpRight,
@@ -81,6 +82,8 @@ const MAIN_MODULES: NavEntry[] = [
   { type: 'link', name: 'HRD', href: '/payroll', icon: <Users className="w-4 h-4" />, isActive: isHrdPath },
 ];
 
+const FOUNDER_ONLY: NavEntry = { type: 'link', name: 'Subscriptions', href: '/subscriptions', icon: <CreditCard className="w-4 h-4" />, isActive: (p) => p === '/subscriptions' || p.startsWith('/subscriptions/') };
+
 interface CyberSidebarProps {
   workspaceContext?: WorkspaceContextInfo;
 }
@@ -140,6 +143,9 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
   // advertiser / client see Pabrik Sosmed only, never the finance navigation.
   const limited = activeRole === 'advertiser' || activeRole === 'sales' || activeRole === 'client';
 
+  // The Subscriptions page is for the founder only.
+  const isFounder = activeRole === 'founder' || isFounderEmail(workspaceContext?.userEmail);
+
   const modules: NavEntry[] =
     activeRole === 'advertiser'
       ? [
@@ -160,7 +166,9 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
           ]
       : limited
         ? [{ type: 'link', name: 'Dream of AI', href: '/productivity/pabrik-sosmed', icon: <Share2 className="w-4 h-4" />, isActive: isPabrikPath }]
-        : MAIN_MODULES;
+        : isFounder
+          ? [...MAIN_MODULES, FOUNDER_ONLY]
+          : MAIN_MODULES;
         
   const availableWorkspaces = workspaceContext?.availableWorkspaces || [];
 

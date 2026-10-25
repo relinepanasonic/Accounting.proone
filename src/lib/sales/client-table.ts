@@ -321,6 +321,9 @@ export async function loadClientRows(db: Db, workspaceId: string, opts: LoadOpts
 
   const { data: assigns } = await db.from('client_assignments').select('client_id, user_id, job').eq('workspace_id', workspaceId).in('client_id', list.map((c) => c.id)).in('job', ['advertising', 'admin']);
   const handler = (id: string, job: string) => (assigns || []).find((a: any) => a.client_id === id && a.job === job)?.user_id || null;
+  // The salesman typed on the client (column added by 20261027_client_sales.sql; without it the Sales stays empty).
+  const { data: salesRows, error: salesErr } = await db.from('clients').select('id, sales_name').in('id', list.map((c) => c.id));
+  const salesOfClient = new Map<string, string>(salesErr ? [] : (salesRows || []).filter((r: any) => r.sales_name).map((r: any) => [r.id, String(r.sales_name)] as [string, string]));
 
   const extra: ClientRow[] = list.map((c) => ({
     key: `client-${c.id}`,
@@ -346,7 +349,7 @@ export async function loadClientRows(db: Db, workspaceId: string, opts: LoadOpts
     invoiceNumber: null,
     status: null,
     isDeal: false,
-    salesman: '',
+    salesman: salesOfClient.get(c.id) || '',
     advertiserId: handler(c.id, 'advertising'),
     adminId: handler(c.id, 'admin'),
     groupSize: 1,

@@ -682,6 +682,20 @@ export async function setClientStatus(invoiceId: string, status: 'auto' | 'freez
 }
 
 /** Accounting or an owner assigns a project (invoice) to a salesman by hand: the Sales column of the Client table and the Top Sales numbers. */
+/** The salesman of a client without any invoice yet (so it can be linked before there is an invoice or a payment). */
+export async function setClientSales(clientId: string, name: string | null): Promise<Result> {
+  const a = await actor();
+  if (!a || !FINANCE.includes(a.ctx.role)) return { success: false, error: 'Only Accounting, Admin and the owners can assign the sales.' };
+  if (!clientId) return { success: false, error: 'Client not found.' };
+  if (!(await clientInScope(a.db, a.ctx.activeWorkspaceId, clientId))) return { success: false, error: 'Client not found.' };
+  const value = name ? String(name).trim().slice(0, 60) : null;
+  const { error } = await a.db.from('clients').update({ sales_name: value || null }).eq('id', clientId);
+  if (error) return { success: false, error: error.code === '42703' || /sales_name/.test(error.message) ? 'Run supabase/migrations/20261027_client_sales.sql in Supabase first.' : error.message };
+  revalidatePath('/sales/clients');
+  revalidatePath('/optimizing/clients');
+  return { success: true };
+}
+
 export async function setInvoiceSales(invoiceId: string, name: string | null): Promise<Result> {
   const a = await actor();
   if (!a || !FINANCE.includes(a.ctx.role)) return { success: false, error: 'Only Accounting, Admin and the owners can assign the sales.' };

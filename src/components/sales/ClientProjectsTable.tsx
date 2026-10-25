@@ -2,7 +2,7 @@
 
 import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { setClientHandler, setClientStatus, setProjectStart, updateClientNames, setInvoiceSales } from '@/app/actions/sales-flow';
+import { setClientHandler, setClientStatus, setProjectStart, updateClientNames, setInvoiceSales, setClientSales } from '@/app/actions/sales-flow';
 import { SALES_PEOPLE } from '@/lib/sales/people';
 import type { ClientRow } from '@/lib/sales/client-table';
 import { SortArrows } from '@/components/ui/SortArrows';
@@ -90,7 +90,8 @@ function SalesCell({ row }: { row: ClientRow }) {
           setValue(next);
           setError('');
           start(async () => {
-            const res = await setInvoiceSales(row.invoiceId, next || null);
+            // A client without an invoice keeps its salesman on the client itself.
+            const res = row.invoiceId ? await setInvoiceSales(row.invoiceId, next || null) : await setClientSales(row.clientId, next || null);
             if (!res.success) { setValue(prev); setError(res.error || 'Could not save.'); } else router.refresh();
           });
         }}

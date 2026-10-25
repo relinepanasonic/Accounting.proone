@@ -71,6 +71,10 @@ export async function loadStoreAdvertisers(db: Db): Promise<StoreAdvertiserMap> 
     }
   }
 
+  // A client without an invoice has its salesman on the client itself (clients.sales_name, when that column exists).
+  const { data: clientSales, error: clientSalesErr } = clientIds.length ? await db.from('clients').select('id, sales_name').in('id', clientIds.slice(0, 1000)) : { data: [] as any[], error: null };
+  if (!clientSalesErr) for (const c of clientSales || []) if (c.sales_name && !salesOf.has(c.id)) salesOf.set(c.id, String(c.sales_name));
+
   // The people.
   const userIds = Array.from(new Set([...(assignments || []).map((a: any) => a.user_id), ...manual.values()]));
   const { data: members } = await db.from('workspace_members').select('user_id').eq('role', 'advertiser');

@@ -73,15 +73,15 @@ function AdsCard({ title, a, color }: { title: string; a: PerfAds; color: string
   );
 }
 
-/** Mini chart of a store or advertiser: sales trend (gold), alone. */
-function SalesSpark({ sales }: { sales: number[] }) {
-  const w = 90, h = 24, max = Math.max(...sales, 1);
-  const pts = sales.map((v, i) => `${(i * w) / Math.max(1, sales.length - 1)},${h - (v / max) * (h - 2) - 1}`).join(' ');
-  return <svg width={w} height={h} aria-label="Sales trend"><polyline points={pts} fill="none" stroke={C.gold} strokeWidth="1.5" /></svg>;
+/** Mini chart of a store or advertiser: GMV trend (green). */
+export function GmvSpark({ gmv }: { gmv: number[] }) {
+  const w = 90, h = 24, max = Math.max(...gmv, 1);
+  const pts = gmv.map((v, i) => `${(i * w) / Math.max(1, gmv.length - 1)},${h - (v / max) * (h - 2) - 1}`).join(' ');
+  return <svg width={w} height={h} aria-label="GMV trend"><polyline points={pts} fill="none" stroke={C.green} strokeWidth="1.5" /></svg>;
 }
 
-/** Mini chart of a store or advertiser: ads cost (gold) against ROAS (green), each on its own scale. */
-function Spark({ cost, adSales }: { cost: number[]; adSales: number[] }) {
+/** Mini chart of a store or advertiser: ads cost (red) against ROAS (gold), each on its own scale. */
+export function Spark({ cost, adSales }: { cost: number[]; adSales: number[] }) {
   const w = 90, h = 24;
   const roasV = cost.map((c, i) => (c > 0 ? adSales[i] / c : 0));
   const line = (values: number[]) => {
@@ -89,15 +89,15 @@ function Spark({ cost, adSales }: { cost: number[]; adSales: number[] }) {
     return values.map((v, i) => `${(i * w) / Math.max(1, values.length - 1)},${h - (v / max) * (h - 2) - 1}`).join(' ');
   };
   return (
-    <svg width={w} height={h} aria-label="Ads cost (gold) and ROAS (green)">
-      <polyline points={line(cost)} fill="none" stroke={C.gold} strokeWidth="1.5" />
-      <polyline points={line(roasV)} fill="none" stroke={C.green} strokeWidth="1.5" />
+    <svg width={w} height={h} aria-label="Ads cost (red) and ROAS (gold)">
+      <polyline points={line(cost)} fill="none" stroke={C.red} strokeWidth="1.5" />
+      <polyline points={line(roasV)} fill="none" stroke={C.gold} strokeWidth="1.5" />
     </svg>
   );
 }
 
 export interface StoreOption { key: string; label: string; source: 'dashboard' | 'reline' }
-export interface AdvertiserSummary { id: string; name: string; stores: number; totals: PerfTotals; sales: number[]; cost: number[]; adSales: number[] }
+export interface AdvertiserSummary { id: string; name: string; stores: number; totals: PerfTotals; gmv: number[]; cost: number[]; adSales: number[] }
 interface Person { id: string; name: string }
 
 /** Owners pick the advertiser of a store; the change is saved at once. */
@@ -197,7 +197,7 @@ export function AdvertiserPerformanceDashboard({ view, year, month, storeKey, ye
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-left text-xs">
               <thead className="border-b border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-500">
-                <tr><th className="px-3 py-2">Advertiser</th><th className="px-3 py-2 text-right">Stores</th><th className="px-3 py-2 text-right">Sales</th><th className="px-3 py-2 text-right">Total GMV</th><th className="px-3 py-2 text-right">Ads Cost</th><th className="px-3 py-2 text-right">ROAS</th><th className="px-3 py-2">Sales Trend</th><th className="px-3 py-2">Ads vs ROAS</th></tr>
+                <tr><th className="px-3 py-2">Advertiser</th><th className="px-3 py-2 text-right">Stores</th><th className="px-3 py-2 text-right">Sales</th><th className="px-3 py-2 text-right">Total GMV</th><th className="px-3 py-2 text-right">Ads Cost</th><th className="px-3 py-2 text-right">ROAS</th><th className="px-3 py-2">GMV Trend</th><th className="px-3 py-2">Ads vs ROAS</th></tr>
               </thead>
               <tbody className="divide-y divide-zinc-800/60">
                 {summaries.map((a) => {
@@ -210,7 +210,7 @@ export function AdvertiserPerformanceDashboard({ view, year, month, storeKey, ye
                       <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-zinc-300">{rp(a.totals.gmv)}</td>
                       <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-zinc-300">{rp(c)}</td>
                       <td className={`whitespace-nowrap px-3 py-2 text-right font-mono ${r >= 1 ? 'text-emerald-400' : 'text-red-400'}`}>{c > 0 ? `${r.toFixed(2)}x` : '-'}</td>
-                      <td className="px-3 py-2"><SalesSpark sales={a.sales} /></td>
+                      <td className="px-3 py-2"><GmvSpark gmv={a.gmv} /></td>
                       <td className="px-3 py-2"><Spark cost={a.cost} adSales={a.adSales} /></td>
                     </tr>
                   );
@@ -291,7 +291,7 @@ export function AdvertiserPerformanceDashboard({ view, year, month, storeKey, ye
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1040px] text-left text-xs">
                 <thead className="border-b border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-500">
-                  <tr><th className="px-3 py-2">Workspace - Store</th><th className="px-3 py-2">Advertiser</th><th className="px-3 py-2">Admin</th><th className="px-3 py-2">Sales</th><th className="px-3 py-2 text-right">Sales</th><th className="px-3 py-2 text-right">Total GMV</th><th className="px-3 py-2 text-right">Traffic</th><th className="px-3 py-2 text-right">In-Cart</th><th className="px-3 py-2 text-right">Ads Cost</th><th className="px-3 py-2 text-right">ROAS</th><th className="px-3 py-2">Sales Trend</th><th className="px-3 py-2">Ads vs ROAS</th></tr>
+                  <tr><th className="px-3 py-2">Workspace - Store</th><th className="px-3 py-2">Advertiser</th><th className="px-3 py-2">Admin</th><th className="px-3 py-2">Sales</th><th className="px-3 py-2 text-right">Sales</th><th className="px-3 py-2 text-right">Total GMV</th><th className="px-3 py-2 text-right">Traffic</th><th className="px-3 py-2 text-right">In-Cart</th><th className="px-3 py-2 text-right">Ads Cost</th><th className="px-3 py-2 text-right">ROAS</th><th className="px-3 py-2">GMV Trend</th><th className="px-3 py-2">Ads vs ROAS</th></tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800/60">
                   {view.stores.map((s) => {
@@ -308,7 +308,7 @@ export function AdvertiserPerformanceDashboard({ view, year, month, storeKey, ye
                         <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-zinc-300">{int(s.totals.addToCart)}</td>
                         <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-zinc-300">{rp(c)}</td>
                         <td className={`whitespace-nowrap px-3 py-2 text-right font-mono ${r >= 1 ? 'text-emerald-400' : 'text-red-400'}`}>{c > 0 ? `${r.toFixed(2)}x` : '-'}</td>
-                        <td className="px-3 py-2"><SalesSpark sales={s.sales} /></td>
+                        <td className="px-3 py-2"><GmvSpark gmv={s.gmv} /></td>
                         <td className="px-3 py-2"><Spark cost={s.cost} adSales={s.adSales} /></td>
                       </tr>
                     );

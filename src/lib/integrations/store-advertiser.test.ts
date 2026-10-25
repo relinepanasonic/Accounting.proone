@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { advertiserOf, teamOf, nameKey, withoutWorkspace, type StoreAdvertiserMap } from './store-advertiser';
 
-const team = (advertiserId: string | null, adminId: string | null = null, sales = '') => ({ advertiserId, adminId, sales });
+const team = (advertiserId: string | null, adminId: string | null = null, sales = '') => ({ advertiserId, adminId, sales, client: '' });
 const map = (over: Partial<StoreAdvertiserMap> = {}): StoreAdvertiserMap => ({ advertisers: [], people: new Map(), byName: new Map(), manual: new Map(), manualReady: true, ...over });
 
 describe('store to advertiser, admin and sales', () => {

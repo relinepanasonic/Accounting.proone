@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { DateRangePicker } from '@/components/ui/DateRangePicker';
+import { PeriodPicker, type Period } from '@/components/ui/PeriodPicker';
 import { useRouter } from 'next/navigation';
 import { ResponsiveContainer, ComposedChart, AreaChart, Area, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 
@@ -30,6 +30,8 @@ export interface ClientCard {
   label: string;
   advertiser: string;
   labels: string[];
+  /** The days of the Input Log boxes when the period is a month or a short range; else the same as labels. */
+  inputLabels: string[];
   gmv: number[];
   cost: number[];
   adSales: number[];
@@ -75,7 +77,7 @@ function Empty({ title }: { title: string }) {
 function InputBoxes({ c }: { c: ClientCard }) {
   const i = c.input;
   if (!i) return <><Empty title="Modal Harian vs Biaya Iklan" /><Empty title="Penjualan vs Biaya Iklan" /></>;
-  const data = c.labels.map((name, k) => ({
+  const data = c.inputLabels.map((name, k) => ({
     name, modal: i.modal[k], biaya: i.biaya[k], penjualan: i.penjualan[k],
     target: i.target[k] ? Number(i.target[k].toFixed(2)) : null, roas: i.biaya[k] ? Number(ratio(i.penjualan[k], i.biaya[k]).toFixed(2)) : null,
   }));
@@ -83,7 +85,7 @@ function InputBoxes({ c }: { c: ClientCard }) {
   return (
     <>
       <Box
-        title="Modal Harian vs Biaya Iklan" sub="budget used · target vs actual ROAS" labels={c.labels}
+        title="Modal Harian vs Biaya Iklan" sub="budget used · target vs actual ROAS" labels={c.inputLabels}
         chart={
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={data}><CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} /><XAxis dataKey="name" {...axis} />
@@ -111,7 +113,7 @@ function InputBoxes({ c }: { c: ClientCard }) {
         ]}
       />
       <Box
-        title="Penjualan vs Biaya Iklan" sub="from the Input Log" labels={c.labels}
+        title="Penjualan vs Biaya Iklan" sub="from the Input Log" labels={c.inputLabels}
         chart={
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={data}><CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} /><XAxis dataKey="name" {...axis} />
@@ -186,17 +188,16 @@ function Card({ c }: { c: ClientCard }) {
 }
 
 /** Advertiser > Performance: every client (store) with its GMV box and its Ads Cost vs ROAS box, sorted by name. */
-export function AdvertiserClientPerformance({ cards, year, month, week, years, advertiserFilter, advertisers, showAdvertiser, storeKey, storeOptions, errors, companyFilter, companies, range }: {
-  cards: ClientCard[]; year: number; month: number; week: number; years: number[];
-  advertiserFilter: string; advertisers: Option[]; showAdvertiser: boolean; storeKey: string; storeOptions: Option[]; errors: string[];
+export function AdvertiserClientPerformance({ cards, year, month, years, advertiserFilter, advertisers, showAdvertiser, storeKey, storeOptions, clientOptions, errors, companyFilter, companies, range }: {
+  cards: ClientCard[]; year: number; month: number; years: number[];
+  advertiserFilter: string; advertisers: Option[]; showAdvertiser: boolean; storeKey: string; storeOptions: Option[]; clientOptions: Option[]; errors: string[];
   companyFilter: string; companies: string[]; range: { from: string; to: string } | null;
 }) {
   const router = useRouter();
-  // Picking a year, month or week leaves the date range; applying a date range leaves them.
-  const go = (p: { y?: number; m?: number; w?: number; adv?: string; co?: string; st?: string; range?: { from: string; to: string } | null }) => {
-    const r = p.range !== undefined ? p.range : p.y !== undefined || p.m !== undefined || p.w !== undefined ? null : range;
-    const y = p.y ?? year; const m = p.m ?? month; const w = m ? p.w ?? week : 0; const adv = p.adv ?? advertiserFilter; const co = p.co ?? companyFilter; const st = p.st ?? storeKey;
-    const when = r ? `from=${r.from}&to=${r.to}` : `year=${y}&month=${m}${w ? `&week=${w}` : ''}`;
+  const go = (p: { adv?: string; co?: string; st?: string; period?: Period }) => {
+    const per = p.period;
+    const when = per ? ('range' in per ? `from=${per.range.from}&to=${per.range.to}` : `year=${per.year}&month=${per.month}`) : range ? `from=${range.from}&to=${range.to}` : `year=${year}&month=${month}`;
+    const adv = p.adv ?? advertiserFilter; const co = p.co ?? companyFilter; const st = p.st ?? storeKey;
     router.push(`/productivity/advertiser/performance?${when}${adv ? `&advertiser=${encodeURIComponent(adv)}` : ''}${co ? `&company=${encodeURIComponent(co)}` : ''}${st ? `&store=${encodeURIComponent(st)}` : ''}`);
   };
   const sel = 'rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs font-bold text-zinc-200 outline-none focus:border-[#d4af37]/60 disabled:opacity-40';
@@ -204,16 +205,7 @@ export function AdvertiserClientPerformance({ cards, year, month, week, years, a
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2">
-        <select value={year} onChange={(e) => go({ y: Number(e.target.value) })} className={`${sel} ${range ? 'opacity-40' : ''}`} aria-label="Year">{years.map((y) => <option key={y} value={y}>{y}</option>)}</select>
-        <select value={range ? 0 : month} onChange={(e) => go({ m: Number(e.target.value), w: 0 })} className={`${sel} ${range ? 'opacity-40' : ''}`} aria-label="Month">
-          <option value={0}>All months</option>
-          {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-        </select>
-        <select value={range ? 0 : week} onChange={(e) => go({ w: Number(e.target.value) })} disabled={!month || !!range} className={sel} aria-label="Week" title={month ? '' : 'Pick a month first'}>
-          <option value={0}>All weeks</option>
-          {[1, 2, 3, 4, 5].map((w) => <option key={w} value={w}>W{w}</option>)}
-        </select>
-        <DateRangePicker value={range} onApply={(r) => go({ range: r })} buttonClass={sel} />
+        <PeriodPicker year={year} month={month} range={range} years={years} onPick={(period) => go({ period })} buttonClass={sel} />
         {showAdvertiser && (
           <select value={advertiserFilter} onChange={(e) => go({ adv: e.target.value, st: '' })} className={sel} aria-label="Advertiser">
             <option value="">Advertiser: all</option>
@@ -225,7 +217,11 @@ export function AdvertiserClientPerformance({ cards, year, month, week, years, a
           <option value="">Company: all</option>
           {companies.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
-        <select value={storeKey} onChange={(e) => go({ st: e.target.value })} className={`${sel} min-w-[220px]`} aria-label="Store">
+        <select value={storeKey} onChange={(e) => go({ st: e.target.value })} className={`${sel} min-w-[180px] max-w-[260px]`} aria-label="Client">
+          <option value="">Client: all</option>
+          {clientOptions.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+        </select>
+        <select value={storeKey} onChange={(e) => go({ st: e.target.value })} className={`${sel} min-w-[180px] max-w-[260px]`} aria-label="Store">
           <option value="">Store: all</option>
           {storeOptions.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
         </select>

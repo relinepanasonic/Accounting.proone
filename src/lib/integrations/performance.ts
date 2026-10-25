@@ -167,14 +167,45 @@ export interface PerfView {
 export const storeKeyOf = (r: Pick<PerfRow, 'source' | 'store' | 'workspace'>) => `${r.source}:${r.store}${r.workspace ? `|${r.workspace}` : ''}`;
 
 export function buildView(rows: PerfRow[], year: number, month: number, storeKey: string): PerfView {
-  const labels = bucketLabels(month);
+  return buildBuckets(rows, bucketLabels(month), (p) => bucketOf(p, year, month), storeKey, month ? 4 : 1);
+}
+
+/** The last n months up to (and with) the month of today: labels "Mei 26" and the bucket of a period start. */
+export function lastMonths(n: number, today: string) {
+  const y = Number(today.slice(0, 4)); const m = Number(today.slice(5, 7));
+  const keys = Array.from({ length: n }, (_, i) => { const d = new Date(Date.UTC(y, m - n + i, 1)); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`; });
+  return {
+    from: `${keys[0]}-01`,
+    labels: keys.map((k) => `${MONTHS[Number(k.slice(5, 7)) - 1]} ${k.slice(2, 4)}`),
+    bucket: (periodStart: string) => keys.indexOf(periodStart.slice(0, 7)),
+  };
+}
+
+/**
+ * A date range (yyyy-mm-dd to yyyy-mm-dd, both in): rows whose period starts inside it. Up to about two months the buckets are the
+ * period starts themselves (the weeks, "07 Sep"); a longer range goes per month ("Sep 26").
+ */
+export function rangeBuckets(rows: Array<Pick<PerfRow, 'periodStart'>>, from: string, to: string) {
+  const inside = (p: string) => p >= from && p <= to;
+  const days = (Date.parse(to) - Date.parse(from)) / 86400000;
+  if (days > 62) {
+    const keys: string[] = [];
+    for (let d = new Date(`${from.slice(0, 7)}-01T00:00:00Z`); d.toISOString().slice(0, 7) <= to.slice(0, 7); d.setUTCMonth(d.getUTCMonth() + 1)) keys.push(d.toISOString().slice(0, 7));
+    return { labels: keys.map((k) => `${MONTHS[Number(k.slice(5, 7)) - 1]} ${k.slice(2, 4)}`), bucket: (p: string) => (inside(p) ? keys.indexOf(p.slice(0, 7)) : -1), baseDiv: 1 };
+  }
+  const keys = Array.from(new Set(rows.map((r) => r.periodStart).filter(inside))).sort();
+  return { labels: keys.map((k) => `${k.slice(8, 10)} ${MONTHS[Number(k.slice(5, 7)) - 1]}`), bucket: (p: string) => (inside(p) ? keys.indexOf(p) : -1), baseDiv: 4 };
+}
+
+/** The numbers per bucket (any labels and any bucket function) and per store. A row with bucket -1 is left out. */
+export function buildBuckets(rows: PerfRow[], labels: string[], bucket: (periodStart: string) => number, storeKey: string, baseDiv: number): PerfView {
   const totals = emptyTotals();
   const buckets = labels.map(() => emptyTotals());
   const byStore = new Map<string, { source: PerfSource; store: string; workspace: string; label: string; totals: PerfTotals; gmv: number[]; cost: number[]; adSales: number[] }>();
   // Baseline: the biggest value of each store (counted once per store, per bucket and for the whole period).
   const baseTotal = new Map<string, number>();
   for (const r of rows) {
-    const b = bucketOf(r.periodStart, year, month);
+    const b = bucket(r.periodStart);
     if (b < 0) continue;
     const key = storeKeyOf(r);
     const s = byStore.get(key) || { source: r.source, store: r.store, workspace: r.workspace, label: storeLabel(r), totals: emptyTotals(), gmv: labels.map(() => 0), cost: labels.map(() => 0), adSales: labels.map(() => 0) };
@@ -192,7 +223,7 @@ export function buildView(rows: PerfRow[], year: number, month: number, storeKey
   const sum = (m: Map<string, number>) => Array.from(m.values()).reduce((a, v) => a + v, 0);
   totals.baselineSales = sum(baseTotal);
   // The baseline is a snapshot of the store (it comes once per store): a flat reference line over the buckets. In the week view it is a quarter of it.
-  buckets.forEach((b) => { b.baselineSales = totals.baselineSales / (month ? 4 : 1); });
+  buckets.forEach((b) => { b.baselineSales = totals.baselineSales / baseDiv; });
   // Active sales: the app's own number when it sends one, else the sales.
   if (totals.activeSales === 0) { totals.activeSales = totals.sales; buckets.forEach((b) => { b.activeSales = b.sales; }); }
   const stores = Array.from(byStore.entries()).map(([key, v]) => ({ key, ...v })).sort((a, b) => b.totals.sales - a.totals.sales);

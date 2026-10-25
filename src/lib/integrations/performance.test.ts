@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeRow, buildView, bucketOf, adsCost, adsSales, roas, storeKeyOf } from './performance';
+import { normalizeRow, buildView, lastMonths, rangeBuckets, bucketOf, adsCost, adsSales, roas, storeKeyOf } from './performance';
 
 const row = (over: any) => normalizeRow(over.source || 'dashboard', {
   store: 'Store A', periodStart: '2026-09-07', granularity: 'week', sales: 100, gmv: 150, traffic: 1000, addToCart: 50, orders: 10,
@@ -70,5 +70,20 @@ describe('store performance', () => {
     const sum = row({});
     expect(sum.ads.total.cost).toBe(15);
     expect(sum.ads.total.sales).toBe(90);
+  });
+
+  it('the last 6 months cross the year; a short date range goes per week, a long one per month', () => {
+    const six = lastMonths(6, '2027-02-10');
+    expect(six.from).toBe('2026-09-01');
+    expect(six.labels).toEqual(['Sep 26', 'Okt 26', 'Nov 26', 'Des 26', 'Jan 27', 'Feb 27']);
+    expect(six.bucket('2026-12-28')).toBe(3);
+    expect(six.bucket('2026-08-31')).toBe(-1);
+    const rows = [{ periodStart: '2026-09-07' }, { periodStart: '2026-09-14' }, { periodStart: '2026-10-05' }];
+    const short = rangeBuckets(rows, '2026-09-01', '2026-09-30');
+    expect(short.labels).toEqual(['07 Sep', '14 Sep']);
+    expect(short.bucket('2026-10-05')).toBe(-1);
+    const long = rangeBuckets(rows, '2026-08-15', '2026-12-31');
+    expect(long.labels).toEqual(['Agu 26', 'Sep 26', 'Okt 26', 'Nov 26', 'Des 26']);
+    expect(long.bucket('2026-10-05')).toBe(2);
   });
 });

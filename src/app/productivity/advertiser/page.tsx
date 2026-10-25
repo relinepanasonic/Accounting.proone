@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { DivisionTabs } from '@/components/productivity/DivisionTabs';
 import { AdvertiserPerformanceDashboard, type StoreOption, type AdvertiserSummary } from '@/components/productivity/AdvertiserPerformanceDashboard';
-import { buildView, adsCost, adsSales, storeKeyOf, workspaceLabel, WORKSPACE_LABELS } from '@/lib/integrations/performance';
+import { buildView, buildBuckets, lastMonths, adsCost, adsSales, storeKeyOf, workspaceLabel, WORKSPACE_LABELS } from '@/lib/integrations/performance';
 import { loadStorePerformance } from '@/lib/integrations/store-performance';
 
 export const dynamic = 'force-dynamic';
@@ -27,7 +27,12 @@ export default async function AdvertiserDashboardPage({ searchParams }: { search
   const companyFilter = String(sp?.company || ''); // '' = all, else ProOne / Reline / Alpha / Lighting Solution
   const advertiserFilter = String(sp?.advertiser || ''); // '' = all, 'none' = not assigned, else a user id
   // Founder and superadmin see every store; an advertiser only their own.
-  const { rows: allRows, errors, map, owners, teams, owner } = await loadStorePerformance(year, { userId: ctx.userId, role: ctx.role });
+  // The mini charts always show the last 6 months up to now, so the feeds are asked from that month on too.
+  const today = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
+  const six = lastMonths(6, today);
+  const yearFrom = `${year}-01-01`;
+  const { rows: allRows, errors, map, owners, owner } = await loadStorePerformance({ from: six.from < yearFrom ? six.from : yearFrom, to: `${year}-12-31` }, { userId: ctx.userId, role: ctx.role });
+  const trendOf = (rs: typeof allRows) => buildBuckets(rs, six.labels, six.bucket, '', 1);
 
   const companies = WORKSPACE_LABELS.filter((c) => allRows.some((r) => workspaceLabel(r.source, r.workspace) === c)) as string[];
   // Company first, then the stores of that company.
@@ -46,9 +51,13 @@ export default async function AdvertiserDashboardPage({ searchParams }: { search
   const summaries: AdvertiserSummary[] = everyone.map((a) => {
     const mine = allRows.filter((r) => (a.id === 'none' ? (owners.get(storeKeyOf(r)) || null) === null : owners.get(storeKeyOf(r)) === a.id));
     const v = buildView(mine, year, month, '');
-    return { id: a.id, name: a.name, stores: v.stores.length, totals: v.totals, gmv: v.buckets.map((b) => b.gmv), cost: v.buckets.map(adsCost), adSales: v.buckets.map(adsSales) };
+    const t6 = trendOf(mine);
+    return { id: a.id, name: a.name, stores: v.stores.length, totals: v.totals, gmv: t6.buckets.map((b) => b.gmv), cost: t6.buckets.map(adsCost), adSales: t6.buckets.map(adsSales) };
   }).filter((s) => s.stores > 0 || (owner && s.id !== 'none'));
   const advertisers = owner ? map.advertisers : map.advertisers.filter((a) => summaries.some((s) => s.id === a.id));
+
+  const trend: Record<string, { gmv: number[]; cost: number[]; adSales: number[] }> = {};
+  for (const st of trendOf(rows).stores) trend[st.key] = { gmv: st.gmv, cost: st.cost, adSales: st.adSales };
 
   const assignedTo: Record<string, string> = {};
   for (const [k, v] of owners) if (v) assignedTo[k] = v;
@@ -58,7 +67,7 @@ export default async function AdvertiserDashboardPage({ searchParams }: { search
       <DivisionTabs base="/productivity/advertiser" active="dashboard" />
       <AdvertiserPerformanceDashboard
         view={view} year={year} month={month} storeKey={storeKey} years={[thisYear, thisYear - 1]} storeOptions={storeOptions} errors={errors}
-        advertiserFilter={advertiserFilter} companyFilter={companyFilter} companies={companies} advertisers={advertisers} summaries={summaries} assignedTo={assignedTo} teams={teams} canAssign={owner}
+        advertiserFilter={advertiserFilter} companyFilter={companyFilter} companies={companies} advertisers={advertisers} summaries={summaries} assignedTo={assignedTo} trend={trend} trendLabel={`${six.labels[0]} - ${six.labels[5]}`} canAssign={owner}
         manualByHand={Array.from(map.manual.keys())} manualReady={map.manualReady}
       />
     </div>

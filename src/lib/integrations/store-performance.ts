@@ -17,10 +17,9 @@ export interface StorePerformance {
   owner: boolean;
 }
 
-export async function loadStorePerformance(year: number, viewer: { userId: string | null; role: string }): Promise<StorePerformance> {
-  // The whole year every time (one call, about 2 seconds): the month and its weeks are cut in memory, and the baseline snapshot of a store is never lost.
-  const from = `${year}-01-01`;
-  const to = `${year}-12-31`;
+/** range: the dates asked from both feeds (a whole year and more: the month, week and date-range cuts are made in memory, and the baseline snapshot of a store is never lost). */
+export async function loadStorePerformance(range: { from: string; to: string }, viewer: { userId: string | null; role: string }): Promise<StorePerformance> {
+  const { from, to } = range;
   const [dash, reline, map] = await Promise.all([
     fetchPerformance('dashboard', from, to),
     fetchPerformance('reline', from, to),

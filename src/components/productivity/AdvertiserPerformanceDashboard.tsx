@@ -6,7 +6,7 @@ import { setStoreAdvertiser } from '@/app/actions/store-advertiser';
 import {
   ResponsiveContainer, ComposedChart, BarChart, LineChart, AreaChart, Area, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts';
-import type { PerfAds, PerfTotals, PerfView } from '@/lib/integrations/performance';
+import { workspaceLabel, type PerfAds, type PerfTotals, type PerfView } from '@/lib/integrations/performance';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 const C = { gold: '#d4af37', blue: '#3b82f6', sky: '#60a5fa', pale: '#93c5fd', green: '#10b981', red: '#f87171', zinc: '#71717a' };
@@ -131,9 +131,9 @@ function AdvertiserCell({ storeKey, current, advertisers, canAssign, byHand }: {
   );
 }
 
-export function AdvertiserPerformanceDashboard({ view, year, month, storeKey, years, storeOptions, errors, advertiserFilter, companyFilter, companies, advertisers, summaries, assignedTo, teams, canAssign, manualByHand }: {
+export function AdvertiserPerformanceDashboard({ view, year, month, storeKey, years, storeOptions, errors, advertiserFilter, companyFilter, companies, advertisers, summaries, assignedTo, trend, trendLabel, canAssign, manualByHand }: {
   view: PerfView; year: number; month: number; storeKey: string; years: number[]; storeOptions: StoreOption[]; errors: string[];
-  advertiserFilter: string; companyFilter: string; companies: string[]; advertisers: Person[]; summaries: AdvertiserSummary[]; assignedTo: Record<string, string>; teams: Record<string, { admin: string; sales: string }>; canAssign: boolean; manualByHand: string[]; manualReady: boolean;
+  advertiserFilter: string; companyFilter: string; companies: string[]; advertisers: Person[]; summaries: AdvertiserSummary[]; assignedTo: Record<string, string>; trend: Record<string, { gmv: number[]; cost: number[]; adSales: number[] }>; trendLabel: string; canAssign: boolean; manualByHand: string[]; manualReady: boolean;
 }) {
   const router = useRouter();
   const go = (y: number, m: number, st: string, adv: string = advertiserFilter, co: string = companyFilter) => router.push(`/productivity/advertiser?year=${y}&month=${m}${adv ? `&advertiser=${encodeURIComponent(adv)}` : ''}${co ? `&company=${encodeURIComponent(co)}` : ''}${st ? `&store=${encodeURIComponent(st)}` : ''}`);
@@ -197,7 +197,7 @@ export function AdvertiserPerformanceDashboard({ view, year, month, storeKey, ye
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-left text-xs">
               <thead className="border-b border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-500">
-                <tr><th className="px-3 py-2">Advertiser</th><th className="px-3 py-2 text-right">Stores</th><th className="px-3 py-2 text-right">Sales</th><th className="px-3 py-2 text-right">Total GMV</th><th className="px-3 py-2 text-right">Ads Cost</th><th className="px-3 py-2 text-right">ROAS</th><th className="px-3 py-2">GMV Trend</th><th className="px-3 py-2">Ads vs ROAS</th></tr>
+                <tr><th className="px-3 py-2">Advertiser</th><th className="px-3 py-2 text-right">Stores</th><th className="px-3 py-2 text-right">Sales</th><th className="px-3 py-2 text-right">Total GMV</th><th className="px-3 py-2 text-right">Ads Cost</th><th className="px-3 py-2 text-right">ROAS</th><th className="px-3 py-2" title={trendLabel}>GMV Trend · 6 mo</th><th className="px-3 py-2" title={trendLabel}>Ads vs ROAS · 6 mo</th></tr>
               </thead>
               <tbody className="divide-y divide-zinc-800/60">
                 {summaries.map((a) => {
@@ -291,25 +291,24 @@ export function AdvertiserPerformanceDashboard({ view, year, month, storeKey, ye
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1040px] text-left text-xs">
                 <thead className="border-b border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-500">
-                  <tr><th className="px-3 py-2">Workspace - Store</th><th className="px-3 py-2">Advertiser</th><th className="px-3 py-2">Admin</th><th className="px-3 py-2">Sales</th><th className="px-3 py-2 text-right">Sales</th><th className="px-3 py-2 text-right">Total GMV</th><th className="px-3 py-2 text-right">Traffic</th><th className="px-3 py-2 text-right">In-Cart</th><th className="px-3 py-2 text-right">Ads Cost</th><th className="px-3 py-2 text-right">ROAS</th><th className="px-3 py-2">GMV Trend</th><th className="px-3 py-2">Ads vs ROAS</th></tr>
+                  <tr><th className="px-3 py-2">Company</th><th className="px-3 py-2">Store</th><th className="px-3 py-2">Advertiser</th><th className="px-3 py-2 text-right">Sales</th><th className="px-3 py-2 text-right">Total GMV</th><th className="px-3 py-2 text-right">Traffic</th><th className="px-3 py-2 text-right">In-Cart</th><th className="px-3 py-2 text-right">Ads Cost</th><th className="px-3 py-2 text-right">ROAS</th><th className="px-3 py-2" title={trendLabel}>GMV Trend · 6 mo</th><th className="px-3 py-2" title={trendLabel}>Ads vs ROAS · 6 mo</th></tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800/60">
                   {view.stores.map((s) => {
                     const c = costOf(s.totals); const r = ratio(adSalesOf(s.totals), c);
                     return (
                       <tr key={s.key} onClick={() => go(year, month, s.key === storeKey ? '' : s.key)} className={`cursor-pointer hover:bg-zinc-900/40 ${s.key === storeKey ? 'bg-[#d4af37]/10' : ''}`}>
-                        <td className="px-3 py-2 font-semibold text-white">{s.label}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-zinc-300">{workspaceLabel(s.source, s.workspace)}</td>
+                        <td className="px-3 py-2 font-semibold text-white">{s.store}</td>
                         <td className="px-3 py-2"><AdvertiserCell storeKey={s.key} current={assignedTo[s.key] || ''} advertisers={advertisers} canAssign={canAssign} byHand={manualByHand.includes(s.key)} /></td>
-                        <td className="px-3 py-2 text-zinc-300">{teams[s.key]?.admin || <span className="text-zinc-600">-</span>}</td>
-                        <td className="px-3 py-2 text-zinc-300">{teams[s.key]?.sales || <span className="text-zinc-600">-</span>}</td>
                         <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-[#f5d77f]">{rp(s.totals.sales)}</td>
                         <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-zinc-300">{rp(s.totals.gmv)}</td>
                         <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-zinc-300">{int(s.totals.traffic)}</td>
                         <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-zinc-300">{int(s.totals.addToCart)}</td>
                         <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-zinc-300">{rp(c)}</td>
                         <td className={`whitespace-nowrap px-3 py-2 text-right font-mono ${r >= 1 ? 'text-emerald-400' : 'text-red-400'}`}>{c > 0 ? `${r.toFixed(2)}x` : '-'}</td>
-                        <td className="px-3 py-2"><GmvSpark gmv={s.gmv} /></td>
-                        <td className="px-3 py-2"><Spark cost={s.cost} adSales={s.adSales} /></td>
+                        <td className="px-3 py-2"><GmvSpark gmv={trend[s.key]?.gmv || []} /></td>
+                        <td className="px-3 py-2"><Spark cost={trend[s.key]?.cost || []} adSales={trend[s.key]?.adSales || []} /></td>
                       </tr>
                     );
                   })}

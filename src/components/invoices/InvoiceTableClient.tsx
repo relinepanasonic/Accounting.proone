@@ -28,6 +28,8 @@ interface InvoiceData {
   paidAmount: number;
   /** A PT Pintu invoice assigned to this workspace: visible here, changed only in PT Pintu. */
   readOnly?: boolean;
+  /** Confirmed by the bank in Bank Reconcile: all its payments (full), some of them (partial) or none. */
+  reconcile?: 'full' | 'partial' | 'none';
 }
 
 export interface InvoiceRequestRow {
@@ -428,6 +430,12 @@ export function InvoiceTableClient({ initialInvoices, availableWorkspaces = [], 
                         assignedWorkspaceId={inv.assignedWorkspaceId}
                         assignedWorkspaceName={inv.assignedWorkspaceName}
                       />
+                    )}
+                    {!inv.readOnly && !inv.isQuotation && inv.reconcile === 'full' && (
+                      <div className="mt-1.5"><span title="Every payment of this invoice is reconciled with the bank" className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />Reconciled</span></div>
+                    )}
+                    {!inv.readOnly && !inv.isQuotation && inv.reconcile === 'partial' && (
+                      <div className="mt-1.5"><span title="Some payments of this invoice are reconciled, some are not" className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-300"><span className="h-1.5 w-1.5 rounded-full bg-amber-300" />Partly reconciled</span></div>
                     )}
                   </td>
                   {/* Aksi */}

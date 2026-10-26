@@ -28,7 +28,7 @@ async function InvoicesTableServer({ activeTab }: { activeTab: string }) {
   ] = await Promise.all([
     supabase
       .from('invoices')
-      .select('id, invoice_number, is_quotation, status, total_amount, amount_paid, issue_date, due_date, notes, client_id, assigned_workspace_id, clients(name, contact_name), invoice_line_items(package_name, description, quantity, scale)')
+      .select('id, invoice_number, is_quotation, status, total_amount, amount_paid, issue_date, due_date, notes, client_id, assigned_workspace_id, reconciled, clients(name, contact_name), invoice_line_items(package_name, description, quantity, scale)')
       .eq('workspace_id', activeWorkspaceId)
       .order('created_at', { ascending: false }),
     supabase
@@ -58,6 +58,21 @@ async function InvoicesTableServer({ activeTab }: { activeTab: string }) {
     ptAssigned = (assignedRes.data || []).map((i: any) => ({ ...i, __ro: true }));
   }
   const allInvoices: any[] = [...(invoices || []), ...ptAssigned];
+
+  // Which invoices are confirmed by the bank: every payment recorded on it is reconciled in Bank Reconcile (or the invoice itself was matched).
+  const paymentsOf = new Map<string, { all: number; matched: number }>();
+  for (const tx of incomeTx || []) {
+    if (!tx.invoice_id) continue;
+    const c = paymentsOf.get(tx.invoice_id) || { all: 0, matched: 0 };
+    c.all++;
+    if (tx.reconciled) c.matched++;
+    paymentsOf.set(tx.invoice_id, c);
+  }
+  const reconcileOf = (inv: any): 'full' | 'partial' | 'none' => {
+    const p = paymentsOf.get(inv.id);
+    if (p && p.all > 0) return p.matched === p.all ? 'full' : p.matched > 0 ? 'partial' : 'none';
+    return inv.reconciled === true && Number(inv.amount_paid || 0) > 0 ? 'full' : 'none';
+  };
 
   const displayInvoices =
     allInvoices.length > 0
@@ -90,6 +105,7 @@ async function InvoicesTableServer({ activeTab }: { activeTab: string }) {
             assignedWorkspaceId: inv.assigned_workspace_id,
             assignedWorkspaceName: inv.assigned_workspace_id === NEW_WAVE_WORKSPACE_ID ? 'New Wave job' : '—',
             readOnly: inv.__ro === true,
+            reconcile: inv.__ro === true ? ('none' as const) : reconcileOf(inv),
           };
         })
       : [];

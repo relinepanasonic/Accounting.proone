@@ -150,6 +150,8 @@ async function deleteFromNewWave(invoiceId: string): Promise<void> {
 export async function syncInvoiceToNewWave(invoiceId: string, supabase: any): Promise<{ success: boolean; error?: string }> {
   try {
     const apiKey = process.env.ACCOUNTING_API_KEY || process.env.NEWWAVE_INTEGRATION_TOKEN;
+    // NEWWAVE_SYNC=off (Vercel env): the New Wave hour system is not used for now, nothing is pushed and nothing is reported as failed.
+    if (String(process.env.NEWWAVE_SYNC || '').toLowerCase() === 'off') return { success: true };
     if (!apiKey) return { success: false, error: 'API Key missing (ACCOUNTING_API_KEY or NEWWAVE_INTEGRATION_TOKEN)' };
 
     const { data: inv } = await supabase
@@ -247,7 +249,9 @@ export async function syncInvoiceToNewWave(invoiceId: string, supabase: any): Pr
     if (!res.ok) {
       const errText = await res.text().catch(() => '');
       console.warn('New Wave sync returned non-ok status:', res.status, errText);
-      return { success: false, error: `New Wave API error (${res.status}): ${errText}` };
+      // The answer of the New Wave app can be a long JSON: say it in one line.
+      const why = /fetch failed/i.test(errText) ? "its own server could not reach its database (the app may be paused)" : errText.replace(/s+/g, " ").slice(0, 120);
+      return { success: false, error: `the New Wave app answered ${res.status}: ${why}. The invoice is saved here; the New Wave hour system was not updated.` };
     }
     
     return { success: true };
@@ -908,7 +912,7 @@ export async function markInvoiceAsFinalized(invoiceId: string) {
     // Sync to New Wave
     const syncRes = await syncInvoiceToNewWave(invoiceId, supabase);
     if (!syncRes.success) {
-      return { success: false, error: `Marked as sent, but New Wave sync failed: ${syncRes.error}` };
+      return { success: true, error: `Marked as sent, but New Wave sync failed: ${syncRes.error}` };
     }
 
     return { success: true };

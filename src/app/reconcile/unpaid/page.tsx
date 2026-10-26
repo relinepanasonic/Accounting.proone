@@ -3,6 +3,8 @@ import { FileWarning } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { clientMask } from '@/lib/auth/client-privacy';
+import { createAdminClient } from '@/lib/api/supabase-admin';
+import { intercompanyLabels } from '@/lib/intercompany/nw-billing';
 import { ReconcileTabs } from '@/components/reconcile/ReconcileTabs';
 import { UnpaidInvoiceTable, type UnpaidInvoice } from '@/components/reconcile/UnpaidInvoiceTable';
 
@@ -17,12 +19,15 @@ async function loadUnpaid() {
   const [{ data: invoices }, { data: banks }] = await Promise.all([
     supabase
       .from('invoices')
-      .select('id, invoice_number, status, total_amount, amount_paid, issue_date, due_date, assigned_workspace_id, clients(name)')
+      .select('id, invoice_number, status, total_amount, amount_paid, issue_date, due_date, assigned_workspace_id, intercompany_of, clients(name)')
       .eq('workspace_id', activeWorkspaceId)
       .eq('is_quotation', false)
       .order('issue_date', { ascending: false }),
     supabase.from('workspace_bank_accounts').select('id, bank_name, account_number').eq('workspace_id', activeWorkspaceId).order('is_default', { ascending: false }),
   ]);
+
+  // New Wave's invoice to PT PLIG shows as "PT PLIG - <the PT client>", so the payment can be told from the others of the same amount.
+  const labels = await intercompanyLabels(createAdminClient(), (invoices || []) as any[]);
 
   const rows: UnpaidInvoice[] = (invoices || [])
     .map((inv: any) => {
@@ -32,7 +37,7 @@ async function loadUnpaid() {
       return {
         id: inv.id as string,
         number: (inv.invoice_number || 'INV') as string,
-        client: mask.name(clientObj?.name, inv.assigned_workspace_id, 'Client') as string,
+        client: (labels.get(inv.id) || mask.name(clientObj?.name, inv.assigned_workspace_id, 'Client')) as string,
         date: String(inv.issue_date || '').slice(0, 10),
         due: String(inv.due_date || '').slice(0, 10),
         total,

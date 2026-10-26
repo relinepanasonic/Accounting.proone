@@ -254,3 +254,17 @@ export async function removeNwBilling(db: Db, ptInvoiceId: string): Promise<Bill
   if (!data?.intercompany_invoice_id) return { ok: true, action: 'skip' };
   return removeBilling(db, ptInvoiceId, data.intercompany_invoice_id);
 }
+
+/**
+ * New Wave's invoice to PT carries the amount of the PT invoice, so in a list it looks like the others. Its label says whose job it is:
+ * "PT PLIG - Lofree". Returns invoice id -> label for the invoices that are intercompany ones; the client is read from the PT invoice.
+ */
+export async function intercompanyLabels(db: Db, invoices: Array<{ id: string; intercompany_of?: string | null }>): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const links = invoices.filter((i) => i.intercompany_of);
+  if (!links.length) return out;
+  const { data } = await db.from('invoices').select('id, assigned_workspace_id, clients(name)').in('id', links.map((i) => i.intercompany_of));
+  const byPt = new Map<string, string>((data || []).map((p: any) => [p.id as string, String((Array.isArray(p.clients) ? p.clients[0]?.name : p.clients?.name) || 'Client')] as [string, string]));
+  for (const i of links) out.set(i.id, `PT PLIG - ${byPt.get(i.intercompany_of as string) || 'Client'}`);
+  return out;
+}

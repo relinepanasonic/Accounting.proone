@@ -9,6 +9,8 @@ import {
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { clientMask, HIDDEN_CLIENT } from '@/lib/auth/client-privacy';
 import { mainPaymentOf } from '@/lib/assets/source';
+import { intercompanyLabels } from '@/lib/intercompany/nw-billing';
+import { createAdminClient } from '@/lib/api/supabase-admin';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // a heavy page may take more than the default 10 seconds on Vercel
@@ -67,7 +69,7 @@ async function ReconciliationCore() {
   ] = await Promise.all([
     supabase
       .from('invoices')
-      .select('id, invoice_number, status, total_amount, amount_paid, issue_date, due_date, clients(name), reconciled, workspace_id, assigned_workspace_id')
+      .select('id, invoice_number, status, total_amount, amount_paid, issue_date, due_date, clients(name), reconciled, workspace_id, assigned_workspace_id, intercompany_of')
       .eq('workspace_id', activeWorkspaceId)
       // Removed reconciled filter so user can match already-reconciled items to bank statement
       .order('issue_date', { ascending: false }),
@@ -206,9 +208,11 @@ async function ReconciliationCore() {
   // That payment transaction is what gets reconciled against the bank, so the invoice row is hidden.
   const invoiceClientName = new Map<string, string>();
   const invoiceIssueDate = new Map<string, string>();
+  const interLabels = await intercompanyLabels(createAdminClient(), rawInvoices as any[]);
   rawInvoices.forEach((inv) => {
     const clientObj = Array.isArray(inv.clients) ? inv.clients[0] : inv.clients;
-    invoiceClientName.set(inv.id, mask.name(clientObj?.name, inv.assigned_workspace_id, 'Client Payee'));
+    // New Wave's invoice to PT PLIG: "PT PLIG - <the PT client>", to tell it from other payments of the same amount.
+    invoiceClientName.set(inv.id, interLabels.get(inv.id) || mask.name(clientObj?.name, inv.assigned_workspace_id, 'Client Payee'));
     if (inv.issue_date) invoiceIssueDate.set(inv.id, inv.issue_date);
   });
   const invoicesWithPayment = new Set(

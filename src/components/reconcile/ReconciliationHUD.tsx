@@ -18,7 +18,7 @@ import {
 import { reconcileRecord, quickResolveAndReconcile, unreconcileRecord } from '@/app/actions/reconcile';
 import { createClientRecord } from '@/app/actions/settings';
 import { recordInvoicePayment } from '@/app/actions/invoices';
-import { relinkBankBook, releaseBankRef } from '@/app/actions/bank-book';
+import { relinkBankBook, releaseBankRef, terminateBankLink } from '@/app/actions/bank-book';
 import { RupiahInput } from '@/components/ui/RupiahInput';
 
 export interface UnreconciledSystemRecord {
@@ -472,6 +472,30 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
     });
   };
 
+  // A reconciled bank line: cut its connection so it can be reconciled again (the records it paid become open again).
+  const handleUnmatchLine = async (line: BankLine) => {
+    const choice = await askOptions(
+      'Cut this connection?',
+      <div className="space-y-2 text-sm">
+        <p>The bank line <span className="font-bold text-white">{line.sourceDestination || '-'}</span> ({signed(line.amount)}) goes back to <span className="font-bold text-white">not reconciled</span>.</p>
+        <p className="text-zinc-400">What it was matched with (expense, income or invoice payment) becomes open again, and the ledger lines posted by the match are removed. If one transfer was matched with several records, all of them are released.</p>
+      </div>,
+      [
+        { text: 'Cut connection', value: 'cut', isPrimary: true },
+        { text: 'Keep it', value: 'cancel', isDanger: true },
+      ],
+    );
+    if (choice !== 'cut') return;
+    startTransition(async () => {
+      const res = await terminateBankLink(line.id);
+      if (!res.success) {
+        await askOptions('Could not cut the connection', res.error || 'Something went wrong.', [{ text: 'Close', value: 'close', isPrimary: true }]);
+        return;
+      }
+      void relinkBankBook().finally(() => router.refresh());
+    });
+  };
+
   const handleQuickResolve = (type: 'expense' | 'income') => {
     if (!activeBankLine) return;
     startTransition(async () => {
@@ -674,7 +698,9 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
                   <div className="mt-2 flex items-center justify-between">
                     {line.reconciled ? <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold text-emerald-400">Reconciled</span> : hint ? <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold text-emerald-400">Match found</span> : <span className="rounded-full bg-zinc-800/60 px-2 py-0.5 text-[9px] font-bold text-zinc-500">No match</span>}
                     <div className="flex items-center gap-1">
-                      {line.reconciled ? null : line.amount < 0 ? (
+                      {line.reconciled ? (
+                        <button type="button" disabled={isPending} title="Cut the connection so this line can be reconciled again" onClick={(e) => { e.stopPropagation(); handleUnmatchLine(line); }} className="rounded border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-red-300 hover:bg-red-500/20 disabled:opacity-40">Unmatch</button>
+                      ) : line.amount < 0 ? (
                         <button type="button" title="No match: create an expense" aria-label="Create expense" onClick={(e) => { e.stopPropagation(); openNoMatch(line, 'expense'); }} className="rounded-md border border-red-500/30 p-1 text-red-400 hover:bg-red-500/10"><Receipt className="h-3.5 w-3.5" /></button>
                       ) : (
                         <>

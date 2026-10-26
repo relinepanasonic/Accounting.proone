@@ -130,22 +130,31 @@ export async function terminateBankLink(lineId: string): Promise<{ success: bool
   try {
     const supabase = await createClient();
     const ctx = await getAuthenticatedWorkspaceContext(supabase);
-    const { data: line } = await supabase.from('bank_statement_lines').select('id, transaction_id, invoice_id').eq('id', lineId).eq('workspace_id', ctx.activeWorkspaceId).maybeSingle();
+    if (!FINANCE_ROLES.includes(ctx.role)) return { success: false, error: 'Not allowed.' };
+    const { data: line } = await supabase.from('bank_statement_lines').select('id, transaction_id, invoice_id, bank_ref').eq('id', lineId).eq('workspace_id', ctx.activeWorkspaceId).maybeSingle();
     if (!line) return { success: false, error: 'Line not found.' };
 
+    // Everything this bank line was matched with: the linked record, and every record that carries its bank reference
+    // (one transfer can pay several records, and an older match may have no link on the line at all).
+    const records = new Map<string, 'income' | 'expense' | 'invoice'>();
     if (line.transaction_id) {
-      const { data: t } = await supabase.from('transactions').select('type').eq('id', line.transaction_id).maybeSingle();
-      if (t) {
-        const res = await unreconcileRecord(line.transaction_id, t.type === 'income' ? 'income' : 'expense');
-        if (!res.success) return { success: false, error: res.error || 'Could not terminate the reconcile.' };
-      }
-    } else if (line.invoice_id) {
-      const res = await unreconcileRecord(line.invoice_id, 'invoice');
-      if (!res.success) return { success: false, error: res.error || 'Could not terminate the reconcile.' };
-    } else {
-      return { success: false, error: 'This line is not connected to anything.' };
+      const { data: t } = await supabase.from('transactions').select('id, type').eq('id', line.transaction_id).maybeSingle();
+      if (t) records.set(t.id, t.type === 'income' ? 'income' : 'expense');
+    }
+    if (line.invoice_id) records.set(line.invoice_id, 'invoice');
+    if (line.bank_ref) {
+      const { data: txs } = await supabase.from('transactions').select('id, type').eq('workspace_id', ctx.activeWorkspaceId).eq('bank_reference', line.bank_ref).eq('reconciled', true);
+      for (const t of txs || []) records.set(t.id, t.type === 'income' ? 'income' : 'expense');
+      const { data: invs } = await supabase.from('invoices').select('id').eq('workspace_id', ctx.activeWorkspaceId).eq('bank_reference', line.bank_ref);
+      for (const i of invs || []) if (!records.has(i.id)) records.set(i.id, 'invoice');
     }
 
+    for (const [id, kind] of records) {
+      const res = await unreconcileRecord(id, kind);
+      if (!res.success) return { success: false, error: res.error || 'Could not terminate the reconcile.' };
+    }
+
+    // The line is open again even when no record was found (the connection was already broken on that side).
     const { error } = await supabase.from('bank_statement_lines').update({ status: 'unreconciled', transaction_id: null, invoice_id: null, bank_ref: null }).eq('id', lineId).eq('workspace_id', ctx.activeWorkspaceId);
     if (error) return { success: false, error: error.message };
     return { success: true };

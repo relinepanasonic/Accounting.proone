@@ -1,6 +1,6 @@
 import React, { Suspense } from 'react';
 import Link from 'next/link';
-import { Building2, AlertTriangle } from 'lucide-react';
+import { Building2, AlertTriangle, TrendingUp, Scale, Waves } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { getDashboardTelemetry } from '@/lib/data/dashboard';
@@ -78,7 +78,13 @@ export default async function CyberneticAccountingDashboardRSC({ searchParams }:
               </div>
             </div>
 
-            <div className="flex items-center gap-3 self-start sm:self-center">
+            {/* Financial statements (SAK / PSAK): they open for the year and month chosen below */}
+            <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
+              {([['profit-loss', 'Profit & Loss', 'Laba Rugi', TrendingUp], ['balance-sheet', 'Balance Sheet', 'Neraca', Scale], ['cash-flow', 'Cash Flow', 'Arus Kas', Waves]] as const).map(([key, en, id, Icon]) => (
+                <Link key={key} href={`/reports/${key}?year=${year}&month=${monthFilter !== null && monthFilter >= 0 && monthFilter <= 11 ? monthFilter + 1 : 0}`} title={id} className="inline-flex items-center gap-2 rounded-xl border border-[#d4af37]/40 bg-[#0e0f14] px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-[#f5d77f] transition-all hover:border-[#d4af37] hover:bg-[#d4af37]/15">
+                  <Icon className="h-4 w-4" />{en}
+                </Link>
+              ))}
             </div>
           </header>
 

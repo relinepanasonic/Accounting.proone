@@ -250,7 +250,7 @@ export async function syncInvoiceToNewWave(invoiceId: string, supabase: any): Pr
       const errText = await res.text().catch(() => '');
       console.warn('New Wave sync returned non-ok status:', res.status, errText);
       // The answer of the New Wave app can be a long JSON: say it in one line.
-      const why = /fetch failed/i.test(errText) ? "its own server could not reach its database (the app may be paused)" : errText.replace(/s+/g, " ").slice(0, 120);
+      const why = /fetch failed/i.test(errText) ? "its own server could not reach its database (the app may be paused)" : errText.replace(/\s+/g, " ").slice(0, 120);
       return { success: false, error: `the New Wave app answered ${res.status}: ${why}. The invoice is saved here; the New Wave hour system was not updated.` };
     }
     

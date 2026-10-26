@@ -119,6 +119,12 @@ async function adoptTransfer(db: Db, ptInvoiceId: string, amount: number, issueD
 
 export interface BillingResult { ok: boolean; action: BillingAction; error?: string; nwInvoiceId?: string; amount?: number }
 
+/** The project date of the PT invoice travels with it (the [ProjectDate:] tag), so the project date of New Wave's invoice is the job's, not today's. */
+function notesFor(pt: { invoice_number: string; notes?: string | null }) {
+  const tag = /\[ProjectDate:[^\]]+\]/.exec(String(pt.notes || ''))?.[0];
+  return `${tag ? `${tag}\n` : ''}Intercompany: invoice ${pt.invoice_number} of PT Pintu`;
+}
+
 /** Takes the invoices of both sides away again (the PT invoice is no longer a New Wave job, or is void/draft). Only while nothing is paid. */
 async function removeBilling(db: Db, ptInvoiceId: string, nwInvoiceId: string): Promise<BillingResult> {
   const { data: nw } = await db.from('invoices').select('id, status, amount_paid').eq('id', nwInvoiceId).maybeSingle();
@@ -141,7 +147,7 @@ async function removeBilling(db: Db, ptInvoiceId: string, nwInvoiceId: string): 
 /** Makes sure the New Wave invoice and the PT cost line of one PT invoice are what they should be. Safe to call again and again. */
 export async function syncNwBilling(db: Db, ptInvoiceId: string, opts: { dryRun?: boolean } = {}): Promise<BillingResult> {
   const { data: pt, error } = await db.from('invoices')
-    .select('id, workspace_id, assigned_workspace_id, invoice_number, status, is_quotation, issue_date, due_date, dpp_amount, total_amount, tax_amount, pph_amount, intercompany_invoice_id, clients(name), invoice_line_items(package_name, description)')
+    .select('id, workspace_id, assigned_workspace_id, invoice_number, status, is_quotation, issue_date, due_date, notes, dpp_amount, total_amount, tax_amount, pph_amount, intercompany_invoice_id, clients(name), invoice_line_items(package_name, description)')
     .eq('id', ptInvoiceId).maybeSingle();
   if (error) return { ok: false, action: 'skip', error: /intercompany|42703|PGRST204/.test(`${error.code} ${error.message}`) ? MISSING : error.message };
   if (!pt) return { ok: false, action: 'skip', error: 'Invoice not found.' };
@@ -171,7 +177,7 @@ export async function syncNwBilling(db: Db, ptInvoiceId: string, opts: { dryRun?
 
   if (action === 'update') {
     const nwId = nw.id as string;
-    const { error: uErr } = await db.from('invoices').update({ issue_date: issue, due_date: dueDate, subtotal: amount, total_amount: amount, dpp_amount: 0, invoice_number: number }).eq('id', nwId);
+    const { error: uErr } = await db.from('invoices').update({ issue_date: issue, due_date: dueDate, subtotal: amount, total_amount: amount, dpp_amount: 0, invoice_number: number, notes: notesFor(pt) }).eq('id', nwId);
     if (uErr) return { ok: false, action, error: uErr.message };
     await db.from('invoice_line_items').update({ description, unit_price: amount }).eq('invoice_id', nwId);
     const pErr = await postNwInvoice(db, nwId, number, amount, issue);
@@ -191,7 +197,7 @@ export async function syncNwBilling(db: Db, ptInvoiceId: string, opts: { dryRun?
   const base: any = {
     workspace_id: NEW_WAVE_WORKSPACE_ID, client_id: clientId, invoice_number: number, is_quotation: false, status: 'sent',
     issue_date: issue, due_date: dueDate, subtotal: amount, total_amount: amount, discount_amount: 0, tax_amount: 0, tax_calculation_type: 'none',
-    has_ppn: false, has_pph: false, pph_amount: 0, dpp_amount: 0, notes: `Intercompany: invoice ${pt.invoice_number} of PT Pintu`, intercompany_of: ptInvoiceId,
+    has_ppn: false, has_pph: false, pph_amount: 0, dpp_amount: 0, notes: notesFor(pt), intercompany_of: ptInvoiceId,
   };
   if (bank?.[0]?.id) base.bank_account_id = bank[0].id;
   let ins = await db.from('invoices').insert(base).select('id').single();

@@ -3,18 +3,19 @@
 import React from 'react';
 import type { DashboardTelemetry } from '@/lib/data/dashboard';
 import {
-  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
+  BarChart, Bar, LineChart, Line, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
 import { formatRupiah } from '@/lib/utils';
 import { TrendingUp, Activity } from 'lucide-react';
 
 export function DashboardChartsRow3({ telemetry }: { telemetry: DashboardTelemetry }) {
-  const { labels, revenue, cost } = telemetry.revenueVsCost;
+  const { labels, revenue, cost, mrr } = telemetry.revenueVsCost;
   
   const revCostData = labels.map((label, idx) => ({
     name: label,
     Revenue: revenue[idx],
     Cost: cost[idx],
+    MRR: mrr?.[idx] ?? 0,
   }));
 
   const pnlData = telemetry.pnl.labels.map((label, idx) => ({
@@ -51,11 +52,15 @@ export function DashboardChartsRow3({ telemetry }: { telemetry: DashboardTelemet
             <h3 className="text-sm font-extrabold uppercase tracking-widest text-white">Revenue vs Cost</h3>
             <p className="text-[10px] text-zinc-500 font-mono mt-0.5">Performance Comparison</p>
           </div>
+          <div className="ml-auto text-right" title="Monthly recurring revenue: the subscriptions (products with a length in months) spread over the months they run">
+            <div className="text-[9px] font-bold uppercase tracking-widest text-sky-300">MRR</div>
+            <div className="font-mono text-sm font-extrabold text-white">{formatRupiah(telemetry.currentMrr || 0)}</div>
+          </div>
         </div>
         
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={revCostData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+            <ComposedChart data={revCostData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
               <XAxis dataKey="name" stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} />
               <YAxis 
@@ -69,7 +74,8 @@ export function DashboardChartsRow3({ telemetry }: { telemetry: DashboardTelemet
               <Legend wrapperStyle={{ fontSize: '12px' }} iconType="circle" />
               <Bar dataKey="Revenue" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />
               <Bar dataKey="Cost" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={40} />
-            </BarChart>
+              <Line type="monotone" dataKey="MRR" stroke="#38bdf8" strokeWidth={2.5} dot={{ r: 3, fill: '#0b0c10', stroke: '#38bdf8', strokeWidth: 2 }} activeDot={{ r: 5, fill: '#7dd3fc' }} />
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
       </div>

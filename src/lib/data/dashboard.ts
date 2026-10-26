@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { withoutProspects } from '@/lib/sales/prospects';
 import { clientMask } from '@/lib/auth/client-privacy';
+import { mrrByMonth } from '@/lib/data/mrr';
 import { PT_WORKSPACE_ID, PROF_WORKSPACE_ID, NEW_WAVE_WORKSPACE_ID, workspaceCode } from '@/lib/workspaces/known';
 import { SALARY_ACCOUNT_CODES_PUBLIC } from '@/lib/data/dashboard-constants';
 
@@ -51,7 +52,11 @@ export interface DashboardTelemetry {
     labels: string[];
     revenue: number[];
     cost: number[];
+    /** Monthly recurring revenue per bucket (in a month view every week shows the MRR of that month). */
+    mrr: number[];
   };
+  /** MRR of the latest month of the period shown (this month for the current year). */
+  currentMrr: number;
 
   pnl: {
     labels: string[];
@@ -158,10 +163,14 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     return q('id, description, amount, due_date, category, reconciled, workspace_id');
   };
 
+  const productsPromise = (async () => {
+    const { data } = await supabase.from('products').select('name, duration_type, duration_value').in('workspace_id', queryWorkspaceIds).eq('duration_type', 'month');
+    return (data || []) as Array<{ name: string; duration_type: string | null; duration_value: number | null }>;
+  })();
   const [invoicesRes, clientsRes, txRes, rawCostLines, coaRes] = await Promise.all([
     (async (): Promise<any> => {
       // intercompany_of / intercompany_invoice_id come from 20261030_intercompany_billing.sql
-      const cols = 'id, invoice_number, status, total_amount, amount_paid, issue_date, due_date, created_at, client_id, workspace_id, assigned_workspace_id, clients(name), invoice_line_items(package_name, description, amount, quantity, scale)';
+      const cols = 'id, invoice_number, status, total_amount, amount_paid, issue_date, due_date, created_at, client_id, workspace_id, assigned_workspace_id, notes, is_quotation, clients(name), invoice_line_items(package_name, description, amount, quantity, scale, unit_price, discount_amount)';
       const withLinks: any = await supabase.from('invoices').select(`${cols}, intercompany_of, intercompany_invoice_id`).eq('is_quotation', false).in('workspace_id', queryWorkspaceIds);
       if (!withLinks.error) return withLinks;
       return supabase.from('invoices').select(cols).eq('is_quotation', false).in('workspace_id', queryWorkspaceIds);
@@ -239,7 +248,12 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     }
   };
 
+  // MRR: the subscriptions (products with a length in months) spread over the months they run; a month view repeats that month on every week.
+  const mrrMonths = mrrByMonth(invoices as any[], await productsPromise, options.year ?? new Date().getFullYear());
   const numBuckets = monthFilter === null ? 12 : 5;
+  const mrrBuckets: number[] = monthFilter === null ? mrrMonths : new Array(5).fill(mrrMonths[monthFilter] || 0);
+  const nowIdx = new Date().getFullYear() === (options.year ?? new Date().getFullYear()) ? new Date().getMonth() : 11;
+  const currentMrr = monthFilter === null ? mrrMonths[nowIdx] || 0 : mrrMonths[monthFilter] || 0;
   const labels = monthFilter === null 
     ? ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     : ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5'];
@@ -606,7 +620,9 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
       labels,
       revenue: bucketRevenue,
       cost: bucketCost,
+      mrr: mrrBuckets,
     },
+    currentMrr,
     pnl: {
       labels,
       profit: bucketProfit,

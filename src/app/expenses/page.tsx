@@ -7,6 +7,7 @@ import { createAdminClient } from '@/lib/api/supabase-admin';
 import { PT_WORKSPACE_ID } from '@/lib/workspaces/known';
 import { assignableWorkspaces } from '@/lib/workspaces/assignable';
 import { ExpenseClientTable, ExpenseRecord } from '@/components/expenses/ExpenseClientTable';
+import { mainPaymentOf } from '@/lib/assets/source';
 
 export const dynamic = 'force-dynamic';
 
@@ -81,8 +82,13 @@ async function ExpensesTable() {
   {
     const { data: lines, error: schErr } = await supabase.from('asset_schedule').select('id, asset_id, seq, due_date, amount, posted_at').eq('workspace_id', activeWorkspaceId).order('due_date').limit(5000);
     if (!schErr && lines?.length) {
-      const { data: assetRows } = await supabase.from('fixed_assets').select('id, asset_name, useful_life_years').eq('workspace_id', activeWorkspaceId);
+      // source_transaction_id comes from 20261029_asset_source_transaction.sql; without it the payment is found by its amount.
+      let { data: assetRows, error: assetErr } = (await supabase.from('fixed_assets').select('id, asset_name, useful_life_years, initial_value, source_transaction_id').eq('workspace_id', activeWorkspaceId)) as any;
+      if (assetErr) ({ data: assetRows } = (await supabase.from('fixed_assets').select('id, asset_name, useful_life_years, initial_value').eq('workspace_id', activeWorkspaceId)) as any);
       const info = new Map((assetRows || []).map((a: any) => [a.id, a]));
+      // The main payment of each asset: when it is reconciled with the bank, all its monthly lines show as reconciled.
+      const { data: assetPayments } = await supabase.from('transactions').select('id, amount, category, reconciled, bank_reference').eq('workspace_id', activeWorkspaceId).eq('type', 'expense').ilike('category', '1%');
+      const main = mainPaymentOf(assetRows || [], (assetPayments as any[]) || []);
       scheduled = lines.map((l: any) => {
         const a: any = info.get(l.asset_id);
         const total = Math.max(1, Math.round(Number(a?.useful_life_years || 1) * 12));
@@ -96,6 +102,8 @@ async function ExpensesTable() {
           status: l.posted_at ? 'paid' : 'pending',
           readOnly: true,
           schedule: l.posted_at ? 'posted' : 'upcoming',
+          bankMatched: Boolean(main.get(l.asset_id)?.matched),
+          bankTxId: main.get(l.asset_id)?.id,
         } as ExpenseRecord;
       });
     }

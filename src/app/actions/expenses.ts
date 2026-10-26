@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { getWorkspaceMappings } from './mappings';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
+import { insertAssetWithSource } from '@/lib/assets/source';
 
 export interface CreateExpensePayload {
   vendor: string;
@@ -58,7 +59,7 @@ export async function createExpense(payload: CreateExpensePayload) {
   // If category is a Fixed Asset account (starts with '12'), also register it in the Fixed Assets module
   const isFixedAsset = debitAccountCode.startsWith('12');
   if (isFixedAsset) {
-    const { data: assetRow, error: assetErr } = await supabase.from('fixed_assets').insert({
+    const { data: assetRow, error: assetErr } = await insertAssetWithSource(supabase, {
       workspace_id: activeWorkspaceId,
       asset_name: payload.vendor,
       category: payload.category,
@@ -68,7 +69,7 @@ export async function createExpense(payload: CreateExpensePayload) {
       useful_life_years: 1,
       // annual_depreciation is a GENERATED column in Postgres, do NOT pass it
       status: 'active'
-    }).select('id').single();
+    }, txData.id);
     if (assetErr) {
       console.error('Failed to insert fixed asset:', assetErr);
     } else if (assetRow?.id) {

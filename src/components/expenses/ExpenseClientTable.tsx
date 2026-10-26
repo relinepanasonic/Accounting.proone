@@ -64,6 +64,8 @@ export interface ExpenseRecord {
   bankMatched?: boolean;
   /** A payment of the Schedule Expense of an asset (depreciation): shown here, kept in Assets > Schedule Expense. */
   schedule?: 'posted' | 'upcoming';
+  /** A scheduled line: the main payment of the asset (its reconcile state shows on every monthly line). */
+  bankTxId?: string;
 }
 
 export function ExpenseClientTable({ initialRecords, workspaces, fromPtLabel = 'PT Pintu' }: { initialRecords: ExpenseRecord[]; workspaces?: { id: string; name: string }[]; fromPtLabel?: string }) {
@@ -317,7 +319,10 @@ export function ExpenseClientTable({ initialRecords, workspaces, fromPtLabel = '
                   )}
                   <td className="py-3 px-2.5 text-center whitespace-nowrap">
                     {item.schedule ? (
+                      <span className="inline-flex items-center gap-2">
+                      {item.bankTxId && <BankLight matched={Boolean(item.bankMatched)} id={item.bankTxId} />}
                       <Link href="/assets/schedule" title="Open the Schedule Expense" className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold ${item.schedule === 'posted' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-zinc-700 bg-zinc-900 text-zinc-400'}`}>{item.schedule === 'posted' ? 'Posted' : 'Upcoming'}</Link>
+                      </span>
                     ) : item.readOnly ? <span className="text-[10px] uppercase tracking-wider text-zinc-600">Read only</span> : <ExpenseRowActions id={item.id} status={item.status} afterPaid={<BankLight matched={Boolean(item.bankMatched)} id={item.id} />} />}
                   </td>
                 </tr>

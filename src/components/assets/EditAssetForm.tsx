@@ -105,7 +105,7 @@ export function EditAssetForm({ initialData }: EditAssetFormProps) {
             <label className="text-[10px] font-bold tracking-widest text-[#d4af37] uppercase">Salvage Value (Rp)</label>
             <RupiahInput
               value={salvageValue}
-              onChange={setSalvageValue}
+              onValueChange={setSalvageValue}
               className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#d4af37]/50 focus:ring-1 focus:ring-[#d4af37]/50 transition-all font-sans text-sm"
               placeholder="0"
             />

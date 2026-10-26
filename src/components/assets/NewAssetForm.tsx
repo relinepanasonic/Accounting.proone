@@ -53,10 +53,10 @@ export function NewAssetForm({ categories, today }: { categories: Array<{ code: 
           </select>
         </div>
         <div className="space-y-2"><label className={label}>Purchase date</label><DatePickerUI value={date} onChange={setDate} required /></div>
-        <div className="space-y-2"><label className={label}>Purchase cost (Rp)</label><RupiahInput value={cost} onChange={setCost as any} className={input} placeholder="0" /></div>
+        <div className="space-y-2"><label className={label}>Purchase cost (Rp)</label><RupiahInput value={cost} onValueChange={setCost} className={input} placeholder="0" /></div>
         <div className="space-y-2"><label className={label}>Useful life (months)</label><input type="number" min={1} step={1} value={months} onChange={(e) => setMonths(Number(e.target.value))} className={input} /></div>
         <div className="space-y-2">
-          <label className={label}>Salvage value (Rp)</label><RupiahInput value={salvage} onChange={setSalvage as any} className={input} placeholder="0" />
+          <label className={label}>Salvage value (Rp)</label><RupiahInput value={salvage} onValueChange={setSalvage} className={input} placeholder="0" />
           <p className="text-[10px] text-zinc-500">Estimated resale value at the end of its life (often 0).</p>
         </div>
       </div>

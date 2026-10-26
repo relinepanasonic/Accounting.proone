@@ -7,6 +7,47 @@ import { syncAssetSchedules } from '@/lib/assets/sync';
 import { monthsOf } from '@/lib/assets/schedule';
 import { previewRebuild, rebuildSchedule, describePlan } from '@/lib/assets/rebuild';
 
+/** Adds an asset by hand: its Schedule Expense is made at once (the months already past are posted). The bank payment is matched later in Bank Reconcile > Cash Paid. */
+export async function createFixedAsset(payload: { asset_name: string; category: string; purchase_date: string; initial_value: number; salvage_value: number; months: number }) {
+  try {
+    const supabase = await createClient();
+    const ctx = await getAuthenticatedWorkspaceContext(supabase);
+    if (!['founder', 'superadmin', 'accounting'].includes(ctx.role)) return { success: false, error: 'Only the Founder, a Superadmin or Accounting can add an asset.' };
+    const name = String(payload.asset_name || '').trim();
+    const cost = Number(payload.initial_value);
+    const salvage = Number(payload.salvage_value || 0);
+    const months = Math.round(Number(payload.months));
+    if (!name) return { success: false, error: 'The asset name is required.' };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(payload.purchase_date))) return { success: false, error: 'Check the purchase date.' };
+    if (!(cost > 0)) return { success: false, error: 'The purchase cost must be more than 0.' };
+    if (salvage < 0 || salvage >= cost) return { success: false, error: 'The salvage value must be less than the cost.' };
+    if (!(months >= 1)) return { success: false, error: 'The months must be at least 1.' };
+
+    const { data: asset, error } = await supabase.from('fixed_assets').insert({
+      workspace_id: ctx.activeWorkspaceId,
+      asset_name: name,
+      category: payload.category,
+      purchase_date: payload.purchase_date,
+      initial_value: cost,
+      salvage_value: salvage,
+      useful_life_years: months / 12,
+      // annual_depreciation is a generated column: not passed
+      status: 'active',
+    }).select('id').single();
+    if (error || !asset) return { success: false, error: error?.message || 'Could not save the asset.' };
+
+    const sync = await syncAssetSchedules(supabase, { workspaceId: ctx.activeWorkspaceId, assetId: asset.id });
+    revalidatePath('/assets');
+    revalidatePath('/assets/schedule');
+    revalidatePath('/expenses');
+    revalidatePath('/reconcile');
+    if (!sync.ok) return { success: true, id: asset.id, error: sync.error };
+    return { success: true, id: asset.id };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Could not add the asset.' };
+  }
+}
+
 /**
  * Saves an edited asset. When the months or the salvage value change, the whole Schedule Expense is rebuilt from the purchase day
  * (posted months get the new amount, months beyond the new life leave the ledger). That rewrites closed months, so the first call

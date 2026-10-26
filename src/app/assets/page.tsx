@@ -4,6 +4,7 @@ import { Box, Edit2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
 import { RunDepreciationButton } from '@/components/assets/RunDepreciationButton';
+import { Plus } from 'lucide-react';
 
 import { AssetRowActions } from '@/components/assets/AssetRowActions';
 import { AssetRowWithHistory } from '@/components/assets/AssetRowWithHistory';
@@ -102,7 +103,7 @@ async function FixedAssetsRegistry() {
           </div>
           <div>
             <h3 className="text-sm font-bold text-white uppercase tracking-wider">No Fixed Assets Recorded Yet</h3>
-            <p className="text-xs text-zinc-400 font-sans mt-1">Capital equipment, studio hardware, and computing assets will appear here once added.</p>
+            <p className="text-xs text-zinc-400 font-sans mt-1">Capital equipment, studio hardware, and computing assets will appear here once added. Press "Add asset" above.</p>
           </div>
         </div>
       ) : (
@@ -146,7 +147,10 @@ export default function AssetsPage() {
             CAPITAL EQUIPMENT & DEPRECIATION HUD
           </p>
         </div>
-        <RunDepreciationButton />
+        <div className="flex flex-wrap items-center gap-3">
+          <Link href="/assets/new" className="gold-btn inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-xs uppercase tracking-wider"><Plus className="h-4 w-4" />Add asset</Link>
+          <RunDepreciationButton />
+        </div>
       </div>
 
       <AssetTabs active="assets" />

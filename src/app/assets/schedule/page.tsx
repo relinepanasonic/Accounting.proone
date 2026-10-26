@@ -75,7 +75,7 @@ export default function AssetSchedulePage() {
             <span>Schedule Expense</span>
           </h1>
           <p className="mt-1 text-xs text-zinc-400">
-            Each asset is spread over the months you chose until it is 0: one payment on the purchase day of every month. The first payment is posted at once, the others on their day.
+            Each asset is spread over the months you chose until it is 0: one payment on the purchase day of every month, shown month by month. Payments are posted by themselves on their day, and they also show in Expenses.
           </p>
         </div>
         <ScheduleSync />

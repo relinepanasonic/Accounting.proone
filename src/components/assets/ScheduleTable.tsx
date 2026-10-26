@@ -16,9 +16,10 @@ export interface ScheduleRow {
 
 const rp = (n: number) => `Rp ${Math.round(n).toLocaleString('id-ID')}`;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+const FULL = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 const sel = 'rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-[11px] font-bold text-zinc-200 outline-none focus:border-[#d4af37]/60';
 
-/** The monthly payments of every asset. Filters: year, month, asset, status. */
+/** The monthly payments of every asset, month by month (January first). Filters: year, month, asset, status. */
 export function ScheduleTable({ rows, today }: { rows: ScheduleRow[]; today: string }) {
   const thisYear = Number(today.slice(0, 4));
   const [year, setYear] = useState<number>(thisYear);
@@ -37,6 +38,16 @@ export function ScheduleTable({ rows, today }: { rows: ScheduleRow[]; today: str
     if (status === 'upcoming' && r.posted) return false;
     return true;
   }), [rows, year, month, asset, status]);
+
+  // Month by month: the payments of a month together, with the month total.
+  const byMonth = useMemo(() => {
+    const groups = new Map<string, ScheduleRow[]>();
+    for (const r of [...shown].sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.asset.localeCompare(b.asset))) {
+      const k = r.dueDate.slice(0, 7);
+      groups.set(k, [...(groups.get(k) || []), r]);
+    }
+    return Array.from(groups.entries());
+  }, [shown]);
 
   const total = shown.reduce((s, r) => s + r.amount, 0);
   const postedTotal = shown.filter((r) => r.posted).reduce((s, r) => s + r.amount, 0);
@@ -74,7 +85,15 @@ export function ScheduleTable({ rows, today }: { rows: ScheduleRow[]; today: str
           </thead>
           <tbody className="divide-y divide-zinc-800/60">
             {shown.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-zinc-500">No scheduled payment for these filters.</td></tr>}
-            {shown.map((r) => {
+            {byMonth.map(([key, list]) => (
+              <React.Fragment key={key}>
+                <tr className="bg-zinc-900/60">
+                  <td colSpan={5} className="px-4 py-2 text-[11px] font-extrabold uppercase tracking-wider text-[#f5d77f]">
+                    {FULL[Number(key.slice(5, 7)) - 1]} {key.slice(0, 4)}
+                    <span className="ml-3 font-mono font-normal normal-case tracking-normal text-zinc-400">{list.length} payment{list.length === 1 ? '' : 's'} · {rp(list.reduce((t, r) => t + r.amount, 0))}</span>
+                  </td>
+                </tr>
+                {list.map((r) => {
               const due = !r.posted && r.dueDate <= today;
               return (
                 <tr key={r.id} className="hover:bg-zinc-900/30">
@@ -86,12 +105,14 @@ export function ScheduleTable({ rows, today }: { rows: ScheduleRow[]; today: str
                     {r.posted
                       ? <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-bold text-emerald-400">Posted</span>
                       : due
-                        ? <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-[10px] font-bold text-amber-400">Due: sync now</span>
+                        ? <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-[10px] font-bold text-amber-400">Due today: posting</span>
                         : <span className="rounded-full border border-zinc-700 bg-zinc-900 px-2.5 py-0.5 text-[10px] font-bold text-zinc-400">Upcoming</span>}
                   </td>
                 </tr>
               );
             })}
+              </React.Fragment>
+            ))}
           </tbody>
         </table>
       </div>

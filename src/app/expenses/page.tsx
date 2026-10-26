@@ -75,7 +75,34 @@ async function ExpensesTable() {
   };
   };
 
+  // The Schedule Expense of the assets: every monthly payment (posted or still to come) as a read-only line, so it sits next to the other expenses.
+  // It is already in the ledger when posted; this is only the list. Without the schedule table the list simply has none.
+  let scheduled: ExpenseRecord[] = [];
+  {
+    const { data: lines, error: schErr } = await supabase.from('asset_schedule').select('id, asset_id, seq, due_date, amount, posted_at').eq('workspace_id', activeWorkspaceId).order('due_date').limit(5000);
+    if (!schErr && lines?.length) {
+      const { data: assetRows } = await supabase.from('fixed_assets').select('id, asset_name, useful_life_years').eq('workspace_id', activeWorkspaceId);
+      const info = new Map((assetRows || []).map((a: any) => [a.id, a]));
+      scheduled = lines.map((l: any) => {
+        const a: any = info.get(l.asset_id);
+        const total = Math.max(1, Math.round(Number(a?.useful_life_years || 1) * 12));
+        return {
+          id: `schedule-${l.id}`,
+          date: String(l.due_date).slice(0, 10),
+          vendor: a?.asset_name || 'Asset',
+          notes: `Asset schedule ${l.seq}/${total}`,
+          category: '6100 - Depreciation Expense',
+          amount: Number(l.amount || 0),
+          status: l.posted_at ? 'paid' : 'pending',
+          readOnly: true,
+          schedule: l.posted_at ? 'posted' : 'upcoming',
+        } as ExpenseRecord;
+      });
+    }
+  }
+
   const displayRecords: ExpenseRecord[] = [
+    ...scheduled,
     ...fromPt.map((r) => toRecord(r, true)),
     ...((records as any[]) || []).map((r) => toRecord(r, false)),
   ].sort((x, y) => String(y.date).localeCompare(String(x.date)));

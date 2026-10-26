@@ -62,6 +62,8 @@ export interface ExpenseRecord {
   readOnly?: boolean;
   /** Reconciled with a bank line in Bank Reconcile. */
   bankMatched?: boolean;
+  /** A payment of the Schedule Expense of an asset (depreciation): shown here, kept in Assets > Schedule Expense. */
+  schedule?: 'posted' | 'upcoming';
 }
 
 export function ExpenseClientTable({ initialRecords, workspaces, fromPtLabel = 'PT Pintu' }: { initialRecords: ExpenseRecord[]; workspaces?: { id: string; name: string }[]; fromPtLabel?: string }) {
@@ -290,7 +292,8 @@ export function ExpenseClientTable({ initialRecords, workspaces, fromPtLabel = '
                     <div className="max-w-[150px] sm:max-w-[220px] truncate" title={item.vendor}>
                       {item.vendor}
                     </div>
-                    {item.readOnly && <div className="mt-0.5 text-[9px] font-bold uppercase tracking-wider text-sky-300">Paid by {fromPtLabel}</div>}
+                    {item.readOnly && !item.schedule && <div className="mt-0.5 text-[9px] font-bold uppercase tracking-wider text-sky-300">Paid by {fromPtLabel}</div>}
+                    {item.schedule && <div className="mt-0.5 text-[9px] font-bold uppercase tracking-wider text-violet-300">Asset schedule</div>}
                   </td>
                   <td className="py-3 px-2.5 font-sans text-zinc-500 group-hover:text-zinc-300 transition-colors">
                     <div className="truncate whitespace-normal line-clamp-2 max-h-10 leading-tight" title={item.notes}>
@@ -309,11 +312,13 @@ export function ExpenseClientTable({ initialRecords, workspaces, fromPtLabel = '
                   </td>
                   {workspaces && (
                     <td className="py-3 px-2.5 font-sans">
-                      <ExpenseWorkspaceSelect id={item.id} current={item.assignedWorkspaceId} workspaces={workspaces} />
+                      {item.schedule ? <span className="text-zinc-600">-</span> : <ExpenseWorkspaceSelect id={item.id} current={item.assignedWorkspaceId} workspaces={workspaces} />}
                     </td>
                   )}
                   <td className="py-3 px-2.5 text-center whitespace-nowrap">
-                    {item.readOnly ? <span className="text-[10px] uppercase tracking-wider text-zinc-600">Read only</span> : <ExpenseRowActions id={item.id} status={item.status} afterPaid={<BankLight matched={Boolean(item.bankMatched)} id={item.id} />} />}
+                    {item.schedule ? (
+                      <Link href="/assets/schedule" title="Open the Schedule Expense" className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold ${item.schedule === 'posted' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-zinc-700 bg-zinc-900 text-zinc-400'}`}>{item.schedule === 'posted' ? 'Posted' : 'Upcoming'}</Link>
+                    ) : item.readOnly ? <span className="text-[10px] uppercase tracking-wider text-zinc-600">Read only</span> : <ExpenseRowActions id={item.id} status={item.status} afterPaid={<BankLight matched={Boolean(item.bankMatched)} id={item.id} />} />}
                   </td>
                 </tr>
               ))

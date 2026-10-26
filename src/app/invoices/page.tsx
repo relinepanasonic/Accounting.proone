@@ -49,14 +49,13 @@ async function InvoicesTableServer({ activeTab }: { activeTab: string }) {
   // Another workspace: the PT Pintu invoices assigned to it (PT collects the money, the job is here). Shown read-only.
   let ptAssigned: any[] = [];
   if (activeWorkspaceId !== PT_WORKSPACE_ID && activeTab === 'invoices' && FINANCE_ROLES.includes(role)) {
-    const { data: assigned } = await createAdminClient()
-      .from('invoices')
-      .select('id, invoice_number, is_quotation, status, total_amount, amount_paid, issue_date, due_date, notes, client_id, assigned_workspace_id, clients(name, contact_name), invoice_line_items(package_name, description, quantity, scale)')
-      .eq('workspace_id', PT_WORKSPACE_ID)
-      .eq('assigned_workspace_id', activeWorkspaceId)
-      .eq('is_quotation', false)
-      .order('created_at', { ascending: false });
-    ptAssigned = (assigned || []).map((i: any) => ({ ...i, __ro: true }));
+    // A job New Wave has billed to PT (intercompany_invoice_id) is not listed here: this company's own invoice to PT takes its place.
+    // The column comes from 20261030_intercompany_billing.sql; before it exists the old list is shown.
+    const cols = 'id, invoice_number, is_quotation, status, total_amount, amount_paid, issue_date, due_date, notes, client_id, assigned_workspace_id, clients(name, contact_name), invoice_line_items(package_name, description, quantity, scale)';
+    const admin = createAdminClient();
+    let assignedRes: any = await admin.from('invoices').select(cols).eq('workspace_id', PT_WORKSPACE_ID).eq('assigned_workspace_id', activeWorkspaceId).eq('is_quotation', false).is('intercompany_invoice_id', null).order('created_at', { ascending: false });
+    if (assignedRes.error) assignedRes = await admin.from('invoices').select(cols).eq('workspace_id', PT_WORKSPACE_ID).eq('assigned_workspace_id', activeWorkspaceId).eq('is_quotation', false).order('created_at', { ascending: false });
+    ptAssigned = (assignedRes.data || []).map((i: any) => ({ ...i, __ro: true }));
   }
   const allInvoices: any[] = [...(invoices || []), ...ptAssigned];
 

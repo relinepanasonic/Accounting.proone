@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { withoutProspects } from '@/lib/sales/prospects';
 import { clientMask } from '@/lib/auth/client-privacy';
-import { PT_WORKSPACE_ID, PROF_WORKSPACE_ID, workspaceCode } from '@/lib/workspaces/known';
+import { PT_WORKSPACE_ID, PROF_WORKSPACE_ID, NEW_WAVE_WORKSPACE_ID, workspaceCode } from '@/lib/workspaces/known';
 import { SALARY_ACCOUNT_CODES_PUBLIC } from '@/lib/data/dashboard-constants';
 
 /**
@@ -149,6 +149,8 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
   // The bank transactions. assigned_workspace_id needs one migration; without it nothing is assigned.
   const fetchTransactions = async () => {
     const q = (cols: string) => supabase.from('transactions').select(cols).in('workspace_id', queryWorkspaceIds);
+    const rLinks: any = await q('id, description, amount, due_date, transaction_date, type, client_id, category, reconciled, workspace_id, assigned_workspace_id, intercompany_of');
+    if (!rLinks.error) return rLinks;
     const r: any = await q('id, description, amount, due_date, transaction_date, type, client_id, category, reconciled, workspace_id, assigned_workspace_id');
     if (!r.error) return r;
     const r2: any = await q('id, description, amount, due_date, transaction_date, type, client_id, category, reconciled, workspace_id');
@@ -157,11 +159,13 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
   };
 
   const [invoicesRes, clientsRes, txRes, rawCostLines, coaRes] = await Promise.all([
-    supabase
-      .from('invoices')
-      .select('id, invoice_number, status, total_amount, amount_paid, issue_date, due_date, created_at, client_id, workspace_id, assigned_workspace_id, clients(name), invoice_line_items(package_name, description, amount, quantity, scale)')
-      .eq('is_quotation', false)
-      .in('workspace_id', queryWorkspaceIds),
+    (async (): Promise<any> => {
+      // intercompany_of / intercompany_invoice_id come from 20261030_intercompany_billing.sql
+      const cols = 'id, invoice_number, status, total_amount, amount_paid, issue_date, due_date, created_at, client_id, workspace_id, assigned_workspace_id, clients(name), invoice_line_items(package_name, description, amount, quantity, scale)';
+      const withLinks: any = await supabase.from('invoices').select(`${cols}, intercompany_of, intercompany_invoice_id`).eq('is_quotation', false).in('workspace_id', queryWorkspaceIds);
+      if (!withLinks.error) return withLinks;
+      return supabase.from('invoices').select(cols).eq('is_quotation', false).in('workspace_id', queryWorkspaceIds);
+    })(),
     withoutProspects((hide) => {
       let q = supabase.from('clients').select('id, name, created_at').in('workspace_id', combined ? queryWorkspaceIds : [A]);
       if (hide) q = q.eq('is_prospect', false);
@@ -180,9 +184,18 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     const src = sourceOf(workspaceId, assigned);
     return src !== null && (!companyFilter || src === companyFilter);
   };
-  const invoices = (invoicesRes.data || []).filter((inv: any) => (combined ? !(inv.workspace_id === PT_WORKSPACE_ID && inv.assigned_workspace_id && !queryWorkspaceIds.includes(inv.assigned_workspace_id)) : keep(inv.workspace_id, inv.assigned_workspace_id)));
+  // A PT invoice of a New Wave job that New Wave has billed to PT (intercompany_invoice_id) is PT's own revenue: it is tagged for New Wave
+  // (client hidden, hour system) but no longer counts as New Wave's. New Wave's revenue is its own invoice to PT.
+  const attribution = (inv: any) => (inv.intercompany_invoice_id ? null : inv.assigned_workspace_id);
+  // When New Wave and PT are in the same view, that invoice and PT's matching cost cancel out (the group did not earn it twice).
+  const eliminate = combined && queryWorkspaceIds.includes(NEW_WAVE_WORKSPACE_ID) && queryWorkspaceIds.includes(PT_WORKSPACE_ID);
+  const invoices = (invoicesRes.data || []).filter((inv: any) => {
+    if (eliminate && inv.intercompany_of) return false;
+    return combined ? !(inv.workspace_id === PT_WORKSPACE_ID && attribution(inv) && !queryWorkspaceIds.includes(attribution(inv))) : keep(inv.workspace_id, attribution(inv));
+  });
   for (const tx of (txRes.data || []) as any[]) if (tx.assigned_workspace_id) assignedTx.set(tx.id, tx.assigned_workspace_id);
-  const costLines = (rawCostLines as any[]).filter((l) => (combined ? true : keep(l.workspace_id, l.workspace_id === PT_WORKSPACE_ID ? assignedTx.get(l.reference_id) : null)));
+  const intercompanyCost = new Set<string>(eliminate ? ((txRes.data || []) as any[]).filter((t) => t.intercompany_of).map((t) => t.id as string) : []);
+  const costLines = (rawCostLines as any[]).filter((l) => (combined ? !intercompanyCost.has(l.reference_id) : keep(l.workspace_id, l.workspace_id === PT_WORKSPACE_ID ? assignedTx.get(l.reference_id) : null)));
   const clients = clientsRes.data || [];
   // Costs belong to vendors, not clients: with a client chosen they are left out of the numbers.
   const transactions = clientName ? [] : ((txRes.data || []) as any[]).filter((t) => keep(t.workspace_id, t.assigned_workspace_id));
@@ -203,7 +216,7 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
     const clientObj = Array.isArray(inv.clients) ? inv.clients[0] : inv.clients;
     return mask.name(clientObj?.name, inv.assigned_workspace_id, 'Unknown Client');
   };
-  const clientNames = Array.from(new Set(invoices.filter((i: any) => i.client_id).map(nameOf))).sort((a, b) => a.localeCompare(b));
+  const clientNames: string[] = Array.from(new Set<string>(invoices.filter((i: any) => i.client_id).map(nameOf))).sort((a, b) => a.localeCompare(b));
 
   // Helper to determine bucket index (0-11 for months, 0-4 for weeks if month filtered)
   const isTargetPeriod = (dateStr: string | null) => {

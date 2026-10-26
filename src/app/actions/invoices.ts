@@ -55,6 +55,7 @@ import { resolveArAccount } from '@/lib/accounting/accounts';
 import { createAdminClient as createServiceClient } from '@/lib/api/supabase-admin';
 import { completeInvoiceRequest, onInvoicePaid } from '@/lib/sales/server';
 import { autoAssignFromCatalog, catalogError, unknownProducts } from '@/lib/invoices/catalog-workspace';
+import { syncNwBilling, removeNwBilling } from '@/lib/intercompany/nw-billing';
 
 /**
  * Helper: Retrieve Authenticated User ID and their active workspace_id (respecting multi-tenant cookie)
@@ -71,6 +72,19 @@ async function getAuthenticatedWorkspaceContext(supabase: any): Promise<{
     userId: ctx.userId || 'seed-user',
     workspaceId: ctx.activeWorkspaceId,
   };
+}
+
+/**
+ * A PT invoice that is a New Wave job: New Wave invoices PT PLIG for its DPP and PT books the cost (see lib/intercompany/nw-billing.ts).
+ * Runs after every change of such an invoice. It never fails the save: a problem is logged and the daily job tries again.
+ */
+async function billNewWave(invoiceId: string): Promise<void> {
+  try {
+    const res = await syncNwBilling(createServiceClient(), invoiceId);
+    if (!res.ok) console.warn('[nw-billing]', invoiceId, res.error);
+  } catch (e) {
+    console.warn('[nw-billing] failed', e);
+  }
 }
 
 // Statuses that are considered "draft" — must NEVER be pushed to New Wave
@@ -145,6 +159,7 @@ export async function syncInvoiceToNewWave(invoiceId: string, supabase: any): Pr
       .single();
 
     if (!inv) return { success: false, error: 'Invoice not found in database for sync.' };
+    if (inv.intercompany_of) return { success: true }; // New Wave's invoice to PT PLIG: not a client project, never pushed
 
     // ── DRAFT GUARD ──────────────────────────────────────────────────────────
     // Drafts (including scratch/duplicate copies) must NEVER be pushed to New
@@ -370,6 +385,7 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
     await autoAssignFromCatalog(supabase, payload.id, workspaceId);
 
     const syncRes = await syncInvoiceToNewWave(payload.id, supabase);
+    await billNewWave(payload.id);
 
     revalidatePath('/invoices');
     revalidatePath(`/invoices/${payload.id}`);
@@ -406,6 +422,8 @@ export async function updateInvoiceAssignment(invoiceId: string, assignedWorkspa
     if (error) {
       return { success: false, error: error.message };
     }
+
+    await billNewWave(invoiceId);
 
     revalidatePath('/invoices');
     revalidatePath(`/invoices/${invoiceId}`);
@@ -684,6 +702,7 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
     }
 
     const syncRes = await syncInvoiceToNewWave(invoice.id, supabase);
+    await billNewWave(invoice.id);
 
     revalidatePath('/invoices');
     revalidatePath('/');
@@ -846,6 +865,7 @@ export async function toggleInvoiceStatus(invoiceId: string, currentStatus: stri
     }
 
     await syncInvoiceToNewWave(invoiceId, supabase);
+    await billNewWave(invoiceId);
 
     revalidatePath('/invoices');
     revalidatePath('/ledger');
@@ -883,6 +903,8 @@ export async function markInvoiceAsFinalized(invoiceId: string) {
     revalidatePath('/invoices');
     revalidatePath(`/invoices/${invoiceId}`);
     
+    await billNewWave(invoiceId);
+
     // Sync to New Wave
     const syncRes = await syncInvoiceToNewWave(invoiceId, supabase);
     if (!syncRes.success) {
@@ -943,6 +965,12 @@ export async function deleteInvoice(invoiceId: string) {
       }
     }
     // ─────────────────────────────────────────────────────────────────────────
+
+    // A New Wave job: its invoice to PT and PT's cost line go too (refused once money moved).
+    {
+      const gone = await removeNwBilling(adminClient, invoiceId);
+      if (!gone.ok) return { success: false, error: gone.error } as any;
+    }
 
     await adminClient
       .from('invoice_line_items')

@@ -127,7 +127,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   const [selectedBankId, setSelectedBankId] = useState<string | null>(null);
   const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
 
-  // Right side: Cash Received | Invoice Unpaid | Expenses | Matched
+  // Right side: Cash Received | Invoice Unpaid | Cash Paid | Matched
   const [rightTab, setRightTab] = useState<'cash' | 'unpaid' | 'expenses' | 'matched'>('cash');
   const [dirFilter, setDirFilter] = useState<'all' | 'in' | 'out'>('all');
   const [activeFilterTab, setActiveFilterTab] = useState<'open' | 'matched' | 'all'>('open');
@@ -604,7 +604,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
   const tabs: Array<{ key: typeof rightTab; label: string; count: number; tone?: 'gold' | 'green' | 'red' | 'blue' }> = [
     { key: 'cash', label: 'Cash Received', count: tabCounts.cash, tone: 'gold' },
     { key: 'unpaid', label: 'Invoice Unpaid', count: tabCounts.unpaid, tone: 'blue' },
-    { key: 'expenses', label: 'Expenses', count: tabCounts.expenses, tone: 'red' },
+    { key: 'expenses', label: 'Cash Paid', count: tabCounts.expenses, tone: 'red' },
     { key: 'matched', label: 'Matched', count: tabCounts.matched, tone: 'green' },
   ];
   const tabTone = { gold: 'bg-[#d4af37]/20 text-[#f5d77f]', green: 'bg-emerald-500/20 text-emerald-400', red: 'bg-red-500/20 text-red-400', blue: 'bg-sky-500/20 text-sky-300' };
@@ -776,7 +776,7 @@ export function ReconciliationHUD({ systemRecords, bankAccounts = [], coaAccount
             <div className="flex-1 space-y-2 overflow-y-auto pr-1">
               {filteredSystemRecords.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-zinc-800 p-8 text-center text-xs text-zinc-500">
-                  {rightTab === 'matched' ? 'Nothing matched in this period.' : rightTab === 'expenses' ? 'No open expense in this period.' : 'No open cash received in this period.'}
+                  {rightTab === 'matched' ? 'Nothing matched in this period.' : rightTab === 'expenses' ? 'No open cash paid in this period.' : 'No open cash received in this period.'}
                 </div>
               ) : filteredSystemRecords.map((rec) => {
                 const isSelected = selectedRecordIds.includes(rec.id);

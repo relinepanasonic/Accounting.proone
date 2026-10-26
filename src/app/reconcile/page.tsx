@@ -8,6 +8,7 @@ import {
 } from '@/components/reconcile/ReconciliationHUD';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { clientMask, HIDDEN_CLIENT } from '@/lib/auth/client-privacy';
+import { mainPaymentOf } from '@/lib/assets/source';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // a heavy page may take more than the default 10 seconds on Vercel
@@ -249,8 +250,23 @@ async function ReconciliationCore() {
     }),
   ];
 
+  // Cash Paid also lists the main payment of every fixed asset that has no cash record yet (an asset added by hand): matching it with the bank
+  // line makes the cash record. An asset with a payment (linked, or found by its amount in an asset account) is not listed twice.
+  {
+    let { data: assetRows, error: assetErr } = (await supabase.from('fixed_assets').select('id, asset_name, category, initial_value, purchase_date, created_at, source_transaction_id').eq('workspace_id', activeWorkspaceId).ilike('status', 'active')) as any;
+    if (assetErr) ({ data: assetRows } = (await supabase.from('fixed_assets').select('id, asset_name, category, initial_value, purchase_date, created_at').eq('workspace_id', activeWorkspaceId).ilike('status', 'active')) as any);
+    const paid = mainPaymentOf(assetRows || [], rawTransactions.filter((t: any) => t.type === 'expense').map((t: any) => ({ id: t.id, amount: Number(t.amount || 0), category: t.category, reconciled: false, bank_reference: null })));
+    for (const a of assetRows || []) {
+      if (paid.has(a.id) || !(Number(a.initial_value) > 0)) continue;
+      systemRecords.push({
+        id: `asset:${a.id}`, type: 'expense' as const, reference: a.category || 'Fixed asset', payeeOrClient: a.asset_name || 'Fixed asset',
+        date: String(a.purchase_date || a.created_at || '').slice(0, 10), amount: Number(a.initial_value), reconciled: false, notes: 'Fixed asset: main payment',
+      });
+    }
+  }
+
   return (
-    <ReconciliationHUD 
+    <ReconciliationHUD
       systemRecords={systemRecords} 
       bankAccounts={bankAccounts} 
       coaAccounts={coaAccounts}

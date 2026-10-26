@@ -239,7 +239,16 @@ async function quickResolveCore(
     ]);
 
     // If it's a fixed asset, also register it in the Fixed Assets module automatically.
+    // An asset of the same cost bought on that day that has no payment yet is that asset: it is linked, not made twice.
+    let adopted = false;
     if (isFixedAsset) {
+      const { data: same } = await supabase.from('fixed_assets').select('id').eq('workspace_id', ctx.activeWorkspaceId).eq('initial_value', amount).eq('purchase_date', todayStr).is('source_transaction_id', null).limit(1);
+      if (same && same.length) {
+        const { error: linkErr } = await supabase.from('fixed_assets').update({ source_transaction_id: data.id }).eq('id', same[0].id);
+        adopted = !linkErr;
+      }
+    }
+    if (isFixedAsset && !adopted) {
       const assetName = description || 'Unnamed Fixed Asset';
       const { data: assetRow, error: assetErr } = await insertAssetWithSource(supabase, {
         workspace_id: ctx.activeWorkspaceId,
@@ -272,8 +281,49 @@ async function quickResolveCore(
  */
 /** The reconcile screen refreshes itself (router.refresh): no revalidatePath here, it made the server render the heavy page again inside the action, which failed with a hidden error. */
 /** A failed match answers with its message (a thrown error is hidden in production and left the screen silent). */
+/**
+ * The main payment of a fixed asset that has no cash record yet (an asset added by hand, before this existed) is listed in Cash Paid as "asset:<id>".
+ * Matching it with a bank line makes its cash record now: the expense (reconciled, with the bank reference), the ledger lines
+ * (Dr the asset account / Cr the bank, on the bank date) and the link from the asset to this payment.
+ */
+async function reconcileAssetPayment(assetId: string, bankReference: string, bankAccountId: string | undefined, bankDate: string | undefined) {
+  const supabase = await createClient();
+  const ctx = await getAuthenticatedWorkspaceContext(supabase);
+  if (!['founder', 'superadmin', 'accounting'].includes(ctx.role)) throw new Error('Only the Founder, a Superadmin or Accounting can match.');
+  const { data: asset } = await supabase.from('fixed_assets').select('id, asset_name, category, initial_value, purchase_date').eq('id', assetId).eq('workspace_id', ctx.activeWorkspaceId).single();
+  if (!asset) throw new Error('Asset not found.');
+
+  const date = bankDate || String(asset.purchase_date || new Date().toISOString().slice(0, 10)).slice(0, 10);
+  const amount = Number(asset.initial_value || 0);
+  const { data: tx, error } = await supabase.from('transactions').insert({
+    workspace_id: ctx.activeWorkspaceId, type: 'expense', category: asset.category, amount, transaction_date: date, due_date: date,
+    description: asset.asset_name, reconciled: true, bank_reference: bankReference || 'BANK-MATCHED',
+  }).select('id').single();
+  if (error || !tx) throw new Error(error?.message || 'Could not make the payment record.');
+
+  let bankAccountCode = '1010';
+  if (bankAccountId && bankAccountId !== 'all' && bankAccountId !== 'custom') {
+    const { data: bankRes } = await supabase.from('workspace_bank_accounts').select('coa_account_code').eq('id', bankAccountId).single();
+    if (bankRes?.coa_account_code) bankAccountCode = bankRes.coa_account_code;
+  }
+  const assetAccount = String(asset.category || '').split(' ')[0].trim();
+  const description = `Quick Expense - ${asset.asset_name}`;
+  const { error: jErr } = await supabase.from('journal_entries').insert([
+    { workspace_id: ctx.activeWorkspaceId, account_code: /^\d+$/.test(assetAccount) ? assetAccount : '1201', transaction_date: date, debit_amount: amount, credit_amount: 0, description, reference_id: tx.id, reference_type: 'quick_expense' },
+    { workspace_id: ctx.activeWorkspaceId, account_code: bankAccountCode, transaction_date: date, debit_amount: 0, credit_amount: amount, description, reference_id: tx.id, reference_type: 'quick_expense' },
+  ]);
+  if (jErr) {
+    await supabase.from('transactions').delete().eq('id', tx.id);
+    throw new Error(jErr.message);
+  }
+  // The link needs 20261029_asset_source_transaction.sql; without it the payment is still found by its amount.
+  await supabase.from('fixed_assets').update({ source_transaction_id: tx.id }).eq('id', assetId);
+  return { success: true };
+}
+
 export async function reconcileRecord(...args: Parameters<typeof reconcileRecordCore>): Promise<{ success: boolean; error?: string }> {
   try {
+    if (String(args[0]).startsWith('asset:')) return await reconcileAssetPayment(String(args[0]).slice(6), args[2], args[3], args[7]);
     return await reconcileRecordCore(...args);
   } catch (e: any) {
     return { success: false, error: e?.message || 'Could not match.' };

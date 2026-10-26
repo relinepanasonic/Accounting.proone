@@ -42,13 +42,19 @@ export function EditAssetForm({ initialData }: EditAssetFormProps) {
 
     setErrorMsg(null);
     startTransition(async () => {
-      const res = await updateFixedAsset(initialData.id, {
+      const payload = {
         asset_name: assetName,
         category: initialData.category,
         useful_life_years: usefulLifeYears,
         salvage_value: Number(salvageValue || 0),
         // annual_depreciation is generated, so we omit it
-      });
+      };
+      let res: any = await updateFixedAsset(initialData.id, payload);
+      // New months rewrite months that are already posted: show what changes and ask first.
+      if (res.needsConfirm) {
+        if (!window.confirm(`Changing the months rebuilds the Schedule Expense from the purchase day:\n\n${res.summary}\n\nApply this change?`)) return;
+        res = await updateFixedAsset(initialData.id, payload, { confirm: true });
+      }
 
       if (res.success) {
         router.push('/assets');

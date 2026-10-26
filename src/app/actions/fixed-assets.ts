@@ -4,11 +4,33 @@ import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { revalidatePath } from 'next/cache';
 import { syncAssetSchedules } from '@/lib/assets/sync';
+import { monthsOf } from '@/lib/assets/schedule';
+import { previewRebuild, rebuildSchedule, describePlan } from '@/lib/assets/rebuild';
 
-export async function updateFixedAsset(id: string, payload: any) {
+/**
+ * Saves an edited asset. When the months or the salvage value change, the whole Schedule Expense is rebuilt from the purchase day
+ * (posted months get the new amount, months beyond the new life leave the ledger). That rewrites closed months, so the first call
+ * answers { needsConfirm, summary } and nothing is saved until it is called again with confirm = true.
+ */
+export async function updateFixedAsset(id: string, payload: any, opts: { confirm?: boolean } = {}) {
   try {
     const supabase = await createClient();
     const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+    const { createAdminClient } = await import('@/lib/api/supabase-admin');
+    const admin = createAdminClient();
+    const today = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
+
+    const { data: asset } = await supabase.from('fixed_assets').select('id, workspace_id, asset_name, initial_value, salvage_value, purchase_date, created_at, useful_life_years').eq('id', id).eq('workspace_id', activeWorkspaceId).single();
+    if (!asset) throw new Error('Asset not found.');
+
+    const months = monthsOf(payload.useful_life_years);
+    const salvage = Number(payload.salvage_value || 0);
+    const scheduleChanged = months !== monthsOf(asset.useful_life_years) || Math.abs(salvage - Number(asset.salvage_value || 0)) > 0.005;
+
+    if (scheduleChanged && !opts.confirm) {
+      const plan = await previewRebuild(admin, asset as any, months, salvage, today);
+      if (plan.changes) return { success: false, needsConfirm: true, summary: describePlan(plan), error: undefined as string | undefined };
+    }
 
     const { error } = await supabase
       .from('fixed_assets')
@@ -24,11 +46,18 @@ export async function updateFixedAsset(id: string, payload: any) {
 
     if (error) throw new Error(error.message);
 
-    // The months, cost or salvage may have changed: the unposted payments of the Schedule Expense are spread again.
-    await syncAssetSchedules(supabase, { workspaceId: activeWorkspaceId, assetId: id });
+    if (scheduleChanged) {
+      const res = await rebuildSchedule(admin, { ...(asset as any), asset_name: payload.asset_name || asset.asset_name }, months, salvage, today);
+      if (!res.ok) throw new Error(res.error || 'The asset was saved but its schedule could not be rebuilt.');
+    } else {
+      await syncAssetSchedules(supabase, { workspaceId: activeWorkspaceId, assetId: id });
+    }
 
     revalidatePath('/assets');
     revalidatePath('/assets/schedule');
+    revalidatePath('/expenses');
+    revalidatePath('/ledger');
+    revalidatePath('/');
     revalidatePath(`/assets/${id}/edit`);
     return { success: true };
   } catch (err: any) {

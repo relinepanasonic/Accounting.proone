@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { RecommendationChips } from './RecommendationList';
 import { Calendar, Clock, Plus, Loader2, PlayCircle, History, CheckCircle2, Circle } from 'lucide-react';
 import { fetchAdvertiserLogs } from '@/app/actions/advertiser';
 import { AdvertiserDashboard } from './AdvertiserDashboard';
@@ -41,6 +40,7 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
   const [session, setSession] = useState<number>(1);
   const [showNewModal, setShowNewModal] = useState(false);
   const [detailLog, setDetailLog] = useState<any | null>(null);
+  const [detailSession, setDetailSession] = useState(1);
 
   // Filter State
   const [filterMonth, setFilterMonth] = useState<string>('');
@@ -207,6 +207,7 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
       {detailLog && (
         <AdvertiserLogDetail
           log={detailLog}
+          initialSession={detailSession}
           onClose={() => setDetailLog(null)}
           onEdit={(sessionNumber) => {
             setSelectedClient(detailLog.client_id);
@@ -290,7 +291,6 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
                 <th className="px-6 py-4 font-bold text-center">Sesi 2</th>
                 <th className="px-6 py-4 font-bold text-center">Sesi 3</th>
                 <th className="px-6 py-4 font-bold">Note</th>
-                <th className="px-6 py-4 font-bold text-[#d4af37]">Recommendation</th>
                 <th className="px-6 py-4 font-bold">Date/Time Stamp</th>
                 <th className="px-6 py-4 font-bold text-right">Action</th>
               </tr>
@@ -298,7 +298,7 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
             <tbody className="divide-y divide-zinc-800/50 text-zinc-300">
               {filteredLogs.length === 0 && !isLoadingLogs ? (
                 <tr>
-                  <td colSpan={11} className="px-6 py-12 text-center text-zinc-500">
+                  <td colSpan={10} className="px-6 py-12 text-center text-zinc-500">
                     No records found.
                   </td>
                 </tr>
@@ -306,9 +306,7 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
                 filteredLogs.map((log, idx) => (
                   <tr
                     key={idx}
-                    onClick={() => setDetailLog(log)}
-                    className="hover:bg-zinc-900/50 transition-colors cursor-pointer"
-                    title="Click to see what the advertiser did"
+                    className="hover:bg-zinc-900/50 transition-colors"
                   >
                     <td className="px-6 py-4 font-bold text-white">
                       {new Date(log.report_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
@@ -318,22 +316,19 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
                     <td className="px-6 py-4 text-zinc-300">{log.store_label || <span className="text-zinc-600">-</span>}</td>
                     
                     <td className="px-6 py-4 text-center">
-                      {log.sessions[1] ? <CheckCircle2 className="w-5 h-5 text-emerald-500 mx-auto" /> : <Circle className="w-4 h-4 text-zinc-700 mx-auto" />}
+                      {log.sessions[1] ? <button type="button" onClick={() => { setDetailSession(1); setDetailLog(log); }} title="Open the report of session 1" className="mx-auto block rounded-full hover:brightness-150"><CheckCircle2 className="w-5 h-5 text-emerald-500" /></button> : <Circle className="w-4 h-4 text-zinc-700 mx-auto" />}
                     </td>
                     <td className="px-6 py-4 text-center">
-                      {log.sessions[2] ? <CheckCircle2 className="w-5 h-5 text-emerald-500 mx-auto" /> : <Circle className="w-4 h-4 text-zinc-700 mx-auto" />}
+                      {log.sessions[2] ? <button type="button" onClick={() => { setDetailSession(2); setDetailLog(log); }} title="Open the report of session 2" className="mx-auto block rounded-full hover:brightness-150"><CheckCircle2 className="w-5 h-5 text-emerald-500" /></button> : <Circle className="w-4 h-4 text-zinc-700 mx-auto" />}
                     </td>
                     <td className="px-6 py-4 text-center">
-                      {log.sessions[3] ? <CheckCircle2 className="w-5 h-5 text-emerald-500 mx-auto" /> : <Circle className="w-4 h-4 text-zinc-700 mx-auto" />}
+                      {log.sessions[3] ? <button type="button" onClick={() => { setDetailSession(3); setDetailLog(log); }} title="Open the report of session 3" className="mx-auto block rounded-full hover:brightness-150"><CheckCircle2 className="w-5 h-5 text-emerald-500" /></button> : <Circle className="w-4 h-4 text-zinc-700 mx-auto" />}
                     </td>
                     
                     <td className="px-6 py-4">
                       <div className="max-w-[200px] truncate text-xs text-zinc-400">
                         {log.note || '-'}
                       </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <RecommendationChips recs={log.recs} />
                     </td>
                     <td className="px-6 py-4 text-xs font-mono text-zinc-500">
                       <div>{new Date(log.created_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</div>

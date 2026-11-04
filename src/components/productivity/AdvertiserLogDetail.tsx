@@ -120,9 +120,10 @@ const stamp = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
 
 export function AdvertiserLogDetail({
-  log, onClose, onEdit,
+  log, onClose, onEdit, initialSession,
 }: {
   log: LogSummary;
+  initialSession?: number;
   onClose: () => void;
   onEdit: (session: number) => void;
 }) {
@@ -142,11 +143,12 @@ export function AdvertiserLogDetail({
       if (cancelled) return;
       const rows = (res.data || []) as SessionRow[];
       setSessions(rows);
-      if (rows.length > 0) setActive(rows[0].session);
+      if (rows.length > 0) setActive(rows.some((r) => r.session === initialSession) ? (initialSession as number) : rows[0].session);
     });
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [log.client_id, log.report_date, log.store_label]);
 
   useEffect(() => {

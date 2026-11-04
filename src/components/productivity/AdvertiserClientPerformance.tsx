@@ -1,6 +1,7 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { X } from 'lucide-react';
 import { PeriodPicker, type Period } from '@/components/ui/PeriodPicker';
 import { ClientSummaryTable } from '@/components/productivity/ClientSummaryTable';
 import { dmy } from '@/components/ui/DateRangePicker';
@@ -196,6 +197,14 @@ export function AdvertiserClientPerformance({ cards, year, month, years, adverti
   companyFilter: string; companies: string[]; range: { from: string; to: string } | null;
 }) {
   const router = useRouter();
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  const opened = cards.find((c) => c.key === openKey) || null;
+  useEffect(() => {
+    if (!opened) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenKey(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [opened]);
   const go = (p: { adv?: string; co?: string; st?: string; period?: Period }) => {
     const per = p.period;
     const when = per ? ('range' in per ? `from=${per.range.from}&to=${per.range.to}` : `year=${per.year}&month=${per.month}`) : range ? `from=${range.from}&to=${range.to}` : `year=${year}&month=${month}`;
@@ -235,12 +244,16 @@ export function AdvertiserClientPerformance({ cards, year, month, years, adverti
 
       {cards.length === 0
         ? <div className="gold-glass-panel rounded-2xl p-8 text-center text-sm text-zinc-500">No store numbers in this period.</div>
-        : (
-          <div className="space-y-4">
-            <ClientSummaryTable cards={cards} year={year} month={month} rangeLabel={range ? (range.from === range.to ? dmy(range.from) : `${dmy(range.from)} - ${dmy(range.to)}`) : null} />
-            {cards.map((c) => <Card key={c.key} c={c} />)}
+        : <ClientSummaryTable cards={cards} year={year} month={month} rangeLabel={range ? (range.from === range.to ? dmy(range.from) : `${dmy(range.from)} - ${dmy(range.to)}`) : null} onOpen={setOpenKey} />}
+
+      {opened && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/80 p-3 sm:p-8" onClick={() => setOpenKey(null)}>
+          <div className="relative w-full max-w-[1400px]" onClick={(e) => e.stopPropagation()}>
+            <button type="button" onClick={() => setOpenKey(null)} aria-label="Close" className="absolute right-3 top-3 z-10 rounded-lg border border-zinc-700 bg-zinc-900 p-1.5 text-zinc-300 hover:text-white"><X className="h-4 w-4" /></button>
+            <div className="rounded-2xl bg-[#0b0c10]"><Card c={opened} /></div>
           </div>
-        )}
+        </div>
+      )}
     </div>
   );
 }

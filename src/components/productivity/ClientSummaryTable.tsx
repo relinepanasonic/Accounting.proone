@@ -16,7 +16,7 @@ const rp = (n: number) => `Rp ${short(n)}`;
 const x = (sales: number, cost: number) => (cost > 0 ? `${(sales / cost).toFixed(2)}x` : '-');
 const COMPANY = /^(ProOne|Reline|Alpha|Lighting Solution)\s+-\s+(.*)$/i;
 
-interface Row { key: string; advertiser: string; year: string; month: string; week: string; company: string; store: string; client: string; gmv: number; cost: number; adSales: number }
+interface Row { key: string; cardKey: string; advertiser: string; year: string; month: string; week: string; company: string; store: string; client: string; gmv: number; cost: number; adSales: number }
 
 /** What a column of the chart means as Year / Month / Week, from its label and the period that is shown. */
 function whenOf(label: string, year: number, month: number): { year: string; month: string; week: string } {
@@ -30,7 +30,7 @@ function whenOf(label: string, year: number, month: number): { year: string; mon
 }
 
 /** The clients in one table before their charts: Advertiser | Year | Month | Week | Company | Store | GMV | Ads Cost | ROAS. Total per client, or one line per month / week. */
-export function ClientSummaryTable({ cards, year, month, rangeLabel }: { cards: ClientCard[]; year: number; month: number; rangeLabel: string | null }) {
+export function ClientSummaryTable({ cards, year, month, rangeLabel, onOpen }: { cards: ClientCard[]; year: number; month: number; rangeLabel: string | null; onOpen: (cardKey: string) => void }) {
   const [mode, setMode] = useState<'total' | 'period'>('total');
   const [sort, setSort] = useState<{ key: 'store' | 'advertiser' | 'gmv' | 'cost' | 'roas'; asc: boolean }>({ key: 'store', asc: true });
 
@@ -40,12 +40,12 @@ export function ClientSummaryTable({ cards, year, month, rangeLabel }: { cards: 
       const m = COMPANY.exec(c.label);
       const base = { advertiser: c.advertiser || 'Not assigned', company: m ? m[1] : '-', store: m ? m[2] : c.label, client: c.name };
       if (mode === 'total') {
-        out.push({ key: c.key, ...base, year: rangeLabel ? '-' : String(year), month: rangeLabel ? rangeLabel : month ? MONTH_FULL[month - 1] : 'Semua bulan', week: month && !rangeLabel ? 'Semua minggu' : '-', gmv: c.totals.gmv, cost: c.totals.cost, adSales: c.totals.adSales });
+        out.push({ key: c.key, cardKey: c.key, ...base, year: rangeLabel ? '-' : String(year), month: rangeLabel ? rangeLabel : month ? MONTH_FULL[month - 1] : 'Semua bulan', week: month && !rangeLabel ? 'Semua minggu' : '-', gmv: c.totals.gmv, cost: c.totals.cost, adSales: c.totals.adSales });
       } else {
         c.labels.forEach((label, i) => {
           if (!c.gmv[i] && !c.cost[i] && !c.adSales[i]) return;
           const w = whenOf(label, year, month);
-          out.push({ key: `${c.key}-${label}`, ...base, ...w, gmv: c.gmv[i], cost: c.cost[i], adSales: c.adSales[i] });
+          out.push({ key: `${c.key}-${label}`, cardKey: c.key, ...base, ...w, gmv: c.gmv[i], cost: c.cost[i], adSales: c.adSales[i] });
         });
       }
     }
@@ -72,7 +72,7 @@ export function ClientSummaryTable({ cards, year, month, rangeLabel }: { cards: 
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-extrabold text-white">Clients</h2>
-          <p className="text-[10px] text-zinc-500">{rows.length} line{rows.length === 1 ? '' : 's'} · the charts of each client follow below</p>
+          <p className="text-[10px] text-zinc-500">{rows.length} line{rows.length === 1 ? '' : 's'} · click a client to see its charts</p>
         </div>
         <div className="flex rounded-lg border border-zinc-800 bg-zinc-950 p-0.5">
           {([['total', 'Total per client'], ['period', rangeLabel || month ? 'Per week / period' : 'Per month']] as const).map(([k, label]) => (
@@ -88,7 +88,7 @@ export function ClientSummaryTable({ cards, year, month, rangeLabel }: { cards: 
           <tbody className="divide-y divide-zinc-800/50">
             {sorted.length === 0 && <tr><td colSpan={9} className="px-3 py-8 text-center text-zinc-500">No numbers in this period.</td></tr>}
             {sorted.map((r) => (
-              <tr key={r.key} className="hover:bg-zinc-900/40">
+              <tr key={r.key} onClick={() => onOpen(r.cardKey)} className="cursor-pointer hover:bg-[#d4af37]/10" title="Open the charts of this client">
                 <td className={`whitespace-nowrap px-3 py-2 ${r.advertiser === 'Not assigned' ? 'text-zinc-600' : 'text-zinc-300'}`}>{r.advertiser}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-zinc-400">{r.year}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-zinc-400">{r.month}</td>

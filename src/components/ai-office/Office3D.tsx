@@ -651,7 +651,7 @@ function Island({
 // An idle agent is not in the working space: the leaders (planners) go to the Bar, every other agent goes to a bed in the Bunker.
 // Each team island is joined to both by a bridge, and the robots walk over it.
 type V2 = [number, number];
-const LOUNGE_GAP = 5; // sky between the cluster of islands and a lounge
+const LOUNGE_GAP = 2.4; // sky between the cluster of islands and a lounge (like between two islands)
 const BUNKER_R = HEX_R * 2; // the Bunker is twice as big as an island
 const BAR_COLOR = '#f59e0b';
 const BUNKER_COLOR = '#6366f1';
@@ -687,13 +687,18 @@ function routeBetween(c1: V2, r1: number, c2: V2, r2: number) {
   return { a: [c1[0] + ux * e1, c1[1] + uz * e1] as V2, b: [c2[0] - ux * e2, c2[1] - uz * e2] as V2, u: [ux, uz] as V2 };
 }
 
+/** Leaders mingle in groups of three that face each other, in front of the counter. */
+const BAR_GROUPS: V2[] = [[-2.2, -0.7], [2.2, -0.7], [0, 1.6], [-3.7, 1.7], [3.7, 1.7], [0, 3.9]];
 function barSlots(n: number): Spot[] {
   const out: Spot[] = [];
-  const rows = [-1.9, -0.7, 0.5, 1.7];
   for (let i = 0; i < Math.max(n, 1); i++) {
-    const row = Math.min(Math.floor(i / 6), rows.length - 1);
-    const col = i % 6;
-    out.push({ x: (col - 2.5) * 1.0 + (row % 2 ? 0.5 : 0), z: rows[row], face: Math.PI, lie: false });
+    const g = Math.floor(i / 3) % BAR_GROUPS.length;
+    const j = i % 3;
+    const ang = (j * 2 * Math.PI) / 3 + g * 0.9;
+    const [cx, cz] = BAR_GROUPS[g];
+    const x = cx + Math.sin(ang) * 0.8;
+    const z = cz + Math.cos(ang) * 0.8;
+    out.push({ x, z, face: Math.atan2(cx - x, cz - z), lie: false });
   }
   return out;
 }
@@ -821,6 +826,42 @@ function LoungeBase({ c, r, color, children }: { c: V2; r: number; color: string
   );
 }
 
+/** The bartender: a robot in a white apron behind the counter, wiping it and shaking a drink now and then. */
+function Bartender() {
+  const armL = useRef<THREE.Group>(null);
+  const armR = useRef<THREE.Group>(null);
+  const head = useRef<THREE.Group>(null);
+  const root = useRef<THREE.Group>(null);
+  useFrame((state) => {
+    const t = state.clock.elapsedTime;
+    const shake = Math.max(0, Math.sin(t * 0.5)); // every few seconds a drink is shaken
+    if (armR.current) armR.current.rotation.x = -1.0 - shake * 0.5 + Math.sin(t * (shake > 0.2 ? 12 : 2.2)) * (shake > 0.2 ? 0.22 : 0.3);
+    if (armL.current) armL.current.rotation.x = -0.9 + Math.sin(t * 2.2 + 1.4) * 0.3;
+    if (head.current) head.current.rotation.y = Math.sin(t * 0.45) * 0.55;
+    if (root.current) root.current.position.x = Math.sin(t * 0.3) * 1.4; // walks along the counter
+  });
+  const hood = '#e8ecf5';
+  return (
+    <group ref={root} position={[0, SURFACE_Y, -4.05]} rotation={[0, 0, 0]}>
+      {[-0.15, 0.15].map((x) => (<mesh key={x} position={[x, 0.3, 0]}><boxGeometry args={[0.17, 0.6, 0.19]} /><meshStandardMaterial color="#14161f" /></mesh>))}
+      <RoundedBox args={[0.66, 0.62, 0.44]} radius={0.12} smoothness={3} position={[0, 0.92, 0]}><meshStandardMaterial color={hood} roughness={0.85} /></RoundedBox>
+      <mesh position={[0, 0.82, 0.24]}><boxGeometry args={[0.5, 0.5, 0.03]} /><meshStandardMaterial color="#ffffff" roughness={0.9} /></mesh>
+      <mesh position={[0, 1.2, 0.24]}><boxGeometry args={[0.2, 0.07, 0.03]} /><meshBasicMaterial color={BAR_COLOR} toneMapped={false} /></mesh>
+      <group ref={armL} position={[-0.42, 1.14, 0]}><mesh position={[0, -0.24, 0]}><boxGeometry args={[0.15, 0.5, 0.16]} /><meshStandardMaterial color={hood} roughness={0.85} /></mesh></group>
+      <group ref={armR} position={[0.42, 1.14, 0]}>
+        <mesh position={[0, -0.24, 0]}><boxGeometry args={[0.15, 0.5, 0.16]} /><meshStandardMaterial color={hood} roughness={0.85} /></mesh>
+        <mesh position={[0, -0.62, 0.05]}><cylinderGeometry args={[0.07, 0.05, 0.26, 10]} /><meshStandardMaterial color="#aeb8cf" metalness={0.8} roughness={0.25} /></mesh>
+      </group>
+      <group ref={head} position={[0, 1.66, 0]}>
+        <mesh scale={[1, 1.05, 0.95]}><sphereGeometry args={[0.52, 28, 24]} /><meshStandardMaterial color={hood} roughness={0.9} /></mesh>
+        <mesh position={[0, -0.02, 0.3]} scale={[0.95, 0.85, 0.78]}><sphereGeometry args={[0.44, 28, 24]} /><meshStandardMaterial color="#07080c" metalness={0.7} roughness={0.2} /></mesh>
+        {[-0.15, 0.15].map((x) => (<mesh key={x} position={[x, 0.02, 0.63]}><boxGeometry args={[0.09, 0.19, 0.03]} /><meshBasicMaterial color={BAR_COLOR} toneMapped={false} /></mesh>))}
+        <mesh position={[0, 0.5, 0]}><cylinderGeometry args={[0.3, 0.34, 0.22, 20]} /><meshStandardMaterial color="#1b1e2a" roughness={0.6} /></mesh>
+      </group>
+    </group>
+  );
+}
+
 function LoungeBar({ plan }: { plan: LoungePlan }) {
   const bottles = ['#f87171', '#fbbf24', '#34d399', '#60a5fa', '#c084fc', '#fb923c'];
   return (
@@ -842,9 +883,10 @@ function LoungeBar({ plan }: { plan: LoungePlan }) {
         <mesh position={[0, 1.12, 0.05]}><boxGeometry args={[6.6, 0.1, 1.2]} /><meshStandardMaterial color="#e6ecf8" roughness={0.25} metalness={0.2} /></mesh>
         <mesh position={[0, 0.2, 0.51]}><boxGeometry args={[6.2, 0.05, 0.03]} /><meshBasicMaterial color={BAR_COLOR} toneMapped={false} /></mesh>
       </group>
-      {/* two high tables at the front */}
-      {[-3.6, 3.6].map((x) => (
-        <group key={x} position={[x, SURFACE_Y, 2.7]}>
+      <Bartender />
+      {/* two high tables at the side */}
+      {[-4.7, 4.7].map((x) => (
+        <group key={x} position={[x, SURFACE_Y, -0.6]}>
           <mesh position={[0, 0.55, 0]}><cylinderGeometry args={[0.07, 0.07, 1.1, 8]} /><meshStandardMaterial color="#aeb8cf" metalness={0.8} roughness={0.3} /></mesh>
           <mesh position={[0, 1.12, 0]}><cylinderGeometry args={[0.6, 0.6, 0.07, 24]} /><meshStandardMaterial color="#e6ecf8" roughness={0.3} /></mesh>
           <mesh position={[0, 0.04, 0]}><cylinderGeometry args={[0.35, 0.4, 0.08, 20]} /><meshStandardMaterial color="#232838" /></mesh>
@@ -917,6 +959,30 @@ function RobotTag({ robot, onSelect }: { robot: RobotView; onSelect: (id: string
   );
 }
 
+/** One shared speech-bubble texture ("...") for the robots that talk at the bar. */
+let bubbleTex: THREE.CanvasTexture | null = null;
+function BUBBLE_TEX() {
+  if (!bubbleTex) {
+    const c = document.createElement('canvas');
+    c.width = 160;
+    c.height = 100;
+    const g = c.getContext('2d')!;
+    g.fillStyle = 'rgba(255,255,255,0.95)';
+    roundRect(g, 4, 4, 152, 70, 30);
+    g.fill();
+    g.beginPath();
+    g.moveTo(40, 70);
+    g.lineTo(26, 96);
+    g.lineTo(66, 72);
+    g.fill();
+    g.fillStyle = '#1b1e2a';
+    for (const x of [48, 80, 112]) { g.beginPath(); g.arc(x, 39, 8, 0, Math.PI * 2); g.fill(); }
+    bubbleTex = new THREE.CanvasTexture(c);
+    bubbleTex.colorSpace = THREE.SRGBColorSpace;
+  }
+  return bubbleTex;
+}
+
 function Robot({ station, lounge, bobSeed, selected, onSelect }: { station: Station; lounge: RobotLounge | null; bobSeed: number; selected: boolean; onSelect: (id: string) => void }) {
   const robot = station.robot;
   const p = paletteOf(robot.floor);
@@ -932,6 +998,7 @@ function Robot({ station, lounge, bobSeed, selected, onSelect }: { station: Stat
   const mode = useRef<'desk' | 'lounge' | null>(null);
   const queue = useRef<V2[]>([]);
   const lieAmt = useRef(0);
+  const bubble = useRef<THREE.Sprite>(null);
 
   useFrame((state, delta) => {
     const g = root.current;
@@ -986,12 +1053,15 @@ function Robot({ station, lounge, bobSeed, selected, onSelect }: { station: Stat
     } else {
       if (queue.current.length) queue.current.shift();
       const settledAt = want === 'lounge' && lounge ? lounge.face : station.face;
-      const target = settledAt + (want === 'lounge' && !lounge?.lie ? Math.sin(t * 0.25) * 0.5 : 0); // idle leaders glance around the bar
+      const target = settledAt + (want === 'lounge' && !lounge?.lie ? Math.sin(t * 0.4) * 0.18 : 0); // leaders at the bar turn a little while they talk
       let diff = target - g.rotation.y;
       diff = Math.atan2(Math.sin(diff), Math.cos(diff));
       g.rotation.y += diff * Math.min(1, delta * 5);
     }
     const settled = !walking && queue.current.length === 0;
+    const chatting = settled && want === 'lounge' && !lounge?.lie;
+    const talk = chatting ? Math.max(0, Math.sin(t * 0.8)) : 0; // takes turns: each leader talks in bursts
+    if (bubble.current) bubble.current.visible = talk > 0.35;
     const lieGoal = settled && want === 'lounge' && lounge?.lie ? 1 : 0;
     lieAmt.current += (lieGoal - lieAmt.current) * Math.min(1, delta * 4);
 
@@ -1004,6 +1074,9 @@ function Robot({ station, lounge, bobSeed, selected, onSelect }: { station: Stat
       if (walking) {
         armL.current.rotation.x = -swing * 0.8;
         armR.current.rotation.x = swing * 0.8;
+      } else if (chatting) {
+        armR.current.rotation.x = -0.35 - talk * (0.7 + Math.sin(t * 7) * 0.25);
+        armL.current.rotation.x = -0.15 - talk * 0.3 * Math.sin(t * 5 + 1);
       } else if (robot.state === 'working') {
         armL.current.rotation.x = -1.05 + Math.sin(t * 14) * 0.16;
         armR.current.rotation.x = -1.05 + Math.sin(t * 14 + 1.7) * 0.16;
@@ -1024,7 +1097,7 @@ function Robot({ station, lounge, bobSeed, selected, onSelect }: { station: Stat
     }
     if (head.current) {
       head.current.rotation.z = robot.state === 'waiting' ? Math.sin(t * 1.4) * 0.12 : 0;
-      head.current.rotation.x = robot.state === 'working' && !walking ? -0.12 + Math.sin(t * 3) * 0.03 : 0;
+      head.current.rotation.x = robot.state === 'working' && !walking ? -0.12 + Math.sin(t * 3) * 0.03 : chatting ? Math.sin(t * 2.6) * 0.07 * (0.4 + talk) : 0;
     }
 
     const eyeColor = robot.state === 'waiting' ? '#fbbf24' : p.eye;
@@ -1086,6 +1159,9 @@ function Robot({ station, lounge, bobSeed, selected, onSelect }: { station: Stat
       )}
 
       <RobotTag robot={robot} onSelect={onSelect} />
+      <sprite ref={bubble} visible={false} position={[0.55, 2.25, 0]} scale={[0.8, 0.5, 1]}>
+        <spriteMaterial map={BUBBLE_TEX()} transparent depthWrite={false} toneMapped={false} />
+      </sprite>
     </group>
   );
 }

@@ -19,8 +19,8 @@ describe('week and number helpers', () => {
   });
   it('short numbers', () => {
     expect(shortModal(25000)).toBe('25k');
-    expect(shortModal(27500)).toBe('27,5k');
-    expect(shortModal(1500000)).toBe('1,5jt');
+    expect(shortModal(27500)).toBe('28k');
+    expect(shortModal(109100)).toBe('109k');
     expect(oneDecimal(14)).toBe('14,0');
     expect(oneDecimal(16.24)).toBe('16,2');
   });

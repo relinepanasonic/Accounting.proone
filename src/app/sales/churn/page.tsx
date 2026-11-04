@@ -32,8 +32,8 @@ export default async function SalesChurnPage() {
       <div>
         <h1 className="text-2xl font-extrabold text-zinc-100 font-serif">Churn</h1>
         <p className="text-sm text-zinc-400 mt-1">
-          Clients whose project ended before this month. They stay in Client until the end of the month they churned, then move here.
-          {canEdit ? ' To bring one back, set its status to Auto.' : ''}
+          Clients that left. A churned client leaves the Client table at once and is listed here.
+          {canEdit ? ' To bring one back, set its status to Finished or Auto.' : ''}
         </p>
         <p className="mt-2 text-xs text-zinc-500">{clients} client{clients === 1 ? '' : 's'} · {groups.length} invoice{groups.length === 1 ? '' : 's'}</p>
       </div>

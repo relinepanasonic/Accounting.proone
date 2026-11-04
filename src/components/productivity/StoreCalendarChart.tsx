@@ -23,13 +23,8 @@ export function mondaysOf(year: number, month: number): string[] {
   return out;
 }
 
-/** 25000 -> "25k", 27500 -> "27,5k", 1500000 -> "1,5jt". */
-export const shortModal = (n: number) => {
-  if (!n) return '-';
-  if (n >= 1e6) return `${(n / 1e6).toFixed(1).replace('.', ',').replace(/,0$/, '')}jt`;
-  if (n >= 1e3) return `${(n / 1e3).toFixed(1).replace('.', ',').replace(/,0$/, '')}k`;
-  return String(Math.round(n));
-};
+/** 25000 -> "25k", 27500 -> "28k", 1500000 -> "1500k": whole thousands, no comma. */
+export const shortModal = (n: number) => (!n ? '-' : n >= 1e3 ? `${Math.round(n / 1e3)}k` : String(Math.round(n)));
 export const oneDecimal = (n: number) => (n ? n.toFixed(1).replace('.', ',') : '-');
 
 /** green = went up from the session before, red = went down, white = the same or the first one. */
@@ -115,8 +110,8 @@ export function StoreCalendarChart({ label, clientIds, year, month, range }: { l
                       const v = cal!.cells[d]?.[s]?.[ad];
                       const b = before.get(`${d}|${s}|${ad}`);
                       return (
-                        <td key={`${d}${s}`} className="whitespace-nowrap border-l border-zinc-900 px-1.5 py-1.5 text-center font-mono">
-                          {v ? <><span className={tone(v[0], b?.m ?? null)}>{shortModal(v[0])}</span><span className="px-1 text-zinc-700">|</span><span className={tone(v[1], b?.t ?? null)}>{oneDecimal(v[1])}</span></> : <span className="text-zinc-700">-</span>}
+                        <td key={`${d}${s}`} className="whitespace-nowrap min-w-[78px] border-l border-zinc-900 px-1.5 py-1.5 text-center align-middle font-mono">
+                          {v ? <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1"><span className={`text-right ${tone(v[0], b?.m ?? null)}`}>{shortModal(v[0])}</span><span className="text-zinc-700">|</span><span className={`text-left ${tone(v[1], b?.t ?? null)}`}>{oneDecimal(v[1])}</span></div> : <span className="text-zinc-700">-</span>}
                         </td>
                       );
                     }))}

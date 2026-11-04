@@ -7,6 +7,7 @@ import { buildView, buildBuckets, rangeBuckets, bucketOf, adsCost, adsSales, sto
 import { loadStorePerformance } from '@/lib/integrations/store-performance';
 import { nameKey } from '@/lib/integrations/store-advertiser';
 import { storeLinks } from '@/lib/sales/client-stores';
+import { loadClientRows } from '@/lib/sales/client-table';
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { inputByDay, inputSeries, type InputReport } from '@/lib/advertiser/input-series';
 
@@ -56,9 +57,9 @@ export default async function AdvertiserStorePerformancePage({ searchParams }: {
   const sortByName = <T extends { name: string }>(a: T, b: T) => a.name.localeCompare(b.name, 'id', { sensitivity: 'base' });
 
   const shown = storeKey ? byAdvertiser.filter((r) => storeKeyOf(r) === storeKey) : byAdvertiser;
-  const view = viewOf(shown);
+  const viewAll = viewOf(shown);
   // The filters list the stores of the period (not cut by the store that is picked).
-  const periodStores = viewOf(byAdvertiser).stores;
+  const periodStoresAll = viewOf(byAdvertiser).stores;
 
   // The Input Log of the clients linked to these stores ("Company - Store" in the Clients table, or an old plain store name).
   const db = createAdminClient();
@@ -85,6 +86,19 @@ export default async function AdvertiserStorePerformancePage({ searchParams }: {
     }
   }
   const days = inputByDay(reports);
+
+  // Only the clients that are still with us: a client on the Churn page is left out (its stores, numbers and filters).
+  const churned = new Set<string>();
+  try {
+    const gone = await loadClientRows(db, ctx.activeWorkspaceId, { archived: 'only', maskName: (n) => n || '' });
+    for (const r of gone) churned.add(r.clientId);
+  } catch { /* no churn list: show everything */ }
+  const isChurned = (label: string, store: string) => {
+    const ids = clientsOf(label, store);
+    return ids.length > 0 && ids.every((id) => churned.has(id));
+  };
+  const periodStores = periodStoresAll.filter((s) => !isChurned(s.label, s.store));
+  const view = { ...viewAll, stores: viewAll.stores.filter((s) => !isChurned(s.label, s.store)) };
   /** Every Input Log of a store: by its own label, and the older ones through the client linked to it. */
   const logKeysOf = (label: string, store: string) => Array.from(new Set([...clientsOf(label, store), `store:${nameKey(label)}`]));
 
@@ -135,6 +149,7 @@ export default async function AdvertiserStorePerformancePage({ searchParams }: {
     for (const [key, v] of loose) {
       const who = advOf.get(v.clientId) || null;
       const co = /^s*(ProOne|Reline|Alpha|Lighting Solution)/i.exec(v.label)?.[1] || '';
+      if (churned.has(v.clientId)) continue;
       if (companyFilter && co.toLowerCase() !== companyFilter.toLowerCase()) continue;
       if (!owner && (!ctx.userId || who !== ctx.userId)) continue;
       if (advertiserFilter && (advertiserFilter === 'none' ? who !== null : who !== advertiserFilter)) continue;

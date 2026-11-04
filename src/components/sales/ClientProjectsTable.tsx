@@ -257,7 +257,7 @@ function HandlerSelect({ clientId, job, current, people }: { clientId: string; j
 }
 
 export function ClientProjectsTable({
-  rows, showStatus, canEditStart, canEditNames, canEditPaid = false, canEditStatus = false, canEditSales = false, hidePaid = false, showSalesman = false, advertisers, admins, storeOptions,
+  rows, showStatus, canEditStart, canEditNames, canEditPaid = false, canEditStatus = false, canEditSales = false, hidePaid = false, showSalesman = false, compact = false, advertisers, admins, storeOptions,
 }: {
   rows: ClientRow[];
   showStatus: boolean;
@@ -273,6 +273,8 @@ export function ClientProjectsTable({
   hidePaid?: boolean;
   /** Sales tabs: which salesman got the client. */
   showSalesman?: boolean;
+  /** Optimizing > Clients: no Paid Date and End Project (they stay in Accounting and Sales), tighter columns that fit one wide screen. */
+  compact?: boolean;
   /** "Company - Store" of every store of Profesor Dashboard (ProOne) and Reline (Reline, Alpha, Lighting Solution): suggestions for the Store column. */
   storeOptions?: string[];
   /** Superadmin / founder only: dropdowns to assign who handles each client. */
@@ -339,13 +341,13 @@ export function ClientProjectsTable({
         {(storeOptions || []).filter((o) => splitStore(o).company === c).map((o) => <option key={o} value={splitStore(o).store} />)}
       </datalist>
     ))}
-    <div className="overflow-x-auto rounded-xl border border-[#d4af37]/20 bg-[#0e0f14] shadow-xl">
-      <table className="w-full text-left text-sm">
+    <div className={`overflow-x-auto rounded-xl border border-[#d4af37]/20 bg-[#0e0f14] shadow-xl ${compact ? '[&_td]:min-w-0 [&_td]:px-2 [&_th]:px-2' : ''}`}>
+      <table className={`w-full text-left ${compact ? 'text-xs' : 'text-sm'}`}>
         <thead className="border-b border-[#d4af37]/10 bg-zinc-900/50 text-[11px] uppercase tracking-wider text-zinc-400">
           <tr>
-            {!hidePaid && <Th k="paid">Paid Date</Th>}
+            {!hidePaid && !compact && <Th k="paid">Paid Date</Th>}
             <Th k="start">Start Project</Th>
-            <Th k="end">End Project</Th>
+            {!compact && <Th k="end">End Project</Th>}
             <Th k="client">Client</Th>
             {(showSalesman || canEditSales) && <Th k="salesman">Sales</Th>}
             <Th k="company">Company</Th>
@@ -363,15 +365,15 @@ export function ClientProjectsTable({
           <tbody key={g[0].key} className="divide-y divide-zinc-800/40 border-t border-zinc-800/70">
             {g.map((row, i) => (
               <tr key={row.key} className="hover:bg-zinc-900/30">
-                {i === 0 && !hidePaid && (
+                {i === 0 && !hidePaid && !compact && (
                   <td rowSpan={g.length} className="px-3 py-3 align-top whitespace-nowrap">
                     <PaidCell row={row} canEdit={canEditPaid} />
                   </td>
                 )}
                 {i === 0 && <td rowSpan={g.length} className="px-3 py-3 align-top whitespace-nowrap"><StartCell row={row} canEdit={canEditStart} /></td>}
-                <td className="px-3 py-3 whitespace-nowrap text-zinc-300">
+                {!compact && <td className="px-3 py-3 whitespace-nowrap text-zinc-300">
                   {row.end ? dmy(row.end) : row.endText ? <span className="text-zinc-400">{row.endText}</span> : <span className="text-zinc-600">{row.start ? 'No length' : '-'}</span>}
-                </td>
+                </td>}
                 {i === 0 && (
                   <td rowSpan={g.length} className="px-3 py-3 align-top font-bold text-zinc-100">
                     {row.clientName}

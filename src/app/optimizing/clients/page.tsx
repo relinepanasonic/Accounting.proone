@@ -69,7 +69,7 @@ export default async function OptimizingClientsPage({ searchParams }: { searchPa
         <h1 className="text-2xl font-extrabold text-zinc-100 font-serif">Optimizing · Clients</h1>
       </div>
       {TabBar}
-      <ClientProjectsTable rows={rows} showStatus canEditStart canEditNames canEditPaid canEditStatus canEditSales={owner} advertisers={handlers?.advertisers} admins={handlers?.admins} storeOptions={storeOptions} />
+      <ClientProjectsTable rows={rows} compact showStatus canEditStart canEditNames canEditPaid canEditStatus canEditSales={owner} advertisers={handlers?.advertisers} admins={handlers?.admins} storeOptions={storeOptions} />
     </div>
   );
 }

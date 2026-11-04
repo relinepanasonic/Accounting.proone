@@ -20,7 +20,9 @@ describe('Input Log rules', () => {
       [{ groupCategory: 'Hero', groupName: 'Group Hero 1', modalHarian: 'Rp 5', biayaIklan: 'Rp 0', penjualan: '' }, { groupCategory: 'Hero', groupName: 'Group Hero 1', modalHarian: 'Rp 5', biayaIklan: 'Rp 0', penjualan: 'Rp 0' }],
       [{ infoIklan: 'A', biayaIklan: 'Rp 0', penjualan: 'Rp 0' }],
     );
-    expect(m.map((x) => `${x.label}:${x.rows}`)).toEqual(['GMV Max Auto:1', 'Group Hero 1:1']);
+    expect(m.map((x) => `${x.label}:${x.rows}`)).toEqual(['GMV Max Auto:1', 'Iklan Group:1']);
+    expect(m[0].where).toEqual(['row 1: Biaya Iklan + Penjualan']);
+    expect(m[1].where).toEqual(['row 1: Penjualan']);
     expect(missingNumbers([], [], [{ infoIklan: 'A', biayaIklan: 'Rp 0', penjualan: 'Rp 0' }])).toEqual([]);
   });
   it('a tab is green when saved with numbers, amber when it differs from what is saved', () => {

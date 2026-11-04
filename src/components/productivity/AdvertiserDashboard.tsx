@@ -129,7 +129,7 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
       const first = missing[0];
       setActiveTab(first.tab);
       if (first.tab === 'group' && first.groupCategory && first.groupName) { setActiveGroupCategory(first.groupCategory as GroupCategory); setActiveGroupName(first.groupName); }
-      alert('Fill Biaya Iklan and Penjualan first (type 0 if there was none):\n\n' + missing.map((m) => `- ${m.label}: ${m.rows} row${m.rows === 1 ? '' : 's'}`).join('\n'));
+      alert('Fill Biaya Iklan and Penjualan first (type 0 if there was none):\n\n' + missing.map((m) => `${m.label}\n` + m.where.slice(0, 8).map((w) => `   - ${w}`).join('\n') + (m.where.length > 8 ? `\n   - and ${m.where.length - 8} more` : '')).join('\n\n'));
       return;
     }
     setShowErrors(false);
@@ -263,18 +263,22 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
       const kept = [...groupData].filter(r => rowUsed(r) || r.iklanProduk !== '' || r.note !== '');
       setGroupData([...kept, ...formatted]);
     } else if (activeTab === 'mandiri') {
-      const formatted = parsedData.map(cols => {
+      const formatted = parsedData.map((raw) => {
+        // Info Iklan | Modal Harian | Target ROAS | Biaya Iklan | Penjualan | ROAS | Note.
+        // An older sheet has a text column (Diagnosis) after the Target ROAS: it is dropped, so the numbers still land in the right boxes.
+        const looksNumeric = (v?: string) => /^\s*(rp\.?)?[\d.,\s]+$/i.test(v || '');
+        const cols = raw.length >= 8 || (raw[3] && !looksNumeric(raw[3])) ? [raw[0], raw[1], raw[2], ...raw.slice(4)] : raw;
         const modal = cols[1] || '';
-        const biaya = cols[4] || '';
-        const penj = cols[5] || '';
+        const biaya = cols[3] || '';
+        const penj = cols[4] || '';
         return {
           infoIklan: cols[0] || '',
           modalHarian: formatCurrency(modal),
           targetRoas: cols[2] || '',
           biayaIklan: formatCurrency(biaya),
           penjualan: formatCurrency(penj),
-          roas: calculateRoas(penj, biaya) || cols[6] || '',
-          note: cols[7] || '',
+          roas: calculateRoas(penj, biaya) || cols[5] || '',
+          note: cols[6] || '',
         };
       });
       const currentData = [...mandiriData].filter(r => r.infoIklan !== '' || r.note !== '');

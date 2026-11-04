@@ -24,7 +24,7 @@ const addDays = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) 
  * picking a client or store hides the other clients.
  * Founder and superadmin see every client; an advertiser only the stores they handle.
  */
-export default async function AdvertiserStorePerformancePage({ searchParams }: { searchParams: Promise<{ year?: string; month?: string; store?: string; advertiser?: string; company?: string; from?: string; to?: string }> }) {
+export default async function AdvertiserStorePerformancePage({ searchParams }: { searchParams: Promise<{ year?: string; month?: string; store?: string; advertiser?: string; company?: string; from?: string; to?: string; open?: string }> }) {
   const sp = await searchParams;
   const supabase = await createClient();
   const ctx = await getAuthenticatedWorkspaceContext(supabase);
@@ -109,6 +109,8 @@ export default async function AdvertiserStorePerformancePage({ searchParams }: {
       key: s.key,
       name: nameOf(s.key, s.store),
       label: s.label,
+      logLabel: s.label,
+      logClientIds: clientsOf(s.label, s.store),
       advertiser: teams[s.key]?.advertiserId ? map.people.get(teams[s.key].advertiserId!) || '' : '',
       labels: view.labels,
       inputLabels,
@@ -143,7 +145,7 @@ export default async function AdvertiserStorePerformancePage({ searchParams }: {
       if (storeKey && storeKey !== key) continue;
       const zero = view.labels.map(() => 0);
       cards.push({
-        key, name, label: v.label.replace(/s*-s*$/, ''),
+        key, name, label: v.label.replace(/s*-s*$/, ''), logLabel: v.label, logClientIds: [v.clientId],
         advertiser: who ? map.people.get(who) || '' : '', labels: view.labels, inputLabels, gmv: zero, cost: zero, adSales: zero,
         totals: { gmv: 0, cost: 0, adSales: 0 },
         input: { modal: inp.modal, biaya: inp.biaya, biayaBudgeted: inp.biayaBudgeted, penjualan: inp.penjualan, target: inp.target },
@@ -166,7 +168,7 @@ export default async function AdvertiserStorePerformancePage({ searchParams }: {
       <AdvertiserClientPerformance
         cards={cards} year={year} month={month} years={[thisYear, thisYear - 1]}
         advertiserFilter={advertiserFilter} advertisers={map.advertisers.map((a) => ({ key: a.id, label: a.name }))} showAdvertiser={owner}
-        storeKey={storeKey} storeOptions={storeOptions} clientOptions={clientOptions} errors={errors} companyFilter={companyFilter} companies={companies} range={range}
+        storeKey={storeKey} storeOptions={storeOptions} clientOptions={clientOptions} errors={errors} companyFilter={companyFilter} companies={companies} range={range} initialOpen={String(sp?.open || '')}
       />
     </div>
   );

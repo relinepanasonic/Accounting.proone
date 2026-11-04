@@ -3,12 +3,14 @@
 import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { PeriodPicker, type Period } from '@/components/ui/PeriodPicker';
+import { StoreCalendarChart, mondaysOf } from '@/components/productivity/StoreCalendarChart';
 import { ClientSummaryTable } from '@/components/productivity/ClientSummaryTable';
 import { dmy } from '@/components/ui/DateRangePicker';
 import { useRouter } from 'next/navigation';
 import { ResponsiveContainer, ComposedChart, AreaChart, Area, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const C = { gold: '#d4af37', green: '#10b981', red: '#f87171', blue: '#60a5fa' };
 
 const short = (n: number) => {
@@ -39,6 +41,9 @@ export interface ClientCard {
   cost: number[];
   adSales: number[];
   totals: { gmv: number; cost: number; adSales: number };
+  /** Where the calendar chart reads the Input Log of this store: its label and the older logs of its clients. */
+  logLabel: string;
+  logClientIds: string[];
   /** From the Input Log of the linked client; null = nothing typed in this period. */
   input: { modal: number[]; biaya: number[]; biayaBudgeted: number[]; penjualan: number[]; target: number[] } | null;
 }
@@ -138,7 +143,7 @@ function InputBoxes({ c }: { c: ClientCard }) {
   );
 }
 
-function Card({ c }: { c: ClientCard }) {
+function Card({ c, year, month, range }: { c: ClientCard; year: number; month: number; range: { from: string; to: string } | null }) {
   const roas = ratio(c.totals.adSales, c.totals.cost);
   const data = c.labels.map((name, i) => ({ name, gmv: c.gmv[i], cost: c.cost[i], roas: Number(ratio(c.adSales[i], c.cost[i]).toFixed(2)) }));
   return (
@@ -186,18 +191,19 @@ function Card({ c }: { c: ClientCard }) {
         />
         <InputBoxes c={c} />
       </div>
+      <StoreCalendarChart label={c.logLabel} clientIds={c.logClientIds} year={year} month={month} range={range} />
     </div>
   );
 }
 
 /** Advertiser > Performance: every client (store) with its GMV box and its Ads Cost vs ROAS box, sorted by name. */
-export function AdvertiserClientPerformance({ cards, year, month, years, advertiserFilter, advertisers, showAdvertiser, storeKey, storeOptions, clientOptions, errors, companyFilter, companies, range }: {
+export function AdvertiserClientPerformance({ cards, year, month, years, advertiserFilter, advertisers, showAdvertiser, storeKey, storeOptions, clientOptions, errors, companyFilter, companies, range, initialOpen }: {
   cards: ClientCard[]; year: number; month: number; years: number[];
   advertiserFilter: string; advertisers: Option[]; showAdvertiser: boolean; storeKey: string; storeOptions: Option[]; clientOptions: Option[]; errors: string[];
-  companyFilter: string; companies: string[]; range: { from: string; to: string } | null;
+  companyFilter: string; companies: string[]; range: { from: string; to: string } | null; initialOpen: string;
 }) {
   const router = useRouter();
-  const [openKey, setOpenKey] = useState<string | null>(null);
+  const [openKey, setOpenKey] = useState<string | null>(initialOpen || null);
   const opened = cards.find((c) => c.key === openKey) || null;
   useEffect(() => {
     if (!opened) return;
@@ -209,8 +215,15 @@ export function AdvertiserClientPerformance({ cards, year, month, years, adverti
     const per = p.period;
     const when = per ? ('range' in per ? `from=${per.range.from}&to=${per.range.to}` : `year=${per.year}&month=${per.month}`) : range ? `from=${range.from}&to=${range.to}` : `year=${year}&month=${month}`;
     const adv = p.adv ?? advertiserFilter; const co = p.co ?? companyFilter; const st = p.st ?? storeKey;
-    router.push(`/productivity/advertiser/performance?${when}${adv ? `&advertiser=${encodeURIComponent(adv)}` : ''}${co ? `&company=${encodeURIComponent(co)}` : ''}${st ? `&store=${encodeURIComponent(st)}` : ''}`);
+    const open = openKey ? `&open=${encodeURIComponent(openKey)}` : '';
+    router.push(`/productivity/advertiser/performance?${when}${open}${adv ? `&advertiser=${encodeURIComponent(adv)}` : ''}${co ? `&company=${encodeURIComponent(co)}` : ''}${st ? `&store=${encodeURIComponent(st)}` : ''}`);
   };
+  // The pop-up has its own Year / Month / Week: they set the period of the whole page, and the pop-up stays open.
+  const plus6 = (d: string) => new Date(Date.parse(`${d}T00:00:00Z`) + 6 * 86400000).toISOString().slice(0, 10);
+  const selYear = range ? Number(range.from.slice(0, 4)) : year;
+  const selMonth = range ? Number(range.from.slice(5, 7)) : month;
+  const weeks = selMonth ? mondaysOf(selYear, selMonth) : [];
+  const weekValue = range && weeks.includes(range.from) && range.to === plus6(range.from) ? range.from : '';
   const sel = 'rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs font-bold text-zinc-200 outline-none focus:border-[#d4af37]/60 disabled:opacity-40';
 
   return (
@@ -250,7 +263,23 @@ export function AdvertiserClientPerformance({ cards, year, month, years, adverti
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/80 p-3 sm:p-8" onClick={() => setOpenKey(null)}>
           <div className="relative w-full max-w-[1400px]" onClick={(e) => e.stopPropagation()}>
             <button type="button" onClick={() => setOpenKey(null)} aria-label="Close" className="absolute right-3 top-3 z-10 rounded-lg border border-zinc-700 bg-zinc-900 p-1.5 text-zinc-300 hover:text-white"><X className="h-4 w-4" /></button>
-            <div className="rounded-2xl bg-[#0b0c10]"><Card c={opened} /></div>
+            <div className="rounded-2xl bg-[#0b0c10]">
+              <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800/80 px-4 py-3 pr-14">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Show</span>
+                <select value={selYear} onChange={(e) => go({ period: { year: Number(e.target.value), month: selMonth } })} className={sel} aria-label="Year">
+                  {years.concat(selYear).filter((y, i, a) => a.indexOf(y) === i).sort((a, b) => b - a).map((y) => <option key={y} value={y}>{y}</option>)}
+                </select>
+                <select value={selMonth} onChange={(e) => go({ period: { year: selYear, month: Number(e.target.value) } })} className={sel} aria-label="Month">
+                  <option value={0}>All months</option>
+                  {MONTH_NAMES.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+                </select>
+                <select value={weekValue} disabled={!selMonth} onChange={(e) => { const v = e.target.value; go({ period: v ? { range: { from: v, to: plus6(v) } } : { year: selYear, month: selMonth } }); }} className={sel} aria-label="Week">
+                  <option value="">All weeks</option>
+                  {weeks.map((w, i) => <option key={w} value={w}>{'Week ' + (i + 1) + ' · ' + dmy(w) + ' - ' + dmy(plus6(w))}</option>)}
+                </select>
+              </div>
+              <Card c={opened} year={selYear} month={selMonth} range={range} />
+            </div>
           </div>
         </div>
       )}

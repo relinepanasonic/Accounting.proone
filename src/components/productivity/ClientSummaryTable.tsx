@@ -18,42 +18,22 @@ const COMPANY = /^(ProOne|Reline|Alpha|Lighting Solution)\s+-\s+(.*)$/i;
 
 interface Row { key: string; cardKey: string; advertiser: string; year: string; month: string; week: string; company: string; store: string; client: string; gmv: number; cost: number; adSales: number }
 
-/** What a column of the chart means as Year / Month / Week, from its label and the period that is shown. */
-function whenOf(label: string, year: number, month: number): { year: string; month: string; week: string } {
-  if (/^W\d$/.test(label)) return { year: String(year), month: MONTH_FULL[month - 1] || '-', week: label };
-  const week = /^(\d{2}) (\w{3}) (\d{4})$/.exec(label); // the first day of a week, in a short range
-  if (week) { const mi = MON.indexOf(week[2]); return { year: week[3], month: MONTH_FULL[mi] || week[2], week: `${week[1]} ${week[2]}` }; }
-  const mYY = /^(\w{3}) (\d{2})$/.exec(label); // a month of a long range
-  if (mYY) { const mi = MON.indexOf(mYY[1]); return { year: `20${mYY[2]}`, month: MONTH_FULL[mi] || mYY[1], week: '-' }; }
-  const mi = MON.indexOf(label);
-  return { year: String(year), month: mi >= 0 ? MONTH_FULL[mi] : label, week: '-' };
-}
-
-/** The clients in one table before their charts: Advertiser | Year | Month | Week | Company | Store | GMV | Ads Cost | ROAS. Total per client, or one line per month / week. */
+/** The clients in one table before their charts: Advertiser | Year | Month | Week | Company | Store | GMV | Ads Cost | ROAS. One line per client, A to Z by client. */
 export function ClientSummaryTable({ cards, year, month, rangeLabel, onOpen }: { cards: ClientCard[]; year: number; month: number; rangeLabel: string | null; onOpen: (cardKey: string) => void }) {
-  const [mode, setMode] = useState<'total' | 'period'>('total');
-  const [sort, setSort] = useState<{ key: 'store' | 'advertiser' | 'gmv' | 'cost' | 'roas'; asc: boolean }>({ key: 'store', asc: true });
+  const [sort, setSort] = useState<{ key: 'client' | 'advertiser' | 'gmv' | 'cost' | 'roas'; asc: boolean }>({ key: 'client', asc: true });
 
   const rows = useMemo<Row[]>(() => {
     const out: Row[] = [];
     for (const c of cards) {
       const m = COMPANY.exec(c.label);
       const base = { advertiser: c.advertiser || 'Not assigned', company: m ? m[1] : '-', store: m ? m[2] : c.label, client: c.name };
-      if (mode === 'total') {
-        out.push({ key: c.key, cardKey: c.key, ...base, year: rangeLabel ? '-' : String(year), month: rangeLabel ? rangeLabel : month ? MONTH_FULL[month - 1] : 'Semua bulan', week: month && !rangeLabel ? 'Semua minggu' : '-', gmv: c.totals.gmv, cost: c.totals.cost, adSales: c.totals.adSales });
-      } else {
-        c.labels.forEach((label, i) => {
-          if (!c.gmv[i] && !c.cost[i] && !c.adSales[i]) return;
-          const w = whenOf(label, year, month);
-          out.push({ key: `${c.key}-${label}`, cardKey: c.key, ...base, ...w, gmv: c.gmv[i], cost: c.cost[i], adSales: c.adSales[i] });
-        });
-      }
+      out.push({ key: c.key, cardKey: c.key, ...base, year: rangeLabel ? '-' : String(year), month: rangeLabel ? rangeLabel : month ? MONTH_FULL[month - 1] : 'Semua bulan', week: month && !rangeLabel ? 'Semua minggu' : '-', gmv: c.totals.gmv, cost: c.totals.cost, adSales: c.totals.adSales });
     }
     return out;
-  }, [cards, mode, year, month, rangeLabel]);
+  }, [cards, year, month, rangeLabel]);
 
   const sorted = useMemo(() => {
-    const val = (r: Row) => (sort.key === 'store' ? r.store.toLowerCase() : sort.key === 'advertiser' ? r.advertiser.toLowerCase() : sort.key === 'gmv' ? r.gmv : sort.key === 'cost' ? r.cost : r.cost > 0 ? r.adSales / r.cost : -1);
+    const val = (r: Row) => (sort.key === 'client' ? (r.client || r.store).toLowerCase() : sort.key === 'advertiser' ? r.advertiser.toLowerCase() : sort.key === 'gmv' ? r.gmv : sort.key === 'cost' ? r.cost : r.cost > 0 ? r.adSales / r.cost : -1);
     return [...rows].sort((a, b) => {
       const p = val(a), q = val(b);
       return (typeof p === 'number' && typeof q === 'number' ? p - q : String(p).localeCompare(String(q))) * (sort.asc ? 1 : -1);
@@ -63,7 +43,7 @@ export function ClientSummaryTable({ cards, year, month, rangeLabel, onOpen }: {
   const total = rows.reduce((t, r) => ({ gmv: t.gmv + r.gmv, cost: t.cost + r.cost, adSales: t.adSales + r.adSales }), { gmv: 0, cost: 0, adSales: 0 });
   const th = (key: typeof sort.key, label: string, right = false) => (
     <th className={`px-4 py-3 ${right ? 'text-right' : ''}`}>
-      <button type="button" onClick={() => setSort((s) => (s.key === key ? { key, asc: !s.asc } : { key, asc: key === 'store' || key === 'advertiser' }))} className={`inline-flex items-center gap-1 uppercase hover:text-zinc-200 ${sort.key === key ? 'text-[#f5d77f]' : ''}`}>{label}<span className="text-[8px]">{sort.key === key ? (sort.asc ? '▲' : '▼') : ''}</span></button>
+      <button type="button" onClick={() => setSort((s) => (s.key === key ? { key, asc: !s.asc } : { key, asc: key === 'client' || key === 'advertiser' }))} className={`inline-flex items-center gap-1 uppercase hover:text-zinc-200 ${sort.key === key ? 'text-[#f5d77f]' : ''}`}>{label}<span className="text-[8px]">{sort.key === key ? (sort.asc ? '▲' : '▼') : ''}</span></button>
     </th>
   );
 
@@ -72,18 +52,13 @@ export function ClientSummaryTable({ cards, year, month, rangeLabel, onOpen }: {
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-extrabold text-white">Clients</h2>
-          <p className="text-[10px] text-zinc-500">{rows.length} line{rows.length === 1 ? '' : 's'} · click a client to see its charts</p>
-        </div>
-        <div className="flex rounded-lg border border-zinc-800 bg-zinc-950 p-0.5">
-          {([['total', 'Total per client'], ['period', rangeLabel || month ? 'Per week / period' : 'Per month']] as const).map(([k, label]) => (
-            <button key={k} type="button" onClick={() => setMode(k)} className={`rounded-md px-3 py-1 text-[10px] font-bold uppercase tracking-wide ${mode === k ? 'bg-[#d4af37]/20 text-[#f5d77f]' : 'text-zinc-500 hover:text-zinc-300'}`}>{label}</button>
-          ))}
+          <p className="text-[10px] text-zinc-500">{rows.length} client{rows.length === 1 ? '' : 's'} · click a client to see its charts</p>
         </div>
       </div>
       <div className="max-h-[calc(100vh-230px)] min-h-[520px] overflow-auto rounded-xl border border-zinc-800/60">
         <table className="w-full min-w-[980px] text-left text-sm">
           <thead className="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-950 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-            <tr>{th('advertiser', 'Advertiser')}<th className="px-4 py-3">Year</th><th className="px-4 py-3">Month</th><th className="px-4 py-3">Week</th><th className="px-4 py-3">Company</th>{th('store', 'Store')}{th('gmv', 'GMV', true)}{th('cost', 'Ads Cost', true)}{th('roas', 'ROAS', true)}</tr>
+            <tr>{th('advertiser', 'Advertiser')}<th className="px-4 py-3">Year</th><th className="px-4 py-3">Month</th><th className="px-4 py-3">Week</th><th className="px-4 py-3">Company</th>{th('client', 'Store')}{th('gmv', 'GMV', true)}{th('cost', 'Ads Cost', true)}{th('roas', 'ROAS', true)}</tr>
           </thead>
           <tbody className="divide-y divide-zinc-800/50">
             {sorted.length === 0 && <tr><td colSpan={9} className="px-3 py-8 text-center text-zinc-500">No numbers in this period.</td></tr>}

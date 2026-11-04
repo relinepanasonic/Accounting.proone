@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
+import { calendarFromReports, type InputReport, type StoreCalendar } from '@/lib/advertiser/input-series';
 import { actionable, buildRecommendations, type DayFigures } from '@/lib/advertiser/optimasi';
 
 export async function fetchAdvertiserLogs() {
@@ -221,4 +222,26 @@ export async function fetchPreviousSession(clientId: string, reportDate: string,
     return { data: null };
   }
   return { data };
+}
+
+/** The Modal Harian and Target ROAS of every ad in every session of one store over a year (for the calendar chart of Advertiser > Performance). */
+export async function fetchStoreCalendar(storeLabel: string, clientIds: string[], year: number): Promise<{ data: StoreCalendar | null; error?: string }> {
+  if (!Number.isInteger(year) || year < 2000 || year > 2100) return { data: null, error: 'Bad year.' };
+  const supabase = await createClient();
+  await getAuthenticatedWorkspaceContext(supabase); // signed in only; the rows themselves are limited by the database rules
+  const cols = 'client_id, report_date, session, data_inkubasi, data_group, data_mandiri';
+  const base = () => supabase.from('advertiser_reports').select(cols).gte('report_date', `${year}-01-01`).lte('report_date', `${year}-12-31`).limit(20000);
+  const reports: InputReport[] = [];
+  const label = String(storeLabel || '').trim().replace(/[%_]/g, '');
+  if (label) {
+    const { data, error } = await base().ilike('store_label', label);
+    if (!error) reports.push(...((data || []) as any[]));
+  }
+  const ids = (clientIds || []).filter((id) => /^[0-9a-f-]{36}$/i.test(id));
+  if (ids.length) {
+    let { data, error } = await base().in('client_id', ids).is('store_label', null);
+    if (error) ({ data, error } = await base().in('client_id', ids));
+    if (!error) reports.push(...((data || []) as any[]));
+  }
+  return { data: calendarFromReports(reports) };
 }

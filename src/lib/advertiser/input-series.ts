@@ -86,3 +86,45 @@ export function inputSeries(days: Array<Map<string, InputDay>>, size: number, bu
   s.target = tw.map((w, i) => (tWeight[i] > 0 ? w / tWeight[i] : 0));
   return s;
 }
+
+// ---- the calendar chart: what each ad was set to in each session of each day
+
+/** date (yyyy-mm-dd) -> session -> ad name -> [Modal Harian, Target ROAS] (target 0 = none). */
+export interface StoreCalendar { ads: string[]; cells: Record<string, Record<string, Record<string, [number, number]>>> }
+
+const GMV_MAX = 'GMV Max';
+const natural = (a: string, b: string) => a.localeCompare(b, 'id', { numeric: true, sensitivity: 'base' });
+
+/** GMV Max first, then the Iklan Groups, then the Iklan Mandiri, each A to Z (numbers in order). */
+export function calendarFromReports(reports: InputReport[]): StoreCalendar {
+  const cells: StoreCalendar['cells'] = {};
+  const kind = new Map<string, number>(); // ad -> 0 GMV Max, 1 group, 2 mandiri
+  const rowsOfKind = (r: InputReport): Array<{ ad: string; k: number; row: any }> => {
+    const out: Array<{ ad: string; k: number; row: any }> = [];
+    for (const row of Array.isArray(r.data_inkubasi) ? r.data_inkubasi : []) out.push({ ad: GMV_MAX, k: 0, row });
+    const g = r.data_group;
+    const groupRows: any[] = Array.isArray(g) ? g : g && typeof g === 'object' ? [...(g.hero || []).map((x: any) => ({ ...x, groupName: 'Group Hero 1' })), ...(g.reguler || []).map((x: any) => ({ ...x, groupName: 'Group Reguler 1' })), ...(g.low || []).map((x: any) => ({ ...x, groupName: 'Group Low 1' }))] : [];
+    for (const row of groupRows) out.push({ ad: String(row?.groupName || 'Group').trim() || 'Group', k: 1, row });
+    (Array.isArray(r.data_mandiri) ? r.data_mandiri : []).forEach((row: any, i: number) => out.push({ ad: String(row?.infoIklan || '').trim() || `Mandiri ${i + 1}`, k: 2, row }));
+    return out;
+  };
+  for (const r of reports) {
+    const acc = new Map<string, { m: number; tw: number; w: number }>();
+    for (const { ad, k, row } of rowsOfKind(r)) {
+      const modal = money(row?.modalHarian);
+      const target = decimal(row?.targetRoas);
+      if (!modal && !target) continue;
+      kind.set(ad, Math.min(kind.get(ad) ?? 9, k));
+      const a = acc.get(ad) || { m: 0, tw: 0, w: 0 };
+      a.m += modal;
+      if (target > 0) { const wgt = modal > 0 ? modal : 1; a.tw += target * wgt; a.w += wgt; }
+      acc.set(ad, a);
+    }
+    if (!acc.size) continue;
+    const day = (cells[r.report_date] ||= {});
+    const ses = (day[String(r.session)] ||= {});
+    for (const [ad, a] of acc) ses[ad] = [a.m, a.w > 0 ? a.tw / a.w : 0];
+  }
+  const ads = Array.from(kind.keys()).sort((a, b) => (kind.get(a)! - kind.get(b)!) || natural(a, b));
+  return { ads, cells };
+}

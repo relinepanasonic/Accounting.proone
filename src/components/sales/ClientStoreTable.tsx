@@ -3,7 +3,7 @@
 import React, { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ClientRow } from '@/lib/sales/client-table';
-import { addClientStore, removeClientStore } from '@/app/actions/sales-flow';
+import { addClientStore, removeClientStore, setClientStatus } from '@/app/actions/sales-flow';
 import { SortArrows } from '@/components/ui/SortArrows';
 import { SalesCell, StatusCell, StartCell, HandlerSelect, field, type Person } from '@/components/sales/ClientProjectsTable';
 
@@ -120,9 +120,23 @@ function StoreCell({ line, canEdit, storeOptions }: { line: StoreLine; canEdit: 
   );
 }
 
-export function ClientStoreTable({ rows, canEditStart, canEditNames, canEditStatus, canEditSales, advertisers, admins, storeOptions }: {
+/** A client that came back: takes it off the Churn page and into the Client table (its old project is then Finished, the client stays). */
+function ReactivateButton({ invoiceId }: { invoiceId: string }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [error, setError] = useState('');
+  if (!invoiceId) return null;
+  return (
+    <div>
+      <button type="button" disabled={pending} onClick={() => { setError(''); start(async () => { const res = await setClientStatus(invoiceId, 'finished'); if (!res.success) setError(res.error || 'Could not save.'); else router.refresh(); }); }} className="whitespace-nowrap rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold text-emerald-300 hover:brightness-125 disabled:opacity-40">{pending ? 'Moving...' : 'Active again'}</button>
+      {error && <div className="mt-1 max-w-[160px] text-[10px] text-red-400">{error}</div>}
+    </div>
+  );
+}
+
+export function ClientStoreTable({ rows, canEditStart, canEditNames, canEditStatus, canEditSales, advertisers, admins, storeOptions, reactivate }: {
   rows: ClientRow[]; canEditStart: boolean; canEditNames: boolean; canEditStatus: boolean; canEditSales: boolean;
-  advertisers?: Person[]; admins?: Person[]; storeOptions?: string[];
+  advertisers?: Person[]; admins?: Person[]; storeOptions?: string[]; reactivate?: boolean;
 }) {
   const assign = Boolean(advertisers && admins);
   const [search, setSearch] = useState('');
@@ -185,10 +199,11 @@ export function ClientStoreTable({ rows, canEditStart, canEditNames, canEditStat
               <Th k="status">Status</Th>
               {assign && <Th k="advertiser">Advertiser</Th>}
               {assign && <Th k="admin">Admin</Th>}
+              {reactivate && <th className="px-4 py-3 font-bold" />}
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800/60">
-            {sorted.length === 0 && <tr><td colSpan={8} className="p-8 text-center text-zinc-500">No client matches.</td></tr>}
+            {sorted.length === 0 && <tr><td colSpan={9} className="p-8 text-center text-zinc-500">No client matches.</td></tr>}
             {sorted.map((l) => {
               const r = l.group[0];
               return (
@@ -206,6 +221,7 @@ export function ClientStoreTable({ rows, canEditStart, canEditNames, canEditStat
                   <td className="px-4 py-3.5"><StatusCell row={r} canEdit={canEditStatus} /></td>
                   {assign && <td className="px-4 py-3.5"><HandlerSelect clientId={r.clientId} job="advertising" current={r.advertiserId} people={advertisers!} /></td>}
                   {assign && <td className="px-4 py-3.5"><HandlerSelect clientId={r.clientId} job="admin" current={r.adminId} people={admins!} /></td>}
+                  {reactivate && <td className="px-4 py-3.5"><ReactivateButton invoiceId={r.invoiceId} /></td>}
                 </tr>
               );
             })}

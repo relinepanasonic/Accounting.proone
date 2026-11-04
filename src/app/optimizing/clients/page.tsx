@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic';
 /**
  * Optimizing > Clients. Two tabs:
  *  - Assign: every client product line, the stores of each client, and (superadmin / founder) who handles each client.
- *  - Churn: the clients that left.
+ *  - Churn: the clients that left ("Active again" moves a returning client back to Assign & Projects).
  */
 export default async function OptimizingClientsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const supabase = await createClient();
@@ -69,7 +69,7 @@ export default async function OptimizingClientsPage({ searchParams }: { searchPa
         <h1 className="text-2xl font-extrabold text-zinc-100 font-serif">Optimizing · Clients</h1>
       </div>
       {TabBar}
-      <ClientStoreTable rows={rows} canEditStart canEditNames canEditStatus canEditSales={owner} advertisers={handlers?.advertisers} admins={handlers?.admins} storeOptions={storeOptions} />
+      <ClientStoreTable rows={rows} canEditStart canEditNames canEditStatus canEditSales={owner} advertisers={handlers?.advertisers} admins={handlers?.admins} storeOptions={storeOptions} reactivate={tab === 'churn'} />
     </div>
   );
 }

@@ -204,8 +204,9 @@ async function loadInvoiceRows(db: Db, workspaceId: string, opts: LoadOpts): Pro
       if (alive.has(clientNameKey(client.name))) lifecycle = 'finished';
       else { lifecycle = 'churn'; churnDate = p.projectEnd; }
     } else lifecycle = p.lifecycle;
-    // A churned client stays in Client until the end of that month, then moves to the Churn page.
-    const archived = lifecycle === 'churn' && !!churnDate && churnDate.slice(0, 7) < today.slice(0, 7);
+    // A churned client leaves the Client table at once and lives on the Churn page. When the client is active again (a newer project
+    // is running, scheduled or frozen) the old churn is not listed there, so the client is never in both places.
+    const archived = lifecycle === 'churn' && !alive.has(clientNameKey(client.name));
     if (opts.archived === 'only' ? !archived : opts.archived === 'all' ? false : archived) continue;
     lines.forEach((it, i) => {
       const terms = start ? computeProjectTerms([it], start) : { endDate: null, deliverables: [] };

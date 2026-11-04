@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { ScreenshotThumbs } from './ScreenshotThumbs';
 import { GMV_KEY, MANDIRI_KEY, MAX_SHOTS, compressImage, groupKey, parseShots, serializeShots, shotLabel, type Shots } from '@/lib/advertiser/screenshots';
-import { ClipboardPaste, Save, Trash2, AlertCircle, TrendingUp, Users, Target, Loader2, Plus, ArrowLeft } from 'lucide-react';
+import { ClipboardPaste, Save, Trash2, AlertCircle, TrendingUp, Users, Target, Loader2, Plus, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { isFilled, rowUsed, missingNumbers, snapshotOf, tabState } from '@/lib/advertiser/log-rules';
 import { fetchAdvertiserReport, saveAdvertiserReport } from '@/app/actions/advertiser';
 
 interface Client {
@@ -22,6 +23,13 @@ interface AdvertiserDashboardProps {
 type TabType = 'inkubasi' | 'group' | 'mandiri';
 type GroupCategory = 'Hero' | 'Reguler' | 'Low';
 
+/** The check of a tab: green = saved with its numbers, amber = something on it is not saved yet. */
+function TabMark({ state }: { state: 'saved' | 'edited' | 'none' }) {
+  if (state === 'saved') return <span title="Saved" className="inline-flex"><CheckCircle2 className="h-4 w-4 text-emerald-400" /></span>;
+  if (state === 'edited') return <span title="Not saved yet" className="inline-block h-2 w-2 rounded-full bg-amber-400" />;
+  return null;
+}
+
 export function AdvertiserDashboard({ clients, initialClient, initialDate, initialSession, onBack }: AdvertiserDashboardProps) {
   const [activeTab, setActiveTab] = useState<TabType>('inkubasi');
   const [isSaving, setIsSaving] = useState(false);
@@ -36,6 +44,9 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
   const [groupData, setGroupData] = useState<any[]>([]); // Flat array of all group rows
   const [mandiriData, setMandiriData] = useState<any[]>([]);
   const [shots, setShots] = useState<Shots>({});
+  // What is saved of each tab (to show the green check), and whether a save was tried with empty Biaya Iklan / Penjualan (the empty cells turn red).
+  const [saved, setSaved] = useState({ inkubasi: '', group: '', mandiri: '' });
+  const [showErrors, setShowErrors] = useState(false);
 
   // Group Filter State
   const [activeGroupCategory, setActiveGroupCategory] = useState<GroupCategory>('Hero');
@@ -90,6 +101,7 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
         setGroupData(fresh ? carryOver(rawGroup) : rawGroup);
         
         setMandiriData(fresh ? carryOver(res.data.data_mandiri) : res.data.data_mandiri || []);
+        setSaved(fresh ? { inkubasi: '', group: '', mandiri: '' } : { inkubasi: snapshotOf(res.data.data_inkubasi || []), group: snapshotOf(rawGroup), mandiri: snapshotOf(res.data.data_mandiri || []) });
         // A historical fallback record (no exact report for this session yet) must not copy yesterday's pictures.
         setShots(res.isHistorical ? {} : parseShots(res.data.screenshot_url));
         setSessionNote(res.data.note || '');
@@ -99,16 +111,29 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
         setInkubasiData(Array(5).fill(null).map(() => getEmptyRowInkubasiGroup()));
         setGroupData(Array(5).fill(null).map(() => getEmptyRowInkubasiGroup('Hero', 'Group Hero 1')));
         setMandiriData(Array(5).fill(null).map(() => getEmptyRowMandiri()));
+        setSaved({ inkubasi: '', group: '', mandiri: '' });
         setShots({});
         setSessionNote('');
         setSisaSaldo('');
       }
+      setShowErrors(false);
       setIsLoading(false);
     }
     loadData();
   }, [initialClient, initialDate, initialSession]);
 
   const handleSave = async () => {
+    // Biaya Iklan and Penjualan must be filled on every row that is in use (a 0 is fine, an empty box is not).
+    const missing = missingNumbers(inkubasiData, groupData, mandiriData);
+    if (missing.length) {
+      setShowErrors(true);
+      const first = missing[0];
+      setActiveTab(first.tab);
+      if (first.tab === 'group' && first.groupCategory && first.groupName) { setActiveGroupCategory(first.groupCategory as GroupCategory); setActiveGroupName(first.groupName); }
+      alert('Fill Biaya Iklan and Penjualan first (type 0 if there was none):\n\n' + missing.map((m) => `- ${m.label}: ${m.rows} row${m.rows === 1 ? '' : 's'}`).join('\n'));
+      return;
+    }
+    setShowErrors(false);
     setIsSaving(true);
     const result = await saveAdvertiserReport(
       initialClient,
@@ -125,8 +150,10 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
     if (!result.success) {
       alert('Could not save: ' + (result.error || 'unknown error'));
     } else if ('warning' in result && result.warning) {
+      setSaved({ inkubasi: snapshotOf(inkubasiData), group: snapshotOf(groupData), mandiri: snapshotOf(mandiriData) });
       alert(result.warning);
     } else {
+      setSaved({ inkubasi: snapshotOf(inkubasiData), group: snapshotOf(groupData), mandiri: snapshotOf(mandiriData) });
       alert('Adjustments saved successfully!');
     }
   };
@@ -256,6 +283,9 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
       setMandiriData([...currentData, ...formatted]);
     }
   };
+
+  /** After a save was tried: an empty Biaya Iklan / Penjualan of a row in use gets a red bottom line. */
+  const emptyCls = (row: any, field: string) => (showErrors && rowUsed(row) && !isFilled(row[field]) ? '!border-b-red-500 bg-red-500/10' : '');
 
   const handleUpdateRow = (index: number, field: string, val: string) => {
     let formattedVal = val;
@@ -393,7 +423,7 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* Tabs: a green check when the tab is saved, an amber dot when something on it is not saved yet */}
       <div className="flex flex-wrap lg:flex-nowrap gap-1 bg-zinc-900/50 p-1 rounded-xl border border-zinc-800">
         <button
           onClick={() => setActiveTab('inkubasi')}
@@ -401,7 +431,7 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
             activeTab === 'inkubasi' ? 'bg-[#0e0f14] text-[#d4af37] shadow-md border border-[#d4af37]/30' : 'text-zinc-500 hover:text-zinc-300'
           }`}
         >
-          <TrendingUp className="w-4 h-4" /> GMV Max Auto
+          <TrendingUp className="w-4 h-4" /> GMV Max Auto<TabMark state={tabState(inkubasiData, saved.inkubasi)} />
         </button>
         <button
           onClick={() => setActiveTab('group')}
@@ -409,7 +439,7 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
             activeTab === 'group' ? 'bg-[#0e0f14] text-[#d4af37] shadow-md border border-[#d4af37]/30' : 'text-zinc-500 hover:text-zinc-300'
           }`}
         >
-          <Users className="w-4 h-4" /> Iklan Group
+          <Users className="w-4 h-4" /> Iklan Group<TabMark state={tabState(groupData, saved.group)} />
         </button>
         <button
           onClick={() => setActiveTab('mandiri')}
@@ -417,7 +447,7 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
             activeTab === 'mandiri' ? 'bg-[#0e0f14] text-[#d4af37] shadow-md border border-[#d4af37]/30' : 'text-zinc-500 hover:text-zinc-300'
           }`}
         >
-          <Target className="w-4 h-4" /> Mandiri
+          <Target className="w-4 h-4" /> Mandiri<TabMark state={tabState(mandiriData, saved.mandiri)} />
         </button>
       </div>
 
@@ -581,10 +611,10 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
                           <input type="text" value={row.targetRoas || ''} onChange={(e) => handleUpdateRow(idx, 'targetRoas', e.target.value)} className="w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-zinc-400 p-1.5 focus:outline-none transition-colors" />
                         </td>
                         <td className="px-1 py-1">
-                          <input type="text" value={row.biayaIklan || ''} onChange={(e) => handleUpdateRow(idx, 'biayaIklan', e.target.value)} className="w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-red-400 p-1.5 focus:outline-none transition-colors font-mono" />
+                          <input type="text" value={row.biayaIklan || ''} onChange={(e) => handleUpdateRow(idx, 'biayaIklan', e.target.value)} className={`w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-red-400 p-1.5 focus:outline-none transition-colors font-mono ${emptyCls(row, 'biayaIklan')}`} />
                         </td>
                         <td className="px-1 py-1">
-                          <input type="text" value={row.penjualan || ''} onChange={(e) => handleUpdateRow(idx, 'penjualan', e.target.value)} className="w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-emerald-400 p-1.5 focus:outline-none transition-colors font-mono" />
+                          <input type="text" value={row.penjualan || ''} onChange={(e) => handleUpdateRow(idx, 'penjualan', e.target.value)} className={`w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-emerald-400 p-1.5 focus:outline-none transition-colors font-mono ${emptyCls(row, 'penjualan')}`} />
                         </td>
                         <td className="px-1 py-1">
                           <input type="text" value={row.roas || ''} readOnly className="w-full bg-zinc-900/50 border-b border-transparent text-[#d4af37] font-bold p-1.5 focus:outline-none cursor-default text-center font-mono rounded" />
@@ -610,10 +640,10 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
                           )}
                         </td>
                         <td className="px-1 py-1">
-                          <input type="text" value={row.biayaIklan || ''} onChange={(e) => handleUpdateRow(idx, 'biayaIklan', e.target.value)} className="w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-red-400 p-1.5 focus:outline-none transition-colors font-mono" />
+                          <input type="text" value={row.biayaIklan || ''} onChange={(e) => handleUpdateRow(idx, 'biayaIklan', e.target.value)} className={`w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-red-400 p-1.5 focus:outline-none transition-colors font-mono ${emptyCls(row, 'biayaIklan')}`} />
                         </td>
                         <td className="px-1 py-1">
-                          <input type="text" value={row.penjualan || ''} onChange={(e) => handleUpdateRow(idx, 'penjualan', e.target.value)} className="w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-emerald-400 p-1.5 focus:outline-none transition-colors font-mono" />
+                          <input type="text" value={row.penjualan || ''} onChange={(e) => handleUpdateRow(idx, 'penjualan', e.target.value)} className={`w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-emerald-400 p-1.5 focus:outline-none transition-colors font-mono ${emptyCls(row, 'penjualan')}`} />
                         </td>
                         <td className="px-1 py-1">
                           <input type="text" value={row.konversi || ''} onChange={(e) => handleUpdateRow(idx, 'konversi', e.target.value)} className="w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-zinc-400 p-1.5 focus:outline-none transition-colors font-mono text-center" />

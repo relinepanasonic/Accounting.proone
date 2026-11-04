@@ -2,7 +2,8 @@
 
 // 3D office in the sky: every team owns a hexagonal island with a glowing border, a tiled floor, one dome pod per
 // agent, a command hub in the middle and some cargo. Islands sit side by side like a honeycomb, floating above the
-// clouds, with a day / night cycle. Robots sit at their pod while working (or queued) and mill around the hub when idle.
+// clouds, with a day / night cycle. Robots sit at their pod while working (or queued). When idle they leave the working space:
+// the leaders go to the Bar, every other agent to a bed in the Bunker, over modern bridges.
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
@@ -523,8 +524,9 @@ function TeamLabel({ name, color, agents, working }: { name: string; color: stri
 }
 
 function Island({
-  index, team, robots, selectedId, onSelect, onFocusTeam,
+  index, team, robots, selectedId, onSelect, onFocusTeam, plan,
 }: {
+  plan: LoungePlan;
   index: number;
   team: TeamView;
   robots: RobotView[];
@@ -541,6 +543,24 @@ function Island({
   const rimMat = useRef<THREE.MeshBasicMaterial>(null);
   const { stations } = useMemo(() => layoutTeam(robots), [robots]);
   const seed = useMemo(() => index * 1.7, [index]);
+  // Where each robot goes when idle (island-local): its spot in the Bar or the Bunker, and both ends of the bridge to it.
+  const lounges = useMemo(() => {
+    const out = new Map<string, RobotLounge>();
+    for (const s of stations) {
+      const as = plan.assign.get(s.robot.id);
+      if (!as) continue;
+      const L = as.kind === 'bar' ? plan.bar : plan.bunker;
+      const rt = routeBetween([cx, cz], HEX_R, L.c, L.r);
+      out.set(s.robot.id, {
+        spot: [L.c[0] + as.spot.x - cx, L.c[1] + as.spot.z - cz],
+        face: as.spot.face,
+        lie: as.spot.lie,
+        a: [rt.a[0] - rt.u[0] * 0.6 - cx, rt.a[1] - rt.u[1] * 0.6 - cz],
+        b: [rt.b[0] + rt.u[0] * 0.6 - cx, rt.b[1] + rt.u[1] * 0.6 - cz],
+      });
+    }
+    return out;
+  }, [stations, plan, cx, cz]);
   const working = robots.filter((r) => r.state === 'working').length;
 
   useFrame((state) => {
@@ -612,7 +632,7 @@ function Island({
           <Pod key={s.robot.id} x={s.x} z={s.z} face={s.face} floor={s.robot.floor} lit={s.robot.state === 'working'} />
         ))}
         {stations.map((s) => (
-          <Robot key={s.robot.id} station={s} selected={selectedId === s.robot.id} onSelect={onSelect} />
+          <Robot key={s.robot.id} station={s} lounge={lounges.get(s.robot.id) || null} bobSeed={seed} selected={selectedId === s.robot.id} onSelect={onSelect} />
         ))}
 
         <TeamLabel name={team.name} color={color} agents={robots.length} working={working} />
@@ -624,6 +644,235 @@ function Island({
         )}
       </group>
     </group>
+  );
+}
+
+// ---------------------------------------------------------------- lounges: the bar and the bunker
+// An idle agent is not in the working space: the leaders (planners) go to the Bar, every other agent goes to a bed in the Bunker.
+// Each team island is joined to both by a bridge, and the robots walk over it.
+type V2 = [number, number];
+const LOUNGE_GAP = 5; // sky between the cluster of islands and a lounge
+const BUNKER_R = HEX_R * 2; // the Bunker is twice as big as an island
+const BAR_COLOR = '#f59e0b';
+const BUNKER_COLOR = '#6366f1';
+
+interface Spot { x: number; z: number; face: number; lie: boolean }
+interface LoungePlan {
+  bar: { c: V2; r: number };
+  bunker: { c: V2; r: number };
+  assign: Map<string, { kind: 'bar' | 'bunker'; spot: Spot }>;
+  barCount: number;
+  bedSpots: Spot[];
+  bedCount: number;
+}
+/** What a robot needs to go to its lounge and back (island-local): the spot, and the two ends of the bridge as seen from its island. */
+interface RobotLounge { spot: V2; face: number; lie: boolean; a: V2; b: V2 }
+
+/** Distance from the middle of a hexagon (vertex at +z) to its edge, in the direction psi (radians from +z). */
+function hexEdge(r: number, psi: number) {
+  const sixty = Math.PI / 3;
+  const m = ((psi % sixty) + sixty) % sixty;
+  return (r * Math.sqrt(3)) / 2 / Math.cos(m - Math.PI / 6);
+}
+
+/** The straight bridge between two hexagons: its two ends on their edges, and the unit direction from the first to the second. */
+function routeBetween(c1: V2, r1: number, c2: V2, r2: number) {
+  const dx = c2[0] - c1[0];
+  const dz = c2[1] - c1[1];
+  const len = Math.hypot(dx, dz) || 1;
+  const ux = dx / len;
+  const uz = dz / len;
+  const e1 = hexEdge(r1, Math.atan2(ux, uz));
+  const e2 = hexEdge(r2, Math.atan2(-ux, -uz));
+  return { a: [c1[0] + ux * e1, c1[1] + uz * e1] as V2, b: [c2[0] - ux * e2, c2[1] - uz * e2] as V2, u: [ux, uz] as V2 };
+}
+
+function barSlots(n: number): Spot[] {
+  const out: Spot[] = [];
+  const rows = [-1.9, -0.7, 0.5, 1.7];
+  for (let i = 0; i < Math.max(n, 1); i++) {
+    const row = Math.min(Math.floor(i / 6), rows.length - 1);
+    const col = i % 6;
+    out.push({ x: (col - 2.5) * 1.0 + (row % 2 ? 0.5 : 0), z: rows[row], face: Math.PI, lie: false });
+  }
+  return out;
+}
+
+function bedSlots(need: number): Spot[] {
+  const A = (BUNKER_R * Math.sqrt(3)) / 2;
+  for (const [sz, sx] of [[3.6, 2.4], [3.1, 2.1], [2.7, 1.9]]) {
+    const out: Spot[] = [];
+    for (let z = -10; z <= 10; z += sz) {
+      for (let x = -10; x <= 10; x += sx) {
+        if (Math.abs(x) + 0.8 <= A - 0.6 && Math.abs(z) + 1.4 + Math.abs(x) / Math.sqrt(3) <= BUNKER_R - 0.6) out.push({ x, z, face: 0, lie: true });
+      }
+    }
+    out.sort((p, q) => Math.hypot(p.x, p.z) - Math.hypot(q.x, q.z));
+    if (out.length >= need || sz === 2.7) return out;
+  }
+  return [];
+}
+
+function buildLounge(robots: RobotView[], islandCount: number): LoungePlan {
+  const ring = islandCount <= 1 ? 0 : islandCount <= 7 ? 1 : 2;
+  const extent = SPACING * ring * (ring === 2 ? 0.95 : 1) + HEX_R;
+  const bar = { c: [-(extent + LOUNGE_GAP + HEX_R), 0] as V2, r: HEX_R };
+  const bunker = { c: [extent + LOUNGE_GAP + BUNKER_R, 0] as V2, r: BUNKER_R };
+  const sorted = robots.slice().sort((a, b) => a.id.localeCompare(b.id));
+  const leaders = sorted.filter((r) => r.kind === 'planner');
+  const others = sorted.filter((r) => r.kind !== 'planner');
+  const barSpots = barSlots(leaders.length);
+  const bedSpots = bedSlots(others.length);
+  const assign: LoungePlan['assign'] = new Map();
+  leaders.forEach((r, i) => assign.set(r.id, { kind: 'bar', spot: barSpots[i] }));
+  others.forEach((r, i) => assign.set(r.id, { kind: 'bunker', spot: bedSpots[i % Math.max(bedSpots.length, 1)] || { x: 0, z: 0, face: 0, lie: true } }));
+  return { bar, bunker, assign, barCount: leaders.length, bedSpots, bedCount: others.length };
+}
+
+/** A modern walkway: steel deck, glowing edges, glass rails. It reaches from one hexagon edge to the other. */
+function Bridge({ a, b, color }: { a: V2; b: V2; color: string }) {
+  const dx = b[0] - a[0];
+  const dz = b[1] - a[1];
+  const len = Math.hypot(dx, dz) + 0.3;
+  const posts = Math.max(2, Math.round(len / 2.4));
+  return (
+    <group position={[(a[0] + b[0]) / 2, SURFACE_Y - 0.06, (a[1] + b[1]) / 2]} rotation={[0, Math.atan2(dx, dz), 0]}>
+      <mesh><boxGeometry args={[1.8, 0.14, len]} /><meshStandardMaterial color="#20263a" roughness={0.45} metalness={0.6} /></mesh>
+      <mesh position={[0, -0.24, 0]}><boxGeometry args={[0.5, 0.34, len]} /><meshStandardMaterial color="#12151f" roughness={0.6} metalness={0.5} /></mesh>
+      {[-0.82, 0.82].map((x) => (
+        <React.Fragment key={x}>
+          <mesh position={[x, 0.08, 0]}><boxGeometry args={[0.06, 0.03, len]} /><meshBasicMaterial color={color} toneMapped={false} /></mesh>
+          <mesh position={[x * 1.07, 0.38, 0]}><boxGeometry args={[0.03, 0.55, len]} /><meshStandardMaterial color="#9fd8ff" transparent opacity={0.22} roughness={0.1} /></mesh>
+          <mesh position={[x * 1.07, 0.67, 0]}><boxGeometry args={[0.06, 0.05, len]} /><meshStandardMaterial color="#aeb8cf" roughness={0.3} metalness={0.8} /></mesh>
+        </React.Fragment>
+      ))}
+      {Array.from({ length: posts + 1 }).map((_, i) => {
+        const z = -len / 2 + (len * i) / posts;
+        return [-0.88, 0.88].map((x) => (
+          <mesh key={`${i}${x}`} position={[x, 0.38, z]}><boxGeometry args={[0.06, 0.6, 0.06]} /><meshStandardMaterial color="#aeb8cf" roughness={0.3} metalness={0.8} /></mesh>
+        ));
+      })}
+      {Array.from({ length: Math.floor(len / 1.6) }).map((_, i) => (
+        <mesh key={i} position={[0, -0.12, -len / 2 + 0.8 + i * 1.6]}><boxGeometry args={[1.5, 0.05, 0.08]} /><meshStandardMaterial color="#0d0f16" /></mesh>
+      ))}
+    </group>
+  );
+}
+
+function LoungeSign({ text, sub, color, y, width }: { text: string; sub: string; color: string; y: number; width: number }) {
+  const tex = useLabelTexture((g, w, h) => {
+    g.fillStyle = 'rgba(8,10,18,0.78)';
+    roundRect(g, 6, 6, w - 12, h - 12, 28);
+    g.fill();
+    g.strokeStyle = color;
+    g.lineWidth = 5;
+    g.stroke();
+    g.fillStyle = '#ffffff';
+    g.font = 'bold 60px sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(text, w / 2, 62);
+    g.font = '600 30px sans-serif';
+    g.fillStyle = '#a1a1aa';
+    g.fillText(sub, w / 2, 112);
+  }, 720, 150, `${text}|${sub}|${color}`);
+  return (
+    <sprite position={[0, y, 0]} scale={[width, width * (150 / 720), 1]}>
+      <spriteMaterial map={tex} transparent depthWrite={false} toneMapped={false} />
+    </sprite>
+  );
+}
+
+/** The slab of a lounge: the same tiled hexagon as an island, but it stays still (the bridges are fixed to it). */
+function LoungeBase({ c, r, color, children }: { c: V2; r: number; color: string; children: React.ReactNode }) {
+  const tiles = useTileTexture();
+  const day = useContext(DayCtx);
+  const light = useRef<THREE.PointLight>(null);
+  const rimMat = useRef<THREE.MeshBasicMaterial>(null);
+  const k = r / HEX_R;
+  useFrame(() => {
+    const night = 1 - day.current;
+    if (light.current) light.current.intensity = night * 26 * k;
+    if (rimMat.current) rimMat.current.color.set(color).multiplyScalar(0.85 + night * 0.5);
+  });
+  return (
+    <group position={[c[0], 0, c[1]]}>
+      <mesh>
+        <cylinderGeometry args={[r, r, 0.6, 6]} />
+        <meshStandardMaterial attach="material-0" color="#1b1f2e" roughness={0.6} metalness={0.4} />
+        <meshStandardMaterial attach="material-1" map={tiles} roughness={0.75} metalness={0.15} />
+        <meshStandardMaterial attach="material-2" color="#141726" />
+      </mesh>
+      <mesh position={[0, -2.6 * k, 0]} rotation={[Math.PI, 0, 0]}>
+        <coneGeometry args={[r * 0.9, 4.6 * k, 6]} />
+        <meshStandardMaterial color="#4a4033" roughness={1} flatShading />
+      </mesh>
+      <mesh position={[0, SURFACE_Y + 0.015, 0]} rotation={[-Math.PI / 2, 0, Math.PI / 6]}>
+        <ringGeometry args={[r - 0.5, r - 0.08, 6]} />
+        <meshBasicMaterial ref={rimMat} color={color} toneMapped={false} />
+      </mesh>
+      <pointLight ref={light} position={[0, 5.5, 0]} color="#ffc27a" distance={20 * k} decay={2} intensity={0} />
+      {Array.from({ length: 6 }).map((_, i) => {
+        const a = (i * Math.PI) / 3 + Math.PI / 6;
+        return <Lamp key={i} x={Math.sin(a) * (r * 0.866 - 0.35)} z={Math.cos(a) * (r * 0.866 - 0.35)} color={color} />;
+      })}
+      {children}
+    </group>
+  );
+}
+
+function LoungeBar({ plan }: { plan: LoungePlan }) {
+  const bottles = ['#f87171', '#fbbf24', '#34d399', '#60a5fa', '#c084fc', '#fb923c'];
+  return (
+    <LoungeBase c={plan.bar.c} r={plan.bar.r} color={BAR_COLOR}>
+      {/* back shelf with glowing bottles */}
+      <group position={[0, SURFACE_Y, -4.75]}>
+        <mesh position={[0, 1.3, 0]}><boxGeometry args={[4.6, 2.6, 0.35]} /><meshStandardMaterial color="#181b28" roughness={0.5} metalness={0.4} /></mesh>
+        {[0.95, 1.65].map((y) => (
+          <mesh key={y} position={[0, y, 0.25]}><boxGeometry args={[4.3, 0.06, 0.3]} /><meshStandardMaterial color="#aeb8cf" metalness={0.8} roughness={0.3} /></mesh>
+        ))}
+        {[0.95, 1.65].map((y, ri) => bottles.map((col, i) => (
+          <mesh key={`${y}${i}`} position={[-1.9 + i * 0.76, y + 0.2, 0.25]}><cylinderGeometry args={[0.09, 0.11, 0.34, 10]} /><meshBasicMaterial color={bottles[(i + ri * 2) % bottles.length]} toneMapped={false} /></mesh>
+        )))}
+        <mesh position={[0, 2.35, 0.2]}><boxGeometry args={[4.4, 0.06, 0.06]} /><meshBasicMaterial color={BAR_COLOR} toneMapped={false} /></mesh>
+      </group>
+      {/* counter */}
+      <group position={[0, SURFACE_Y, -3.0]}>
+        <mesh position={[0, 0.55, 0]}><boxGeometry args={[6.4, 1.1, 1.0]} /><meshStandardMaterial color="#232838" roughness={0.45} metalness={0.5} /></mesh>
+        <mesh position={[0, 1.12, 0.05]}><boxGeometry args={[6.6, 0.1, 1.2]} /><meshStandardMaterial color="#e6ecf8" roughness={0.25} metalness={0.2} /></mesh>
+        <mesh position={[0, 0.2, 0.51]}><boxGeometry args={[6.2, 0.05, 0.03]} /><meshBasicMaterial color={BAR_COLOR} toneMapped={false} /></mesh>
+      </group>
+      {/* two high tables at the front */}
+      {[-3.6, 3.6].map((x) => (
+        <group key={x} position={[x, SURFACE_Y, 2.7]}>
+          <mesh position={[0, 0.55, 0]}><cylinderGeometry args={[0.07, 0.07, 1.1, 8]} /><meshStandardMaterial color="#aeb8cf" metalness={0.8} roughness={0.3} /></mesh>
+          <mesh position={[0, 1.12, 0]}><cylinderGeometry args={[0.6, 0.6, 0.07, 24]} /><meshStandardMaterial color="#e6ecf8" roughness={0.3} /></mesh>
+          <mesh position={[0, 0.04, 0]}><cylinderGeometry args={[0.35, 0.4, 0.08, 20]} /><meshStandardMaterial color="#232838" /></mesh>
+        </group>
+      ))}
+      <LoungeSign text="BAR" sub={`${plan.barCount} leader${plan.barCount === 1 ? '' : 's'} resting here`} color={BAR_COLOR} y={5.2} width={5.4} />
+    </LoungeBase>
+  );
+}
+
+function Bed({ spot }: { spot: Spot }) {
+  return (
+    <group position={[spot.x, SURFACE_Y, spot.z]}>
+      <mesh position={[0, 0.14, 0]}><boxGeometry args={[1.3, 0.28, 2.5]} /><meshStandardMaterial color="#1d2233" roughness={0.5} metalness={0.4} /></mesh>
+      <mesh position={[0, 0.36, 0]}><boxGeometry args={[1.14, 0.17, 2.3]} /><meshStandardMaterial color="#cfd8ea" roughness={0.8} /></mesh>
+      <mesh position={[0, 0.5, -0.85]}><boxGeometry args={[0.8, 0.13, 0.5]} /><meshStandardMaterial color="#ffffff" roughness={0.9} /></mesh>
+      <mesh position={[0, 0.3, 1.26]}><boxGeometry args={[1.3, 0.06, 0.05]} /><meshBasicMaterial color={BUNKER_COLOR} toneMapped={false} /></mesh>
+    </group>
+  );
+}
+
+function LoungeBunker({ plan }: { plan: LoungePlan }) {
+  const beds = plan.bedSpots.slice(0, Math.max(plan.bedCount, 1));
+  return (
+    <LoungeBase c={plan.bunker.c} r={plan.bunker.r} color={BUNKER_COLOR}>
+      {beds.map((s, i) => <Bed key={i} spot={s} />)}
+      <LoungeSign text="BUNKER" sub={`${plan.bedCount} bed${plan.bedCount === 1 ? '' : 's'} for resting agents`} color={BUNKER_COLOR} y={7.4} width={7.2} />
+    </LoungeBase>
   );
 }
 
@@ -668,7 +917,7 @@ function RobotTag({ robot, onSelect }: { robot: RobotView; onSelect: (id: string
   );
 }
 
-function Robot({ station, selected, onSelect }: { station: Station; selected: boolean; onSelect: (id: string) => void }) {
+function Robot({ station, lounge, bobSeed, selected, onSelect }: { station: Station; lounge: RobotLounge | null; bobSeed: number; selected: boolean; onSelect: (id: string) => void }) {
   const robot = station.robot;
   const p = paletteOf(robot.floor);
   const root = useRef<THREE.Group>(null);
@@ -680,26 +929,52 @@ function Robot({ station, selected, onSelect }: { station: Station; selected: bo
   const legR = useRef<THREE.Group>(null);
   const eyeMats = useRef<THREE.MeshBasicMaterial[]>([]);
   const seed = useMemo(() => Math.random() * 10, []);
-  const start = useRef(false);
+  const mode = useRef<'desk' | 'lounge' | null>(null);
+  const queue = useRef<V2[]>([]);
+  const lieAmt = useRef(0);
 
   useFrame((state, delta) => {
     const g = root.current;
     if (!g) return;
     const t = state.clock.elapsedTime + seed;
-    const atDesk = robot.state !== 'idle';
-    const tx = atDesk ? station.x : station.idleX;
-    const tz = atDesk ? station.z : station.idleZ;
+    const want: 'desk' | 'lounge' = robot.state === 'idle' && lounge ? 'lounge' : 'desk';
+    const desk: V2 = [station.x, station.z];
+    const goal: V2 = want === 'lounge' && lounge ? lounge.spot : desk;
 
-    if (!start.current) {
-      g.position.set(tx, SURFACE_Y, tz);
-      g.rotation.y = station.face;
-      start.current = true;
+    if (mode.current === null) {
+      g.position.set(goal[0], SURFACE_Y, goal[1]);
+      g.rotation.y = want === 'lounge' && lounge ? lounge.face : station.face;
+      if (want === 'lounge' && lounge?.lie) lieAmt.current = 1;
+      mode.current = want;
+    } else if (mode.current !== want && lounge) {
+      // leaving (or coming back): which part of the way the robot is on decides the waypoints
+      const len = Math.hypot(lounge.b[0] - lounge.a[0], lounge.b[1] - lounge.a[1]) || 1;
+      const ux = (lounge.b[0] - lounge.a[0]) / len;
+      const uz = (lounge.b[1] - lounge.a[1]) / len;
+      const along = (g.position.x - lounge.a[0]) * ux + (g.position.z - lounge.a[1]) * uz;
+      const where = along < 0.4 ? 'island' : along > len - 0.4 ? 'lounge' : 'bridge';
+      queue.current = want === 'lounge'
+        ? where === 'island' ? [lounge.a, lounge.b, lounge.spot] : where === 'bridge' ? [lounge.b, lounge.spot] : [lounge.spot]
+        : where === 'lounge' ? [lounge.b, lounge.a, desk] : where === 'bridge' ? [lounge.a, desk] : [desk];
+      mode.current = want;
     }
 
-    const dx = tx - g.position.x;
-    const dz = tz - g.position.z;
+    // the islands float up and down, the lounges and bridges do not: out on the bridge the robot stops following the island
+    if (lounge) {
+      const len = Math.hypot(lounge.b[0] - lounge.a[0], lounge.b[1] - lounge.a[1]) || 1;
+      const along = ((g.position.x - lounge.a[0]) * (lounge.b[0] - lounge.a[0]) + (g.position.z - lounge.a[1]) * (lounge.b[1] - lounge.a[1])) / len;
+      const f = Math.min(1, Math.max(0, along / len));
+      g.position.y = SURFACE_Y - Math.sin(state.clock.elapsedTime * 0.5 + bobSeed) * 0.18 * f;
+    } else {
+      g.position.y = SURFACE_Y;
+    }
+
+    const next = queue.current[0] || goal;
+    const dx = next[0] - g.position.x;
+    const dz = next[1] - g.position.z;
     const dist = Math.hypot(dx, dz);
     const walking = dist > 0.05;
+
     if (walking) {
       const step = Math.min(dist, 1.7 * delta);
       g.position.x += (dx / dist) * step;
@@ -709,11 +984,16 @@ function Robot({ station, selected, onSelect }: { station: Station; selected: bo
       diff = Math.atan2(Math.sin(diff), Math.cos(diff));
       g.rotation.y += diff * Math.min(1, delta * 9);
     } else {
-      const target = atDesk ? station.face : station.face + Math.sin(t * 0.25) * 1.3; // idle robots glance around
+      if (queue.current.length) queue.current.shift();
+      const settledAt = want === 'lounge' && lounge ? lounge.face : station.face;
+      const target = settledAt + (want === 'lounge' && !lounge?.lie ? Math.sin(t * 0.25) * 0.5 : 0); // idle leaders glance around the bar
       let diff = target - g.rotation.y;
       diff = Math.atan2(Math.sin(diff), Math.cos(diff));
       g.rotation.y += diff * Math.min(1, delta * 5);
     }
+    const settled = !walking && queue.current.length === 0;
+    const lieGoal = settled && want === 'lounge' && lounge?.lie ? 1 : 0;
+    lieAmt.current += (lieGoal - lieAmt.current) * Math.min(1, delta * 4);
 
     const swing = walking ? Math.sin(t * 10) * 0.6 : 0;
     if (legL.current && legR.current) {
@@ -736,7 +1016,11 @@ function Robot({ station, selected, onSelect }: { station: Station; selected: bo
       }
     }
     if (body.current) {
-      body.current.position.y = walking ? Math.abs(Math.sin(t * 10)) * 0.06 : Math.sin(t * 2) * 0.015;
+      // asleep in a bed: the robot lies on its back, head on the pillow
+      const L = lieAmt.current;
+      const bob = walking ? Math.abs(Math.sin(t * 10)) * 0.06 : Math.sin(t * 2) * 0.015;
+      body.current.position.set(0, bob * (1 - L) + 0.75 * L, 0.8 * L);
+      body.current.rotation.x = -Math.PI / 2 * L;
     }
     if (head.current) {
       head.current.rotation.z = robot.state === 'waiting' ? Math.sin(t * 1.4) * 0.12 : 0;
@@ -744,7 +1028,7 @@ function Robot({ station, selected, onSelect }: { station: Station; selected: bo
     }
 
     const eyeColor = robot.state === 'waiting' ? '#fbbf24' : p.eye;
-    const bright = robot.state === 'working' ? 1 : robot.state === 'waiting' ? 0.85 : 0.5 + Math.sin(t * 0.9) * 0.08;
+    const bright = robot.state === 'working' ? 1 : robot.state === 'waiting' ? 0.85 : lieAmt.current > 0.5 ? 0.18 : 0.5 + Math.sin(t * 0.9) * 0.08;
     const blink = Math.sin(t * 0.7) > 0.985 ? 0.15 : 1;
     eyeMats.current.forEach((m) => {
       if (!m) return;
@@ -877,9 +1161,12 @@ export function Office3D({
   const islands = useMemo<TeamView[]>(() => (teams.length ? teams : [{ id: NO_TEAM, name: 'No team yet' }]), [teams]);
   const robotsOf = (teamId: string) => robots.filter((r) => (r.teamId ?? NO_TEAM) === teamId);
 
+  const plan = useMemo(() => buildLounge(robots, islands.length), [robots, islands.length]);
+
   const focusIndex = Math.max(0, islands.findIndex((t) => t.id === focusTeamId));
   const focus = teamCenter(focusIndex);
-  const spread = islands.length <= 1 ? 1 : islands.length <= 3 ? 1.5 : islands.length <= 7 ? 1.9 : 2.4;
+  // far enough back to see both lounges next to the islands
+  const spread = (islands.length <= 1 ? 1 : islands.length <= 3 ? 1.5 : islands.length <= 7 ? 1.9 : 2.4) * 1.3;
 
   return (
     <div className="absolute inset-0">
@@ -898,8 +1185,16 @@ export function Office3D({
           <FloatingRocks />
 
           {islands.map((t, i) => (
-            <Island key={t.id} index={i} team={t} robots={robotsOf(t.id)} selectedId={selectedId} onSelect={onSelect} onFocusTeam={onFocusTeam} />
+            <Island key={t.id} index={i} team={t} robots={robotsOf(t.id)} selectedId={selectedId} onSelect={onSelect} onFocusTeam={onFocusTeam} plan={plan} />
           ))}
+
+          <LoungeBar plan={plan} />
+          <LoungeBunker plan={plan} />
+          {islands.map((t, i) => (['bar', 'bunker'] as const).map((k) => {
+            const L = plan[k];
+            const rt = routeBetween(teamCenter(i), HEX_R, L.c, L.r);
+            return <Bridge key={t.id + k} a={rt.a} b={rt.b} color={k === 'bar' ? BAR_COLOR : BUNKER_COLOR} />;
+          }))}
 
           <OrbitControls
             ref={controls}

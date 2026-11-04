@@ -631,6 +631,50 @@ export async function updateClientNames(clientId: string, brand: string, store: 
   return { success: true };
 }
 
+const STORE_MISSING = 'Run supabase/migrations/20261106_client_stores.sql in Supabase first.';
+const storeFail = (e: { code?: string; message: string }): Result => ({ success: false, error: /client_stores|42P01|PGRST205/.test(`${e.code} ${e.message}`) ? STORE_MISSING : e.code === '23505' ? 'This client already has that store.' : e.message });
+
+/** Gives a client one more store ("Company - Store"). A client can have several. */
+export async function addClientStore(clientId: string, company: string, store: string): Promise<Result & { id?: string }> {
+  const a = await actor();
+  if (!a || !FINANCE.includes(a.ctx.role)) return { success: false, error: 'Only Accounting, Admin and the owners can change the stores of a client.' };
+  const { ctx, db } = a;
+  const co = ['ProOne', 'Reline', 'Alpha', 'Lighting Solution'].find((c) => c.toLowerCase() === String(company).trim().toLowerCase());
+  const name = str(store, 120);
+  if (!co) return { success: false, error: 'Choose the company of the store.' };
+  if (!name) return { success: false, error: 'Type the store name.' };
+  if (!(await clientInScope(db, ctx.activeWorkspaceId, clientId))) return { success: false, error: 'Client not found.' };
+  const { data, error } = await db.from('client_stores').insert({ workspace_id: ctx.activeWorkspaceId, client_id: clientId, company: co, store: name }).select('id').single();
+  if (error) return storeFail(error);
+  // the first store is also the one the older screens read (clients.store_name)
+  const { data: client } = await db.from('clients').select('store_name').eq('id', clientId).maybeSingle();
+  if (!/\s-\s+\S/.test(String(client?.store_name || ''))) await db.from('clients').update({ store_name: `${co} - ${name}` }).eq('id', clientId);
+  revalidatePath('/optimizing/clients');
+  revalidatePath('/sales/clients');
+  return { success: true, id: data.id };
+}
+
+/** Takes a store away from a client (the logs and numbers of the store stay where they are). */
+export async function removeClientStore(storeId: string): Promise<Result> {
+  const a = await actor();
+  if (!a || !FINANCE.includes(a.ctx.role)) return { success: false, error: 'Only Accounting, Admin and the owners can change the stores of a client.' };
+  const { ctx, db } = a;
+  const { data: row, error: readErr } = await db.from('client_stores').select('id, client_id, company, store').eq('id', storeId).maybeSingle();
+  if (readErr) return storeFail(readErr);
+  if (!row) return { success: false, error: 'Store not found.' };
+  if (!(await clientInScope(db, ctx.activeWorkspaceId, row.client_id))) return { success: false, error: 'Client not found.' };
+  const { error } = await db.from('client_stores').delete().eq('id', storeId);
+  if (error) return storeFail(error);
+  const { data: client } = await db.from('clients').select('store_name').eq('id', row.client_id).maybeSingle();
+  if (String(client?.store_name || '').trim().toLowerCase() === `${row.company} - ${row.store}`.toLowerCase()) {
+    const { data: next } = await db.from('client_stores').select('company, store').eq('client_id', row.client_id).order('created_at', { ascending: true }).limit(1);
+    await db.from('clients').update({ store_name: next?.[0] ? `${next[0].company} - ${next[0].store}` : null }).eq('id', row.client_id);
+  }
+  revalidatePath('/optimizing/clients');
+  revalidatePath('/sales/clients');
+  return { success: true };
+}
+
 /** Superadmin / founder: who handles this client. Replaces the current handler(s) of that job; empty = unassign. */
 export async function setClientHandler(clientId: string, job: 'advertising' | 'admin', userId: string | null): Promise<Result> {
   const a = await actor();

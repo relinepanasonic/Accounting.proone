@@ -2,6 +2,7 @@
 // Built from the INVOICES of the workspace (so every client with an issued invoice shows, whether the invoice came from a
 // pipeline card or was made by Accounting directly), joined with the pipeline card (paid / approved date) and the project (start).
 // Used by Sales > Client, Optimizing > Clients (with handler assignment) and mirrored in Advertiser / Admin (up to Product).
+import { loadClientStores, type ClientStoreRef } from '@/lib/sales/client-stores';
 import { computeProjectTerms, withLengthFromQuantity, type RequestItem } from '@/lib/sales/flow';
 import { todayJakarta } from '@/lib/kpi/calendar';
 import { PT_WORKSPACE_ID, NEW_WAVE_WORKSPACE_ID } from '@/lib/workspaces/known';
@@ -56,6 +57,8 @@ export interface ClientRow {
   adminId: string | null;
   /** The salesman who sold this project: set by hand (invoices.sales_name), else the salesman of the pipeline card. */
   salesman: string;
+  /** The stores of this client (one client can have several). */
+  stores: ClientStoreRef[];
   groupSize: number;
   groupIndex: number;
 }
@@ -231,6 +234,7 @@ async function loadInvoiceRows(db: Db, workspaceId: string, opts: LoadOpts): Pro
         status: inv.status || null,
         isDeal,
         salesman: inv.sales_name || deal?.salesman_name || '',
+        stores: [],
         advertiserId: handler(inv.client_id, 'advertising'),
         adminId: handler(inv.client_id, 'admin'),
         groupSize: lines.length,
@@ -283,7 +287,15 @@ async function aliveClients(db: Db, pending: Array<{ client: any; lifecycle: str
  * The Client table. With includeAll, every client of the contact book is listed too, also the ones that have no invoice yet
  * (one row, product "No invoice yet"), so each client can be handed to an advertiser and an admin.
  */
+/** The rows of the client table, each with the stores of its client. */
 export async function loadClientRows(db: Db, workspaceId: string, opts: LoadOpts & { includeAll?: boolean }): Promise<ClientRow[]> {
+  const rows = await loadClientRowsBase(db, workspaceId, opts);
+  const stores = await loadClientStores(db, Array.from(new Set(rows.map((r) => r.clientId))));
+  for (const r of rows) r.stores = stores.get(r.clientId) || [];
+  return rows;
+}
+
+async function loadClientRowsBase(db: Db, workspaceId: string, opts: LoadOpts & { includeAll?: boolean }): Promise<ClientRow[]> {
   let rows = await loadInvoiceRows(db, workspaceId, opts);
   // The Churn archive: newest churn date first (the rows of one invoice stay together).
   if (opts.archived === 'only') {
@@ -350,6 +362,7 @@ export async function loadClientRows(db: Db, workspaceId: string, opts: LoadOpts
     status: null,
     isDeal: false,
     salesman: salesOfClient.get(c.id) || '',
+    stores: [],
     advertiserId: handler(c.id, 'advertising'),
     adminId: handler(c.id, 'admin'),
     groupSize: 1,

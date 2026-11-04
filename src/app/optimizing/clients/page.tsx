@@ -5,25 +5,23 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { getAuthenticatedWorkspaceContext, FINANCE_ROLES } from '@/lib/auth/workspace-context';
 import { clientMask } from '@/lib/auth/client-privacy';
-import { withoutProspects } from '@/lib/sales/prospects';
 import { loadClientRows } from '@/lib/sales/client-table';
 import { loadHandlers } from '@/lib/sales/people';
 import { ClientProjectsTable } from '@/components/sales/ClientProjectsTable';
 import { fetchPerformance, storeLabel } from '@/lib/integrations/performance';
-import { ContactCrmManager, type ClientRecord } from '@/components/settings/ContactCrmManager';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * Optimizing > Clients. Two tabs:
- *  - Assign: every client product line, and (superadmin / founder) who handles each client.
- *  - Contacts: the client contact book (add, edit, delete), which used to live in Settings.
+ *  - Assign: every client product line, the stores of each client, and (superadmin / founder) who handles each client.
+ *  - Churn: the clients that left.
  */
 export default async function OptimizingClientsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const supabase = await createClient();
   const ctx = await getAuthenticatedWorkspaceContext(supabase);
   const tabParam = (await searchParams).tab;
-  const tab = tabParam === 'contacts' ? 'contacts' : tabParam === 'churn' ? 'churn' : 'assign';
+  const tab = tabParam === 'churn' ? 'churn' : 'assign';
 
   if (!FINANCE_ROLES.includes(ctx.role)) {
     return (
@@ -38,7 +36,6 @@ export default async function OptimizingClientsPage({ searchParams }: { searchPa
   const tabs = [
     { key: 'assign', label: 'Assign & Projects', href: '/optimizing/clients' },
     { key: 'churn', label: 'Churn', href: '/optimizing/clients?tab=churn' },
-    { key: 'contacts', label: 'Contacts', href: '/optimizing/clients?tab=contacts' },
   ] as const;
   const TabBar = (
     <div className="flex w-fit gap-1 rounded-xl border border-zinc-800 bg-zinc-900/50 p-1">
@@ -55,53 +52,6 @@ export default async function OptimizingClientsPage({ searchParams }: { searchPa
       ))}
     </div>
   );
-
-  if (tab === 'contacts') {
-    const { data: clients } = await withoutProspects((hide) => {
-      let q = supabase.from('clients').select('*');
-      if (ctx.activeWorkspaceId === '11111111-1111-1111-1111-111111111111') {
-        q = q.or('workspace_id.in.(11111111-1111-1111-1111-111111111111,f7262187-2a08-4454-b046-b4fd91f2f642,b9f6425f-ad1f-4911-a182-ab788c5fa0e3),workspace_id.is.null');
-      } else {
-        q = q.or(`workspace_id.eq.${ctx.activeWorkspaceId},workspace_id.is.null`);
-      }
-      if (hide) q = q.eq('is_prospect', false);
-      return q.order('name', { ascending: true });
-    });
-
-    const { data: invoices } = await supabase.from('invoices').select('client_id, total_amount').neq('status', 'void');
-    const invoiceTotals = (invoices || []).reduce((acc, inv) => {
-      if (inv.client_id) acc[inv.client_id] = (acc[inv.client_id] || 0) + (Number(inv.total_amount) || 0);
-      return acc;
-    }, {} as Record<string, number>);
-
-    const list: ClientRecord[] = (clients || [])
-      .filter((c: any) => (c.contact_type || 'client') !== 'vendor')
-      .map((c: any) => ({
-        id: c.id,
-        name: c.name || 'Client',
-        company: c.contact_name || c.company_name || c.company || c.name || '',
-        company_legal_name: c.company_legal_name || '',
-        email: c.email || '',
-        contactType: 'client' as const,
-        workspace_id: c.workspace_id,
-        totalSales: invoiceTotals[c.id] || 0,
-        totalExpenses: 0,
-      }));
-
-    return (
-      <div className="p-4 lg:p-8 space-y-6 animate-in fade-in zoom-in-95 duration-300">
-        <h1 className="text-2xl font-extrabold text-zinc-100 font-serif">Optimizing · Clients</h1>
-        {TabBar}
-        <ContactCrmManager
-          initialClients={list}
-          currentUserRole={ctx.role}
-          activeWorkspaceId={ctx.activeWorkspaceId}
-          availableWorkspaces={ctx.availableWorkspaces}
-          mode="client"
-        />
-      </div>
-    );
-  }
 
   const mask = clientMask({ userEmail: ctx.userEmail, availableWorkspaces: ctx.availableWorkspaces });
   const db = createAdminClient();

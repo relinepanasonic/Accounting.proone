@@ -2,7 +2,7 @@
 
 import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { setClientHandler, setClientStatus, setProjectStart, updateClientNames, setInvoiceSales, setClientSales } from '@/app/actions/sales-flow';
+import { setClientHandler, setClientStatus, setProjectStart, setInvoiceSales, setClientSales, addClientStore, removeClientStore } from '@/app/actions/sales-flow';
 import { SALES_PEOPLE } from '@/lib/sales/people';
 import type { ClientRow } from '@/lib/sales/client-table';
 import { SortArrows } from '@/components/ui/SortArrows';
@@ -33,40 +33,67 @@ export function splitStore(value: string): { company: string; store: string } {
   return { company, store: m[2] || '' };
 }
 
-/** Cells that belong to a whole invoice span all of its product rows: Company and Store. */
+/** Cells that belong to a whole invoice span all of its product rows: Company and Store. A client can have several stores. */
 function NameCells({ row, canEdit, storeOptions }: { row: ClientRow; canEdit: boolean; storeOptions?: string[] }) {
   const router = useRouter();
-  const first = splitStore(row.store);
-  const [company, setCompany] = useState(first.company);
-  const [store, setStore] = useState(first.store);
+  const [adding, setAdding] = useState(false);
+  const [company, setCompany] = useState('ProOne');
+  const [store, setStore] = useState('');
   const [error, setError] = useState('');
-  const [, start] = useTransition();
-  const save = (c: string, st: string) => {
-    // Company and store together ("ProOne - Toko A"); a company alone is saved as "ProOne -"; no company keeps an old plain store name.
-    const value = c ? (st.trim() ? `${c} - ${st.trim()}` : `${c} -`) : st.trim();
-    if (value === row.store) return;
+  const [pending, start] = useTransition();
+  const stores = row.stores || [];
+  const companies = Array.from(new Set(stores.map((x) => x.company)));
+  const listId = `client-store-options-${company.replace(/\s+/g, '-')}`;
+  const cls = `${field} w-full min-w-[120px]`;
+
+  const add = () => {
     setError('');
     start(async () => {
-      const res = await updateClientNames(row.clientId, row.brand, value);
-      if (!res.success) { setError(res.error || 'Could not save.'); setCompany(first.company); setStore(first.store); return; }
+      const res = await addClientStore(row.clientId, company, store);
+      if (!res.success) { setError(res.error || 'Could not save.'); return; }
+      setStore(''); setAdding(false);
       router.refresh();
     });
   };
-  const cls = `${field} w-full min-w-[120px]`;
-  const listId = company ? `client-store-options-${company.replace(/\s+/g, '-')}` : undefined;
+  const remove = (id: string, label: string) => {
+    if (!window.confirm(`Take ${label} away from ${row.clientName}?`)) return;
+    setError('');
+    start(async () => {
+      const res = await removeClientStore(id);
+      if (!res.success) setError(res.error || 'Could not remove.');
+      else router.refresh();
+    });
+  };
+
   return (
     <>
       <td rowSpan={row.groupSize} className="px-3 py-3 align-top">
-        {canEdit ? (
-          <select value={company} onChange={(e) => { setCompany(e.target.value); save(e.target.value, store); }} className={cls}>
-            <option value="">-</option>
-            {COMPANIES.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-        ) : <span className="text-zinc-200">{company || '-'}</span>}
-        {error && <div className="mt-1 max-w-[170px] text-[10px] text-red-400">{error}</div>}
+        {companies.length ? <div className="flex flex-col gap-1">{companies.map((c) => <span key={c} className="text-zinc-200">{c}</span>)}</div> : <span className="text-zinc-600">-</span>}
       </td>
-      <td rowSpan={row.groupSize} className="px-3 py-3 align-top">
-        {canEdit ? <input value={store} onChange={(e) => setStore(e.target.value)} onBlur={() => save(company, store)} placeholder="Store" list={listId} className={`${cls} min-w-[180px]`} /> : <span className="text-zinc-200">{store || '-'}</span>}
+      <td rowSpan={row.groupSize} className="min-w-[220px] px-3 py-3 align-top">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {stores.map((x) => (
+            <span key={x.id} title={`${x.company} - ${x.store}`} className="inline-flex max-w-[230px] items-center gap-1 rounded-md border border-[#d4af37]/30 bg-[#d4af37]/10 px-2 py-0.5 text-[11px] font-semibold text-[#f5d77f]">
+              <span className="truncate">{x.store}</span>
+              {canEdit && !x.id.startsWith('legacy-') && <button type="button" disabled={pending} onClick={() => remove(x.id, `${x.company} - ${x.store}`)} aria-label={`Remove ${x.store}`} className="text-[#f5d77f]/60 hover:text-red-400">×</button>}
+            </span>
+          ))}
+          {canEdit && !adding && (
+            <button type="button" onClick={() => { setAdding(true); setError(''); }} className="rounded-md border border-dashed border-zinc-600 px-2 py-0.5 text-[11px] font-bold text-zinc-300 hover:border-[#d4af37] hover:text-[#f5d77f]">{stores.length ? '+ New store' : '+ Create store'}</button>
+          )}
+          {!canEdit && stores.length === 0 && <span className="text-zinc-600">-</span>}
+        </div>
+        {canEdit && adding && (
+          <div className="mt-2 space-y-1.5 rounded-lg border border-zinc-700 bg-zinc-950/60 p-2">
+            <select value={company} onChange={(e) => setCompany(e.target.value)} className={cls}>{COMPANIES.map((c) => <option key={c} value={c}>{c}</option>)}</select>
+            <input value={store} onChange={(e) => setStore(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') add(); }} placeholder="Store name" list={listId} autoFocus className={cls} />
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => { setAdding(false); setError(''); }} className="px-2 py-1 text-[11px] font-bold text-zinc-400 hover:text-white">Cancel</button>
+              <button type="button" disabled={pending || !store.trim()} onClick={add} className="rounded-md border border-[#d4af37]/40 bg-[#d4af37]/10 px-3 py-1 text-[11px] font-bold text-[#f5d77f] disabled:opacity-40">{pending ? 'Saving...' : 'Save store'}</button>
+            </div>
+          </div>
+        )}
+        {error && <div className="mt-1 max-w-[230px] text-[10px] text-red-400">{error}</div>}
       </td>
     </>
   );
@@ -265,8 +292,8 @@ export function ClientProjectsTable({
       case 'end': return r.end || '';
       case 'client': return r.clientName.toLowerCase();
       case 'salesman': return (r.salesman || '').toLowerCase();
-      case 'company': return splitStore(r.store).company.toLowerCase();
-      case 'store': return splitStore(r.store).store.toLowerCase();
+      case 'company': return (r.stores || []).map((x) => x.company).join(' ').toLowerCase();
+      case 'store': return (r.stores || []).map((x) => x.store).join(' ').toLowerCase();
       case 'product': return r.product.toLowerCase();
       case 'status': return r.lifecycle;
       case 'advertiser': return nameOf(advertisers, r.advertiserId).toLowerCase();
@@ -291,7 +318,7 @@ export function ClientProjectsTable({
   const filteredGroups = all.filter((g) => {
     if (onlyOpen && g[0].advertiserId && g[0].adminId) return false;
     if (!q) return true;
-    return g.some((r) => [r.clientName, r.store, r.product, r.invoiceNumber || ''].some((t) => t.toLowerCase().includes(q)));
+    return g.some((r) => [r.clientName, ...(r.stores || []).map((x) => `${x.company} ${x.store}`), r.product, r.invoiceNumber || ''].some((t) => t.toLowerCase().includes(q)));
   });
   // A sorted list keeps the products of one invoice together (the group moves as one).
   const groups = sort ? [...filteredGroups].sort((a, b) => sortValue(a, sort.key).localeCompare(sortValue(b, sort.key)) * (sort.asc ? 1 : -1)) : filteredGroups;

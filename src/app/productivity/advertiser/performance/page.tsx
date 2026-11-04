@@ -6,6 +6,7 @@ import { AdvertiserClientPerformance, type ClientCard } from '@/components/produ
 import { buildView, buildBuckets, rangeBuckets, bucketOf, adsCost, adsSales, storeKeyOf, workspaceLabel, WORKSPACE_LABELS } from '@/lib/integrations/performance';
 import { loadStorePerformance } from '@/lib/integrations/store-performance';
 import { nameKey } from '@/lib/integrations/store-advertiser';
+import { storeLinks } from '@/lib/sales/client-stores';
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { inputByDay, inputSeries, type InputReport } from '@/lib/advertiser/input-series';
 
@@ -62,7 +63,8 @@ export default async function AdvertiserStorePerformancePage({ searchParams }: {
   // The Input Log of the clients linked to these stores ("Company - Store" in the Clients table, or an old plain store name).
   const db = createAdminClient();
   const span = range || { from: `${year}-01-01`, to: `${year}-12-31` };
-  const { data: linked } = await db.from('clients').select('id, name, store_name').not('store_name', 'is', null).limit(10000);
+  // One line per store of a client (a client can have several).
+  const linked = await storeLinks(db);
   const clientsOfName = new Map<string, string[]>();
   for (const c of linked || []) { const k = nameKey(c.store_name); if (k) clientsOfName.set(k, [...(clientsOfName.get(k) || []), c.id]); }
   const clientsOf = (label: string, store: string) => Array.from(new Set([...(clientsOfName.get(nameKey(label)) || []), ...(clientsOfName.get(nameKey(store)) || [])]));

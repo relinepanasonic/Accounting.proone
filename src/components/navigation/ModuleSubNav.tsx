@@ -52,7 +52,6 @@ const MODULES = {
     items: [
       { name: 'Settings Hub', href: '/settings' },
       { name: 'Workspaces', href: '/settings/workspaces' },
-      { name: 'Contacts DB', href: '/settings/contacts' },
     ]
   }
 };

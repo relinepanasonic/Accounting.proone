@@ -13,6 +13,8 @@ interface Client {
   name: string;
   /** The store linked in the Clients table ("Company - Store"). */
   store_name?: string | null;
+  /** Every store of the client ("Company - Store"). */
+  stores?: string[];
 }
 
 const COMPANIES = ['ProOne', 'Reline', 'Alpha', 'Lighting Solution'];
@@ -31,8 +33,8 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
   // New Record State
   const [selectedClient, setSelectedClient] = useState<string>(clients[0]?.id || '');
   // The log is kept per STORE: a client can have several. "Company - Store".
-  const [storeCompany, setStoreCompany] = useState<string>(splitStore(clients[0]?.store_name).company || 'ProOne');
-  const [storeName, setStoreName] = useState<string>(splitStore(clients[0]?.store_name).store);
+  const [storeCompany, setStoreCompany] = useState<string>(splitStore(clients[0]?.stores?.[0] || clients[0]?.store_name).company || 'ProOne');
+  const [storeName, setStoreName] = useState<string>(splitStore(clients[0]?.stores?.[0] || clients[0]?.store_name).store);
   const [storeError, setStoreError] = useState('');
   const storeLabel = storeName.trim() ? `${storeCompany} - ${storeName.trim()}` : '';
   const [reportDate, setReportDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -63,16 +65,18 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
   const pickClient = (id: string) => {
     setSelectedClient(id);
     const known = logs.find((l) => l.client_id === id && l.store_label);
-    const linked = splitStore(clients.find((c) => c.id === id)?.store_name);
+    const c = clients.find((x) => x.id === id);
+    const linked = splitStore(c?.stores?.[0] || c?.store_name);
     const from = known ? splitStore(known.store_label) : linked;
     setStoreCompany(from.company || 'ProOne');
     setStoreName(from.store);
     setStoreError('');
   };
+  const chosen = clients.find((c) => c.id === selectedClient);
   const storesOfClient = Array.from(new Set([
+    ...(chosen?.stores || (chosen?.store_name ? [chosen.store_name] : [])),
     ...logs.filter((l) => l.client_id === selectedClient && l.store_label).map((l) => l.store_label as string),
-    ...(clients.find((c) => c.id === selectedClient)?.store_name && splitStore(clients.find((c) => c.id === selectedClient)?.store_name).store ? [clients.find((c) => c.id === selectedClient)!.store_name as string] : []),
-  ]));
+  ].filter((x) => splitStore(x).store)));
 
   const handleStartRecord = () => {
     if (!storeName.trim()) { setStoreError('Type the store of this log.'); return; }

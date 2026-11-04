@@ -40,6 +40,8 @@ export function teamOf(map: StoreAdvertiserMap, storeKey: string, label: string,
 
 export const advertiserOf = (map: StoreAdvertiserMap, storeKey: string, label: string, store: string) => teamOf(map, storeKey, label, store).advertiserId;
 
+import { loadClientStores, storeText } from '@/lib/sales/client-stores';
+
 export async function loadStoreAdvertisers(db: Db): Promise<StoreAdvertiserMap> {
   const { data: notAdv } = await db.from('profiles').select('id').in('email', NOT_ADVERTISER_EMAILS);
   const notAdvertiser = new Set<string>((notAdv || []).map((p: any) => p.id));
@@ -90,6 +92,8 @@ export async function loadStoreAdvertisers(db: Db): Promise<StoreAdvertiserMap> 
     .map((id) => ({ id, name: people.get(id)! }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  const storesOf = await loadClientStores(db, clientIds as string[]);
+
   // Names -> team. When a name has several candidates the one with the most clients wins.
   const clientById = new Map<string, any>(clients.map((c) => [c.id, c]));
   const votes = new Map<string, { adv: Map<string, number>; adm: Map<string, number>; sales: Map<string, number>; client: Map<string, number> }>();
@@ -99,7 +103,7 @@ export async function loadStoreAdvertisers(db: Db): Promise<StoreAdvertiserMap> 
     if (!c) continue;
     // The linked store ("ProOne - Toko A", or just "Toko A" for an old entry) by its full text; the client brand and name as a last resort.
     // A "Workspace - Store" is never matched by the bare store name: the same store name can exist in two workspaces.
-    const names = [nameKey(c.store_name), nameKey(c.company_name), nameKey(c.name)].filter(Boolean);
+    const names = [...(storesOf.get(a.client_id) || []).map((x) => nameKey(storeText(x))), nameKey(c.store_name), nameKey(c.company_name), nameKey(c.name)].filter(Boolean);
     for (const k of new Set(names)) {
       const v = votes.get(k) || { adv: new Map(), adm: new Map(), sales: new Map(), client: new Map() };
       if (a.job === 'advertising') bump(v.adv, a.user_id); else bump(v.adm, a.user_id);

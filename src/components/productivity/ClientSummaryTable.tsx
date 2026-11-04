@@ -62,16 +62,16 @@ export function ClientSummaryTable({ cards, year, month, rangeLabel, onOpen }: {
 
   const total = rows.reduce((t, r) => ({ gmv: t.gmv + r.gmv, cost: t.cost + r.cost, adSales: t.adSales + r.adSales }), { gmv: 0, cost: 0, adSales: 0 });
   const th = (key: typeof sort.key, label: string, right = false) => (
-    <th className={`px-3 py-2 ${right ? 'text-right' : ''}`}>
+    <th className={`px-4 py-3 ${right ? 'text-right' : ''}`}>
       <button type="button" onClick={() => setSort((s) => (s.key === key ? { key, asc: !s.asc } : { key, asc: key === 'store' || key === 'advertiser' }))} className={`inline-flex items-center gap-1 uppercase hover:text-zinc-200 ${sort.key === key ? 'text-[#f5d77f]' : ''}`}>{label}<span className="text-[8px]">{sort.key === key ? (sort.asc ? '▲' : '▼') : ''}</span></button>
     </th>
   );
 
   return (
-    <div className="gold-glass-panel rounded-2xl border border-[#d4af37]/10 p-4">
+    <div className="gold-glass-panel rounded-2xl border border-[#d4af37]/10 p-5">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-sm font-extrabold text-white">Clients</h2>
+          <h2 className="text-lg font-extrabold text-white">Clients</h2>
           <p className="text-[10px] text-zinc-500">{rows.length} line{rows.length === 1 ? '' : 's'} · click a client to see its charts</p>
         </div>
         <div className="flex rounded-lg border border-zinc-800 bg-zinc-950 p-0.5">
@@ -80,30 +80,30 @@ export function ClientSummaryTable({ cards, year, month, rangeLabel, onOpen }: {
           ))}
         </div>
       </div>
-      <div className="max-h-[420px] overflow-auto rounded-xl border border-zinc-800/60">
-        <table className="w-full min-w-[820px] text-left text-xs">
+      <div className="max-h-[calc(100vh-230px)] min-h-[520px] overflow-auto rounded-xl border border-zinc-800/60">
+        <table className="w-full min-w-[980px] text-left text-sm">
           <thead className="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-950 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-            <tr>{th('advertiser', 'Advertiser')}<th className="px-3 py-2">Year</th><th className="px-3 py-2">Month</th><th className="px-3 py-2">Week</th><th className="px-3 py-2">Company</th>{th('store', 'Store')}{th('gmv', 'GMV', true)}{th('cost', 'Ads Cost', true)}{th('roas', 'ROAS', true)}</tr>
+            <tr>{th('advertiser', 'Advertiser')}<th className="px-4 py-3">Year</th><th className="px-4 py-3">Month</th><th className="px-4 py-3">Week</th><th className="px-4 py-3">Company</th>{th('store', 'Store')}{th('gmv', 'GMV', true)}{th('cost', 'Ads Cost', true)}{th('roas', 'ROAS', true)}</tr>
           </thead>
           <tbody className="divide-y divide-zinc-800/50">
             {sorted.length === 0 && <tr><td colSpan={9} className="px-3 py-8 text-center text-zinc-500">No numbers in this period.</td></tr>}
             {sorted.map((r) => (
               <tr key={r.key} onClick={() => onOpen(r.cardKey)} className="cursor-pointer hover:bg-[#d4af37]/10" title="Open the charts of this client">
-                <td className={`whitespace-nowrap px-3 py-2 ${r.advertiser === 'Not assigned' ? 'text-zinc-600' : 'text-zinc-300'}`}>{r.advertiser}</td>
-                <td className="whitespace-nowrap px-3 py-2 text-zinc-400">{r.year}</td>
-                <td className="whitespace-nowrap px-3 py-2 text-zinc-400">{r.month}</td>
-                <td className="whitespace-nowrap px-3 py-2 text-zinc-400">{r.week}</td>
-                <td className="whitespace-nowrap px-3 py-2 text-zinc-300">{r.company}</td>
-                <td className="px-3 py-2 font-semibold text-white">{r.store}{r.client && r.client !== r.store && <div className="text-[10px] font-normal text-zinc-500">{r.client}</div>}</td>
-                <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-emerald-400">{rp(r.gmv)}</td>
-                <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-red-400">{rp(r.cost)}</td>
-                <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-[#d4af37]">{x(r.adSales, r.cost)}</td>
+                <td className={`whitespace-nowrap px-4 py-3.5 ${r.advertiser === 'Not assigned' ? 'text-zinc-600' : 'text-zinc-300'}`}>{r.advertiser}</td>
+                <td className="whitespace-nowrap px-4 py-3.5 text-zinc-400">{r.year}</td>
+                <td className="whitespace-nowrap px-4 py-3.5 text-zinc-400">{r.month}</td>
+                <td className="whitespace-nowrap px-4 py-3.5 text-zinc-400">{r.week}</td>
+                <td className="whitespace-nowrap px-4 py-3.5 text-zinc-300">{r.company}</td>
+                <td className="px-4 py-3.5 font-semibold text-white">{r.store}{r.client && r.client !== r.store && <div className="text-[10px] font-normal text-zinc-500">{r.client}</div>}</td>
+                <td className="whitespace-nowrap px-4 py-3.5 text-right font-mono text-emerald-400">{rp(r.gmv)}</td>
+                <td className="whitespace-nowrap px-4 py-3.5 text-right font-mono text-red-400">{rp(r.cost)}</td>
+                <td className="whitespace-nowrap px-4 py-3.5 text-right font-mono text-[#d4af37]">{x(r.adSales, r.cost)}</td>
               </tr>
             ))}
           </tbody>
           {sorted.length > 0 && (
             <tfoot className="sticky bottom-0 border-t border-zinc-700 bg-zinc-950 text-xs font-extrabold">
-              <tr><td colSpan={6} className="px-3 py-2 text-zinc-300">Total</td><td className="px-3 py-2 text-right font-mono text-emerald-400">{rp(total.gmv)}</td><td className="px-3 py-2 text-right font-mono text-red-400">{rp(total.cost)}</td><td className="px-3 py-2 text-right font-mono text-[#d4af37]">{x(total.adSales, total.cost)}</td></tr>
+              <tr><td colSpan={6} className="px-4 py-3 text-zinc-300">Total</td><td className="px-4 py-3 text-right font-mono text-emerald-400">{rp(total.gmv)}</td><td className="px-4 py-3 text-right font-mono text-red-400">{rp(total.cost)}</td><td className="px-4 py-3 text-right font-mono text-[#d4af37]">{x(total.adSales, total.cost)}</td></tr>
             </tfoot>
           )}
         </table>

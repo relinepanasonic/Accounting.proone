@@ -51,7 +51,6 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
   // Group Filter State
   const [activeGroupCategory, setActiveGroupCategory] = useState<GroupCategory>('Hero');
   const [activeGroupName, setActiveGroupName] = useState<string>('Group Hero 1');
-  const [newGroupName, setNewGroupName] = useState<string>('');
 
   const getEmptyRowInkubasiGroup = (category?: GroupCategory, name?: string) => ({
     groupCategory: category || null,
@@ -261,9 +260,8 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
           note: cols[8] || '',
         };
       });
-      const otherGroupData = [...groupData].filter(r => r.groupCategory !== activeGroupCategory || r.groupName !== activeGroupName);
-      const currentActiveGroupData = [...groupData].filter(r => r.groupCategory === activeGroupCategory && r.groupName === activeGroupName && (r.iklanProduk !== '' || r.note !== ''));
-      setGroupData([...otherGroupData, ...currentActiveGroupData, ...formatted]);
+      const kept = [...groupData].filter(r => rowUsed(r) || r.iklanProduk !== '' || r.note !== '');
+      setGroupData([...kept, ...formatted]);
     } else if (activeTab === 'mandiri') {
       const formatted = parsedData.map(cols => {
         const modal = cols[1] || '';
@@ -301,9 +299,7 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
       }
       setInkubasiData(newData);
     } else if (activeTab === 'group') {
-      const activeGroupSubset = groupData.filter(r => r.groupCategory === activeGroupCategory && r.groupName === activeGroupName);
-      const rowToUpdate = activeGroupSubset[index];
-      const absoluteIndex = groupData.indexOf(rowToUpdate);
+      const absoluteIndex = index < groupData.length ? index : -1;
       
       if (absoluteIndex !== -1) {
         const newData = [...groupData];
@@ -331,10 +327,7 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
 
   const clearData = () => {
     if (activeTab === 'inkubasi') setInkubasiData([]);
-    else if (activeTab === 'group') {
-      // Only clear the active group
-      setGroupData(prev => prev.filter(r => r.groupCategory !== activeGroupCategory || r.groupName !== activeGroupName));
-    }
+    else if (activeTab === 'group') setGroupData([]);
     else if (activeTab === 'mandiri') setMandiriData([]);
     setShots((prev) => {
       const copy = { ...prev };
@@ -345,42 +338,12 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
 
   const getActiveData = () => {
     if (activeTab === 'inkubasi') return inkubasiData;
-    if (activeTab === 'group') return groupData.filter(r => r.groupCategory === activeGroupCategory && r.groupName === activeGroupName);
+    if (activeTab === 'group') return groupData;
     return mandiriData;
   };
 
   const activeData = getActiveData();
   
-  // Extract unique group names for the active category
-  const existingGroupNames = Array.from(new Set(groupData.filter(r => r.groupCategory === activeGroupCategory).map(r => r.groupName)));
-  if (!existingGroupNames.includes(activeGroupName)) {
-    // If somehow active is not in list (e.g. they changed category), update it to the first available or default
-    if (existingGroupNames.length > 0) {
-      setTimeout(() => setActiveGroupName(existingGroupNames[0] as string), 0);
-    }
-  }
-
-  const handleAddNewGroup = () => {
-    if (newGroupName.trim() && !existingGroupNames.includes(newGroupName.trim())) {
-      setActiveGroupName(newGroupName.trim());
-      // Initialize with 3 empty rows
-      setGroupData(prev => [...prev, getEmptyRowInkubasiGroup(activeGroupCategory, newGroupName.trim()), getEmptyRowInkubasiGroup(activeGroupCategory, newGroupName.trim()), getEmptyRowInkubasiGroup(activeGroupCategory, newGroupName.trim())]);
-      setNewGroupName('');
-    }
-  };
-
-  const handleDeleteGroup = () => {
-    if (confirm(`Are you sure you want to delete ${activeGroupName}?`)) {
-      setGroupData(prev => prev.filter(r => !(r.groupCategory === activeGroupCategory && r.groupName === activeGroupName)));
-      const remainingNames = existingGroupNames.filter(name => name !== activeGroupName);
-      if (remainingNames.length > 0) {
-        setTimeout(() => setActiveGroupName(remainingNames[0] as string), 0);
-      } else {
-        setTimeout(() => setActiveGroupName(`Group ${activeGroupCategory} 1`), 0);
-      }
-    }
-  };
-
   return (
     <div className="space-y-6">
       {/* Top Header */}
@@ -455,56 +418,6 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
       <div className="bg-[#0e0f14] border border-[#d4af37]/20 rounded-xl overflow-hidden shadow-xl">
         
         {/* Sub-Filters for Group */}
-        {activeTab === 'group' && (
-          <div className="p-4 bg-zinc-900/50 border-b border-zinc-800 flex flex-col md:flex-row gap-4 items-end">
-            <div className="w-full md:w-auto">
-              <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Group Category</label>
-              <select 
-                value={activeGroupCategory}
-                onChange={(e) => {
-                  const newCat = e.target.value as GroupCategory;
-                  setActiveGroupCategory(newCat);
-                  const namesForNewCat = Array.from(new Set(groupData.filter(r => r.groupCategory === newCat).map(r => r.groupName)));
-                  if (namesForNewCat.length > 0) setActiveGroupName(namesForNewCat[0] as string);
-                  else setActiveGroupName(`Group ${newCat} 1`);
-                }}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#d4af37]"
-              >
-                <option value="Hero">Group Hero</option>
-                <option value="Reguler">Group Reguler</option>
-                <option value="Low">Group Low Konversi</option>
-              </select>
-            </div>
-            <div className="w-full md:w-auto">
-              <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Group Name</label>
-              <select 
-                value={activeGroupName}
-                onChange={(e) => setActiveGroupName(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#d4af37] md:min-w-[200px]"
-              >
-                {existingGroupNames.length === 0 && <option value={activeGroupName}>{activeGroupName}</option>}
-                {existingGroupNames.map(name => (
-                  <option key={name as string} value={name as string}>{name as string}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex items-center gap-2 w-full md:w-auto mt-2 md:mt-0">
-              <input 
-                type="text" 
-                value={newGroupName}
-                onChange={(e) => setNewGroupName(e.target.value)}
-                placeholder="New group name..." 
-                className="flex-1 md:flex-none bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#d4af37]"
-              />
-              <button onClick={handleAddNewGroup} className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 p-2 rounded-lg transition-colors border border-zinc-700">
-                <Plus className="w-4 h-4" />
-              </button>
-              <button onClick={handleDeleteGroup} className="bg-red-500/10 hover:bg-red-500/20 text-red-400 p-2 rounded-lg transition-colors border border-red-500/20 ml-2">
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Paste Area Instructions */}
         <div className="p-6 bg-zinc-900/30 border-b border-zinc-800/80 focus-within:bg-zinc-900/60 transition-colors">

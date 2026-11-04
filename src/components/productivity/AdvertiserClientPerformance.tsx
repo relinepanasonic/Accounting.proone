@@ -2,6 +2,8 @@
 
 import React from 'react';
 import { PeriodPicker, type Period } from '@/components/ui/PeriodPicker';
+import { ClientSummaryTable } from '@/components/productivity/ClientSummaryTable';
+import { dmy } from '@/components/ui/DateRangePicker';
 import { useRouter } from 'next/navigation';
 import { ResponsiveContainer, ComposedChart, AreaChart, Area, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 
@@ -233,7 +235,12 @@ export function AdvertiserClientPerformance({ cards, year, month, years, adverti
 
       {cards.length === 0
         ? <div className="gold-glass-panel rounded-2xl p-8 text-center text-sm text-zinc-500">No store numbers in this period.</div>
-        : <div className="space-y-4">{cards.map((c) => <Card key={c.key} c={c} />)}</div>}
+        : (
+          <div className="space-y-4">
+            <ClientSummaryTable cards={cards} year={year} month={month} rangeLabel={range ? (range.from === range.to ? dmy(range.from) : `${dmy(range.from)} - ${dmy(range.to)}`) : null} />
+            {cards.map((c) => <Card key={c.key} c={c} />)}
+          </div>
+        )}
     </div>
   );
 }

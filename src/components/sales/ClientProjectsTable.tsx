@@ -7,8 +7,8 @@ import { SALES_PEOPLE } from '@/lib/sales/people';
 import type { ClientRow } from '@/lib/sales/client-table';
 import { SortArrows } from '@/components/ui/SortArrows';
 
-const field = 'rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-100 focus:border-[#d4af37]/50 focus:outline-none [color-scheme:dark]';
-const dmy = (d: string | null) => (d ? new Date(`${d}T12:00:00Z`).toLocaleDateString('id-ID', { timeZone: 'UTC', day: '2-digit', month: 'short', year: 'numeric' }) : '');
+export const field = 'rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-100 focus:border-[#d4af37]/50 focus:outline-none [color-scheme:dark]';
+export const dmy = (d: string | null) => (d ? new Date(`${d}T12:00:00Z`).toLocaleDateString('id-ID', { timeZone: 'UTC', day: '2-digit', month: 'short', year: 'numeric' }) : '');
 const stamp = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta', day: '2-digit', month: 'short', year: 'numeric' }) : '');
 
 const LIFE_STYLE: Record<string, string> = {
@@ -20,7 +20,7 @@ const LIFE_STYLE: Record<string, string> = {
 };
 const LIFE_LABEL: Record<string, string> = { active: 'Active', scheduled: 'Scheduled', freeze: 'Freeze', finished: 'Finished', churn: 'Churn' };
 
-interface Person { id: string; name: string }
+export interface Person { id: string; name: string }
 
 const COMPANIES = ['ProOne', 'Reline', 'Alpha', 'Lighting Solution'];
 
@@ -100,7 +100,7 @@ function NameCells({ row, canEdit, storeOptions }: { row: ClientRow; canEdit: bo
 }
 
 /** Who sold this project: a dropdown for the owners and Accounting, saved at once. */
-function SalesCell({ row }: { row: ClientRow }) {
+export function SalesCell({ row }: { row: ClientRow }) {
   const router = useRouter();
   const [value, setValue] = useState(row.salesman);
   const [error, setError] = useState('');
@@ -144,7 +144,7 @@ function PaidCell({ row }: { row: ClientRow; canEdit?: boolean }) {
   );
 }
 
-function StatusCell({ row, canEdit }: { row: ClientRow; canEdit: boolean }) {
+export function StatusCell({ row, canEdit }: { row: ClientRow; canEdit: boolean }) {
   // The change shows at once; the save runs behind it and is undone only if it fails. No page reload.
   const router = useRouter();
   const [life, setLife] = useState(row.lifecycle);
@@ -199,7 +199,7 @@ function StatusCell({ row, canEdit }: { row: ClientRow; canEdit: boolean }) {
   );
 }
 
-function StartCell({ row, canEdit }: { row: ClientRow; canEdit: boolean }) {
+export function StartCell({ row, canEdit }: { row: ClientRow; canEdit: boolean }) {
   const router = useRouter();
   const [value, setValue] = useState(row.start || '');
   const [error, setError] = useState('');
@@ -232,7 +232,7 @@ function StartCell({ row, canEdit }: { row: ClientRow; canEdit: boolean }) {
   );
 }
 
-function HandlerSelect({ clientId, job, current, people }: { clientId: string; job: 'advertising' | 'admin'; current: string | null; people: Person[] }) {
+export function HandlerSelect({ clientId, job, current, people }: { clientId: string; job: 'advertising' | 'admin'; current: string | null; people: Person[] }) {
   const router = useRouter();
   const [value, setValue] = useState(current || '');
   const [pending, start] = useTransition();

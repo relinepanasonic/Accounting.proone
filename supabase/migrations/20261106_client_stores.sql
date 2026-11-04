@@ -18,5 +18,5 @@ SELECT c.workspace_id, c.id,
   CASE lower(m[1]) WHEN 'proone' THEN 'ProOne' WHEN 'reline' THEN 'Reline' WHEN 'alpha' THEN 'Alpha' ELSE 'Lighting Solution' END,
   btrim(m[2])
 FROM public.clients c, LATERAL regexp_match(c.store_name, '^\s*(ProOne|Reline|Alpha|Lighting Solution)\s+-\s+(\S.*)$', 'i') AS m
-WHERE c.store_name IS NOT NULL
+WHERE c.store_name IS NOT NULL AND m IS NOT NULL -- only the ones that have a company and a store ("ProOne -" alone is skipped)
 ON CONFLICT DO NOTHING;

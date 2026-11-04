@@ -9,7 +9,7 @@ import { SalesCell, StatusCell, StartCell, HandlerSelect, field, type Person } f
 
 const COMPANIES = ['ProOne', 'Reline', 'Alpha', 'Lighting Solution'];
 
-/** The rows of the same client: its projects (invoices) as groups of product lines, the newest first. */
+/** The rows of the same client: its projects (invoices) as groups of product lines. */
 function groupsOf(rows: ClientRow[]): ClientRow[][] {
   const all: ClientRow[][] = [];
   for (const r of rows) (r.groupIndex === 0 ? all.push([r]) : all[all.length - 1]?.push(r));
@@ -17,14 +17,13 @@ function groupsOf(rows: ClientRow[]): ClientRow[][] {
 }
 
 /**
- * Optimizing > Clients: ONE line for each client and store. The latest project of the client is the one shown (when the package was renewed,
- * the earlier project is left out: the older invoices stay in Accounting and Sales). A client without a store has one line with "Create store".
+ * Optimizing > Clients: ONE line for each client, with its latest project (when the package was renewed, the earlier project is left out:
+ * the older invoices stay in Accounting and Sales). The stores of the client are in the Store cell: one store is written out, several are a dropdown.
  */
 export interface StoreLine {
   key: string;
   group: ClientRow[]; // the product lines of the client's latest project
-  store: { id: string; company: string; store: string } | null;
-  first: boolean; // the first line of this client
+  stores: Array<{ id: string; company: string; store: string }>;
 }
 
 export function storeLines(rows: ClientRow[]): StoreLine[] {
@@ -34,44 +33,10 @@ export function storeLines(rows: ClientRow[]): StoreLine[] {
     const cur = latest.get(g[0].clientId);
     if (!cur || score(g) > score(cur)) latest.set(g[0].clientId, g);
   }
-  const out: StoreLine[] = [];
-  for (const g of latest.values()) {
-    const stores = g[0].stores || [];
-    if (!stores.length) out.push({ key: `${g[0].clientId}-none`, group: g, store: null, first: true });
-    else stores.forEach((st, i) => out.push({ key: `${g[0].clientId}-${st.id}`, group: g, store: st, first: i === 0 }));
-  }
-  return out;
+  return Array.from(latest.values()).map((g) => ({ key: g[0].clientId, group: g, stores: g[0].stores || [] }));
 }
 
-function StoreCell({ line, canEdit }: { line: StoreLine; canEdit: boolean }) {
-  const router = useRouter();
-  const [pending, start] = useTransition();
-  const [error, setError] = useState('');
-  const st = line.store;
-  if (!st) return <span className="text-zinc-600">-</span>;
-  return (
-    <div>
-      <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">{st.company}</div>
-      <div className="flex items-center gap-1.5">
-        <span className="font-semibold text-[#f5d77f]">{st.store}</span>
-        {canEdit && !st.id.startsWith('legacy-') && (
-          <button
-            type="button" disabled={pending} aria-label={`Remove ${st.store}`} title="Take this store away from the client"
-            onClick={() => {
-              if (!window.confirm(`Take ${st.company} - ${st.store} away from ${line.group[0].clientName}?`)) return;
-              setError('');
-              start(async () => { const res = await removeClientStore(st.id); if (!res.success) setError(res.error || 'Could not remove.'); else router.refresh(); });
-            }}
-            className="text-zinc-500 hover:text-red-400"
-          >×</button>
-        )}
-      </div>
-      {error && <div className="text-[10px] text-red-400">{error}</div>}
-    </div>
-  );
-}
-
-/** "+ Create store" / "+ New store" under the client: the form opens in place. */
+/** "+ Create store" / "+ New store": the form opens in place, under the store name. */
 function AddStore({ line, storeOptions }: { line: StoreLine; storeOptions?: string[] }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -92,7 +57,7 @@ function AddStore({ line, storeOptions }: { line: StoreLine; storeOptions?: stri
   return (
     <div className="mt-1.5">
       {!open ? (
-        <button type="button" onClick={() => setOpen(true)} className="rounded-md border border-dashed border-zinc-600 px-2 py-0.5 text-[11px] font-bold text-zinc-300 hover:border-[#d4af37] hover:text-[#f5d77f]">{line.store ? '+ New store' : '+ Create store'}</button>
+        <button type="button" onClick={() => setOpen(true)} className="rounded-md border border-dashed border-zinc-600 px-2 py-0.5 text-[11px] font-bold text-zinc-300 hover:border-[#d4af37] hover:text-[#f5d77f]">{line.stores.length ? '+ New store' : '+ Create store'}</button>
       ) : (
         <div className="space-y-1.5 rounded-lg border border-zinc-700 bg-zinc-950/60 p-2">
           <select value={company} onChange={(e) => setCompany(e.target.value)} className={`${field} w-full`}>{COMPANIES.map((c) => <option key={c} value={c}>{c}</option>)}</select>
@@ -105,6 +70,52 @@ function AddStore({ line, storeOptions }: { line: StoreLine; storeOptions?: stri
         </div>
       )}
       {error && <div className="mt-1 max-w-[220px] text-[10px] text-red-400">{error}</div>}
+    </div>
+  );
+}
+
+/** The stores of the client: none = a dash, one = its name, several = a dropdown. The "+ Create store" / "+ New store" button is under it. */
+function StoreCell({ line, canEdit, storeOptions }: { line: StoreLine; canEdit: boolean; storeOptions?: string[] }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [error, setError] = useState('');
+  const [pick, setPick] = useState('');
+  const stores = line.stores;
+  const current = stores.find((x) => x.id === pick) || stores[0] || null;
+  const remove = () => {
+    if (!current) return;
+    if (!window.confirm(`Take ${current.company} - ${current.store} away from ${line.group[0].clientName}?`)) return;
+    setError('');
+    start(async () => {
+      const res = await removeClientStore(current.id);
+      if (!res.success) setError(res.error || 'Could not remove.');
+      else { setPick(''); router.refresh(); }
+    });
+  };
+  const removable = canEdit && current && !current.id.startsWith('legacy-');
+  return (
+    <div>
+      {!current && <span className="text-zinc-600">-</span>}
+      {current && stores.length === 1 && (
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">{current.company}</div>
+          <div className="flex items-center gap-1.5">
+            <span className="font-semibold text-[#f5d77f]">{current.store}</span>
+            {removable && <button type="button" disabled={pending} aria-label={`Remove ${current.store}`} title="Take this store away from the client" onClick={remove} className="text-zinc-500 hover:text-red-400">×</button>}
+          </div>
+        </div>
+      )}
+      {current && stores.length > 1 && (
+        <div className="flex items-center gap-1.5">
+          <select value={current.id} onChange={(e) => setPick(e.target.value)} className={`${field} min-w-[150px] max-w-[220px] font-semibold text-[#f5d77f]`} aria-label="Stores of this client">
+            {stores.map((x) => <option key={x.id} value={x.id}>{x.store} · {x.company}</option>)}
+          </select>
+          <span className="text-[10px] text-zinc-500" title="Stores of this client">{stores.length}</span>
+          {removable && <button type="button" disabled={pending} aria-label={`Remove ${current.store}`} title="Take the shown store away from the client" onClick={remove} className="text-zinc-500 hover:text-red-400">×</button>}
+        </div>
+      )}
+      {error && <div className="text-[10px] text-red-400">{error}</div>}
+      {canEdit && <AddStore line={line} storeOptions={storeOptions} />}
     </div>
   );
 }
@@ -125,13 +136,13 @@ export function ClientStoreTable({ rows, canEditStart, canEditNames, canEditStat
     const r = l.group[0];
     if (onlyOpen && r.advertiserId && r.adminId) return false;
     if (!q) return true;
-    return [r.clientName, l.store ? `${l.store.company} ${l.store.store}` : '', ...l.group.map((x) => x.product), r.invoiceNumber || ''].some((t) => t.toLowerCase().includes(q));
+    return [r.clientName, ...l.stores.map((st) => `${st.company} ${st.store}`), ...l.group.map((x) => x.product), r.invoiceNumber || ''].some((t) => t.toLowerCase().includes(q));
   });
   const val = (l: StoreLine, k: string) => {
     const r = l.group[0];
     switch (k) {
-      case 'client': return `${r.clientName}|${l.store?.store || ''}`.toLowerCase();
-      case 'store': return `${l.store?.store || ''}`.toLowerCase();
+      case 'client': return r.clientName.toLowerCase();
+      case 'store': return l.stores.map((st) => st.store).join(' ').toLowerCase();
       case 'sales': return (r.salesman || '').toLowerCase();
       case 'product': return r.product.toLowerCase();
       case 'start': return r.start || '';
@@ -159,7 +170,7 @@ export function ClientStoreTable({ rows, canEditStart, canEditNames, canEditStat
             <input type="checkbox" checked={onlyOpen} onChange={(e) => setOnlyOpen(e.target.checked)} className="accent-[#d4af37]" /> Only clients missing an advertiser or admin
           </label>
         )}
-        <span className="text-[11px] text-zinc-500">{sorted.length} line{sorted.length === 1 ? '' : 's'} · one per client and store, the latest project</span>
+        <span className="text-[11px] text-zinc-500">{sorted.length} client{sorted.length === 1 ? '' : 's'} · the latest project of each</span>
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-[#d4af37]/20 bg-[#0e0f14] shadow-xl">
@@ -180,27 +191,21 @@ export function ClientStoreTable({ rows, canEditStart, canEditNames, canEditStat
             {sorted.length === 0 && <tr><td colSpan={8} className="p-8 text-center text-zinc-500">No client matches.</td></tr>}
             {sorted.map((l) => {
               const r = l.group[0];
-              const own = true; // every line is complete: the client, the store and the latest project of that client
               return (
                 <tr key={l.key} className="align-top hover:bg-zinc-900/30">
                   <td className="px-4 py-3.5">
-                    {own ? (
-                      <>
-                        <div className="font-bold text-zinc-100">{r.clientName}</div>
-                        {r.invoiceNumber && <div className="font-mono text-[10px] text-zinc-500">{r.invoiceNumber}</div>}
-                        {canEditNames && l.first && <AddStore line={l} storeOptions={storeOptions} />}
-                      </>
-                    ) : <div className="pl-3 text-xs text-zinc-600">{r.clientName}</div>}
+                    <div className="font-bold text-zinc-100">{r.clientName}</div>
+                    {r.invoiceNumber && <div className="font-mono text-[10px] text-zinc-500">{r.invoiceNumber}</div>}
                   </td>
-                  <td className="px-4 py-3.5"><StoreCell line={l} canEdit={canEditNames} /></td>
-                  {canEditSales && <td className="px-4 py-3.5">{own ? <SalesCell row={r} /> : null}</td>}
+                  <td className="px-4 py-3.5"><StoreCell line={l} canEdit={canEditNames} storeOptions={storeOptions} /></td>
+                  {canEditSales && <td className="px-4 py-3.5"><SalesCell row={r} /></td>}
                   <td className="px-4 py-3.5 text-zinc-200">
-                    {own ? l.group.map((x, i) => <div key={i}>{x.product}{x.quantity > 1 && <span className="ml-1 text-xs text-zinc-500">x{x.quantity}</span>}</div>) : null}
+                    {l.group.map((x, i) => <div key={i}>{x.product}{x.quantity > 1 && <span className="ml-1 text-xs text-zinc-500">x{x.quantity}</span>}</div>)}
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3.5">{own ? <StartCell row={r} canEdit={canEditStart} /> : null}</td>
-                  <td className="px-4 py-3.5">{own ? <StatusCell row={r} canEdit={canEditStatus} /> : null}</td>
-                  {assign && <td className="px-4 py-3.5">{own ? <HandlerSelect clientId={r.clientId} job="advertising" current={r.advertiserId} people={advertisers!} /> : null}</td>}
-                  {assign && <td className="px-4 py-3.5">{own ? <HandlerSelect clientId={r.clientId} job="admin" current={r.adminId} people={admins!} /> : null}</td>}
+                  <td className="whitespace-nowrap px-4 py-3.5"><StartCell row={r} canEdit={canEditStart} /></td>
+                  <td className="px-4 py-3.5"><StatusCell row={r} canEdit={canEditStatus} /></td>
+                  {assign && <td className="px-4 py-3.5"><HandlerSelect clientId={r.clientId} job="advertising" current={r.advertiserId} people={advertisers!} /></td>}
+                  {assign && <td className="px-4 py-3.5"><HandlerSelect clientId={r.clientId} job="admin" current={r.adminId} people={admins!} /></td>}
                 </tr>
               );
             })}

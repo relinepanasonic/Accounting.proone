@@ -66,7 +66,6 @@ function RowsTable({ rows, mandiri }: { rows: any[]; mandiri?: boolean }) {
           <th style={th}>Penjualan</th>
           {!mandiri && <th style={th}>Konversi</th>}
           {!mandiri && <th style={th}>Terjual</th>}
-          {mandiri && <th style={th}>Diagnosis</th>}
           <th style={th}>ROAS</th>
           <th style={th}>Note</th>
         </tr>
@@ -81,7 +80,6 @@ function RowsTable({ rows, mandiri }: { rows: any[]; mandiri?: boolean }) {
             <td style={td}>{rupiah(num(r.penjualan))}</td>
             {!mandiri && <td style={td}>{text(r.konversi)}</td>}
             {!mandiri && <td style={td}>{text(r.produkTerjual)}</td>}
-            {mandiri && <td style={td}>{text(r.diagnosis)}</td>}
             <td style={{ ...td, fontWeight: 700 }}>{text(r.roas)}</td>
             <td style={td}>{text(r.note)}</td>
           </tr>

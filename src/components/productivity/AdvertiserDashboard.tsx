@@ -60,12 +60,14 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
     infoIklan: '',
     modalHarian: '',
     targetRoas: '',
-    diagnosis: '',
     biayaIklan: '',
     penjualan: '',
     roas: '',
     note: ''
   });
+
+  /** A new log starts from the last one: who the ad is, its Target ROAS and its Modal Harian stay; what happened (Biaya Iklan, Penjualan, Konversi, Terjual, ROAS, note) is empty. */
+  const carryOver = (rows: any[]) => (Array.isArray(rows) ? rows : []).map((r) => ({ ...r, biayaIklan: '', penjualan: '', konversi: '', produkTerjual: '', roas: '', note: '' }));
 
   useEffect(() => {
     async function loadData() {
@@ -73,7 +75,8 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
       const res = await fetchAdvertiserReport(initialClient, initialDate, initialSession);
       
       if (res.data) {
-        setInkubasiData(res.data.data_inkubasi || []);
+        const fresh = Boolean(res.isHistorical); // no log for this session yet: the last one is only the starting point
+        setInkubasiData(fresh ? carryOver(res.data.data_inkubasi) : res.data.data_inkubasi || []);
         
         let rawGroup = res.data.data_group || [];
         if (!Array.isArray(rawGroup)) {
@@ -84,9 +87,9 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
           if (rawGroup.low) rawGroup.low.forEach((r: any) => flat.push({ ...r, groupCategory: 'Low', groupName: 'Group Low 1' }));
           rawGroup = flat;
         }
-        setGroupData(rawGroup);
+        setGroupData(fresh ? carryOver(rawGroup) : rawGroup);
         
-        setMandiriData(res.data.data_mandiri || []);
+        setMandiriData(fresh ? carryOver(res.data.data_mandiri) : res.data.data_mandiri || []);
         // A historical fallback record (no exact report for this session yet) must not copy yesterday's pictures.
         setShots(res.isHistorical ? {} : parseShots(res.data.screenshot_url));
         setSessionNote(res.data.note || '');
@@ -243,7 +246,6 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
           infoIklan: cols[0] || '',
           modalHarian: formatCurrency(modal),
           targetRoas: cols[2] || '',
-          diagnosis: cols[3] || '',
           biayaIklan: formatCurrency(biaya),
           penjualan: formatCurrency(penj),
           roas: calculateRoas(penj, biaya) || cols[6] || '',
@@ -526,10 +528,9 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
               <tr>
                 {activeTab === 'mandiri' ? (
                   <>
-                    <th className="px-2 py-3 font-medium min-w-[200px]">Info Iklan</th>
+                    <th className="w-[340px] min-w-[340px] px-2 py-3 font-medium">Info Iklan</th>
                     <th className="px-2 py-3 font-medium min-w-[120px]">Modal Harian</th>
                     <th className="px-2 py-3 font-medium min-w-[120px]">Target ROAS</th>
-                    <th className="px-2 py-3 font-medium min-w-[120px]">Diagnosis</th>
                     <th className="px-2 py-3 font-medium min-w-[120px]">Biaya Iklan</th>
                     <th className="px-2 py-3 font-medium min-w-[120px]">Penjualan</th>
                     <th className="px-2 py-3 font-medium min-w-[80px]">ROAS</th>
@@ -552,7 +553,7 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
             <tbody className="divide-y divide-zinc-800/50">
               {activeData.length === 0 ? (
                 <tr>
-                  <td colSpan={activeTab === 'mandiri' ? 8 : 9} className="px-4 py-12 text-center">
+                  <td colSpan={activeTab === 'mandiri' ? 7 : 9} className="px-4 py-12 text-center">
                     <div className="flex flex-col items-center justify-center text-zinc-500 mb-4">
                       <AlertCircle className="w-8 h-8 mb-2 opacity-50" />
                       <p>No data yet. Paste from spreadsheet, paste a screenshot above, or add a row manually.</p>
@@ -578,9 +579,6 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
                         </td>
                         <td className="px-1 py-1">
                           <input type="text" value={row.targetRoas || ''} onChange={(e) => handleUpdateRow(idx, 'targetRoas', e.target.value)} className="w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-zinc-400 p-1.5 focus:outline-none transition-colors" />
-                        </td>
-                        <td className="px-1 py-1">
-                          <input type="text" value={row.diagnosis || ''} onChange={(e) => handleUpdateRow(idx, 'diagnosis', e.target.value)} className="w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-zinc-400 p-1.5 focus:outline-none transition-colors" />
                         </td>
                         <td className="px-1 py-1">
                           <input type="text" value={row.biayaIklan || ''} onChange={(e) => handleUpdateRow(idx, 'biayaIklan', e.target.value)} className="w-full bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-[#d4af37] text-red-400 p-1.5 focus:outline-none transition-colors font-mono" />

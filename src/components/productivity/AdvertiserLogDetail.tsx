@@ -78,7 +78,6 @@ function RowsTable({ rows, kind }: { rows: any[]; kind: 'inkubasi' | 'group' | '
               <th className="px-3 py-2">Penjualan</th>
               {!isMandiri && <th className="px-3 py-2">Konversi</th>}
               {!isMandiri && <th className="px-3 py-2">Terjual</th>}
-              {isMandiri && <th className="px-3 py-2">Diagnosis</th>}
               <th className="px-3 py-2">ROAS</th>
               <th className="px-3 py-2">Note</th>
             </tr>
@@ -93,7 +92,6 @@ function RowsTable({ rows, kind }: { rows: any[]; kind: 'inkubasi' | 'group' | '
                 <td className="px-3 py-2 font-mono">{rupiah(num(r.penjualan))}</td>
                 {!isMandiri && <td className="px-3 py-2 font-mono">{text(r.konversi)}</td>}
                 {!isMandiri && <td className="px-3 py-2 font-mono">{text(r.produkTerjual)}</td>}
-                {isMandiri && <td className="px-3 py-2">{text(r.diagnosis)}</td>}
                 <td className="px-3 py-2 font-mono text-[#f5d77f]">{text(r.roas)}</td>
                 <td className="px-3 py-2 max-w-[240px] truncate text-zinc-400">{text(r.note)}</td>
               </tr>

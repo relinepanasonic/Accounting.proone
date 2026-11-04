@@ -11,7 +11,13 @@ import { AdvertiserLogDetail } from './AdvertiserLogDetail';
 interface Client {
   id: string;
   name: string;
+  /** The store linked in the Clients table ("Company - Store"). */
+  store_name?: string | null;
 }
+
+const COMPANIES = ['ProOne', 'Reline', 'Alpha', 'Lighting Solution'];
+/** "ProOne - japarutomo" -> company and store. */
+const splitStore = (v?: string | null) => { const m = /^\s*(ProOne|Reline|Alpha|Lighting Solution)\s+-\s*(.*)$/i.exec(v || ''); return m ? { company: COMPANIES.find((c) => c.toLowerCase() === m[1].toLowerCase()) || m[1], store: m[2].trim() } : { company: '', store: '' }; };
 
 interface AdvertiserManagerProps {
   clients: Client[];
@@ -24,6 +30,11 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
 
   // New Record State
   const [selectedClient, setSelectedClient] = useState<string>(clients[0]?.id || '');
+  // The log is kept per STORE: a client can have several. "Company - Store".
+  const [storeCompany, setStoreCompany] = useState<string>(splitStore(clients[0]?.store_name).company || 'ProOne');
+  const [storeName, setStoreName] = useState<string>(splitStore(clients[0]?.store_name).store);
+  const [storeError, setStoreError] = useState('');
+  const storeLabel = storeName.trim() ? `${storeCompany} - ${storeName.trim()}` : '';
   const [reportDate, setReportDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [session, setSession] = useState<number>(1);
   const [showNewModal, setShowNewModal] = useState(false);
@@ -33,6 +44,7 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
   const [filterMonth, setFilterMonth] = useState<string>('');
   const [filterAdvertiser, setFilterAdvertiser] = useState<string>('');
   const [filterClient, setFilterClient] = useState<string>('');
+  const [filterStore, setFilterStore] = useState<string>('');
 
   const loadLogs = async () => {
     setIsLoadingLogs(true);
@@ -47,7 +59,24 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
     }
   }, [isEditing]);
 
+  // Choosing a client suggests its linked store; the stores already logged for it are offered too.
+  const pickClient = (id: string) => {
+    setSelectedClient(id);
+    const known = logs.find((l) => l.client_id === id && l.store_label);
+    const linked = splitStore(clients.find((c) => c.id === id)?.store_name);
+    const from = known ? splitStore(known.store_label) : linked;
+    setStoreCompany(from.company || 'ProOne');
+    setStoreName(from.store);
+    setStoreError('');
+  };
+  const storesOfClient = Array.from(new Set([
+    ...logs.filter((l) => l.client_id === selectedClient && l.store_label).map((l) => l.store_label as string),
+    ...(clients.find((c) => c.id === selectedClient)?.store_name && splitStore(clients.find((c) => c.id === selectedClient)?.store_name).store ? [clients.find((c) => c.id === selectedClient)!.store_name as string] : []),
+  ]));
+
   const handleStartRecord = () => {
+    if (!storeName.trim()) { setStoreError('Type the store of this log.'); return; }
+    setStoreError('');
     setIsEditing(true);
     setShowNewModal(false);
   };
@@ -57,6 +86,7 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
       <AdvertiserDashboard 
         clients={clients}
         initialClient={selectedClient}
+        initialStore={storeLabel}
         initialDate={reportDate}
         initialSession={session}
         onBack={() => setIsEditing(false)}
@@ -64,6 +94,7 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
     );
   }
 
+  const uniqueStores = Array.from(new Set(logs.map((l) => l.store_label as string).filter(Boolean))).sort();
   const uniqueAdvertisers = Array.from(new Set(logs.map(l => l.advertiser_name))).filter(Boolean).sort();
 
   const filteredLogs = logs.filter(log => {
@@ -71,6 +102,7 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
     if (filterMonth && !log.report_date.startsWith(filterMonth)) match = false;
     if (filterAdvertiser && log.advertiser_name !== filterAdvertiser) match = false;
     if (filterClient && log.client_id !== filterClient) match = false;
+    if (filterStore && (log.store_label || '') !== filterStore) match = false;
     return match;
   });
 
@@ -108,9 +140,22 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
                 <label className="block text-xs font-bold text-zinc-400 uppercase mb-2">Client</label>
                 <ClientSelect
                   value={selectedClient}
-                  onChange={setSelectedClient}
+                  onChange={pickClient}
                   options={clients.map(c => ({ id: c.id, name: c.name }))}
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-zinc-400 uppercase mb-2">Store</label>
+                <div className="flex gap-2">
+                  <select value={storeCompany} onChange={(e) => setStoreCompany(e.target.value)} className="w-[42%] bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:border-[#d4af37]">
+                    {COMPANIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <input list="log-stores" value={storeName} onChange={(e) => { setStoreName(e.target.value); setStoreError(''); }} placeholder="Store name" className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#d4af37]" />
+                  <datalist id="log-stores">{storesOfClient.map((st) => <option key={st} value={splitStore(st).store} />)}</datalist>
+                </div>
+                <p className="mt-1 text-[10px] text-zinc-500">A client can have several stores: each store has its own log.</p>
+                {storeError && <p className="mt-1 text-[11px] text-red-400">{storeError}</p>}
               </div>
 
               <div>
@@ -161,6 +206,7 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
           onClose={() => setDetailLog(null)}
           onEdit={(sessionNumber) => {
             setSelectedClient(detailLog.client_id);
+            { const sp = splitStore(detailLog.store_label); setStoreCompany(sp.company || 'ProOne'); setStoreName(sp.store); }
             setReportDate(detailLog.report_date);
             setSession(sessionNumber);
             setDetailLog(null);
@@ -209,6 +255,17 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
               ))}
             </select>
           </div>
+          <div className="flex-1">
+            <select
+              aria-label="Store"
+              value={filterStore}
+              onChange={(e) => setFilterStore(e.target.value)}
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#d4af37] transition-colors"
+            >
+              <option value="">All Stores</option>
+              {uniqueStores.map((st) => <option key={st} value={st}>{st}</option>)}
+            </select>
+          </div>
         </div>
 
         {isLoadingLogs && (
@@ -224,6 +281,7 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
                 <th className="px-6 py-4 font-bold">Tanggal</th>
                 <th className="px-6 py-4 font-bold">Advertiser</th>
                 <th className="px-6 py-4 font-bold">Client</th>
+                <th className="px-6 py-4 font-bold">Store</th>
                 <th className="px-6 py-4 font-bold text-center">Sesi 1</th>
                 <th className="px-6 py-4 font-bold text-center">Sesi 2</th>
                 <th className="px-6 py-4 font-bold text-center">Sesi 3</th>
@@ -236,7 +294,7 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
             <tbody className="divide-y divide-zinc-800/50 text-zinc-300">
               {filteredLogs.length === 0 && !isLoadingLogs ? (
                 <tr>
-                  <td colSpan={10} className="px-6 py-12 text-center text-zinc-500">
+                  <td colSpan={11} className="px-6 py-12 text-center text-zinc-500">
                     No records found.
                   </td>
                 </tr>
@@ -253,6 +311,7 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
                     </td>
                     <td className="px-6 py-4 text-[#d4af37] font-mono">{log.advertiser_name}</td>
                     <td className="px-6 py-4 font-bold">{log.client_name}</td>
+                    <td className="px-6 py-4 text-zinc-300">{log.store_label || <span className="text-zinc-600">-</span>}</td>
                     
                     <td className="px-6 py-4 text-center">
                       {log.sessions[1] ? <CheckCircle2 className="w-5 h-5 text-emerald-500 mx-auto" /> : <Circle className="w-4 h-4 text-zinc-700 mx-auto" />}
@@ -281,6 +340,7 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedClient(log.client_id);
+                          { const sp = splitStore(log.store_label); setStoreCompany(sp.company || 'ProOne'); setStoreName(sp.store); }
                           setReportDate(log.report_date);
                           // Default to the first available session or just 1
                           setSession(log.sessions[1] ? 1 : log.sessions[2] ? 2 : 3);

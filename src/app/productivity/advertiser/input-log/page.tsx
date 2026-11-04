@@ -12,7 +12,7 @@ export default async function AdvertiserPerformancePage() {
 
   let { data: clients } = await supabase
     .from('clients')
-    .select('id, name')
+    .select('id, name, store_name')
     .eq('workspace_id', activeWorkspaceId)
     .or('contact_type.eq.client,contact_type.is.null')
     .order('name');

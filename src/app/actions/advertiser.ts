@@ -8,25 +8,11 @@ export async function fetchAdvertiserLogs() {
   const supabase = await createClient();
   const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
-  // Fetch all reports to group them
-  const { data, error } = await supabase
-    .from('advertiser_reports')
-    .select(`
-      id,
-      client_id,
-      report_date,
-      session,
-      note,
-      data_inkubasi,
-      data_group,
-      data_mandiri,
-      created_at,
-      user_id,
-      clients ( name )
-    `)
-    .eq('workspace_id', activeWorkspaceId)
-    .order('report_date', { ascending: false })
-    .order('created_at', { ascending: false });
+  // Fetch all reports to group them. store_label comes from 20261105_advertiser_report_store.sql; before it exists the logs are per client as they were.
+  const cols = 'id, client_id, report_date, session, note, data_inkubasi, data_group, data_mandiri, created_at, user_id, clients ( name )';
+  const read = (extra: string) => supabase.from('advertiser_reports').select(`${cols}${extra}`).eq('workspace_id', activeWorkspaceId).order('report_date', { ascending: false }).order('created_at', { ascending: false });
+  let { data, error } = (await read(', store_label')) as any;
+  if (error) ({ data, error } = (await read('')) as any);
 
   if (error) {
     console.error('Error fetching logs:', error);
@@ -36,7 +22,7 @@ export async function fetchAdvertiserLogs() {
   // Need to get user names from workspace_members or profiles
   // Since we don't easily have a direct link to profiles from advertiser_reports,
   // we will just fetch profiles separately for the user_ids found
-  const userIds = [...new Set(data.filter(d => d.user_id).map(d => d.user_id))];
+  const userIds = [...new Set((data as any[]).filter((d: any) => d.user_id).map((d: any) => d.user_id))];
   let profiles: Record<string, string> = {};
   if (userIds.length > 0) {
     const { data: profs } = await supabase
@@ -50,15 +36,16 @@ export async function fetchAdvertiserLogs() {
     }
   }
 
-  // Group by client_id + report_date
-  // We want to show 1 row per (client, date) and show checkboxes for session 1, 2, 3
+  // Group by client + store + report_date
+  // We want to show 1 row per (client, store, date) and show checkboxes for session 1, 2, 3
   const grouped: Record<string, any> = {};
 
-  data.forEach((row: any) => {
-    const key = `${row.client_id}_${row.report_date}`;
+  (data as any[]).forEach((row: any) => {
+    const key = `${row.client_id}_${row.store_label || ''}_${row.report_date}`;
     if (!grouped[key]) {
       grouped[key] = {
         client_id: row.client_id,
+        store_label: row.store_label || '',
         client_name: row.clients?.name || 'Unknown',
         report_date: row.report_date,
         advertiser_name: profiles[row.user_id] || 'Unknown',
@@ -86,13 +73,14 @@ export async function fetchAdvertiserLogs() {
     }
   });
 
-  // OptimasiShopee: one set of recommendations per client and day, with the earlier days of that client as history.
+  // OptimasiShopee: one set of recommendations per store and day, with the earlier days of that store as history.
   const figsByClient: Record<string, DayFigures[]> = {};
   Object.values(grouped).forEach((g: any) => {
-    (figsByClient[g.client_id] = figsByClient[g.client_id] || []).push(g._figs);
+    const k = `${g.client_id}|${g.store_label}`;
+    (figsByClient[k] = figsByClient[k] || []).push(g._figs);
   });
   Object.values(grouped).forEach((g: any) => {
-    const history = (figsByClient[g.client_id] || []).filter((f) => f.date < g._figs.date);
+    const history = (figsByClient[`${g.client_id}|${g.store_label}`] || []).filter((f) => f.date < g._figs.date);
     g.recs = buildRecommendations(g._figs, history);
     g.recommendation = actionable(g.recs)[0]?.action || '';
     delete g._figs;
@@ -102,34 +90,23 @@ export async function fetchAdvertiserLogs() {
   return { data: Object.values(grouped).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) };
 }
 
-export async function fetchAdvertiserReport(clientId: string, reportDate: string, session: number) {
+/** The log of one STORE of a client (storeLabel "Company - Store"). Before 20261105_advertiser_report_store.sql the store is ignored. */
+export async function fetchAdvertiserReport(clientId: string, reportDate: string, session: number, storeLabel = '') {
   const supabase = await createClient();
   const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
+  const base = () => supabase.from('advertiser_reports').select('*').eq('workspace_id', activeWorkspaceId).eq('client_id', clientId);
 
   // Try to find the exact report
-  const { data: exactReport, error: exactError } = await supabase
-    .from('advertiser_reports')
-    .select('*')
-    .eq('workspace_id', activeWorkspaceId)
-    .eq('client_id', clientId)
-    .eq('report_date', reportDate)
-    .eq('session', session)
-    .single();
+  let { data: exactReport, error: exactError } = await base().eq('store_label', storeLabel).eq('report_date', reportDate).eq('session', session).maybeSingle();
+  if (exactError && /store_label/.test(exactError.message)) ({ data: exactReport, error: exactError } = await base().eq('report_date', reportDate).eq('session', session).maybeSingle());
 
   if (exactReport && !exactError) {
     return { data: exactReport, isHistorical: false };
   }
 
-  // If no exact report, find the most recent one for this client
-  const { data: lastReport } = await supabase
-    .from('advertiser_reports')
-    .select('*')
-    .eq('workspace_id', activeWorkspaceId)
-    .eq('client_id', clientId)
-    .order('report_date', { ascending: false })
-    .order('session', { ascending: false })
-    .limit(1)
-    .single();
+  // If no exact report, find the most recent one for this store
+  let { data: lastReport, error: lastError } = await base().eq('store_label', storeLabel).order('report_date', { ascending: false }).order('session', { ascending: false }).limit(1).maybeSingle();
+  if (lastError && /store_label/.test(lastError.message)) ({ data: lastReport } = await base().order('report_date', { ascending: false }).order('session', { ascending: false }).limit(1).maybeSingle());
 
   if (lastReport) {
     return { data: lastReport, isHistorical: true };
@@ -147,7 +124,8 @@ export async function saveAdvertiserReport(
   data_mandiri: any,
   screenshotUrl: string | null,
   note: string | null,
-  sisaSaldo: string | null = null
+  sisaSaldo: string | null = null,
+  storeLabel = ''
 ) {
   const supabase = await createClient();
   const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
@@ -164,11 +142,18 @@ export async function saveAdvertiserReport(
     screenshot_url: screenshotUrl,
     user_id: userData?.user?.id,
     note,
+    store_label: storeLabel,
   };
 
   let { error } = await supabase
     .from('advertiser_reports')
-    .upsert({ ...base, sisa_saldo_iklan: sisaSaldo }, { onConflict: 'client_id, report_date, session' });
+    .upsert({ ...base, sisa_saldo_iklan: sisaSaldo }, { onConflict: 'client_id, store_label, report_date, session' });
+
+  // The store: 20261105_advertiser_report_store.sql. Until it is run the log is saved per client as before.
+  if (error && (error.code === '42703' || error.code === 'PGRST204' || error.code === '42P10' || /store_label/.test(error.message))) {
+    const { store_label: _s, ...old } = base;
+    ({ error } = await supabase.from('advertiser_reports').upsert({ ...old, sisa_saldo_iklan: sisaSaldo }, { onConflict: 'client_id, report_date, session' }));
+  }
 
   // The saldo column comes from supabase/migrations/20260930_advertiser_saldo.sql. Until that has been run,
   // save everything else instead of losing the whole session, and say so.
@@ -189,17 +174,13 @@ export async function saveAdvertiserReport(
 }
 
 /** Everything one advertiser saved for one client on one day: every session, with who saved it and when. */
-export async function fetchAdvertiserLogDetail(clientId: string, reportDate: string) {
+export async function fetchAdvertiserLogDetail(clientId: string, reportDate: string, storeLabel = '') {
   const supabase = await createClient();
   const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
-  const { data, error } = await supabase
-    .from('advertiser_reports')
-    .select('*')
-    .eq('workspace_id', activeWorkspaceId)
-    .eq('client_id', clientId)
-    .eq('report_date', reportDate)
-    .order('session', { ascending: true });
+  const q = () => supabase.from('advertiser_reports').select('*').eq('workspace_id', activeWorkspaceId).eq('client_id', clientId).eq('report_date', reportDate).order('session', { ascending: true });
+  let { data, error } = await q().eq('store_label', storeLabel);
+  if (error && /store_label/.test(error.message)) ({ data, error } = await q());
 
   if (error) {
     console.error('Error fetching log detail:', error);
@@ -224,22 +205,16 @@ export async function fetchAdvertiserLogDetail(clientId: string, reportDate: str
  * The session right before this one for the same client: the latest earlier session on the same day,
  * otherwise the last session of an earlier day (e.g. 1 Oct sesi 1 -> 30 Sep sesi 2 or 3).
  */
-export async function fetchPreviousSession(clientId: string, reportDate: string, session: number) {
+export async function fetchPreviousSession(clientId: string, reportDate: string, session: number, storeLabel = '') {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(reportDate) || !Number.isInteger(session)) return { data: null };
 
   const supabase = await createClient();
   const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
-  const { data, error } = await supabase
-    .from('advertiser_reports')
-    .select('session, report_date, data_inkubasi, data_group, data_mandiri')
-    .eq('workspace_id', activeWorkspaceId)
-    .eq('client_id', clientId)
-    .or(`report_date.lt.${reportDate},and(report_date.eq.${reportDate},session.lt.${session})`)
-    .order('report_date', { ascending: false })
-    .order('session', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const q = () => supabase.from('advertiser_reports').select('session, report_date, data_inkubasi, data_group, data_mandiri').eq('workspace_id', activeWorkspaceId).eq('client_id', clientId)
+    .or(`report_date.lt.${reportDate},and(report_date.eq.${reportDate},session.lt.${session})`).order('report_date', { ascending: false }).order('session', { ascending: false }).limit(1);
+  let { data, error } = await q().eq('store_label', storeLabel).maybeSingle();
+  if (error && /store_label/.test(error.message)) ({ data, error } = await q().maybeSingle());
 
   if (error) {
     console.error('Error fetching previous session:', error);

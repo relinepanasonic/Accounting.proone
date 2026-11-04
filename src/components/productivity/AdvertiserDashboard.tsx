@@ -15,6 +15,8 @@ interface Client {
 interface AdvertiserDashboardProps {
   clients: Client[];
   initialClient: string;
+  /** The store of this log ("Company - Store"): a client can have several. */
+  initialStore?: string;
   initialDate: string;
   initialSession: number;
   onBack: () => void;
@@ -30,7 +32,7 @@ function TabMark({ state }: { state: 'saved' | 'edited' | 'none' }) {
   return null;
 }
 
-export function AdvertiserDashboard({ clients, initialClient, initialDate, initialSession, onBack }: AdvertiserDashboardProps) {
+export function AdvertiserDashboard({ clients, initialClient, initialStore = '', initialDate, initialSession, onBack }: AdvertiserDashboardProps) {
   const [activeTab, setActiveTab] = useState<TabType>('inkubasi');
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -82,7 +84,7 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
   useEffect(() => {
     async function loadData() {
       setIsLoading(true);
-      const res = await fetchAdvertiserReport(initialClient, initialDate, initialSession);
+      const res = await fetchAdvertiserReport(initialClient, initialDate, initialSession, initialStore);
       
       if (res.data) {
         const fresh = Boolean(res.isHistorical); // no log for this session yet: the last one is only the starting point
@@ -119,7 +121,7 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
       setIsLoading(false);
     }
     loadData();
-  }, [initialClient, initialDate, initialSession]);
+  }, [initialClient, initialStore, initialDate, initialSession]);
 
   const handleSave = async () => {
     // Biaya Iklan and Penjualan must be filled on every row that is in use (a 0 is fine, an empty box is not).
@@ -143,7 +145,8 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
       mandiriData,
       serializeShots(shots),
       sessionNote,
-      sisaSaldo.trim() || null
+      sisaSaldo.trim() || null,
+      initialStore
     );
     setIsSaving(false);
     if (!result.success) {
@@ -359,6 +362,7 @@ export function AdvertiserDashboard({ clients, initialClient, initialDate, initi
           <h2 className="text-xl font-bold text-white uppercase tracking-wider">
             {clients.find(c => c.id === initialClient)?.name}
           </h2>
+          {initialStore && <div className="text-[#d4af37] text-xs font-mono mb-0.5">{initialStore}</div>}
           <div className="text-zinc-500 text-sm flex gap-2">
             <span>{new Date(initialDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
             <span>&bull;</span>

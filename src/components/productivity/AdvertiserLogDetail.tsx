@@ -27,6 +27,7 @@ import type { Recommendation } from '@/lib/advertiser/optimasi';
 
 interface LogSummary {
   client_id: string;
+  store_label?: string;
   client_name: string;
   report_date: string;
   advertiser_name: string;
@@ -137,7 +138,7 @@ export function AdvertiserLogDetail({
 
   useEffect(() => {
     let cancelled = false;
-    fetchAdvertiserLogDetail(log.client_id, log.report_date).then((res) => {
+    fetchAdvertiserLogDetail(log.client_id, log.report_date, log.store_label || '').then((res) => {
       if (cancelled) return;
       const rows = (res.data || []) as SessionRow[];
       setSessions(rows);
@@ -146,7 +147,7 @@ export function AdvertiserLogDetail({
     return () => {
       cancelled = true;
     };
-  }, [log.client_id, log.report_date]);
+  }, [log.client_id, log.report_date, log.store_label]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -158,13 +159,13 @@ export function AdvertiserLogDetail({
     if (!sessions || sessions.length === 0) return;
     let cancelled = false;
     setPrev({ loaded: false, data: null });
-    fetchPreviousSession(log.client_id, log.report_date, active).then((res) => {
+    fetchPreviousSession(log.client_id, log.report_date, active, log.store_label || '').then((res) => {
       if (!cancelled) setPrev({ loaded: true, data: (res.data as PreviousSession | null) ?? null });
     });
     return () => {
       cancelled = true;
     };
-  }, [log.client_id, log.report_date, active, sessions]);
+  }, [log.client_id, log.report_date, log.store_label, active, sessions]);
 
   const current = sessions?.find((s) => s.session === active) || null;
   const inkubasi = current ? (Array.isArray(current.data_inkubasi) ? current.data_inkubasi : []).filter(hasData) : [];
@@ -267,11 +268,12 @@ export function AdvertiserLogDetail({
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/80 p-3 md:p-8 overflow-y-auto" onClick={onClose}>
-      {current && <AdvertiserSessionReport ref={reportRef} clientName={log.client_name} reportDate={log.report_date} data={current} previous={prev.data} includeScreenshot={includeShot} />}
+      {current && <AdvertiserSessionReport ref={reportRef} clientName={log.store_label ? `${log.client_name} - ${log.store_label}` : log.client_name} reportDate={log.report_date} data={current} previous={prev.data} includeScreenshot={includeShot} />}
       <div className="w-full max-w-5xl rounded-2xl border border-[#d4af37]/30 bg-[#0e0f14] shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-4 p-5 border-b border-zinc-800">
           <div>
             <h2 className="text-lg font-extrabold text-white">{log.client_name}</h2>
+            {log.store_label && <div className="font-mono text-xs text-[#d4af37]">{log.store_label}</div>}
             <p className="text-xs text-zinc-400 mt-1">
               {new Date(log.report_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })} ·{' '}
               <span className="text-[#d4af37] font-mono">{log.advertiser_name}</span>

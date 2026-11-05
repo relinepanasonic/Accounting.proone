@@ -40,6 +40,8 @@ export function AdvertiserDashboard({ clients, initialClient, initialStore = '',
   // Note for the session
   const [sessionNote, setSessionNote] = useState('');
   const [sisaSaldo, setSisaSaldo] = useState('');
+  /** The log this one started from (new sessions begin with the ads of the session before). */
+  const [copiedFrom, setCopiedFrom] = useState<{ date: string; session: number } | null>(null);
 
   // Data state per tab
   const [inkubasiData, setInkubasiData] = useState<any[]>([]);
@@ -78,7 +80,7 @@ export function AdvertiserDashboard({ clients, initialClient, initialStore = '',
     note: ''
   });
 
-  /** A new log starts from the last one: who the ad is, its Target ROAS and its Modal Harian stay; what happened (Biaya Iklan, Penjualan, Konversi, Terjual, ROAS, note) is empty. */
+  /** A new session starts from the session before: Nama Iklan / Iklan Produk (SKU), Modal Harian and Target ROAS stay; what happened (Biaya Iklan, Penjualan, Konversi, Terjual, ROAS, note) is empty. */
   const carryOver = (rows: any[]) => (Array.isArray(rows) ? rows : []).map((r) => ({ ...r, biayaIklan: '', penjualan: '', konversi: '', produkTerjual: '', roas: '', note: '' }));
 
   useEffect(() => {
@@ -86,6 +88,7 @@ export function AdvertiserDashboard({ clients, initialClient, initialStore = '',
       setIsLoading(true);
       const res = await fetchAdvertiserReport(initialClient, initialDate, initialSession, initialStore);
       
+      setCopiedFrom(res.data && res.isHistorical ? res.from : null);
       if (res.data) {
         const fresh = Boolean(res.isHistorical); // no log for this session yet: the last one is only the starting point
         setInkubasiData(fresh ? carryOver(res.data.data_inkubasi) : res.data.data_inkubasi || []);
@@ -370,6 +373,12 @@ export function AdvertiserDashboard({ clients, initialClient, initialStore = '',
           </div>
         </div>
       </div>
+
+      {copiedFrom && (
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-2.5 text-xs text-emerald-200">
+          Started from Sesi {copiedFrom.session} of {new Date(copiedFrom.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}: the ad names, SKU, Modal Harian and Target ROAS are copied in all three tabs. Biaya Iklan and Penjualan are empty for you to fill.
+        </div>
+      )}
 
       <div className="bg-[#0e0f14] p-4 rounded-xl border border-[#d4af37]/20 flex flex-col md:flex-row justify-between gap-4 items-center">
         <div className="flex-1 w-full relative">

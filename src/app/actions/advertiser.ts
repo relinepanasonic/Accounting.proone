@@ -102,18 +102,24 @@ export async function fetchAdvertiserReport(clientId: string, reportDate: string
   if (exactError && /store_label/.test(exactError.message)) ({ data: exactReport, error: exactError } = await base().eq('report_date', reportDate).eq('session', session).maybeSingle());
 
   if (exactReport && !exactError) {
-    return { data: exactReport, isHistorical: false };
+    return { data: exactReport, isHistorical: false, from: null as { date: string; session: number } | null };
   }
 
-  // If no exact report, find the most recent one for this store
+  // No log for this session yet: it starts from the session right before it (the earlier session of the same day, else the last one of an earlier day),
+  // and only when there is none, from the latest log of the store.
+  const before = () => base().or(`report_date.lt.${reportDate},and(report_date.eq.${reportDate},session.lt.${session})`).order('report_date', { ascending: false }).order('session', { ascending: false }).limit(1);
+  let { data: prevReport, error: prevError } = await before().eq('store_label', storeLabel).maybeSingle();
+  if (prevError && /store_label/.test(prevError.message)) ({ data: prevReport } = await before().maybeSingle());
+  if (prevReport) return { data: prevReport, isHistorical: true, from: { date: prevReport.report_date as string, session: prevReport.session as number } };
+
   let { data: lastReport, error: lastError } = await base().eq('store_label', storeLabel).order('report_date', { ascending: false }).order('session', { ascending: false }).limit(1).maybeSingle();
   if (lastError && /store_label/.test(lastError.message)) ({ data: lastReport } = await base().order('report_date', { ascending: false }).order('session', { ascending: false }).limit(1).maybeSingle());
 
   if (lastReport) {
-    return { data: lastReport, isHistorical: true };
+    return { data: lastReport, isHistorical: true, from: { date: lastReport.report_date as string, session: lastReport.session as number } };
   }
 
-  return { data: null, isHistorical: false };
+  return { data: null, isHistorical: false, from: null as { date: string; session: number } | null };
 }
 
 export async function saveAdvertiserReport(

@@ -142,10 +142,11 @@ export function ClientContactTable({ rows, canEdit, storeOptions }: { rows: Cont
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search company, brand, store or PIC" className="w-full rounded-xl border border-zinc-800 bg-zinc-950 py-2 pl-9 pr-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-[#d4af37]/50 focus:outline-none" />
         </div>
         <div className="flex flex-wrap gap-2">{pill('all', 'All')}{pill('nostore', 'No store')}{pill('nopic', 'No PIC')}{pill('nobrand', 'No brand')}</div>
+        <span className="text-[11px] text-zinc-500" title="Click a name, brand or PIC to edit it. It saves when you leave the box.">{shown.length} of {rows.length}</span>
         {canEdit && <div className="ml-auto">{!search && <AddClient />}</div>}
       </div>
 
-      <div className="max-h-[calc(100vh-290px)] min-h-[360px] overflow-auto rounded-2xl border border-[#d4af37]/20 bg-[#0e0f14] shadow-xl">
+      <div className="max-h-[calc(100vh-238px)] min-h-[360px] overflow-auto rounded-2xl border border-[#d4af37]/20 bg-[#0e0f14] shadow-xl">
         <table className="w-full min-w-[900px] table-fixed text-left">
           <thead className="sticky top-0 z-10 border-b border-[#d4af37]/10 bg-zinc-950 text-[11px] text-zinc-400">
             <tr><Th k="name" w="30%">Company Name</Th><Th k="brand" w="22%">Brand Name</Th><Th k="store" w="27%">Store Name</Th><Th k="pic" w="21%">PIC Name</Th></tr>
@@ -178,7 +179,6 @@ export function ClientContactTable({ rows, canEdit, storeOptions }: { rows: Cont
           </tbody>
         </table>
       </div>
-      <p className="text-[11px] text-zinc-500">{shown.length} of {rows.length} client{rows.length === 1 ? '' : 's'} · click a name, brand or PIC to edit it, it saves when you leave the box.</p>
     </div>
   );
 }

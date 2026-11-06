@@ -36,7 +36,7 @@ export default async function ClientContactPage() {
   const rows: ContactRow[] = Array.from(first.values()).map((r) => ({ clientId: r.clientId, name: r.clientName, brand: r.brand || '', pic: pics.get(r.clientId) || '', row: r }));
 
   return (
-    <div className="p-4 lg:p-8 space-y-6 animate-in fade-in zoom-in-95 duration-300">
+    <div className="p-4 lg:p-8 space-y-5 animate-in fade-in zoom-in-95 duration-300">
       <div className="flex items-center gap-4">
         <div className="rounded-xl bg-[#d4af37]/10 p-3 text-[#d4af37]"><Contact className="h-7 w-7" /></div>
         <div>

@@ -424,13 +424,20 @@ export function InvoicePDFDocument({
               <span className="block text-[10px] font-bold text-[#c5a059] tracking-widest uppercase mb-1">
                 {isQuotation ? 'Prepared For / Pitch To:' : 'Billed To:'}
               </span>
-              <h3 className="text-sm font-bold text-[#1e2536] uppercase tracking-wide">
-                {clientLegalName ? `${clientLegalName} - ${clientName}` : clientName}
-              </h3>
-              {clientBrand && <div className="text-zinc-700 font-bold">{clientBrand}</div>}
-              {clientContact && clientContact !== clientName && (
-                <div className="text-xs text-[#1e2536] font-medium mt-1">{clientContact}</div>
-              )}
+              {(() => {
+                // Line 1: PIC name - Brand name, on ONE row (the font shrinks to fit). Line 2, smaller: the company name. Then the address.
+                const company = clientLegalName ? `${clientLegalName} - ${clientName}` : clientName;
+                const pic = clientContact && clientContact !== clientName ? clientContact : '';
+                const headline = [pic, clientBrand].map((v) => String(v || '').trim()).filter(Boolean).join(' - ');
+                const first = headline || company;
+                const size = Math.max(9, Math.min(14, Math.floor(330 / (Math.max(first.length, 1) * 0.66))));
+                return (
+                  <>
+                    <h3 className="font-bold text-[#1e2536] uppercase tracking-wide whitespace-nowrap leading-tight" style={{ fontSize: size }} title={first}>{first}</h3>
+                    {headline && <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-600 leading-snug">{company}</div>}
+                  </>
+                );
+              })()}
               <div className="text-zinc-600 mt-1 leading-relaxed max-w-[300px]">
                 {clientAddress && <div>{clientAddress}</div>}
                 {clientPhone && <div>{clientPhone}</div>}

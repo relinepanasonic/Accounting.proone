@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { calendarFromReports, type InputReport, type StoreCalendar } from '@/lib/advertiser/input-series';
+import { missingNumbers } from '@/lib/advertiser/log-rules';
 import { actionable, buildRecommendations, type DayFigures } from '@/lib/advertiser/optimasi';
 
 export async function fetchAdvertiserLogs() {
@@ -53,10 +54,13 @@ export async function fetchAdvertiserLogs() {
         note: row.note || '',
         recommendation: '',
         created_at: row.created_at,
-        sessions: { 1: false, 2: false, 3: false }
+        sessions: { 1: false, 2: false, 3: false },
+        drafts: { 1: false, 2: false, 3: false }
       };
     }
     grouped[key].sessions[row.session as 1|2|3] = true;
+    // saved with Biaya Iklan / Penjualan still empty = a draft to finish
+    try { grouped[key].drafts[row.session as 1|2|3] = missingNumbers(Array.isArray(row.data_inkubasi) ? row.data_inkubasi : [], Array.isArray(row.data_group) ? row.data_group : [], Array.isArray(row.data_mandiri) ? row.data_mandiri : []).length > 0; } catch { /* unreadable rows: not a draft */ }
     
     // Prefer earliest creation date for the Date Stamp
     if (new Date(row.created_at) < new Date(grouped[key].created_at)) {

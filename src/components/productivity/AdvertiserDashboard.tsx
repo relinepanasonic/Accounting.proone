@@ -126,40 +126,100 @@ export function AdvertiserDashboard({ clients, initialClient, initialStore = '',
     loadData();
   }, [initialClient, initialStore, initialDate, initialSession]);
 
+  // A copy of the edits is kept in this browser while typing, so a closed tab, a lost connection or a failed save never loses the work.
+  const draftKey = `adv-draft:${initialClient}|${initialStore}|${initialDate}|${initialSession}`;
+  const dirty = tabState(inkubasiData, saved.inkubasi) === 'edited' || tabState(groupData, saved.group) === 'edited' || tabState(mandiriData, saved.mandiri) === 'edited';
+  const [localDraft, setLocalDraft] = useState<{ t: number; ink: any[]; grp: any[]; man: any[]; note: string; saldo: string } | null>(null);
+
+  useEffect(() => {
+    if (isLoading) return;
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (raw) {
+        const d = JSON.parse(raw);
+        const differs = snapshotOf(d.ink) !== snapshotOf(inkubasiData) || snapshotOf(d.grp) !== snapshotOf(groupData) || snapshotOf(d.man) !== snapshotOf(mandiriData);
+        if (differs && (d.ink?.some(rowUsed) || d.grp?.some(rowUsed) || d.man?.some(rowUsed))) setLocalDraft(d); else localStorage.removeItem(draftKey);
+      }
+    } catch { /* storage blocked: no local copy */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, draftKey]);
+
+  useEffect(() => {
+    if (isLoading || localDraft) return;
+    const t = setTimeout(() => {
+      try {
+        if (dirty) localStorage.setItem(draftKey, JSON.stringify({ t: Date.now(), ink: inkubasiData, grp: groupData, man: mandiriData, note: sessionNote, saldo: sisaSaldo }));
+        else localStorage.removeItem(draftKey);
+      } catch { /* storage full or blocked */ }
+    }, 800);
+    return () => clearTimeout(t);
+  }, [inkubasiData, groupData, mandiriData, sessionNote, sisaSaldo, dirty, isLoading, localDraft, draftKey]);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty]);
+
+  const goBack = () => {
+    if (dirty && !window.confirm('You have changes that are not saved yet. Leave without saving?\n\n(A copy is kept in this browser: open this record again to restore it.)')) return;
+    onBack();
+  };
+
+  const restoreDraft = () => {
+    if (!localDraft) return;
+    setInkubasiData(localDraft.ink); setGroupData(localDraft.grp); setMandiriData(localDraft.man);
+    setSessionNote(localDraft.note || ''); setSisaSaldo(localDraft.saldo || '');
+    setLocalDraft(null);
+  };
+  const discardDraft = () => { try { localStorage.removeItem(draftKey); } catch { /* ignore */ } setLocalDraft(null); };
+
   const handleSave = async () => {
-    // Biaya Iklan and Penjualan must be filled on every row that is in use (a 0 is fine, an empty box is not).
-    const missing = missingNumbers(inkubasiData, groupData, mandiriData);
-    if (missing.length) {
-      setShowErrors(true);
-      const first = missing[0];
-      setActiveTab(first.tab);
-      if (first.tab === 'group' && first.groupCategory && first.groupName) { setActiveGroupCategory(first.groupCategory as GroupCategory); setActiveGroupName(first.groupName); }
-      alert('Fill Biaya Iklan and Penjualan first (type 0 if there was none):\n\n' + missing.map((m) => `${m.label}\n` + m.where.slice(0, 8).map((w) => `   - ${w}`).join('\n') + (m.where.length > 8 ? `\n   - and ${m.where.length - 8} more` : '')).join('\n\n'));
+    if (isSaving) return;
+    // The screenshots travel with the save: a request this big is refused by the server, so say it before trying.
+    const shotsText = serializeShots(shots);
+    const size = (shotsText?.length || 0) + JSON.stringify([inkubasiData, groupData, mandiriData, sessionNote]).length;
+    if (size > 4_000_000) {
+      alert(`This record is too big to save (${(size / 1_000_000).toFixed(1)} MB). Remove some screenshots (the pictures are what make it big) and save again.`);
       return;
     }
-    setShowErrors(false);
     setIsSaving(true);
-    const result = await saveAdvertiserReport(
-      initialClient,
-      initialDate,
-      initialSession,
-      inkubasiData,
-      groupData,
-      mandiriData,
-      serializeShots(shots),
-      sessionNote,
-      sisaSaldo.trim() || null,
-      initialStore
-    );
-    setIsSaving(false);
-    if (!result.success) {
-      alert('Could not save: ' + (result.error || 'unknown error'));
-    } else if ('warning' in result && result.warning) {
+    try {
+      const result = await saveAdvertiserReport(
+        initialClient,
+        initialDate,
+        initialSession,
+        inkubasiData,
+        groupData,
+        mandiriData,
+        shotsText,
+        sessionNote,
+        sisaSaldo.trim() || null,
+        initialStore
+      );
+      if (!result.success) {
+        alert('NOT saved: ' + (result.error || 'unknown error') + '\n\nYour edits are still here (and a copy is kept in this browser). Try again.');
+        return;
+      }
       setSaved({ inkubasi: snapshotOf(inkubasiData), group: snapshotOf(groupData), mandiri: snapshotOf(mandiriData) });
-      alert(result.warning);
-    } else {
-      setSaved({ inkubasi: snapshotOf(inkubasiData), group: snapshotOf(groupData), mandiri: snapshotOf(mandiriData) });
-      alert('Adjustments saved successfully!');
+      try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
+      // Saving never waits for the numbers: what is still empty is told, and the record stays a draft you can open again to finish.
+      const missing = missingNumbers(inkubasiData, groupData, mandiriData);
+      setShowErrors(missing.length > 0);
+      const warning = 'warning' in result && result.warning ? `\n\n${result.warning}` : '';
+      if (missing.length) {
+        const first = missing[0];
+        setActiveTab(first.tab);
+        if (first.tab === 'group' && first.groupCategory && first.groupName) { setActiveGroupCategory(first.groupCategory as GroupCategory); setActiveGroupName(first.groupName); }
+        alert('Saved as a DRAFT. Biaya Iklan and Penjualan are still empty (type 0 if there was none):\n\n' + missing.map((m) => `${m.label}\n` + m.where.slice(0, 6).map((w) => `   - ${w}`).join('\n') + (m.where.length > 6 ? `\n   - and ${m.where.length - 6} more` : '')).join('\n\n') + '\n\nOpen this record again (Edit) any time to continue.' + warning);
+      } else {
+        alert('Saved. This record is complete.' + warning);
+      }
+    } catch (e: any) {
+      alert('NOT saved: ' + (e?.message || 'the connection to the server failed') + '\n\nYour edits are still here (and a copy is kept in this browser). Check the connection and press Save again.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -358,7 +418,7 @@ export function AdvertiserDashboard({ clients, initialClient, initialStore = '',
     <div className="space-y-6">
       {/* Top Header */}
       <div className="flex items-center gap-4">
-        <button onClick={onBack} className="p-2 bg-zinc-900 rounded-xl hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors">
+        <button onClick={goBack} className="p-2 bg-zinc-900 rounded-xl hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors">
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div>
@@ -373,6 +433,13 @@ export function AdvertiserDashboard({ clients, initialClient, initialStore = '',
           </div>
         </div>
       </div>
+
+      {localDraft && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-200">
+          <span>Unsaved edits from {new Date(localDraft.t).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} were kept in this browser (the last save did not go through, or the page was closed).</span>
+          <span className="flex gap-2"><button type="button" onClick={restoreDraft} className="rounded-lg bg-amber-400 px-3 py-1 font-bold text-black">Restore them</button><button type="button" onClick={discardDraft} className="px-2 py-1 font-bold text-amber-200/70 hover:text-white">Discard</button></span>
+        </div>
+      )}
 
       {copiedFrom && (
         <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-2.5 text-xs text-emerald-200">
@@ -622,7 +689,7 @@ export function AdvertiserDashboard({ clients, initialClient, initialStore = '',
                   className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-3 md:py-2 bg-[#d4af37]/10 text-[#d4af37] hover:bg-[#d4af37]/20 text-sm md:text-xs font-bold rounded-xl transition-colors border border-[#d4af37]/40 shadow-[0_0_15px_rgba(212,175,55,0.15)] disabled:opacity-50"
                 >
                   {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} 
-                  SAVE RECORD
+                  SAVE (any time)
                 </button>
               </div>
             </div>

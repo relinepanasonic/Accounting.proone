@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, Plus, Loader2, PlayCircle, History, CheckCircle2, Circle } from 'lucide-react';
+import { Calendar, Clock, Plus, Loader2, PlayCircle, History, CheckCircle2, Circle, CircleDashed } from 'lucide-react';
 import { fetchAdvertiserLogs } from '@/app/actions/advertiser';
 import { AdvertiserDashboard } from './AdvertiserDashboard';
 import { ClientSelect } from '@/components/ui/ClientSelect';
@@ -316,13 +316,13 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
                     <td className="px-6 py-4 text-zinc-300">{log.store_label || <span className="text-zinc-600">-</span>}</td>
                     
                     <td className="px-6 py-4 text-center">
-                      {log.sessions[1] ? <button type="button" onClick={() => { setDetailSession(1); setDetailLog(log); }} title="Open the report of session 1" className="mx-auto block rounded-full hover:brightness-150"><CheckCircle2 className="w-5 h-5 text-emerald-500" /></button> : <Circle className="w-4 h-4 text-zinc-700 mx-auto" />}
+                      {log.sessions[1] ? <button type="button" onClick={() => { setDetailSession(1); setDetailLog(log); }} title={log.drafts?.[1] ? 'Draft: Biaya Iklan / Penjualan still empty. Open it and press Edit to continue.' : 'Open the report of session 1'} className="mx-auto block rounded-full hover:brightness-150">{log.drafts?.[1] ? <CircleDashed className="w-5 h-5 text-amber-400" /> : <CheckCircle2 className="w-5 h-5 text-emerald-500" />}</button> : <Circle className="w-4 h-4 text-zinc-700 mx-auto" />}
                     </td>
                     <td className="px-6 py-4 text-center">
-                      {log.sessions[2] ? <button type="button" onClick={() => { setDetailSession(2); setDetailLog(log); }} title="Open the report of session 2" className="mx-auto block rounded-full hover:brightness-150"><CheckCircle2 className="w-5 h-5 text-emerald-500" /></button> : <Circle className="w-4 h-4 text-zinc-700 mx-auto" />}
+                      {log.sessions[2] ? <button type="button" onClick={() => { setDetailSession(2); setDetailLog(log); }} title={log.drafts?.[2] ? 'Draft: Biaya Iklan / Penjualan still empty. Open it and press Edit to continue.' : 'Open the report of session 2'} className="mx-auto block rounded-full hover:brightness-150">{log.drafts?.[2] ? <CircleDashed className="w-5 h-5 text-amber-400" /> : <CheckCircle2 className="w-5 h-5 text-emerald-500" />}</button> : <Circle className="w-4 h-4 text-zinc-700 mx-auto" />}
                     </td>
                     <td className="px-6 py-4 text-center">
-                      {log.sessions[3] ? <button type="button" onClick={() => { setDetailSession(3); setDetailLog(log); }} title="Open the report of session 3" className="mx-auto block rounded-full hover:brightness-150"><CheckCircle2 className="w-5 h-5 text-emerald-500" /></button> : <Circle className="w-4 h-4 text-zinc-700 mx-auto" />}
+                      {log.sessions[3] ? <button type="button" onClick={() => { setDetailSession(3); setDetailLog(log); }} title={log.drafts?.[3] ? 'Draft: Biaya Iklan / Penjualan still empty. Open it and press Edit to continue.' : 'Open the report of session 3'} className="mx-auto block rounded-full hover:brightness-150">{log.drafts?.[3] ? <CircleDashed className="w-5 h-5 text-amber-400" /> : <CheckCircle2 className="w-5 h-5 text-emerald-500" />}</button> : <Circle className="w-4 h-4 text-zinc-700 mx-auto" />}
                     </td>
                     
                     <td className="px-6 py-4">

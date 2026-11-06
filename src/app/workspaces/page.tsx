@@ -5,6 +5,7 @@ import { ArrowRight, Building2, LogOut, LayoutDashboard, UserPlus } from 'lucide
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { signOut } from '@/app/actions/auth';
+import { NewCompanyCard } from '@/components/workspaces/NewCompanyCard';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,8 +28,10 @@ export default async function WorkspacesLandingPage() {
   // Only the workspaces this person may enter are listed; the others are not shown at all.
   const eligible = ctx.availableWorkspaces;
   if (eligible.length === 0) redirect('/no-access');
+  // An owner can create a company from this page, so an owner always sees it; anyone else with one choice goes straight in.
+  const isOwner = eligible.some((w) => ['founder', 'superadmin'].includes(w.role));
   // One choice is no choice: go straight in.
-  if (eligible.length === 1) redirect(`/workspaces/enter?id=${encodeURIComponent(eligible[0].id)}`);
+  if (eligible.length === 1 && !isOwner) redirect(`/workspaces/enter?id=${encodeURIComponent(eligible[0].id)}`);
 
   // Logos are optional; a failed lookup just means initials are shown.
   const logos: Record<string, string> = {};
@@ -89,6 +92,8 @@ export default async function WorkspacesLandingPage() {
             </a>
           ))}
         </div>
+
+        {isOwner && <div className="flex justify-center"><NewCompanyCard /></div>}
 
         {eligible.length > 1 && eligible.some(w => ['founder', 'superadmin', 'accounting', 'admin'].includes(w.role)) && (
           <div className="mt-8 flex justify-center">

@@ -3,11 +3,10 @@ import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { WorkspaceDetailTabs } from '@/components/settings/WorkspaceDetailTabs';
-import { RegisterWorkspaceCard } from '@/components/settings/RegisterWorkspaceCard';
 
 export const dynamic = 'force-dynamic';
 
-/** Company Settings: the identity of the active company, and a way to register one more company (workspace). */
+/** Company Settings: the identity of the active company. A new company is created on the first landing page (/workspaces). */
 export default async function CompanySettingsPage() {
   const supabase = await createClient();
   const wsContext = await getAuthenticatedWorkspaceContext(supabase);
@@ -35,7 +34,6 @@ export default async function CompanySettingsPage() {
         email={ws?.official_email || ws?.email || ''}
         website={ws?.website_url || ws?.website || ''}
       />
-      <RegisterWorkspaceCard />
     </div>
   );
 }

@@ -13,6 +13,7 @@ import {
   CheckSquare,
   Users,
   Settings,
+  Contact,
   ChevronLeft,
   ChevronRight,
   Bot,
@@ -64,6 +65,7 @@ const ACCOUNTING_ICONS: Record<string, React.ReactNode> = {
   'Activity Ledger': <BookOpen className="w-3.5 h-3.5" />,
   'Bank Reconcile': <RefreshCw className="w-3.5 h-3.5" />,
   'COA Mapping': <Network className="w-3.5 h-3.5" />,
+  'Client Contact': <Contact className="w-3.5 h-3.5" />,
   Vendors: <Truck className="w-3.5 h-3.5" />,
   'Settings Hub': <Settings className="w-3.5 h-3.5" />,
 };

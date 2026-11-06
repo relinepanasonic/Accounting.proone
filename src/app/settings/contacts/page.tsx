@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
-// The client contact book is gone: old links land on Optimizing > Clients.
+// The client contacts live in Accounting > Client Contact (the same clients as Optimizing > Clients).
 export default function ContactsRedirect() {
-  redirect('/optimizing/clients');
+  redirect('/contacts');
 }

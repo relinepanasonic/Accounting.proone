@@ -10,7 +10,7 @@ export const maxDuration = 60; // a heavy page may take more than the default 10
 
 async function BankBookCore({ focusTx }: { focusTx: string }) {
   const supabase = await createClient();
-  const { activeWorkspaceId, userEmail } = await getAuthenticatedWorkspaceContext(supabase);
+  const { activeWorkspaceId, userEmail, role } = await getAuthenticatedWorkspaceContext(supabase);
 
   const { data: accounts } = await supabase
     .from('workspace_bank_accounts')
@@ -62,7 +62,7 @@ async function BankBookCore({ focusTx }: { focusTx: string }) {
   }));
   const banks: BankBookAccount[] = (accounts || []).map((a: any) => ({ id: a.id, bankName: a.bank_name || 'Bank', accountNumber: a.account_number || '', accountName: a.account_name || '' }));
 
-  return <BankBookTable lines={lines} banks={banks} migrationMissing={migrationMissing} canEdit={canEditBankBook(userEmail)} focusTx={focusTx} />;
+  return <BankBookTable lines={lines} banks={banks} migrationMissing={migrationMissing} canEdit={canEditBankBook(userEmail)} canAddBank={canEditBankBook(userEmail) || role === 'superadmin' || role === 'founder'} focusTx={focusTx} />;
 }
 
 export default async function BankBookPage({ searchParams }: { searchParams: Promise<{ tx?: string }> }) {

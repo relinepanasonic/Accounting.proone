@@ -1,5 +1,6 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext, FINANCE_ROLES } from '@/lib/auth/workspace-context';
 import { canEditBankBook } from '@/lib/auth/bank-book-editors';
@@ -206,5 +207,61 @@ export async function deleteBankLine(id: string): Promise<{ success: boolean; er
     return { success: true };
   } catch (e: any) {
     return { success: false, error: e?.message || 'Could not delete.' };
+  }
+}
+
+/**
+ * Buku Bank > Add bank: a new bank account of this company. Like the old Settings Hub it also opens a COA account (101X under 1010), so
+ * Bank Reconcile can post to it. Only the Buku Bank editors and the owners may add a bank.
+ */
+export async function addBankAccount(input: { bankName: string; accountNumber: string; accountName: string }): Promise<{ success: boolean; id?: string; error?: string }> {
+  try {
+    const supabase = await createClient();
+    const ctx = await getAuthenticatedWorkspaceContext(supabase);
+    const owner = ctx.role === 'superadmin' || ctx.role === 'founder';
+    if (!FINANCE_ROLES.includes(ctx.role) || !(owner || canEditBankBook(ctx.userEmail))) return { success: false, error: 'Only the Buku Bank editors and the owners can add a bank.' };
+
+    const bankName = String(input.bankName || '').trim().slice(0, 80);
+    const accountNumber = String(input.accountNumber || '').trim().slice(0, 40);
+    const accountName = String(input.accountName || '').trim().slice(0, 120) || bankName;
+    if (!bankName) return { success: false, error: 'Type the bank name.' };
+    if (!accountNumber) return { success: false, error: 'Type the account number.' };
+
+    const { data: existing } = await supabase.from('workspace_bank_accounts').select('id, bank_name, account_number').eq('workspace_id', ctx.activeWorkspaceId);
+    const norm = (v: string) => v.replace(/[^a-z0-9]/gi, '').toLowerCase();
+    if ((existing || []).some((b: any) => norm(b.bank_name || '') === norm(bankName) && norm(b.account_number || '') === norm(accountNumber))) {
+      return { success: false, error: 'This bank account is already in the list.' };
+    }
+
+    // the next COA code 101X of this company
+    const { data: coa } = await supabase.from('global_chart_of_accounts').select('account_code').eq('workspace_id', ctx.activeWorkspaceId).like('account_code', '101%');
+    const codes = (coa || []).map((c: any) => parseInt(c.account_code, 10)).filter((n: number) => !Number.isNaN(n));
+    const code = String(codes.length ? Math.max(...codes) + 1 : 1011);
+    const { error: coaErr } = await supabase.from('global_chart_of_accounts').insert({
+      workspace_id: ctx.activeWorkspaceId,
+      account_code: code,
+      account_name: `${bankName} - ${accountNumber.slice(-4)}`,
+      account_type: 'Asset',
+      description: `Auto-generated for ${accountName}`,
+      parent_code: '1010',
+      is_active: true,
+    });
+    if (coaErr) return { success: false, error: `Could not open the COA account: ${coaErr.message}` };
+
+    const { data: row, error } = await supabase
+      .from('workspace_bank_accounts')
+      .insert({ workspace_id: ctx.activeWorkspaceId, bank_name: bankName, account_number: accountNumber, account_name: accountName, is_default: !(existing || []).length, coa_account_code: code })
+      .select('id')
+      .single();
+    if (error) {
+      await supabase.from('global_chart_of_accounts').delete().eq('workspace_id', ctx.activeWorkspaceId).eq('account_code', code); // undo the COA account
+      return { success: false, error: error.message };
+    }
+    revalidatePath('/bank-book');
+    revalidatePath('/reconcile');
+    revalidatePath('/coa');
+    return { success: true, id: row.id };
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Could not add the bank.' };
   }
 }

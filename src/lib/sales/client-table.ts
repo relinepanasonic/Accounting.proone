@@ -59,6 +59,8 @@ export interface ClientRow {
   salesman: string;
   /** The stores of this client (one client can have several). */
   stores: ClientStoreRef[];
+  /** Person in charge of the client (clients.contact_name); filled by the pages that show it. */
+  pic?: string;
   groupSize: number;
   groupIndex: number;
 }

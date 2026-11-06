@@ -7,7 +7,7 @@ import { isOptimizingPath, isPabrikPath, isAccountingPath, OPTIMIZING_CHILDREN }
 
 const MODULES = {
   accounting: {
-    match: ['/', '/invoices', '/expenses', '/assets', '/ledger', '/reconcile', '/bank-book', '/coa'],
+    match: ['/', '/invoices', '/expenses', '/assets', '/ledger', '/reconcile', '/bank-book', '/coa', '/contacts'],
     items: [
       { name: 'Dashboard', href: '/' },
       { name: 'Income', href: '/invoices' },
@@ -18,6 +18,7 @@ const MODULES = {
       { name: 'Activity Ledger', href: '/ledger' },
       { name: 'Bank Reconcile', href: '/reconcile' },
       { name: 'COA Mapping', href: '/coa' },
+      { name: 'Client Contact', href: '/contacts' },
       { name: 'Vendors', href: '/vendors' },
     ]
   },

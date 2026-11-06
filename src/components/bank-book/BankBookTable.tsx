@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { updateBankLine, deleteBankLine, relinkBankBook, getBankLineConnection, terminateBankLink, type BankLineConnection } from '@/app/actions/bank-book';
 import { BankStatementUpload } from '@/components/bank-book/BankStatementUpload';
+import { AddBankButton } from '@/components/bank-book/AddBankButton';
 import { SortArrows } from '@/components/ui/SortArrows';
 
 export interface BankBookLine { id: string; bankAccountId: string; date: string; counterparty: string; details: string; rekFrom: string; notes: string; amount: number; status: string; fileName: string; balance: number | null; time: string; transactionId: string | null; invoiceId: string | null }
@@ -31,7 +32,7 @@ const detailsHover = (l: BankBookLine) => (isOpeningRow(l) ? detailsText(l) : [l
 type SortKey = 'date' | 'bank' | 'counterparty' | 'details' | 'in' | 'out' | 'status';
 
 /** Buku Bank: all stored statement lines, filtered by bank account, year, month, in/out and status, sortable from the header. */
-export function BankBookTable({ lines: serverLines, banks, migrationMissing, canEdit = false, focusTx = '' }: { lines: BankBookLine[]; banks: BankBookAccount[]; migrationMissing: boolean; canEdit?: boolean; focusTx?: string }) {
+export function BankBookTable({ lines: serverLines, banks, migrationMissing, canEdit = false, canAddBank = false, focusTx = '' }: { lines: BankBookLine[]; banks: BankBookAccount[]; migrationMissing: boolean; canEdit?: boolean; canAddBank?: boolean; focusTx?: string }) {
   const [focus, setFocus] = useState(focusTx);
   const [lines, setLines] = useState(serverLines);
   useEffect(() => setLines(serverLines), [serverLines]);
@@ -198,6 +199,7 @@ export function BankBookTable({ lines: serverLines, banks, migrationMissing, can
 
   return (
     <div className="space-y-5">
+      {canAddBank && <div className="flex justify-end"><AddBankButton /></div>}
       <BankStatementUpload banks={banks} />
 
       {migrationMissing && (

@@ -75,7 +75,7 @@ function AddStore({ line, storeOptions }: { line: StoreLine; storeOptions?: stri
 }
 
 /** The stores of the client: none = a dash, one = its name, several = a dropdown. The "+ Create store" / "+ New store" button is under it. */
-function StoreCell({ line, canEdit, storeOptions }: { line: StoreLine; canEdit: boolean; storeOptions?: string[] }) {
+export function StoreCell({ line, canEdit, storeOptions }: { line: StoreLine; canEdit: boolean; storeOptions?: string[] }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState('');
@@ -210,6 +210,7 @@ export function ClientStoreTable({ rows, canEditStart, canEditNames, canEditStat
                 <tr key={l.key} className="align-top hover:bg-zinc-900/30">
                   <td className="px-4 py-3.5">
                     <div className="font-bold text-zinc-100">{r.clientName}</div>
+                    {r.clientName !== 'Hidden client' && (r.brand || r.pic) && <div className="text-[10px] text-zinc-400">{[r.brand, r.pic && `PIC ${r.pic}`].filter(Boolean).join(' · ')}</div>}
                     {r.invoiceNumber && <div className="font-mono text-[10px] text-zinc-500">{r.invoiceNumber}</div>}
                   </td>
                   <td className="px-4 py-3.5"><StoreCell line={l} canEdit={canEditNames} storeOptions={storeOptions} /></td>

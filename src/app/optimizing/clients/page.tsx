@@ -7,6 +7,7 @@ import { getAuthenticatedWorkspaceContext, FINANCE_ROLES } from '@/lib/auth/work
 import { clientMask } from '@/lib/auth/client-privacy';
 import { loadClientRows } from '@/lib/sales/client-table';
 import { loadHandlers } from '@/lib/sales/people';
+import { loadClientPics } from '@/lib/sales/client-pics';
 import { ClientStoreTable } from '@/components/sales/ClientStoreTable';
 import { fetchPerformance, storeLabel } from '@/lib/integrations/performance';
 
@@ -56,6 +57,8 @@ export default async function OptimizingClientsPage({ searchParams }: { searchPa
   const mask = clientMask({ userEmail: ctx.userEmail, availableWorkspaces: ctx.availableWorkspaces });
   const db = createAdminClient();
   const rows = await loadClientRows(db, ctx.activeWorkspaceId, { archived: tab === 'churn' ? 'only' : 'all', includeAll: true, maskName: (name, ws) => mask.name(name, ws, 'Client') });
+  const pics = await loadClientPics(db, Array.from(new Set(rows.map((r) => r.clientId))));
+  for (const r of rows) r.pic = pics.get(r.clientId) || '';
   const handlers = owner ? await loadHandlers(db, ctx.activeWorkspaceId) : null;
 
   // The stores of the two apps (this year), to pick "Workspace - Store" for each client. A short wait: if an app is slow, the box still takes typed text.

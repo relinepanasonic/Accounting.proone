@@ -631,6 +631,47 @@ export async function updateClientNames(clientId: string, brand: string, store: 
   return { success: true };
 }
 
+const refreshClientPages = () => {
+  for (const p of ['/contacts', '/optimizing/clients', '/sales/clients', '/productivity/advertiser/clients', '/productivity/admin/clients']) revalidatePath(p);
+};
+
+/** Client Contact: Company Name (clients.name), Brand Name (clients.company_name) and PIC Name (clients.contact_name). Only the keys that are sent change. */
+export async function updateClientContact(clientId: string, patch: { name?: string; brand?: string; pic?: string }): Promise<Result> {
+  const a = await actor();
+  if (!a || !FINANCE.includes(a.ctx.role)) return { success: false, error: 'Only Accounting, Admin and the owners can change client contacts.' };
+  const { ctx, db } = a;
+  if (!(await clientInScope(db, ctx.activeWorkspaceId, clientId))) return { success: false, error: 'Client not found.' };
+  const update: Record<string, string | null> = {};
+  if (patch.name !== undefined) {
+    const name = str(patch.name, 160);
+    if (!name) return { success: false, error: 'The company name cannot be empty.' };
+    update.name = name;
+  }
+  if (patch.brand !== undefined) update.company_name = str(patch.brand, 160) || null;
+  if (patch.pic !== undefined) update.contact_name = str(patch.pic, 160) || null;
+  if (!Object.keys(update).length) return { success: true };
+  const { error } = await db.from('clients').update(update).eq('id', clientId);
+  if (error) return fail(error);
+  refreshClientPages();
+  return { success: true };
+}
+
+/** A new client from Client Contact: it appears in Optimizing > Clients at once (same table). */
+export async function createClientContact(input: { name: string; brand?: string; pic?: string }): Promise<Result & { id?: string }> {
+  const a = await actor();
+  if (!a || !FINANCE.includes(a.ctx.role)) return { success: false, error: 'Only Accounting, Admin and the owners can add clients.' };
+  const { ctx, db } = a;
+  const name = str(input.name, 160);
+  if (!name) return { success: false, error: 'Type the company name.' };
+  const { data: same } = await db.from('clients').select('id').eq('workspace_id', ctx.activeWorkspaceId).ilike('name', name.replace(/[%_]/g, '')).neq('contact_type', 'vendor').limit(1);
+  if (same?.length) return { success: false, error: 'A client with this company name already exists.' };
+  const row: Record<string, unknown> = { workspace_id: ctx.activeWorkspaceId, name, contact_type: 'client', company_name: str(input.brand, 160) || null, contact_name: str(input.pic, 160) || null };
+  const { data, error } = await db.from('clients').insert(row).select('id').single();
+  if (error) return fail(error);
+  refreshClientPages();
+  return { success: true, id: data.id };
+}
+
 const STORE_MISSING = 'Run supabase/migrations/20261106_client_stores.sql in Supabase first.';
 const storeFail = (e: { code?: string; message: string }): Result => ({ success: false, error: /client_stores|42P01|PGRST205/.test(`${e.code} ${e.message}`) ? STORE_MISSING : e.code === '23505' ? 'This client already has that store.' : e.message });
 

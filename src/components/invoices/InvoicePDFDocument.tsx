@@ -420,20 +420,22 @@ export function InvoicePDFDocument({
           {/* META SECTION: Bill To (Left) & Document Title + Details (Right) */}
           <div data-pdf-block className="flex flex-row items-start justify-between gap-8">
             {/* Left: Bill To */}
-            <div className="space-y-1.5 text-xs">
+            <div className="space-y-1.5 text-xs min-w-0 max-w-[340px] shrink">
               <span className="block text-[10px] font-bold text-[#c5a059] tracking-widest uppercase mb-1">
                 {isQuotation ? 'Prepared For / Pitch To:' : 'Billed To:'}
               </span>
               {(() => {
                 // Line 1: PIC name - Brand name, on ONE row (the font shrinks to fit). Line 2, smaller: the company name. Then the address.
                 const company = clientLegalName ? `${clientLegalName} - ${clientName}` : clientName;
-                const pic = clientContact && clientContact !== clientName ? clientContact : '';
+                // A PIC is a person's name: an address typed in that box (old data) or a very long text is not printed as the headline.
+                const looksLikeAddress = (v: string) => v.length > 40 || /\b(JL|JLN|JALAN|NO|RT|RW|KEL|KEC|KOTA|KAB|BLOK|LANTAI)\.?\s*\d|\b(JALAN|KOTA|KELURAHAN|KECAMATAN|KABUPATEN)\b/i.test(v) || /\d{5}/.test(v);
+                const pic = clientContact && clientContact !== clientName && !looksLikeAddress(clientContact) ? clientContact : '';
                 const headline = [pic, clientBrand].map((v) => String(v || '').trim()).filter(Boolean).join(' - ');
                 const first = headline || company;
                 const size = Math.max(9, Math.min(14, Math.floor(330 / (Math.max(first.length, 1) * 0.66))));
                 return (
                   <>
-                    <h3 className="font-bold text-[#1e2536] uppercase tracking-wide whitespace-nowrap leading-tight" style={{ fontSize: size }} title={first}>{first}</h3>
+                    <h3 className="max-w-full overflow-hidden text-ellipsis font-bold text-[#1e2536] uppercase tracking-wide whitespace-nowrap leading-tight" style={{ fontSize: size }} title={first}>{first}</h3>
                     {headline && <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-600 leading-snug">{company}</div>}
                   </>
                 );

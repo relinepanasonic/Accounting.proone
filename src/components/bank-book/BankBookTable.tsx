@@ -6,11 +6,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { updateBankLine, deleteBankLine, relinkBankBook, getBankLineConnection, terminateBankLink, type BankLineConnection } from '@/app/actions/bank-book';
 import { BankStatementUpload } from '@/components/bank-book/BankStatementUpload';
-import { AddBankButton } from '@/components/bank-book/AddBankButton';
+import { BanksPanel } from '@/components/bank-book/BanksPanel';
 import { SortArrows } from '@/components/ui/SortArrows';
 
 export interface BankBookLine { id: string; bankAccountId: string; date: string; counterparty: string; details: string; rekFrom: string; notes: string; amount: number; status: string; fileName: string; balance: number | null; time: string; transactionId: string | null; invoiceId: string | null }
-export interface BankBookAccount { id: string; bankName: string; accountNumber: string; accountName: string }
+export interface BankBookAccount { id: string; bankName: string; accountNumber: string; accountName: string; isDefault?: boolean; /** The balance of last year (the direct income of 31 Dec 2025), 0 = none. */ lastYear?: number }
 
 const field = 'rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-600 focus:border-[#d4af37]/60 focus:outline-none';
 const rp = (n: number) => `Rp ${Math.round(Math.abs(n)).toLocaleString('id-ID')}`;
@@ -199,7 +199,7 @@ export function BankBookTable({ lines: serverLines, banks, migrationMissing, can
 
   return (
     <div className="space-y-5">
-      {canAddBank && <div className="flex justify-end"><AddBankButton /></div>}
+      <BanksPanel banks={banks} canManage={canAddBank} />
       <BankStatementUpload banks={banks} />
 
       {migrationMissing && (

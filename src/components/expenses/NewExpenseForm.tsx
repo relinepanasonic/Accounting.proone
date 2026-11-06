@@ -138,7 +138,7 @@ export function NewExpenseForm({ contacts, isHistorical, coaAccounts = [], initi
         }
         
         if (isHistorical) {
-          router.push('/settings/opening-balances');
+          router.push('/expenses');
         } else {
           router.push('/expenses');
         }

@@ -14,8 +14,11 @@ async function BankBookCore({ focusTx }: { focusTx: string }) {
 
   const { data: accounts } = await supabase
     .from('workspace_bank_accounts')
-    .select('id, bank_name, account_number, account_name')
+    .select('id, bank_name, account_number, account_name, is_default')
     .eq('workspace_id', activeWorkspaceId);
+  // the balance of last year of each bank: one direct income of 31 Dec 2025 (bank_reference LYB:<bank id>)
+  const { data: lastYear } = await supabase.from('transactions').select('amount, bank_reference').eq('workspace_id', activeWorkspaceId).like('bank_reference', 'LYB:%');
+  const lastYearOf = new Map<string, number>((lastYear || []).map((t: any) => [String(t.bank_reference).slice(4), Number(t.amount || 0)]));
 
   // One request returns at most 1000 rows: page through. The new columns need the 20261014 migration; without it the base columns still show.
   const fetchAll = async (cols: string) => {
@@ -60,7 +63,7 @@ async function BankBookCore({ focusTx }: { focusTx: string }) {
     transactionId: r.transaction_id || null,
     invoiceId: r.invoice_id || null,
   }));
-  const banks: BankBookAccount[] = (accounts || []).map((a: any) => ({ id: a.id, bankName: a.bank_name || 'Bank', accountNumber: a.account_number || '', accountName: a.account_name || '' }));
+  const banks: BankBookAccount[] = (accounts || []).map((a: any) => ({ id: a.id, bankName: a.bank_name || 'Bank', accountNumber: a.account_number || '', accountName: a.account_name || '', isDefault: Boolean(a.is_default), lastYear: lastYearOf.get(a.id) || 0 }));
 
   return <BankBookTable lines={lines} banks={banks} migrationMissing={migrationMissing} canEdit={canEditBankBook(userEmail)} canAddBank={canEditBankBook(userEmail) || role === 'superadmin' || role === 'founder'} focusTx={focusTx} />;
 }

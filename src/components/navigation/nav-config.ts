@@ -49,5 +49,5 @@ export const ACCOUNTING_CHILDREN = [
   { name: 'COA Mapping', href: '/coa', isActive: (p: string) => p === '/coa' || p.startsWith('/coa/') },
   { name: 'Client Contact', href: '/contacts', isActive: (p: string) => p === '/contacts' || p.startsWith('/contacts/') },
   { name: 'Vendors', href: '/vendors', isActive: (p: string) => p === '/vendors' || p.startsWith('/vendors/') },
-  { name: 'Settings Hub', href: '/settings', isActive: (p: string) => p === '/settings' || p.startsWith('/settings/') },
+  { name: 'Company Settings', href: '/settings/workspaces', isActive: (p: string) => p === '/settings' || p.startsWith('/settings/') },
 ] as const;

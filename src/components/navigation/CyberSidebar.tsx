@@ -67,7 +67,7 @@ const ACCOUNTING_ICONS: Record<string, React.ReactNode> = {
   'COA Mapping': <Network className="w-3.5 h-3.5" />,
   'Client Contact': <Contact className="w-3.5 h-3.5" />,
   Vendors: <Truck className="w-3.5 h-3.5" />,
-  'Settings Hub': <Settings className="w-3.5 h-3.5" />,
+  'Company Settings': <Settings className="w-3.5 h-3.5" />,
 };
 
 const GROUP_ICONS: Record<string, Record<string, React.ReactNode>> = {

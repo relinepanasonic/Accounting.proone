@@ -1,103 +1,41 @@
 import React from 'react';
-import { notFound, redirect } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { WorkspaceDetailTabs } from '@/components/settings/WorkspaceDetailTabs';
-import type { BankAccountItem } from '@/app/actions/settings';
-import type { CatalogProduct } from '@/components/settings/CatalogManager';
+import { RegisterWorkspaceCard } from '@/components/settings/RegisterWorkspaceCard';
 
 export const dynamic = 'force-dynamic';
 
-export default async function WorkspacesMasterPage() {
+/** Company Settings: the identity of the active company, and a way to register one more company (workspace). */
+export default async function CompanySettingsPage() {
   const supabase = await createClient();
-  const wsContext = await getAuthenticatedWorkspaceContext();
+  const wsContext = await getAuthenticatedWorkspaceContext(supabase);
   const activeId = wsContext.activeWorkspaceId;
+  if (!activeId) return notFound();
 
-  if (!activeId) {
-    // If somehow no active workspace, redirect to general settings to create one
-    redirect('/settings/general');
-  }
+  const { data: ws } = await supabase.from('workspaces').select('*').eq('id', activeId).single();
+  const seedWs = wsContext.availableWorkspaces?.find((w) => w.id === activeId);
+  if (!ws && !seedWs) return notFound();
 
-  // Concurrently fetch exact workspace entity, bank accounts, and products by active ID
-  const [wsRes, accountsRes, productsRes] = await Promise.all([
-    supabase.from('workspaces').select('*').eq('id', activeId).single(),
-    supabase.from('workspace_bank_accounts').select('*').eq('workspace_id', activeId).order('is_default', { ascending: false }),
-    supabase.from('products').select('*').eq('workspace_id', activeId).order('created_at', { ascending: false }),
-  ]);
-
-  const { data: ws, error: wsErr } = wsRes;
-
-  if (wsErr || !ws) {
-    // Check fallback in preview seed mode if not in database
-    const seedWs = wsContext.availableWorkspaces?.find((w) => w.id === activeId);
-    if (!seedWs) {
-      return notFound();
-    }
-  }
-
-  const workspaceName =
-    ws?.name || wsContext.availableWorkspaces?.find((w) => w.id === activeId)?.name || 'Enterprise Tenant';
-  const isTaxRegistered =
-    ws?.is_tax_registered !== undefined && ws?.is_tax_registered !== null
-      ? Boolean(ws.is_tax_registered)
-      : Number(ws?.tax_rate_percent || 0) > 0;
+  const workspaceName = ws?.name || seedWs?.name || 'Company';
+  const isTaxRegistered = ws?.is_tax_registered !== undefined && ws?.is_tax_registered !== null ? Boolean(ws.is_tax_registered) : Number(ws?.tax_rate_percent || 0) > 0;
   const taxRatePercent = ws?.tax_rate_percent !== undefined ? Number(ws.tax_rate_percent) : (isTaxRegistered ? 11 : 0);
-  const logoUrl = ws?.logo_url || ws?.company_logo_url || '';
-  const tagline = ws?.brand_tagline || ws?.tagline || '';
-  const phone = ws?.contact_phone || ws?.phone || '';
-  const email = ws?.official_email || ws?.email || '';
-  const website = ws?.website_url || ws?.website || '';
-
-  // Process bank accounts data
-  let bankAccounts: BankAccountItem[] = [];
-  if (!accountsRes.error && accountsRes.data && accountsRes.data.length > 0) {
-    bankAccounts = accountsRes.data.map((acc: any) => ({
-      id: acc.id,
-      bank_name: acc.bank_name,
-      account_number: acc.account_number,
-      account_name: acc.account_name,
-      is_default: Boolean(acc.is_default),
-    }));
-  } else if (ws?.payment_instructions) {
-    const lines = ws.payment_instructions.split('\n').filter((l: string) => l.trim().length > 0);
-    if (lines.length > 0) {
-      bankAccounts = lines.map((line: string, idx: number) => ({
-        id: `temp-legacy-${idx}`,
-        bank_name: idx === 0 ? 'Bank Account' : `Bank Account (${idx + 1})`,
-        account_number: line.trim(),
-        account_name: workspaceName,
-        is_default: idx === 0,
-      }));
-    }
-  }
-
-  // Process products data
-  const productList: CatalogProduct[] =
-    productsRes.data && productsRes.data.length > 0
-      ? productsRes.data.map((p: any) => ({
-          id: p.id,
-          name: p.name,
-          description: p.description || undefined,
-          unit_price: Number(p.unit_price) || 0,
-          quantity: Number(p.quantity) || 1,
-          scale: p.scale || 'pc',
-        }))
-      : [];
 
   return (
-    <WorkspaceDetailTabs
-      targetWorkspaceId={activeId}
-      workspaceName={workspaceName}
-      isTaxRegistered={isTaxRegistered}
-      taxRatePercent={taxRatePercent}
-      logoUrl={logoUrl}
-      tagline={tagline}
-      phone={phone}
-      email={email}
-      website={website}
-      bankAccounts={bankAccounts}
-      products={productList}
-      isCurrentActive={true}
-    />
+    <div className="mx-auto max-w-4xl space-y-8 p-4 lg:p-8">
+      <WorkspaceDetailTabs
+        targetWorkspaceId={activeId}
+        workspaceName={workspaceName}
+        isTaxRegistered={isTaxRegistered}
+        taxRatePercent={taxRatePercent}
+        logoUrl={ws?.logo_url || ws?.company_logo_url || ''}
+        tagline={ws?.brand_tagline || ws?.tagline || ''}
+        phone={ws?.contact_phone || ws?.phone || ''}
+        email={ws?.official_email || ws?.email || ''}
+        website={ws?.website_url || ws?.website || ''}
+      />
+      <RegisterWorkspaceCard />
+    </div>
   );
 }

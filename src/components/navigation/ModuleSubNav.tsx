@@ -51,8 +51,7 @@ const MODULES = {
   system: {
     match: ['/settings'],
     items: [
-      { name: 'Settings Hub', href: '/settings' },
-      { name: 'Workspaces', href: '/settings/workspaces' },
+      { name: 'Company Settings', href: '/settings/workspaces' },
     ]
   }
 };

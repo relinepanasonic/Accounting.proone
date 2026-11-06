@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext, FINANCE_ROLES } from '@/lib/auth/workspace-context';
 import { canEditBankBook } from '@/lib/auth/bank-book-editors';
 import { storeStatement, linkReconciled, type BankBookLineInput } from '@/lib/bank-book/store';
-import { unreconcileRecord } from '@/app/actions/reconcile';
+import { unreconcileRecord, quickResolveAndReconcile } from '@/app/actions/reconcile';
 
 
 /**
@@ -263,5 +263,98 @@ export async function addBankAccount(input: { bankName: string; accountNumber: s
     return { success: true, id: row.id };
   } catch (e: any) {
     return { success: false, error: e?.message || 'Could not add the bank.' };
+  }
+}
+
+// ---- the bank list of Buku Bank: edit, delete, and the balance of last year
+
+async function bankManager() {
+  const supabase = await createClient();
+  const ctx = await getAuthenticatedWorkspaceContext(supabase);
+  const owner = ctx.role === 'superadmin' || ctx.role === 'founder';
+  const ok = FINANCE_ROLES.includes(ctx.role) && (owner || canEditBankBook(ctx.userEmail));
+  return { supabase, ctx, ok };
+}
+const NOT_ALLOWED = 'Only the Buku Bank editors and the owners can change the banks.';
+
+export async function updateBankAccount(id: string, input: { bankName: string; accountNumber: string; accountName: string; isDefault?: boolean }): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { supabase, ctx, ok } = await bankManager();
+    if (!ok) return { success: false, error: NOT_ALLOWED };
+    const bankName = String(input.bankName || '').trim().slice(0, 80);
+    const accountNumber = String(input.accountNumber || '').trim().slice(0, 40);
+    const accountName = String(input.accountName || '').trim().slice(0, 120) || bankName;
+    if (!bankName || !accountNumber) return { success: false, error: 'Bank name and account number are needed.' };
+    const { data: me } = await supabase.from('workspace_bank_accounts').select('id').eq('id', id).eq('workspace_id', ctx.activeWorkspaceId).maybeSingle();
+    if (!me) return { success: false, error: 'Bank not found.' };
+    if (input.isDefault) await supabase.from('workspace_bank_accounts').update({ is_default: false }).eq('workspace_id', ctx.activeWorkspaceId);
+    const patch: Record<string, unknown> = { bank_name: bankName, account_number: accountNumber, account_name: accountName };
+    if (input.isDefault !== undefined) patch.is_default = input.isDefault;
+    const { error } = await supabase.from('workspace_bank_accounts').update(patch).eq('id', id);
+    if (error) return { success: false, error: error.message };
+    revalidatePath('/bank-book'); revalidatePath('/reconcile');
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Could not save the bank.' };
+  }
+}
+
+/** A bank that still has statement lines or ledger entries is not deleted: it would break the books. */
+export async function deleteBankAccount(id: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { supabase, ctx, ok } = await bankManager();
+    if (!ok) return { success: false, error: NOT_ALLOWED };
+    const { data: bank } = await supabase.from('workspace_bank_accounts').select('id, coa_account_code').eq('id', id).eq('workspace_id', ctx.activeWorkspaceId).maybeSingle();
+    if (!bank) return { success: false, error: 'Bank not found.' };
+    const { count: lines } = await supabase.from('bank_statement_lines').select('id', { count: 'exact', head: true }).eq('workspace_id', ctx.activeWorkspaceId).eq('bank_account_id', id);
+    if (lines) return { success: false, error: `This bank still has ${lines} statement line${lines === 1 ? '' : 's'} in Buku Bank. Delete those lines first.` };
+    let entries = 0;
+    if (bank.coa_account_code) {
+      const { count } = await supabase.from('journal_entries').select('id', { count: 'exact', head: true }).eq('workspace_id', ctx.activeWorkspaceId).eq('account_code', bank.coa_account_code);
+      entries = count || 0;
+    }
+    if (entries) return { success: false, error: `The ledger has ${entries} entr${entries === 1 ? 'y' : 'ies'} on this bank (its COA account ${bank.coa_account_code}), so it cannot be deleted. You can edit it instead.` };
+    const { error } = await supabase.from('workspace_bank_accounts').delete().eq('id', id);
+    if (error) return { success: false, error: error.message };
+    if (bank.coa_account_code) await supabase.from('global_chart_of_accounts').delete().eq('workspace_id', ctx.activeWorkspaceId).eq('account_code', bank.coa_account_code);
+    revalidatePath('/bank-book'); revalidatePath('/reconcile'); revalidatePath('/coa');
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Could not delete the bank.' };
+  }
+}
+
+const LAST_YEAR_DATE = '2025-12-31';
+const LAST_YEAR_REF = (bankId: string) => `LYB:${bankId}`;
+
+/**
+ * The balance a bank had at the end of last year, as ONE direct income on 31 Dec 2025 (note "Last year balance"). Setting it again changes
+ * that income; 0 takes it away. It replaces the old Opening Balance screen.
+ */
+export async function setLastYearBalance(bankId: string, amount: number): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { supabase, ctx, ok } = await bankManager();
+    if (!ok) return { success: false, error: NOT_ALLOWED };
+    const value = Math.round(Number(amount));
+    if (!Number.isFinite(value) || value < 0) return { success: false, error: 'Type an amount of 0 or more.' };
+    const { data: bank } = await supabase.from('workspace_bank_accounts').select('id, bank_name, account_number').eq('id', bankId).eq('workspace_id', ctx.activeWorkspaceId).maybeSingle();
+    if (!bank) return { success: false, error: 'Bank not found.' };
+    const ref = LAST_YEAR_REF(bankId);
+    const { data: old } = await supabase.from('transactions').select('id').eq('workspace_id', ctx.activeWorkspaceId).eq('bank_reference', ref).maybeSingle();
+
+    if (old) {
+      await supabase.from('journal_entries').delete().eq('workspace_id', ctx.activeWorkspaceId).eq('reference_id', old.id).eq('reference_type', 'quick_income');
+      const { error } = await supabase.from('transactions').delete().eq('id', old.id);
+      if (error) return { success: false, error: error.message };
+    }
+    if (value > 0) {
+      const tail = String(bank.account_number || '').slice(-4);
+      const res = await quickResolveAndReconcile('income', 'Direct Income', value, LAST_YEAR_DATE, `Last year balance - ${bank.bank_name}${tail ? ` ${tail}` : ''}`, ref, bankId);
+      if (!res.success) return { success: false, error: res.error || 'Could not save the balance.' };
+    }
+    revalidatePath('/bank-book'); revalidatePath('/invoices'); revalidatePath('/ledger');
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Could not save the balance.' };
   }
 }

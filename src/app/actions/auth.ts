@@ -35,7 +35,7 @@ export async function signInAction(formData: FormData): Promise<AuthActionResult
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
     
-    const { data: profile } = await adminSupabase
+    const { data: profile, error: lookupError } = await adminSupabase
       .from('profiles')
       .select('email')
       .in('username', [identifier, identifier.toLowerCase()])
@@ -44,6 +44,9 @@ export async function signInAction(formData: FormData): Promise<AuthActionResult
       
     if (profile?.email) {
       emailToUse = profile.email;
+    } else if (lookupError) {
+      // The lookup itself failed (for example the Supabase project is restricted): say that, not "not found".
+      return { success: false, error: `Cannot reach the user database: ${lookupError.message}. Sign in with your email address, or check the Supabase project.` };
     } else {
       return { success: false, error: 'Username not found.' };
     }

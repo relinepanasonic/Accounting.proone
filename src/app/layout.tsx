@@ -4,6 +4,7 @@ import { CyberSidebar } from '@/components/navigation/CyberSidebar';
 import { BottomMobileNav } from '@/components/navigation/BottomMobileNav';
 import { NavigationShell } from '@/components/navigation/NavigationShell';
 import { PWAInit } from '@/components/PWAInit';
+import { AutoSortTables } from '@/components/ui/AutoSortTables';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 
 export const viewport: Viewport = {
@@ -57,6 +58,8 @@ export default async function RootLayout({
 
         {/* PWA Service Worker Registration */}
         <PWAInit />
+        {/* Every plain table gets the up / down sort arrows */}
+        <AutoSortTables />
       </body>
     </html>
   );

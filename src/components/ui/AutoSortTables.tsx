@@ -92,7 +92,8 @@ export function AutoSortTables() {
       if (!cur || !body || !sortable(t)) return;
       const rows = Array.from(body.rows);
       const keyed = rows.map((r, i) => ({ r, i, k: keyOf(r.cells[cur.col]) }));
-      keyed.sort((x, y) => (compare(x.k, y.k) || x.i - y.i) * (cur.asc ? 1 : -1));
+      // equal values keep the order they are in (not reversed with the direction), or every re-check would flip them again and the table would flicker
+      keyed.sort((x, y) => compare(x.k, y.k) * (cur.asc ? 1 : -1) || x.i - y.i);
       // only touch the DOM when the order really changes (the page may be re-rendering the rows)
       if (keyed.every((x, i) => x.r === rows[i])) return;
       keyed.forEach((x) => body.appendChild(x.r));

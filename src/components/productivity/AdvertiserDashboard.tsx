@@ -51,6 +51,9 @@ export function AdvertiserDashboard({ clients, initialClient, initialStore = '',
   // What is saved of each tab (to show the green check), and whether a save was tried with empty Biaya Iklan / Penjualan (the empty cells turn red).
   const [saved, setSaved] = useState({ inkubasi: '', group: '', mandiri: '' });
   const [showErrors, setShowErrors] = useState(false);
+  // What the screen held right after it loaded (or was saved): "unsaved edits" means different from THIS. A carried-over session that was only looked at is not an edit.
+  const [loaded, setLoaded] = useState(false);
+  const [baseline, setBaseline] = useState({ ink: '', grp: '', man: '' });
 
   // Group Filter State
   const [activeGroupCategory, setActiveGroupCategory] = useState<GroupCategory>('Hero');
@@ -86,12 +89,14 @@ export function AdvertiserDashboard({ clients, initialClient, initialStore = '',
   useEffect(() => {
     async function loadData() {
       setIsLoading(true);
+      setLoaded(false);
       const res = await fetchAdvertiserReport(initialClient, initialDate, initialSession, initialStore);
       
       setCopiedFrom(res.data && res.isHistorical ? res.from : null);
       if (res.data) {
         const fresh = Boolean(res.isHistorical); // no log for this session yet: the last one is only the starting point
-        setInkubasiData(fresh ? carryOver(res.data.data_inkubasi) : res.data.data_inkubasi || []);
+        const inkRows = fresh ? carryOver(res.data.data_inkubasi) : res.data.data_inkubasi || [];
+        setInkubasiData(inkRows);
         
         let rawGroup = res.data.data_group || [];
         if (!Array.isArray(rawGroup)) {
@@ -102,9 +107,12 @@ export function AdvertiserDashboard({ clients, initialClient, initialStore = '',
           if (rawGroup.low) rawGroup.low.forEach((r: any) => flat.push({ ...r, groupCategory: 'Low', groupName: 'Group Low 1' }));
           rawGroup = flat;
         }
-        setGroupData(fresh ? carryOver(rawGroup) : rawGroup);
+        const grpRows = fresh ? carryOver(rawGroup) : rawGroup;
+        setGroupData(grpRows);
         
-        setMandiriData(fresh ? carryOver(res.data.data_mandiri) : res.data.data_mandiri || []);
+        const manRows = fresh ? carryOver(res.data.data_mandiri) : res.data.data_mandiri || [];
+        setMandiriData(manRows);
+        setBaseline({ ink: snapshotOf(inkRows), grp: snapshotOf(grpRows), man: snapshotOf(manRows) });
         setSaved(fresh ? { inkubasi: '', group: '', mandiri: '' } : { inkubasi: snapshotOf(res.data.data_inkubasi || []), group: snapshotOf(rawGroup), mandiri: snapshotOf(res.data.data_mandiri || []) });
         // A historical fallback record (no exact report for this session yet) must not copy yesterday's pictures.
         setShots(res.isHistorical ? {} : parseShots(res.data.screenshot_url));
@@ -115,6 +123,7 @@ export function AdvertiserDashboard({ clients, initialClient, initialStore = '',
         setInkubasiData(Array(5).fill(null).map(() => getEmptyRowInkubasiGroup()));
         setGroupData(Array(5).fill(null).map(() => getEmptyRowInkubasiGroup('Hero', 'Group Hero 1')));
         setMandiriData(Array(5).fill(null).map(() => getEmptyRowMandiri()));
+        setBaseline({ ink: '[]', grp: '[]', man: '[]' });
         setSaved({ inkubasi: '', group: '', mandiri: '' });
         setShots({});
         setSessionNote('');
@@ -122,30 +131,31 @@ export function AdvertiserDashboard({ clients, initialClient, initialStore = '',
       }
       setShowErrors(false);
       setIsLoading(false);
+      setLoaded(true);
     }
     loadData();
   }, [initialClient, initialStore, initialDate, initialSession]);
 
   // A copy of the edits is kept in this browser while typing, so a closed tab, a lost connection or a failed save never loses the work.
   const draftKey = `adv-draft:${initialClient}|${initialStore}|${initialDate}|${initialSession}`;
-  const dirty = tabState(inkubasiData, saved.inkubasi) === 'edited' || tabState(groupData, saved.group) === 'edited' || tabState(mandiriData, saved.mandiri) === 'edited';
+  const dirty = loaded && (snapshotOf(inkubasiData) !== baseline.ink || snapshotOf(groupData) !== baseline.grp || snapshotOf(mandiriData) !== baseline.man);
   const [localDraft, setLocalDraft] = useState<{ t: number; ink: any[]; grp: any[]; man: any[]; note: string; saldo: string } | null>(null);
 
   useEffect(() => {
-    if (isLoading) return;
+    if (!loaded) { setLocalDraft(null); return; }
     try {
       const raw = localStorage.getItem(draftKey);
-      if (raw) {
-        const d = JSON.parse(raw);
-        const differs = snapshotOf(d.ink) !== snapshotOf(inkubasiData) || snapshotOf(d.grp) !== snapshotOf(groupData) || snapshotOf(d.man) !== snapshotOf(mandiriData);
-        if (differs && (d.ink?.some(rowUsed) || d.grp?.some(rowUsed) || d.man?.some(rowUsed))) setLocalDraft(d); else localStorage.removeItem(draftKey);
-      }
+      if (!raw) { setLocalDraft(null); return; }
+      const d = JSON.parse(raw);
+      // offered only when it holds something different from what is on the screen now
+      const differs = snapshotOf(d.ink || []) !== baseline.ink || snapshotOf(d.grp || []) !== baseline.grp || snapshotOf(d.man || []) !== baseline.man;
+      if (differs) setLocalDraft(d); else { localStorage.removeItem(draftKey); setLocalDraft(null); }
     } catch { /* storage blocked: no local copy */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoading, draftKey]);
+  }, [loaded, draftKey]);
 
   useEffect(() => {
-    if (isLoading || localDraft) return;
+    if (!loaded || localDraft) return;
     const t = setTimeout(() => {
       try {
         if (dirty) localStorage.setItem(draftKey, JSON.stringify({ t: Date.now(), ink: inkubasiData, grp: groupData, man: mandiriData, note: sessionNote, saldo: sisaSaldo }));
@@ -153,7 +163,7 @@ export function AdvertiserDashboard({ clients, initialClient, initialStore = '',
       } catch { /* storage full or blocked */ }
     }, 800);
     return () => clearTimeout(t);
-  }, [inkubasiData, groupData, mandiriData, sessionNote, sisaSaldo, dirty, isLoading, localDraft, draftKey]);
+  }, [inkubasiData, groupData, mandiriData, sessionNote, sisaSaldo, dirty, loaded, localDraft, draftKey]);
 
   useEffect(() => {
     if (!dirty) return;
@@ -203,6 +213,7 @@ export function AdvertiserDashboard({ clients, initialClient, initialStore = '',
         return;
       }
       setSaved({ inkubasi: snapshotOf(inkubasiData), group: snapshotOf(groupData), mandiri: snapshotOf(mandiriData) });
+      setBaseline({ ink: snapshotOf(inkubasiData), grp: snapshotOf(groupData), man: snapshotOf(mandiriData) });
       try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
       // Saving never waits for the numbers: what is still empty is told, and the record stays a draft you can open again to finish.
       const missing = missingNumbers(inkubasiData, groupData, mandiriData);

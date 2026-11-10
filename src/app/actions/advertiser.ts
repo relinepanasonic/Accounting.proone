@@ -1,7 +1,8 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
+import { getAuthenticatedWorkspaceContext, FINANCE_ROLES } from '@/lib/auth/workspace-context';
+import { createAdminClient } from '@/lib/api/supabase-admin';
 import { calendarFromReports, type InputReport, type StoreCalendar } from '@/lib/advertiser/input-series';
 import { missingNumbers } from '@/lib/advertiser/log-rules';
 import { actionable, buildRecommendations, type DayFigures } from '@/lib/advertiser/optimasi';
@@ -254,4 +255,38 @@ export async function fetchStoreCalendar(storeLabel: string, clientIds: string[]
     if (!error) reports.push(...((data || []) as any[]));
   }
   return { data: calendarFromReports(reports) };
+}
+
+/**
+ * Delete the log of one store on one day (every session), or just one session. The advertiser who handles the client may do it, and
+ * Accounting, Admin, Superadmin and Founder. The database only lets owners delete, so the check is made here and the delete runs with the service role.
+ */
+export async function deleteAdvertiserLog(clientId: string, reportDate: string, storeLabel = '', session?: number): Promise<{ success: boolean; deleted?: number; error?: string }> {
+  try {
+    if (!clientId || !/^\d{4}-\d{2}-\d{2}$/.test(reportDate)) return { success: false, error: 'Nothing to delete.' };
+    if (session !== undefined && ![1, 2, 3].includes(session)) return { success: false, error: 'Unknown session.' };
+    const supabase = await createClient();
+    const ctx = await getAuthenticatedWorkspaceContext(supabase);
+    if (!ctx.userId || !ctx.activeWorkspaceId) return { success: false, error: 'Sign in again.' };
+    const db = createAdminClient();
+
+    if (!FINANCE_ROLES.includes(ctx.role)) {
+      if (ctx.role !== 'advertiser') return { success: false, error: 'You cannot delete logs.' };
+      const { data: mine } = await db.from('client_assignments').select('client_id').eq('client_id', clientId).eq('user_id', ctx.userId).eq('job', 'advertising').limit(1);
+      if (!mine?.length) return { success: false, error: 'This client is not assigned to you.' };
+    }
+
+    const del = (withStore: boolean) => {
+      let q = db.from('advertiser_reports').delete({ count: 'exact' }).eq('workspace_id', ctx.activeWorkspaceId).eq('client_id', clientId).eq('report_date', reportDate);
+      if (withStore) q = q.eq('store_label', storeLabel);
+      if (session !== undefined) q = q.eq('session', session);
+      return q;
+    };
+    let { error, count } = await del(true);
+    if (error && /store_label/.test(error.message)) ({ error, count } = await del(false)); // before 20261105_advertiser_report_store.sql
+    if (error) return { success: false, error: error.message };
+    return { success: true, deleted: count || 0 };
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Could not delete the log.' };
+  }
 }

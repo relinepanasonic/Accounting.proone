@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { X, Loader2, Pencil, Download, MessageCircle } from 'lucide-react';
-import { fetchAdvertiserLogDetail, fetchPreviousSession } from '@/app/actions/advertiser';
+import { deleteAdvertiserLog, fetchAdvertiserLogDetail, fetchPreviousSession } from '@/app/actions/advertiser';
 import {
   buildReportMessage,
   compareSessions,
@@ -120,12 +120,14 @@ const stamp = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
 
 export function AdvertiserLogDetail({
-  log, onClose, onEdit, initialSession,
+  log, onClose, onEdit, onDeleted, initialSession,
 }: {
   log: LogSummary;
   initialSession?: number;
   onClose: () => void;
   onEdit: (session: number) => void;
+  /** After a session was deleted from here. */
+  onDeleted?: () => void;
 }) {
   const [sessions, setSessions] = useState<SessionRow[] | null>(null);
   const [active, setActive] = useState<number>(1);
@@ -376,6 +378,18 @@ export function AdvertiserLogDetail({
                       className="inline-flex items-center gap-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 px-3 py-1.5 rounded-lg text-white font-bold"
                     >
                       <Pencil className="w-3.5 h-3.5" /> Edit Sesi {current.session}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!window.confirm(`Delete Sesi ${current.session} of ${log.client_name}${log.store_label ? ` | ${log.store_label}` : ''}?\n\nThis cannot be undone.`)) return;
+                        const res = await deleteAdvertiserLog(log.client_id, log.report_date, log.store_label || '', current.session);
+                        if (!res.success) { alert('NOT deleted: ' + (res.error || 'unknown error')); return; }
+                        onDeleted?.();
+                      }}
+                      className="inline-flex items-center gap-1.5 text-xs bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 px-3 py-1.5 rounded-lg font-bold"
+                    >
+                      Delete Sesi {current.session}
                     </button>
                   </div>
                 </div>

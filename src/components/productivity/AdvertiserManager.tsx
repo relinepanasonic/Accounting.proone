@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, Plus, Loader2, PlayCircle, History, CheckCircle2, Circle, CircleDashed } from 'lucide-react';
-import { fetchAdvertiserLogs } from '@/app/actions/advertiser';
+import { deleteAdvertiserLog, fetchAdvertiserLogs } from '@/app/actions/advertiser';
 import { AdvertiserDashboard } from './AdvertiserDashboard';
 import { ClientSelect } from '@/components/ui/ClientSelect';
 import { AdvertiserLogDetail } from './AdvertiserLogDetail';
@@ -47,6 +47,18 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
   const [filterAdvertiser, setFilterAdvertiser] = useState<string>('');
   const [filterClient, setFilterClient] = useState<string>('');
   const [filterStore, setFilterStore] = useState<string>('');
+
+  const [deleting, setDeleting] = useState('');
+  const removeLog = async (log: any) => {
+    const sessions = [1, 2, 3].filter((n) => log.sessions[n]);
+    const day = new Date(log.report_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+    if (!window.confirm(`Delete this log?\n\n${log.client_name}${log.store_label ? ` | ${log.store_label}` : ''}\n${day} · Sesi ${sessions.join(', ')}\n\nThis cannot be undone.`)) return;
+    setDeleting(`${log.client_id}|${log.store_label}|${log.report_date}`);
+    const res = await deleteAdvertiserLog(log.client_id, log.report_date, log.store_label || '');
+    setDeleting('');
+    if (!res.success) { alert('NOT deleted: ' + (res.error || 'unknown error')); return; }
+    loadLogs();
+  };
 
   const loadLogs = async () => {
     setIsLoadingLogs(true);
@@ -209,6 +221,7 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
           log={detailLog}
           initialSession={detailSession}
           onClose={() => setDetailLog(null)}
+          onDeleted={() => { setDetailLog(null); loadLogs(); }}
           onEdit={(sessionNumber) => {
             setSelectedClient(detailLog.client_id);
             { const sp = splitStore(detailLog.store_label); setStoreCompany(sp.company || 'ProOne'); setStoreName(sp.store); }
@@ -334,7 +347,7 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
                       <div>{new Date(log.created_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
                       <div>{new Date(log.created_at).toLocaleTimeString()}</div>
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="whitespace-nowrap px-6 py-4 text-right">
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
@@ -348,6 +361,15 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
                         className="text-xs bg-zinc-800 hover:bg-zinc-700 px-3 py-1.5 rounded-lg text-white font-bold transition-colors"
                       >
                         EDIT
+                      </button>
+                      <button
+                        type="button"
+                        disabled={deleting === `${log.client_id}|${log.store_label}|${log.report_date}`}
+                        onClick={(e) => { e.stopPropagation(); removeLog(log); }}
+                        title="Delete this log (all its sessions)"
+                        className="ml-2 text-xs bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 px-3 py-1.5 rounded-lg font-bold transition-colors disabled:opacity-50"
+                      >
+                        DELETE
                       </button>
                     </td>
                   </tr>

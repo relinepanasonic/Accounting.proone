@@ -635,8 +635,8 @@ const refreshClientPages = () => {
   for (const p of ['/contacts', '/optimizing/clients', '/sales/clients', '/productivity/advertiser/clients', '/productivity/admin/clients']) revalidatePath(p);
 };
 
-/** Client Contact: Company Name (clients.name), Brand Name (clients.company_name) and PIC Name (clients.contact_name). Only the keys that are sent change. */
-export async function updateClientContact(clientId: string, patch: { name?: string; brand?: string; pic?: string }): Promise<Result> {
+/** Client Contact: Company Name (clients.name), Brand Name (clients.company_name), PIC Name (clients.contact_name) and Address (clients.billing_address). Only the keys that are sent change. */
+export async function updateClientContact(clientId: string, patch: { name?: string; brand?: string; pic?: string; address?: string }): Promise<Result> {
   const a = await actor();
   if (!a || !FINANCE.includes(a.ctx.role)) return { success: false, error: 'Only Accounting, Admin and the owners can change client contacts.' };
   const { ctx, db } = a;
@@ -649,6 +649,7 @@ export async function updateClientContact(clientId: string, patch: { name?: stri
   }
   if (patch.brand !== undefined) update.company_name = str(patch.brand, 160) || null;
   if (patch.pic !== undefined) update.contact_name = str(patch.pic, 160) || null;
+  if (patch.address !== undefined) update.billing_address = str(patch.address, 600) || null;
   if (!Object.keys(update).length) return { success: true };
   const { error } = await db.from('clients').update(update).eq('id', clientId);
   if (error) return fail(error);

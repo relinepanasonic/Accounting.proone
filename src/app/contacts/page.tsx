@@ -5,7 +5,7 @@ import { createAdminClient } from '@/lib/api/supabase-admin';
 import { getAuthenticatedWorkspaceContext, FINANCE_ROLES } from '@/lib/auth/workspace-context';
 import { clientMask, HIDDEN_CLIENT } from '@/lib/auth/client-privacy';
 import { loadClientRows } from '@/lib/sales/client-table';
-import { loadClientPics } from '@/lib/sales/client-pics';
+import { loadClientPics, loadClientAddresses } from '@/lib/sales/client-pics';
 import { ClientContactTable, type ContactRow } from '@/components/sales/ClientContactTable';
 
 export const dynamic = 'force-dynamic';
@@ -32,8 +32,9 @@ export default async function ClientContactPage() {
   const first = new Map<string, (typeof all)[number]>();
   // a client that is hidden from this viewer is not listed at all (its brand, store and PIC would show who it is)
   for (const r of all) if (!first.has(r.clientId) && r.clientName !== HIDDEN_CLIENT) first.set(r.clientId, r);
-  const pics = await loadClientPics(db, Array.from(first.keys()));
-  const rows: ContactRow[] = Array.from(first.values()).map((r) => ({ clientId: r.clientId, name: r.clientName, brand: r.brand || '', pic: pics.get(r.clientId) || '', row: r }));
+  const ids = Array.from(first.keys());
+  const [pics, addresses] = await Promise.all([loadClientPics(db, ids), loadClientAddresses(db, ids)]);
+  const rows: ContactRow[] = Array.from(first.values()).map((r) => ({ clientId: r.clientId, name: r.clientName, brand: r.brand || '', pic: pics.get(r.clientId) || '', address: addresses.get(r.clientId) || '', row: r }));
 
   return (
     <div className="p-4 lg:p-8 space-y-5 animate-in fade-in zoom-in-95 duration-300">

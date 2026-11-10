@@ -8,7 +8,7 @@ import { updateClientContact, createClientContact } from '@/app/actions/sales-fl
 import { SortArrows } from '@/components/ui/SortArrows';
 import { StoreCell, type StoreLine } from '@/components/sales/ClientStoreTable';
 
-export interface ContactRow { clientId: string; name: string; brand: string; pic: string; row: ClientRow }
+export interface ContactRow { clientId: string; name: string; brand: string; pic: string; address: string; row: ClientRow }
 
 const AVATAR = ['#38bdf8', '#f472b6', '#34d399', '#fbbf24', '#a78bfa', '#fb923c', '#f87171', '#2dd4bf'];
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
@@ -17,7 +17,7 @@ const colorOf = (name: string) => AVATAR[Array.from(name).reduce((h, c) => (h * 
 const quiet = 'w-full truncate rounded-md border border-transparent bg-transparent px-2 py-1.5 text-sm text-zinc-200 placeholder:text-zinc-600 hover:border-zinc-700 focus:border-[#d4af37]/60 focus:bg-zinc-900 focus:outline-none';
 
 /** A box that looks like plain text until you hover it. It saves when you leave it (Tab, Enter or a click away) and flashes a check. */
-function EditCell({ clientId, kind, value, canEdit, placeholder, ids }: { clientId: string; kind: 'name' | 'brand' | 'pic'; value: string; canEdit: boolean; placeholder: string; /** The company name of a group is changed on all its brands. */ ids?: string[] }) {
+function EditCell({ clientId, kind, value, canEdit, placeholder, ids }: { clientId: string; kind: 'name' | 'brand' | 'pic' | 'address'; value: string; canEdit: boolean; placeholder: string; /** The company name of a group is changed on all its brands. */ ids?: string[] }) {
   const router = useRouter();
   const [text, setText] = useState(value);
   const [error, setError] = useState('');
@@ -39,6 +39,24 @@ function EditCell({ clientId, kind, value, canEdit, placeholder, ids }: { client
       router.refresh();
     });
   };
+  if (kind === 'address') {
+    return (
+      <div className="relative">
+        <textarea
+          value={text}
+          rows={2}
+          placeholder={placeholder}
+          title={text}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={save}
+          onKeyDown={(e) => { if (e.key === 'Escape') { setText(value); (e.target as HTMLTextAreaElement).blur(); } }}
+          className={`${quiet} resize-none whitespace-normal pr-6 text-xs leading-snug ${pending ? 'opacity-60' : ''}`}
+        />
+        {done && <Check className="pointer-events-none absolute right-2 top-2 h-3.5 w-3.5 text-emerald-400" />}
+        {error && <div className="mt-0.5 px-2 text-[10px] text-red-400">{error}</div>}
+      </div>
+    );
+  }
   return (
     <div className="relative">
       <input
@@ -130,7 +148,7 @@ type Filter = 'all' | 'nostore' | 'nopic' | 'nobrand';
 export function ClientContactTable({ rows, canEdit, storeOptions }: { rows: ContactRow[]; canEdit: boolean; storeOptions?: string[] }) {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
-  const [sort, setSort] = useState<{ key: 'name' | 'brand' | 'store' | 'pic'; asc: boolean }>({ key: 'name', asc: true });
+  const [sort, setSort] = useState<{ key: 'name' | 'brand' | 'store' | 'pic' | 'address'; asc: boolean }>({ key: 'name', asc: true });
   const q = search.trim().toLowerCase();
 
   const counts = useMemo(() => ({
@@ -146,9 +164,9 @@ export function ClientContactTable({ rows, canEdit, storeOptions }: { rows: Cont
       if (filter === 'nostore' && (r.row.stores || []).length) return false;
       if (filter === 'nopic' && r.pic.trim()) return false;
       if (filter === 'nobrand' && r.brand.trim()) return false;
-      return !q || [r.name, r.brand, r.pic, storeText(r)].some((t) => t.toLowerCase().includes(q));
+      return !q || [r.name, r.brand, r.pic, r.address, storeText(r)].some((t) => t.toLowerCase().includes(q));
     });
-    const val = (r: ContactRow) => (sort.key === 'name' ? r.name : sort.key === 'brand' ? r.brand : sort.key === 'pic' ? r.pic : (r.row.stores || []).map((s) => s.store).join(' ')).toLowerCase();
+    const val = (r: ContactRow) => (sort.key === 'name' ? r.name : sort.key === 'brand' ? r.brand : sort.key === 'pic' ? r.pic : sort.key === 'address' ? r.address : (r.row.stores || []).map((s) => s.store).join(' ')).toLowerCase();
     return list.sort((a, b) => val(a).localeCompare(val(b), 'id', { numeric: true }) * (sort.asc ? 1 : -1));
   }, [rows, q, sort, filter]);
 
@@ -179,7 +197,7 @@ export function ClientContactTable({ rows, canEdit, storeOptions }: { rows: Cont
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative w-full max-w-sm">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search company, brand, store or PIC" className="w-full rounded-xl border border-zinc-800 bg-zinc-950 py-2 pl-9 pr-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-[#d4af37]/50 focus:outline-none" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search company, brand, store, PIC or address" className="w-full rounded-xl border border-zinc-800 bg-zinc-950 py-2 pl-9 pr-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-[#d4af37]/50 focus:outline-none" />
         </div>
         <div className="flex flex-wrap gap-2">{pill('all', 'All')}{pill('nostore', 'No store')}{pill('nopic', 'No PIC')}{pill('nobrand', 'No brand')}</div>
         <span className="text-[11px] text-zinc-500" title="Click a name, brand or PIC to edit it. It saves when you leave the box.">{shown.length} of {rows.length}</span>
@@ -187,13 +205,13 @@ export function ClientContactTable({ rows, canEdit, storeOptions }: { rows: Cont
       </div>
 
       <div className="max-h-[calc(100vh-238px)] min-h-[360px] overflow-auto rounded-2xl border border-[#d4af37]/20 bg-[#0e0f14] shadow-xl">
-        <table className="w-full min-w-[900px] table-fixed text-left">
+        <table className="w-full table-fixed text-left">
           <thead className="sticky top-0 z-10 border-b border-[#d4af37]/10 bg-zinc-950 text-[11px] text-zinc-400">
-            <tr><Th k="name" w="30%">Company Name</Th><Th k="brand" w="22%">Brand Name</Th><Th k="store" w="27%">Store Name</Th><Th k="pic" w="21%">PIC Name</Th></tr>
+            <tr><Th k="name" w="22%">Company Name</Th><Th k="brand" w="15%">Brand Name</Th><Th k="store" w="21%">Store Name</Th><Th k="pic" w="15%">PIC Name</Th><Th k="address" w="27%">Address</Th></tr>
           </thead>
           <tbody className="divide-y divide-zinc-800/50">
             {groups.length === 0 && (
-              <tr><td colSpan={4} className="p-12 text-center text-sm text-zinc-500">{rows.length === 0 ? 'No client yet.' : 'No client matches.'}</td></tr>
+              <tr><td colSpan={5} className="p-12 text-center text-sm text-zinc-500">{rows.length === 0 ? 'No client yet.' : 'No client matches.'}</td></tr>
             )}
             {groups.map((g) => {
               const memberRow = (r: ContactRow, tree: boolean) => {
@@ -221,6 +239,7 @@ export function ClientContactTable({ rows, canEdit, storeOptions }: { rows: Cont
                         <div className="min-w-0 flex-1"><EditCell clientId={r.clientId} kind="pic" value={r.pic} canEdit={canEdit} placeholder="Add PIC" /></div>
                       </div>
                     </td>
+                    <td className="px-3 py-3"><EditCell clientId={r.clientId} kind="address" value={r.address} canEdit={canEdit} placeholder="Add address" /></td>
                   </tr>
                 );
               };
@@ -230,7 +249,7 @@ export function ClientContactTable({ rows, canEdit, storeOptions }: { rows: Cont
               return (
                 <React.Fragment key={`company:${head.name.trim().toLowerCase()}`}>
                   <tr className="bg-zinc-900/50">
-                    <td colSpan={4} className="px-3 py-3">
+                    <td colSpan={5} className="px-3 py-3">
                       <div className="flex flex-wrap items-center gap-3">
                         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[11px] font-extrabold text-black" style={{ background: colorOf(head.name) }} aria-hidden>{initials(head.name)}</span>
                         <div className="min-w-[220px] max-w-[360px] flex-1"><EditCell clientId={head.clientId} ids={g.map((x) => x.clientId)} kind="name" value={head.name} canEdit={canEdit} placeholder="Company name" /></div>

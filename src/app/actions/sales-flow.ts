@@ -657,14 +657,14 @@ export async function updateClientContact(clientId: string, patch: { name?: stri
 }
 
 /** A new client from Client Contact: it appears in Optimizing > Clients at once (same table). */
-export async function createClientContact(input: { name: string; brand?: string; pic?: string }): Promise<Result & { id?: string }> {
+export async function createClientContact(input: { name: string; brand?: string; pic?: string; /** One more brand of an existing company: the company name may repeat. */ sameCompany?: boolean }): Promise<Result & { id?: string }> {
   const a = await actor();
   if (!a || !FINANCE.includes(a.ctx.role)) return { success: false, error: 'Only Accounting, Admin and the owners can add clients.' };
   const { ctx, db } = a;
   const name = str(input.name, 160);
   if (!name) return { success: false, error: 'Type the company name.' };
-  const { data: same } = await db.from('clients').select('id').eq('workspace_id', ctx.activeWorkspaceId).ilike('name', name.replace(/[%_]/g, '')).neq('contact_type', 'vendor').limit(1);
-  if (same?.length) return { success: false, error: 'A client with this company name already exists.' };
+  const { data: same } = input.sameCompany ? { data: [] as any[] } : await db.from('clients').select('id').eq('workspace_id', ctx.activeWorkspaceId).ilike('name', name.replace(/[%_]/g, '')).neq('contact_type', 'vendor').limit(1);
+  if (same?.length) return { success: false, error: 'A client with this company name already exists. To add a brand to it, use "+ brand" on that company.' };
   const row: Record<string, unknown> = { workspace_id: ctx.activeWorkspaceId, name, contact_type: 'client', company_name: str(input.brand, 160) || null, contact_name: str(input.pic, 160) || null };
   const { data, error } = await db.from('clients').insert(row).select('id').single();
   if (error) return fail(error);

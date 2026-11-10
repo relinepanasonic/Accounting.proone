@@ -17,7 +17,7 @@ const colorOf = (name: string) => AVATAR[Array.from(name).reduce((h, c) => (h * 
 const quiet = 'w-full truncate rounded-md border border-transparent bg-transparent px-2 py-1.5 text-sm text-zinc-200 placeholder:text-zinc-600 hover:border-zinc-700 focus:border-[#d4af37]/60 focus:bg-zinc-900 focus:outline-none';
 
 /** A box that looks like plain text until you hover it. It saves when you leave it (Tab, Enter or a click away) and flashes a check. */
-function EditCell({ clientId, kind, value, canEdit, placeholder }: { clientId: string; kind: 'name' | 'brand' | 'pic'; value: string; canEdit: boolean; placeholder: string }) {
+function EditCell({ clientId, kind, value, canEdit, placeholder, ids }: { clientId: string; kind: 'name' | 'brand' | 'pic'; value: string; canEdit: boolean; placeholder: string; /** The company name of a group is changed on all its brands. */ ids?: string[] }) {
   const router = useRouter();
   const [text, setText] = useState(value);
   const [error, setError] = useState('');
@@ -32,7 +32,8 @@ function EditCell({ clientId, kind, value, canEdit, placeholder }: { clientId: s
     if (kind === 'name' && !next) { setText(value); setError('The company name cannot be empty.'); return; }
     setError('');
     start(async () => {
-      const res = await updateClientContact(clientId, { [kind]: next });
+      const all = await Promise.all((ids && ids.length ? ids : [clientId]).map((id) => updateClientContact(id, { [kind]: next })));
+      const res = all.find((r) => !r.success) || all[0];
       if (!res.success) { setError(res.error); setText(value); return; }
       setDone(true);
       router.refresh();
@@ -52,6 +53,36 @@ function EditCell({ clientId, kind, value, canEdit, placeholder }: { clientId: s
       {done && <Check className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-emerald-400" />}
       {error && <div className="mt-0.5 px-2 text-[10px] text-red-400">{error}</div>}
     </div>
+  );
+}
+
+/** One more brand under a company: a new client with the same company name (its own brand, store and PIC). */
+function AddBrand({ company }: { company: string }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [brand, setBrand] = useState('');
+  const [pic, setPic] = useState('');
+  const [error, setError] = useState('');
+  const [pending, start] = useTransition();
+  const save = () => {
+    setError('');
+    start(async () => {
+      const res = await createClientContact({ name: company, brand, pic, sameCompany: true });
+      if (!res.success) { setError(res.error); return; }
+      setBrand(''); setPic(''); setOpen(false);
+      router.refresh();
+    });
+  };
+  const box = 'rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100 placeholder:text-zinc-600 focus:border-[#d4af37]/60 focus:outline-none';
+  if (!open) return <button type="button" onClick={() => setOpen(true)} className="rounded-md border border-dashed border-zinc-700 px-2 py-0.5 text-[11px] font-bold text-zinc-400 hover:border-[#d4af37] hover:text-[#f5d77f]">+ brand</button>;
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      <input value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Brand name" autoFocus className={`${box} w-36`} />
+      <input value={pic} onChange={(e) => setPic(e.target.value)} placeholder="PIC (optional)" className={`${box} w-32`} onKeyDown={(e) => { if (e.key === 'Enter') save(); }} />
+      <button type="button" disabled={pending || !brand.trim()} onClick={save} className="rounded-md border border-[#d4af37]/40 bg-[#d4af37]/10 px-2 py-1 text-[11px] font-bold text-[#f5d77f] disabled:opacity-40">{pending ? '...' : 'Add'}</button>
+      <button type="button" onClick={() => { setOpen(false); setError(''); }} className="text-[11px] text-zinc-500 hover:text-white">Cancel</button>
+      {error && <span className="w-full text-[10px] text-red-400">{error}</span>}
+    </span>
   );
 }
 
@@ -121,6 +152,15 @@ export function ClientContactTable({ rows, canEdit, storeOptions }: { rows: Cont
     return list.sort((a, b) => val(a).localeCompare(val(b), 'id', { numeric: true }) * (sort.asc ? 1 : -1));
   }, [rows, q, sort, filter]);
 
+  const groups = useMemo(() => {
+    const byCompany = new Map<string, ContactRow[]>();
+    for (const r of shown) {
+      const k = r.name.trim().toLowerCase();
+      byCompany.set(k, [...(byCompany.get(k) || []), r]);
+    }
+    return Array.from(byCompany.values()).map((g) => g.slice().sort((a, b) => a.brand.localeCompare(b.brand, 'id', { sensitivity: 'base' })));
+  }, [shown]);
+
   const Th = ({ k, children, w }: { k: typeof sort.key; children: React.ReactNode; w: string }) => (
     <th className="px-3 py-3 font-bold" style={{ width: w }}>
       <button onClick={() => setSort((p) => (p.key === k ? { key: k, asc: !p.asc } : { key: k, asc: true }))} className={`inline-flex items-center gap-1.5 uppercase tracking-wider hover:text-zinc-200 ${sort.key === k ? 'text-[#f5d77f]' : ''}`}>
@@ -152,28 +192,55 @@ export function ClientContactTable({ rows, canEdit, storeOptions }: { rows: Cont
             <tr><Th k="name" w="30%">Company Name</Th><Th k="brand" w="22%">Brand Name</Th><Th k="store" w="27%">Store Name</Th><Th k="pic" w="21%">PIC Name</Th></tr>
           </thead>
           <tbody className="divide-y divide-zinc-800/50">
-            {shown.length === 0 && (
+            {groups.length === 0 && (
               <tr><td colSpan={4} className="p-12 text-center text-sm text-zinc-500">{rows.length === 0 ? 'No client yet.' : 'No client matches.'}</td></tr>
             )}
-            {shown.map((r) => {
-              const line: StoreLine = { key: r.clientId, group: [r.row], stores: r.row.stores || [] };
+            {groups.map((g) => {
+              const memberRow = (r: ContactRow, tree: boolean) => {
+                const line: StoreLine = { key: r.clientId, group: [r.row], stores: r.row.stores || [] };
+                return (
+                  <tr key={r.clientId} className="group align-top transition-colors hover:bg-[#d4af37]/[0.04]">
+                    <td className="px-3 py-3">
+                      {tree ? (
+                        <span className="ml-6 inline-block h-5 w-4 rounded-bl-md border-b border-l border-zinc-700" aria-hidden />
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[11px] font-extrabold text-black" style={{ background: colorOf(r.name) }} aria-hidden>{initials(r.name)}</span>
+                          <div className="min-w-0 flex-1">
+                            <EditCell clientId={r.clientId} kind="name" value={r.name} canEdit={canEdit} placeholder="Company name" />
+                            {canEdit && <div className="px-2 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"><AddBrand company={r.name} /></div>}
+                          </div>
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-3 py-3"><EditCell clientId={r.clientId} kind="brand" value={r.brand} canEdit={canEdit} placeholder="Add brand" /></td>
+                    <td className="px-3 py-3"><StoreCell line={line} canEdit={canEdit} storeOptions={storeOptions} /></td>
+                    <td className="px-3 py-3">
+                      <div className="flex items-center gap-1.5">
+                        <UserRound className="h-3.5 w-3.5 shrink-0 text-zinc-600" aria-hidden />
+                        <div className="min-w-0 flex-1"><EditCell clientId={r.clientId} kind="pic" value={r.pic} canEdit={canEdit} placeholder="Add PIC" /></div>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              };
+              if (g.length === 1) return memberRow(g[0], false);
+              // one company with several brands: the company once, then a line per brand with its own store
+              const head = g[0];
               return (
-                <tr key={r.clientId} className="group align-top transition-colors hover:bg-[#d4af37]/[0.04]">
-                  <td className="px-3 py-3">
-                    <div className="flex items-center gap-3">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[11px] font-extrabold text-black" style={{ background: colorOf(r.name) }} aria-hidden>{initials(r.name)}</span>
-                      <div className="min-w-0 flex-1"><EditCell clientId={r.clientId} kind="name" value={r.name} canEdit={canEdit} placeholder="Company name" /></div>
-                    </div>
-                  </td>
-                  <td className="px-3 py-3"><EditCell clientId={r.clientId} kind="brand" value={r.brand} canEdit={canEdit} placeholder="Add brand" /></td>
-                  <td className="px-3 py-3"><StoreCell line={line} canEdit={canEdit} storeOptions={storeOptions} /></td>
-                  <td className="px-3 py-3">
-                    <div className="flex items-center gap-1.5">
-                      <UserRound className="h-3.5 w-3.5 shrink-0 text-zinc-600" aria-hidden />
-                      <div className="min-w-0 flex-1"><EditCell clientId={r.clientId} kind="pic" value={r.pic} canEdit={canEdit} placeholder="Add PIC" /></div>
-                    </div>
-                  </td>
-                </tr>
+                <React.Fragment key={`company:${head.name.trim().toLowerCase()}`}>
+                  <tr className="bg-zinc-900/50">
+                    <td colSpan={4} className="px-3 py-3">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[11px] font-extrabold text-black" style={{ background: colorOf(head.name) }} aria-hidden>{initials(head.name)}</span>
+                        <div className="min-w-[220px] max-w-[360px] flex-1"><EditCell clientId={head.clientId} ids={g.map((x) => x.clientId)} kind="name" value={head.name} canEdit={canEdit} placeholder="Company name" /></div>
+                        <span className="rounded-full border border-[#d4af37]/30 bg-[#d4af37]/10 px-2.5 py-0.5 text-[11px] font-bold text-[#f5d77f]">{g.length} brands</span>
+                        {canEdit && <AddBrand company={head.name} />}
+                      </div>
+                    </td>
+                  </tr>
+                  {g.map((r) => memberRow(r, true))}
+                </React.Fragment>
               );
             })}
           </tbody>

@@ -9,6 +9,12 @@ import {
   hasData,
   normalizeGroup,
   TONE_DARK,
+  rowDirs,
+  statChanges,
+  vsLabel,
+  type Pct,
+  type Dir,
+  type StatChanges,
   num,
   previousLabel,
   rupiah,
@@ -49,25 +55,31 @@ interface SessionRow {
   advertiser_name: string;
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+const DIR_DARK: Record<string, string> = { up: 'text-emerald-400', down: 'text-red-400', same: 'text-zinc-400' };
+
+function Stat({ label, value, pct, vs }: { label: string; value: string; pct?: Pct | null; vs?: string }) {
   return (
     <div className="rounded-lg border border-zinc-800 bg-black/30 px-3 py-2">
       <div className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">{label}</div>
       <div className="text-sm font-bold text-zinc-100 font-mono">{value}</div>
+      {pct && <div className={`text-[10px] font-bold ${DIR_DARK[pct.dir]}`}>{pct.text}{vs ? <span className="font-normal text-zinc-500"> vs {vs}</span> : null}</div>}
     </div>
   );
 }
 
-function RowsTable({ rows, kind }: { rows: any[]; kind: 'inkubasi' | 'group' | 'mandiri' }) {
+function RowsTable({ rows, kind, prevRows, vs }: { rows: any[]; kind: 'inkubasi' | 'group' | 'mandiri'; prevRows?: any[] | null; vs?: string }) {
   const isMandiri = kind === 'mandiri';
   const t = totals(rows);
+  const change: StatChanges | null = statChanges(rows, prevRows ?? null);
+  const dirs = rowDirs(rows, prevRows ?? null);
+  const tone = (d: Dir | null) => (d === 'up' || d === 'down' ? `font-bold ${DIR_DARK[d]}` : '');
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-        <Stat label="Modal harian" value={rupiah(t.modal)} />
-        <Stat label="Biaya iklan" value={rupiah(t.biaya)} />
-        <Stat label="Penjualan" value={rupiah(t.jual)} />
-        <Stat label="ROAS" value={t.roas} />
+        <Stat label="Modal harian" value={rupiah(t.modal)} pct={change?.modal} vs={vs} />
+        <Stat label="Biaya iklan" value={rupiah(t.biaya)} pct={change?.biaya} vs={vs} />
+        <Stat label="Penjualan" value={rupiah(t.jual)} pct={change?.jual} vs={vs} />
+        <Stat label="ROAS" value={t.roas} pct={change?.roas} vs={vs} />
       </div>
       <div className="overflow-x-auto rounded-lg border border-zinc-800">
         <table className="w-full text-xs text-left whitespace-nowrap">
@@ -88,8 +100,8 @@ function RowsTable({ rows, kind }: { rows: any[]; kind: 'inkubasi' | 'group' | '
             {rows.map((r, i) => (
               <tr key={i}>
                 <td className="px-3 py-2 max-w-[220px] truncate">{text(isMandiri ? r.infoIklan : r.iklanProduk)}</td>
-                <td className="px-3 py-2 font-mono">{rupiah(num(r.modalHarian))}</td>
-                <td className="px-3 py-2 font-mono">{text(r.targetRoas)}</td>
+                <td className={`px-3 py-2 font-mono ${tone(dirs[i].modal)}`}>{rupiah(num(r.modalHarian))}</td>
+                <td className={`px-3 py-2 font-mono ${tone(dirs[i].target)}`}>{text(r.targetRoas)}</td>
                 <td className="px-3 py-2 font-mono">{rupiah(num(r.biayaIklan))}</td>
                 <td className="px-3 py-2 font-mono">{rupiah(num(r.penjualan))}</td>
                 {!isMandiri && <td className="px-3 py-2 font-mono">{text(r.konversi)}</td>}
@@ -176,6 +188,13 @@ export function AdvertiserLogDetail({
   const inkubasi = current ? (Array.isArray(current.data_inkubasi) ? current.data_inkubasi : []).filter(hasData) : [];
   const groups = current ? normalizeGroup(current.data_group).filter(hasData) : [];
   const mandiri = current ? (Array.isArray(current.data_mandiri) ? current.data_mandiri : []).filter(hasData) : [];
+  // the same sections of the session before, to colour what went up or down and to give the % under the numbers
+  const before = prev.loaded && prev.data ? prev.data : null;
+  const prevRowsOf = (raw: any) => (Array.isArray(raw) ? raw : []).filter(hasData);
+  const prevInk = before ? prevRowsOf(before.data_inkubasi) : null;
+  const prevGroups = before ? normalizeGroup(before.data_group).filter(hasData) : null;
+  const prevMan = before ? prevRowsOf(before.data_mandiri) : null;
+  const vs = before ? vsLabel(log.report_date, before) : '';
 
   // Build the PDF in the background whenever the viewed session changes. Browsers only allow "share" right
   // after a click, so having the file ready beforehand is what makes the WhatsApp button work.
@@ -461,7 +480,7 @@ export function AdvertiserLogDetail({
                 ))}
 
                 <Section title="GMV Max Auto" count={inkubasi.length}>
-                  <RowsTable rows={inkubasi} kind="inkubasi" />
+                  <RowsTable rows={inkubasi} kind="inkubasi" prevRows={prevInk} vs={vs} />
                 </Section>
 
                 <Section title="Iklan Group" count={groups.length}>
@@ -474,7 +493,7 @@ export function AdvertiserLogDetail({
                           <div className="text-[11px] font-bold text-zinc-300">
                             {name} {category && <span className="ml-1 text-[10px] text-zinc-500 uppercase">{category}</span>}
                           </div>
-                          <RowsTable rows={rows} kind="group" />
+                          <RowsTable rows={rows} kind="group" prevRows={prevGroups ? prevGroups.filter((g) => `${g.groupCategory || ''}|${g.groupName || 'Group'}` === key) : null} vs={vs} />
                         </div>
                       );
                     })}
@@ -482,7 +501,7 @@ export function AdvertiserLogDetail({
                 </Section>
 
                 <Section title="Mandiri" count={mandiri.length}>
-                  <RowsTable rows={mandiri} kind="mandiri" />
+                  <RowsTable rows={mandiri} kind="mandiri" prevRows={prevMan} vs={vs} />
                 </Section>
               </div>
             )}

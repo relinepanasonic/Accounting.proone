@@ -11,6 +11,12 @@ import {
   text,
   totals,
   TONE_PDF,
+  rowDirs,
+  statChanges,
+  vsLabel,
+  type Pct,
+  type Dir,
+  type StatChanges,
   type PreviousSession,
 } from '@/lib/advertiser/report-utils';
 
@@ -35,27 +41,33 @@ export const PDF_WIDTH_PX = 794;
 const th: React.CSSProperties = { padding: '6px 8px', textAlign: 'left', fontSize: 10, textTransform: 'uppercase', color: '#6b7280', borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap' };
 const td: React.CSSProperties = { padding: '6px 8px', fontSize: 11, color: '#111827', borderBottom: '1px solid #f1f5f9', verticalAlign: 'top' };
 
-function Stats({ rows }: { rows: any[] }) {
+const DIR_COLOR: Record<string, string> = { up: '#15803d', down: '#dc2626', same: '#4b5563' };
+
+function Stats({ rows, change, vs }: { rows: any[]; change?: StatChanges | null; vs?: string }) {
   const t = totals(rows);
-  const items: [string, string][] = [
-    ['Modal harian', rupiah(t.modal)],
-    ['Biaya iklan', rupiah(t.biaya)],
-    ['Penjualan', rupiah(t.jual)],
-    ['ROAS', t.roas],
+  const items: [string, string, Pct | null][] = [
+    ['Modal harian', rupiah(t.modal), change?.modal ?? null],
+    ['Biaya iklan', rupiah(t.biaya), change?.biaya ?? null],
+    ['Penjualan', rupiah(t.jual), change?.jual ?? null],
+    ['ROAS', t.roas, change?.roas ?? null],
   ];
   return (
     <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-      {items.map(([label, value]) => (
+      {items.map(([label, value, pct]) => (
         <div key={label} style={{ flex: 1, border: '1px solid #e5e7eb', borderRadius: 8, padding: '8px 10px', background: '#f9fafb' }}>
           <div style={{ fontSize: 9, textTransform: 'uppercase', color: '#6b7280', fontWeight: 700 }}>{label}</div>
           <div style={{ fontSize: 14, fontWeight: 800, color: '#111827' }}>{value}</div>
+          {pct && <div style={{ fontSize: 10, fontWeight: 700, marginTop: 2, color: DIR_COLOR[pct.dir] }}>{pct.text}{vs ? <span style={{ fontWeight: 400, color: '#6b7280' }}> vs {vs}</span> : null}</div>}
         </div>
       ))}
     </div>
   );
 }
 
-function RowsTable({ rows, mandiri }: { rows: any[]; mandiri?: boolean }) {
+function RowsTable({ rows, mandiri, prevRows }: { rows: any[]; mandiri?: boolean; prevRows?: any[] | null }) {
+  const dirs = rowDirs(rows, prevRows ?? null);
+  const tone = (d: Dir | null): React.CSSProperties => (d === 'up' || d === 'down' ? { color: DIR_COLOR[d], fontWeight: 700 } : {});
+  const money: React.CSSProperties = { whiteSpace: 'nowrap' };
   return (
     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
       <thead>
@@ -75,10 +87,10 @@ function RowsTable({ rows, mandiri }: { rows: any[]; mandiri?: boolean }) {
         {rows.map((r, i) => (
           <tr key={i}>
             <td style={td}>{text(mandiri ? r.infoIklan : r.iklanProduk)}</td>
-            <td style={td}>{rupiah(num(r.modalHarian))}</td>
-            <td style={td}>{text(r.targetRoas)}</td>
-            <td style={td}>{rupiah(num(r.biayaIklan))}</td>
-            <td style={td}>{rupiah(num(r.penjualan))}</td>
+            <td style={{ ...td, ...money, ...tone(dirs[i].modal) }}>{rupiah(num(r.modalHarian))}</td>
+            <td style={{ ...td, ...tone(dirs[i].target) }}>{text(r.targetRoas)}</td>
+            <td style={{ ...td, ...money }}>{rupiah(num(r.biayaIklan))}</td>
+            <td style={{ ...td, ...money }}>{rupiah(num(r.penjualan))}</td>
             {!mandiri && <td style={td}>{text(r.konversi)}</td>}
             {!mandiri && <td style={td}>{text(r.produkTerjual)}</td>}
             <td style={{ ...td, fontWeight: 700 }}>{text(r.roas)}</td>
@@ -103,6 +115,11 @@ export const AdvertiserSessionReport = React.forwardRef<
     const mandiri = (Array.isArray(data.data_mandiri) ? data.data_mandiri : []).filter(hasData);
     const saldo = saldoDisplay(data.sisa_saldo_iklan);
     const changes = compareSessions(data, previous);
+    const prevRowsOf = (raw: any) => (Array.isArray(raw) ? raw : []).filter(hasData);
+    const prevInk = previous ? prevRowsOf(previous.data_inkubasi) : null;
+    const prevGroups = previous ? normalizeGroup(previous.data_group).filter(hasData) : null;
+    const prevMan = previous ? prevRowsOf(previous.data_mandiri) : null;
+    const vs = vsLabel(reportDate, previous);
     const groupKeys = Array.from(new Set(groups.map((g) => `${g.groupCategory || ''}|${g.groupName || 'Group'}`)));
 
     return (
@@ -170,22 +187,23 @@ export const AdvertiserSessionReport = React.forwardRef<
         {inkubasi.length > 0 && (
           <div data-pdf-block style={block}>
             <div style={sectionTitle}>GMV Max Auto</div>
-            <Stats rows={inkubasi} />
-            <RowsTable rows={inkubasi} />
+            <Stats rows={inkubasi} change={statChanges(inkubasi, prevInk)} vs={vs} />
+            <RowsTable rows={inkubasi} prevRows={prevInk} />
           </div>
         )}
 
         {groupKeys.map((key) => {
           const [category, name] = key.split('|');
           const rows = groups.filter((g) => `${g.groupCategory || ''}|${g.groupName || 'Group'}` === key);
+          const prevRows = prevGroups ? prevGroups.filter((g) => `${g.groupCategory || ''}|${g.groupName || 'Group'}` === key) : null;
           return (
             <div data-pdf-block key={key} style={block}>
               <div style={sectionTitle}>
                 Iklan Group · {name}
                 {category ? ` (${category})` : ''}
               </div>
-              <Stats rows={rows} />
-              <RowsTable rows={rows} />
+              <Stats rows={rows} change={statChanges(rows, prevRows)} vs={vs} />
+              <RowsTable rows={rows} prevRows={prevRows} />
             </div>
           );
         })}
@@ -193,8 +211,8 @@ export const AdvertiserSessionReport = React.forwardRef<
         {mandiri.length > 0 && (
           <div data-pdf-block style={block}>
             <div style={sectionTitle}>Mandiri</div>
-            <Stats rows={mandiri} />
-            <RowsTable rows={mandiri} mandiri />
+            <Stats rows={mandiri} change={statChanges(mandiri, prevMan)} vs={vs} />
+            <RowsTable rows={mandiri} mandiri prevRows={prevMan} />
           </div>
         )}
 

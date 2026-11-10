@@ -195,6 +195,58 @@ function compareRows(curRows: any[], prevRows: any[], hasPrevious: boolean): Com
   });
 }
 
+// ---- the table cells and the numbers of a section against the session before
+
+export type Dir = 'up' | 'down' | 'same' | 'first';
+export interface RowDir { modal: Dir | null; target: Dir | null }
+
+/** For each row: did its Modal Harian / Target ROAS go up, down or stay since the previous session? (rows are matched by name, else by position) */
+export function rowDirs(curRows: any[], prevRows: any[] | null): RowDir[] {
+  if (!prevRows) return curRows.map(() => ({ modal: null, target: null }));
+  const prevByKey = new Map<string, any>();
+  prevRows.forEach((r, i) => { const k = rowKey(r, i); if (!prevByKey.has(k)) prevByKey.set(k, r); });
+  return curRows.map((r, i) => {
+    const p = prevByKey.get(rowKey(r, i));
+    if (!p) return { modal: null, target: null };
+    const dir = (a: number | null, b: number | null): Dir | null => (a === null || b === null || a <= 0 || b <= 0 ? null : a > b ? 'up' : a < b ? 'down' : 'same');
+    return { modal: dir(num(r.modalHarian), num(p.modalHarian)), target: dir(parseTarget(r.targetRoas), parseTarget(p.targetRoas)) };
+  });
+}
+
+export interface Pct { dir: 'up' | 'down' | 'same'; text: string }
+/** "▲ 12.5%" / "▼ 8%" / "0%" against the value before; null when there is nothing to compare with. */
+export function pctChange(now: number, before: number): Pct | null {
+  if (!(before > 0)) return null;
+  const p = ((now - before) / before) * 100;
+  if (Math.abs(p) < 0.05) return { dir: 'same', text: '0%' };
+  const n = Math.abs(p) >= 100 ? String(Math.round(Math.abs(p))) : Math.abs(p).toFixed(1).replace(/\.0$/, '');
+  return { dir: p > 0 ? 'up' : 'down', text: `${p > 0 ? '▲' : '▼'} ${n}%` };
+}
+
+export interface StatChanges { modal: Pct | null; biaya: Pct | null; jual: Pct | null; roas: Pct | null }
+const sums = (rows: any[]) => {
+  const modal = rows.reduce((t, r) => t + num(r.modalHarian), 0);
+  const biaya = rows.reduce((t, r) => t + num(r.biayaIklan), 0);
+  const jual = rows.reduce((t, r) => t + num(r.penjualan), 0);
+  return { modal, biaya, jual, roas: biaya > 0 ? jual / biaya : 0 };
+};
+/** The four numbers of a section against the same section of the previous session. */
+export function statChanges(curRows: any[], prevRows: any[] | null): StatChanges | null {
+  if (!prevRows || !prevRows.length) return null;
+  const c = sums(curRows), p = sums(prevRows);
+  return { modal: pctChange(c.modal, p.modal), biaya: pctChange(c.biaya, p.biaya), jual: pctChange(c.jual, p.jual), roas: pctChange(c.roas, p.roas) };
+}
+
+/** "kemarin" (the day before), "Sesi 2" (same day) or "09 Nov". */
+export function vsLabel(reportDate: string, prev: { session: number; report_date: string } | null): string {
+  if (!prev) return '';
+  if (prev.report_date === reportDate) return `Sesi ${prev.session}`;
+  const days = Math.round((Date.parse(`${reportDate.slice(0, 10)}T00:00:00Z`) - Date.parse(`${prev.report_date.slice(0, 10)}T00:00:00Z`)) / 86400000);
+  if (days === 1) return 'kemarin';
+  const { dd, mmm } = splitReportDate(prev.report_date);
+  return `${dd} ${mmm}`;
+}
+
 /** Per section (Inkubasi, each Iklan Group, Mandiri): what changed since the previous session. */
 export function compareSessions(current: SessionData, previous: SessionData | null): CompareSection[] {
   const rowsOf = (raw: any) => (Array.isArray(raw) ? raw : []).filter(hasData);

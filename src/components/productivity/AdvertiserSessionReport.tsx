@@ -10,6 +10,7 @@ import {
   saldoDisplay,
   text,
   totals,
+  TONE_PDF,
   type PreviousSession,
 } from '@/lib/advertiser/report-utils';
 
@@ -142,7 +143,7 @@ export const AdvertiserSessionReport = React.forwardRef<
                       <span style={{ width: 20, color: '#6b7280' }}>{i + 1}.</span>
                       <span style={{ flex: 1 }}>
                         {line.label.startsWith('Baris ') ? '' : <span style={{ color: '#6b7280' }}>{line.label}: </span>}
-                        {line.text}
+                        {line.segments.map((seg, k) => <span key={k} style={{ color: TONE_PDF[seg.tone] }}>{seg.text}</span>)}
                       </span>
                     </div>
                   ))}

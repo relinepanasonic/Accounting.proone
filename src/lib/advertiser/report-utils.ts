@@ -74,12 +74,18 @@ export type ChangePart = {
   value: string; // "11" or "Rp 30.000"
 };
 
+/** up = raised (green), down = lowered (red), same = stay (dark grey), plain = no colour (a new ad, a sentence part). */
+export type Tone = 'up' | 'down' | 'same' | 'plain';
+export interface TextSegment { text: string; tone: Tone }
+
 export interface CompareLine {
   label: string; // product name, or "Baris 1" when the row has none
   text: string; // sentence used on screen and in the PDF
   changed: boolean;
   isNew: boolean; // row did not exist in the previous session
   parts: ChangePart[];
+  /** The same sentence as `text`, in pieces with their colour. */
+  segments: TextSegment[];
   note: string;
 }
 
@@ -105,6 +111,7 @@ const rowKey = (r: any, idx: number) => {
 function describeRow(cur: any, prev: any | null, hasPrevious: boolean): Omit<CompareLine, 'label' | 'note'> {
   const parts: ChangePart[] = [];
   const bits: string[] = [];
+  const tones: Tone[] = [];
   let changed = false;
   const isNew = hasPrevious && !prev;
 
@@ -113,18 +120,18 @@ function describeRow(cur: any, prev: any | null, hasPrevious: boolean): Omit<Com
   if (curT !== null) {
     if (prevT === null) {
       parts.push({ kind: 'target', dir: 'first', value: fmtTarget(curT) });
-      bits.push(`Target ROAS ${fmtTarget(curT)}`);
+      bits.push(`Target ROAS ${fmtTarget(curT)}`); tones.push('plain');
     } else if (curT > prevT) {
       parts.push({ kind: 'target', dir: 'up', value: fmtTarget(curT) });
-      bits.push(`Target ROAS dinaikkan ke ${fmtTarget(curT)}`);
+      bits.push(`Target ROAS dinaikkan ke ${fmtTarget(curT)}`); tones.push('up');
       changed = true;
     } else if (curT < prevT) {
       parts.push({ kind: 'target', dir: 'down', value: fmtTarget(curT) });
-      bits.push(`Target ROAS diturunkan ke ${fmtTarget(curT)}`);
+      bits.push(`Target ROAS diturunkan ke ${fmtTarget(curT)}`); tones.push('down');
       changed = true;
     } else {
       parts.push({ kind: 'target', dir: 'same', value: fmtTarget(curT) });
-      bits.push(`Target ROAS tetap ${fmtTarget(curT)}`);
+      bits.push(`Target ROAS tetap ${fmtTarget(curT)}`); tones.push('same');
     }
   }
 
@@ -133,32 +140,46 @@ function describeRow(cur: any, prev: any | null, hasPrevious: boolean): Omit<Com
   if (curM > 0) {
     if (!prev || prevM === 0) {
       parts.push({ kind: 'modal', dir: 'first', value: rupiah(curM) });
-      bits.push(`modal harian ${rupiah(curM)}`);
+      bits.push(`modal harian ${rupiah(curM)}`); tones.push('plain');
     } else if (curM > prevM) {
       parts.push({ kind: 'modal', dir: 'up', value: rupiah(curM) });
-      bits.push(`modal harian naik menjadi ${rupiah(curM)}`);
+      bits.push(`modal harian naik menjadi ${rupiah(curM)}`); tones.push('up');
       changed = true;
     } else if (curM < prevM) {
       parts.push({ kind: 'modal', dir: 'down', value: rupiah(curM) });
-      bits.push(`modal harian turun menjadi ${rupiah(curM)}`);
+      bits.push(`modal harian turun menjadi ${rupiah(curM)}`); tones.push('down');
       changed = true;
     } else {
       parts.push({ kind: 'modal', dir: 'same', value: rupiah(curM) });
-      bits.push('modal harian tetap');
+      bits.push('modal harian tetap'); tones.push('same');
     }
   }
 
   if (isNew) changed = true;
 
-  if (bits.length === 0) return { text: 'Tidak ada Target ROAS / modal harian yang diisi', changed: false, isNew, parts };
+  if (bits.length === 0) return { text: 'Tidak ada Target ROAS / modal harian yang diisi', changed: false, isNew, parts, segments: [{ text: 'Tidak ada Target ROAS / modal harian yang diisi', tone: 'same' }] };
   const joined = bits.join(', ');
   const text = isNew
     ? `Baru · ${joined}`
     : !changed && hasPrevious
       ? `Stay (${joined})`
       : joined.charAt(0).toUpperCase() + joined.slice(1);
-  return { text, changed, isNew, parts };
+  // the same sentence in coloured pieces: up green, down red, stay dark grey
+  const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+  let segments: TextSegment[];
+  if (isNew) {
+    segments = [{ text: 'Baru · ', tone: 'plain' }, ...bits.flatMap((b, i) => [...(i ? [{ text: ', ', tone: 'plain' as Tone }] : []), { text: b, tone: 'plain' as Tone }])];
+  } else if (!changed && hasPrevious) {
+    segments = [{ text: `Stay (${joined})`, tone: 'same' }];
+  } else {
+    segments = bits.flatMap((b, i) => [...(i ? [{ text: ', ', tone: 'plain' as Tone }] : []), { text: i ? b : cap(b), tone: tones[i] }]);
+  }
+  return { text, changed, isNew, parts, segments };
 }
+
+/** Colours of the change sentences: on the white PDF / report, and on the dark screen. */
+export const TONE_PDF: Record<Tone, string> = { up: '#15803d', down: '#dc2626', same: '#4b5563', plain: '#111827' };
+export const TONE_DARK: Record<Tone, string> = { up: 'text-emerald-400', down: 'text-red-400', same: 'text-zinc-400', plain: 'text-zinc-100' };
 
 function compareRows(curRows: any[], prevRows: any[], hasPrevious: boolean): CompareLine[] {
   const prevByKey = new Map<string, any>();

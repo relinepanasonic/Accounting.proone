@@ -8,6 +8,7 @@ import {
   compareSessions,
   hasData,
   normalizeGroup,
+  TONE_DARK,
   num,
   previousLabel,
   rupiah,
@@ -432,11 +433,11 @@ export function AdvertiserLogDetail({
                         <div className="text-[11px] font-bold text-zinc-300 mb-1">{section.title}</div>
                         <ol className="space-y-1">
                           {section.lines.map((line, i) => (
-                            <li key={i} className={`text-xs flex gap-2 ${line.changed ? 'text-[#f5d77f] font-semibold' : 'text-zinc-400'}`}>
+                            <li key={i} className={`text-xs flex gap-2 ${line.changed ? 'font-semibold' : ''}`}>
                               <span className="w-5 text-zinc-600">{i + 1}.</span>
                               <span>
                                 {!line.label.startsWith('Baris ') && <span className="text-zinc-500">{line.label}: </span>}
-                                {line.text}
+                                {line.segments.map((seg, k) => <span key={k} className={TONE_DARK[seg.tone]}>{seg.text}</span>)}
                               </span>
                             </li>
                           ))}

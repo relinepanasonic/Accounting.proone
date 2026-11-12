@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/api/supabase-admin';
 import { buildWhatsAppReport } from '@/lib/reports/whatsapp-report';
 import { signedReportUrl, SHARE_TTL_SECONDS } from '@/lib/reports/signed-url';
 import { sendWhatsApp } from './send';
+import { signAsOli } from './oli';
 
 /**
  * The team performance report (Sales, Admin, Advertiser, To Do, Accounting) for Nico, Herlan and Lucy.
@@ -32,7 +33,8 @@ export async function previewPerformance(dateOverride?: string): Promise<Perform
     const links = ((res.files || []) as { company: string }[]).map((f) => `${f.company}: ${signedReportUrl(ERP_ORIGIN, f.company, res.date, SHARE_TTL_SECONDS)}`);
     message = [res.headline, ...links].filter(Boolean).join('\n');
   }
-  return { send: true, kind: res.kind, date: res.date, from: res.from, to: res.to, text: res.text, message };
+  // The WhatsApp message is written as coming from Oli; `text` stays the plain report for the Founder page.
+  return { send: true, kind: res.kind, date: res.date, from: res.from, to: res.to, text: res.text, message: signAsOli(res.kind, message) };
 }
 
 export interface SendOutcome { sent: boolean; reason?: string; kind?: string; date?: string; recipients?: number; detail?: string }

@@ -78,7 +78,10 @@ export function parseFonnteWebhook(payload: Record<string, unknown>, now: Date =
   if (!body && !mediaType) return null;
 
   const externalId = str(payload.inboxid) ?? str(payload.id);
-  const sentAt = now;
+  // Fonnte's own "timestamp" (epoch seconds or milliseconds) is when WhatsApp received it; fall back to now.
+  const ts = Number(payload.timestamp);
+  const fromFonnte = Number.isFinite(ts) && ts > 0 ? new Date(ts < 1e12 ? ts * 1000 : ts) : null;
+  const sentAt = fromFonnte && Math.abs(fromFonnte.getTime() - now.getTime()) < 3 * 86400000 ? fromFonnte : now;
   const minute = Math.floor(sentAt.getTime() / 60000);
   const dedupeKey = externalId
     ? `fonnte:${externalId}`

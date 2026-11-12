@@ -70,6 +70,17 @@ describe('parseFonnteWebhook', () => {
   });
 });
 
+describe('message time', () => {
+  it('uses the Fonnte timestamp (seconds or ms) when it is recent, else now', () => {
+    const base = { device: '6281', sender: '6282', message: 'x' };
+    const t = Math.floor(NOW.getTime() / 1000) - 120;
+    expect(parseFonnteWebhook({ ...base, timestamp: t }, NOW)!.sentAt.getTime()).toBe(t * 1000);
+    expect(parseFonnteWebhook({ ...base, timestamp: String(t * 1000) }, NOW)!.sentAt.getTime()).toBe(t * 1000);
+    expect(parseFonnteWebhook({ ...base, timestamp: 1000 }, NOW)!.sentAt).toEqual(NOW);
+    expect(parseFonnteWebhook({ ...base, timestamp: 'abc' }, NOW)!.sentAt).toEqual(NOW);
+  });
+});
+
 describe('mediaTypeOf', () => {
   it('maps extensions, falls back to document, and null without media', () => {
     expect(mediaTypeOf('mp4', 'u')).toBe('video');

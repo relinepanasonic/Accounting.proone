@@ -59,6 +59,7 @@ export async function WaBoard({ workspaceId, role, days, groupId, q }: { workspa
   let devices: { phone: string; label: string | null; webhook_secret: string }[] = [];
   let reports: any[] = [];
   let actions: any[] = [];
+  let calls: any[] = [];
   if (!role) {
     const seen = new Map<string, { name: string; count: number }>();
     for (const m of msgs) {
@@ -69,11 +70,13 @@ export async function WaBoard({ workspaceId, role, days, groupId, q }: { workspa
       seen.set(m.sender_phone, s);
     }
     unlinked = [...seen.entries()].map(([phone, v]) => ({ phone, ...v })).sort((a, b) => b.count - a.count).slice(0, 12);
-    const [d, r, a] = await Promise.all([
+    const [d, r, a, l] = await Promise.all([
       db.from('wa_devices').select('phone, label, webhook_secret').eq('workspace_id', workspaceId),
       db.from('wa_reports').select('id, report_date, group_id, summary, message_count, created_at').eq('workspace_id', workspaceId).order('report_date', { ascending: false }).order('created_at', { ascending: false }).limit(60),
       db.from('wa_action_items').select('id, title, detail, owner_phone, due_date, group_id, staff_task_id').eq('workspace_id', workspaceId).eq('status', 'open').order('created_at', { ascending: false }).limit(30),
+      db.from('wa_webhook_log').select('id, received_at, outcome, reason, payload').eq('workspace_id', workspaceId).order('received_at', { ascending: false }).limit(8),
     ]);
+    calls = l.data || [];
     devices = (d.data || []) as any;
     reports = r.data || [];
     actions = a.data || [];
@@ -247,7 +250,7 @@ export async function WaBoard({ workspaceId, role, days, groupId, q }: { workspa
       )}
 
       {!role && (
-        <details className={card}>
+        <details className={card} open={groups.length === 0}>
           <summary className="cursor-pointer text-xs font-extrabold uppercase tracking-wider text-[#f5d77f]">Connect a device</summary>
           <p className="mt-3 text-[11px] text-zinc-500">In Fonnte, open the device and set its Webhook (incoming message) to the address below. Keep it private: anyone who has it can post messages into this company.</p>
           <ul className="mt-2 space-y-2">
@@ -256,6 +259,19 @@ export async function WaBoard({ workspaceId, role, days, groupId, q }: { workspa
             ))}
             {devices.length === 0 && <li className="text-xs text-zinc-500">No device added yet.</li>}
           </ul>
+          <h3 className="mb-1 mt-4 text-[10px] font-bold uppercase tracking-wider text-zinc-500">Last calls from Fonnte (kept 7 days)</h3>
+          {calls.length === 0 ? (
+            <p className="text-xs text-amber-400/90">Fonnte has not called this address yet. Check the Webhook field of the device in Fonnte, then send a message to the number.</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {calls.map((c) => (
+                <li key={c.id} className="rounded bg-black/30 p-2 text-[11px]">
+                  <div className="flex gap-2 text-zinc-400"><span>{jakarta(c.received_at)}</span><span className={c.outcome === 'stored' ? 'text-emerald-400' : c.outcome === 'error' ? 'text-red-400' : 'text-amber-400'}>{c.outcome}</span>{c.reason && <span>{c.reason}</span>}</div>
+                  <code className="mt-1 block break-all text-zinc-500">{JSON.stringify(c.payload).slice(0, 400)}</code>
+                </li>
+              ))}
+            </ul>
+          )}
         </details>
       )}
     </div>

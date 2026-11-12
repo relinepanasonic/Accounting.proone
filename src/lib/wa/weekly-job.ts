@@ -6,6 +6,8 @@ import { clientGroupMap, pickGroup } from './group-pick';
 import { jakartaDate } from './report-text';
 import { hasActivity, lastFullWeek, seriesFrom, sumRows, weeklyCaption, weeklyFigures, weeklyFileName, weeklySeries, type WeeklyPayload } from './weekly';
 import { sendWhatsApp } from './send';
+import { asDelivery, sendMedia } from './send-media';
+import { adminMediaStorage } from './media-storage';
 import { renderWeeklyPdf } from './weekly-pdf';
 import { renderWeeklyJpeg } from './report-image';
 
@@ -103,7 +105,7 @@ export async function sendOutboxItem(workspaceId: string, userId: string, id: st
   if (!caption) return { ok: false, detail: 'The message is empty.' };
   const payload = item.payload as WeeklyPayload | null;
 
-  const { data: settings } = await db.from('wa_settings').select('send_files').eq('workspace_id', workspaceId).maybeSingle();
+  const { data: settings } = await db.from('wa_settings').select('send_files, image_delivery').eq('workspace_id', workspaceId).maybeSingle();
   const asFile = !!settings?.send_files && !!payload?.cur && !opts.asText;
 
   const { data: claimed } = await db.from('wa_outbox').update({ status: 'sending', message: caption }).eq('id', id).in('status', wasSent ? ['sent'] : ['draft', 'failed']).select('id');
@@ -122,7 +124,13 @@ export async function sendOutboxItem(workspaceId: string, userId: string, id: st
       try { file = { data: new Uint8Array(await renderWeeklyPdf(payload!)), filename: pdfName, contentType: 'application/pdf' }; }
       catch (e: any) { r = { ok: false, parts: 0, detail: `Could not make the report: ${e?.message || e}` }; }
     }
-    if (file) { r = await sendWhatsApp([target], caption, { file }); sentAs = file.contentType === 'image/jpeg' ? 'Image' : 'PDF'; }
+    if (file) {
+      const isJpg = file.contentType === 'image/jpeg';
+      const month = (payload!.from || '').slice(0, 7);
+      const sent = await sendMedia({ phones: [target], caption, ...file, path: `weekly/${workspaceId}/${month}/${id}.${isJpg ? 'jpg' : 'pdf'}`, delivery: asDelivery(settings?.image_delivery), storage: adminMediaStorage() });
+      r = sent;
+      sentAs = `${isJpg ? 'Image' : 'PDF'} by ${sent.mode}`;
+    }
   } else {
     r = await sendWhatsApp([target], payload?.cur ? `${caption}\n\n${weeklyFigures(payload.cur, payload.prev)}` : caption);
   }

@@ -47,3 +47,25 @@ export async function pdfToJpeg(pdf: Uint8Array, opts: { scale?: number; quality
 export async function renderWeeklyJpeg(p: WeeklyPayload): Promise<Uint8Array> {
   return pdfToJpeg(new Uint8Array(await renderWeeklyPdf(p)));
 }
+
+export const MAX_IMAGE_WIDTH = 1240;     // enough to read a report on a phone
+export const SEND_QUALITY = 82;
+
+/**
+ * Makes a JPEG lighter for the chat: at most 1240 px wide and re-encoded at quality 82 on a white background. The advertiser screen builds
+ * its picture at 2-3x (500+ kB), which is heavy to download in a group. Never makes a file bigger: if the result is not smaller, the original is kept.
+ */
+export async function normalizeJpeg(data: Uint8Array, opts: { maxWidth?: number; quality?: number } = {}): Promise<Uint8Array> {
+  const { createCanvas, loadImage } = await import('@napi-rs/canvas');
+  const img = await loadImage(Buffer.from(data));
+  const scale = Math.min(1, (opts.maxWidth ?? MAX_IMAGE_WIDTH) / img.width);
+  const w = Math.max(1, Math.round(img.width * scale));
+  const h = Math.max(1, Math.round(img.height * scale));
+  const canvas = createCanvas(w, h);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(img, 0, 0, w, h);
+  const out = new Uint8Array(canvas.toBuffer('image/jpeg', opts.quality ?? SEND_QUALITY));
+  return out.byteLength < data.byteLength ? out : data;
+}

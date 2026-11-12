@@ -3,6 +3,9 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { getAuthenticatedWorkspaceContext, FINANCE_ROLES } from '@/lib/auth/workspace-context';
 import { sendWhatsApp } from '@/lib/wa/send';
+import { asDelivery, sendMedia } from '@/lib/wa/send-media';
+import { adminMediaStorage } from '@/lib/wa/media-storage';
+import { normalizeJpeg } from '@/lib/wa/report-image';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -55,7 +58,7 @@ export async function POST(request: Request) {
     if (recent && recent.length) return json({ already: true, sentAt: recent[0].created_at, error: 'This session report was already sent to the group.' }, 409);
   }
 
-  const { data: settings } = await db.from('wa_settings').select('send_files').eq('workspace_id', ws).maybeSingle();
+  const { data: settings } = await db.from('wa_settings').select('send_files, image_delivery').eq('workspace_id', ws).maybeSingle();
   const isImage = file instanceof File && file.type === 'image/jpeg' && file.size > 0;
   const isPdf = file instanceof File && file.type === 'application/pdf' && file.size > 0;
   const attach = !!settings?.send_files && (isImage || isPdf);
@@ -65,7 +68,9 @@ export async function POST(request: Request) {
     const pdf = file as File;   // the report as an image (preferred: it shows inline in the chat) or as a PDF
     if (pdf.size > MAX_BYTES) return json({ error: 'The file is over 4 MB (Fonnte limit). Switch off the screenshot in the report and try again.' }, 413);
     // The PDF that came from the screen is uploaded to Fonnte as a real file: nothing is stored on our side.
-    fileArg = { data: new Uint8Array(await pdf.arrayBuffer()), filename: (pdf.name || (isImage ? 'Report.jpg' : 'Report.pdf')).replace(/[\\/:*?"<>|]/g, '').slice(0, 120), contentType: isImage ? 'image/jpeg' : 'application/pdf' };
+    let bytes: Uint8Array = new Uint8Array(await pdf.arrayBuffer());
+    if (isImage) { try { bytes = await normalizeJpeg(bytes); } catch { /* send it as it is */ } }   // the screen's picture is 500+ kB: make it lighter for the chat
+    fileArg = { data: bytes, filename: (pdf.name || (isImage ? 'Report.jpg' : 'Report.pdf')).replace(/[\\/:*?"<>|]/g, '').slice(0, 120), contentType: isImage ? 'image/jpeg' : 'application/pdf' };
   }
 
   // WhatsApp keeps only about 1,000 characters of a caption. A longer report text goes as its own message right after the image,
@@ -73,23 +78,27 @@ export async function POST(request: Request) {
   const CAPTION_MAX = 1000;
   const longText = !!fileArg && message.length > CAPTION_MAX;
   const caption = longText ? message.split('\n')[0].slice(0, CAPTION_MAX) : message;
-  const r = await sendWhatsApp([target], caption, fileArg ? { file: fileArg } : {});
+  // The file is stored first and Fonnte is given a link (WhatsApp can then show a preview); if Fonnte cannot use the link, it is uploaded.
+  const filePath = fileArg ? `session/${ws}/${reportDate.slice(0, 7)}/${crypto.randomUUID()}.${isImage ? 'jpg' : 'pdf'}` : '';
+  let mode = '';
+  let stored = false;
+  let r;
+  if (fileArg) {
+    const sent = await sendMedia({ phones: [target], caption, ...fileArg, path: filePath, delivery: asDelivery(settings?.image_delivery), storage: adminMediaStorage() });
+    r = sent; mode = sent.mode; stored = sent.stored;
+  } else {
+    r = await sendWhatsApp([target], caption);
+  }
   let followUp = '';
   if (r.ok && longText) {
     await new Promise((res) => setTimeout(res, 1500));
     const t = await sendWhatsApp([target], message);
     if (!t.ok) followUp = ` (the full text could not be sent: ${t.detail})`;
   }
-  const detail = `${attach ? (isImage ? 'Image' : 'PDF') : 'Text only'}: ${r.detail}${followUp}`;
+  const detail = `${attach ? `${isImage ? 'Image' : 'PDF'} by ${mode}` : 'Text only'}: ${r.detail}${followUp}`;
   const { data: logged } = await db.from('wa_sends').insert({ workspace_id: ws, kind: 'session', report_date: reportDate, trigger: 'manual', recipients: [target], ok: r.ok, detail, text: message, ref }).select('id').single();
 
-  // Keep a copy of what was sent, so the status table can show it later (best effort: a failed copy never turns a sent report into an error).
-  if (r.ok && attach && fileArg && logged?.id) {
-    try {
-      const path = `session/${ws}/${reportDate.slice(0, 7)}/${logged.id}.${isImage ? 'jpg' : 'pdf'}`;
-      const up = await db.storage.from('wa-files').upload(path, fileArg.data, { contentType: fileArg.contentType, upsert: true });
-      if (!up.error) await db.from('wa_sends').update({ file_path: path }).eq('id', logged.id);
-    } catch { /* ignore */ }
-  }
+  // The copy of what was sent is already stored (sendMedia): record where, so the status table can show it.
+  if (r.ok && attach && stored && logged?.id) await db.from('wa_sends').update({ file_path: filePath }).eq('id', logged.id);
   return r.ok ? json({ ok: true, attached: attach, client: client.name, detail }) : json({ error: detail }, 502);
 }

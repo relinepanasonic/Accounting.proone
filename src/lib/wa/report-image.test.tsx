@@ -3,7 +3,7 @@ import { writeFileSync } from 'fs';
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 import { normalizeRow } from '@/lib/integrations/performance';
 import { sumRows, weeklySeries, type WeeklyPayload } from './weekly';
-import { darkShare, IMAGE_SCALE, MIN_DARK_SHARE, pdfToJpeg, renderWeeklyJpeg } from './report-image';
+import { darkShare, IMAGE_SCALE, MAX_IMAGE_WIDTH, MIN_DARK_SHARE, normalizeJpeg, pdfToJpeg, renderWeeklyJpeg } from './report-image';
 import { renderWeeklyPdf } from './weekly-pdf';
 
 const k = [0.82, 0.9, 1.0, 1.08, 1.2];
@@ -81,4 +81,26 @@ describe('weekly report as a JPG', () => {
     const boxOnly = new Uint8Array(await renderToBuffer(React.createElement(Document, null, React.createElement(Page, { size: 'A4' }, React.createElement(View, { style: { width: 300, height: 200, backgroundColor: '#2563eb', margin: 40 } })))));
     await expect(pdfToJpeg(boxOnly)).rejects.toThrow(/no text/);
   }, 120000);
+
+  it('normalizeJpeg makes a big picture lighter for the chat: at most 1240 px wide, and smaller in bytes', async () => {
+    const c = createCanvas(2400, 3400);
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 2400, 3400);
+    for (let i = 0; i < 4000; i++) { ctx.fillStyle = `rgb(${(i * 37) % 255},${(i * 91) % 255},${(i * 53) % 255})`; ctx.fillRect((i * 97) % 2300, (i * 131) % 3300, 90, 40); }
+    const big = new Uint8Array(c.toBuffer('image/jpeg', 98));
+    const small = await normalizeJpeg(big);
+    const img = await loadImage(Buffer.from(small));
+    expect(img.width).toBe(MAX_IMAGE_WIDTH);
+    expect(img.height).toBe(Math.round(3400 * (MAX_IMAGE_WIDTH / 2400)));
+    expect(small.byteLength).toBeLessThan(big.byteLength);
+    expect(Buffer.from(small.subarray(0, 3)).toString('hex')).toBe('ffd8ff');
+  }, 60000);
+
+  it('normalizeJpeg never makes a file bigger: a small, already-light picture is returned as it is', async () => {
+    const c = createCanvas(300, 200);
+    const ctx = c.getContext('2d'); ctx.fillStyle = '#2563eb'; ctx.fillRect(0, 0, 300, 200);
+    const tiny = new Uint8Array(c.toBuffer('image/jpeg', 40));
+    const out = await normalizeJpeg(tiny, { quality: 99 });
+    expect(out.byteLength).toBeLessThanOrEqual(tiny.byteLength);
+  }, 60000);
 });

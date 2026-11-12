@@ -21,6 +21,10 @@
       "schedule": "0 1 * * 1"
     },
     {
+      "path": "/api/wa/upload-trigger-cron",
+      "schedule": "0 3 * * *"
+    },
+    {
       "path": "/api/wa/groups-cron",
       "schedule": "1 5 * * *"
     }

@@ -26,6 +26,8 @@ export interface LogRow {
   files: string[];
   tags: string[];
   owner: string;
+  /** Reline: the workspace the file went to (the report needs it to find the store). */
+  workspace?: string;
 }
 
 export interface AssignedStore { project: ProjectKey; store: string; pic: string }
@@ -35,7 +37,7 @@ export function normalizeLogs(prof: DashboardUploadLogResult, reline: DashboardU
   const assigned: AssignedStore[] = [];
   const errors: string[] = [];
   const add = (u: DashboardUpload, project: ProjectKey) =>
-    rows.push({ id: `${project}-${u.id}`, at: u.uploadedAt, day: jakartaDay(new Date(u.uploadedAt)), project, admin: u.admin, store: u.store || '-', type: u.type, month: u.month || '', files: u.files || [], tags: u.tags || [], owner: u.owner || '' });
+    rows.push({ id: `${project}-${u.id}`, at: u.uploadedAt, day: jakartaDay(new Date(u.uploadedAt)), project, admin: u.admin, store: u.store || '-', type: u.type, month: u.month || '', files: u.files || [], tags: u.tags || [], owner: u.owner || '', workspace: u.workspace || '' });
 
   if (prof.ok) {
     for (const u of prof.uploads) add(u, 'profesor');
@@ -108,6 +110,8 @@ export interface FileEntry { type: string; name: string; admin: string; at: stri
 export interface MonthStoreRow {
   project: ProjectKey;
   store: string;
+  /** Reline workspace of the store (empty for Profesor Dashboard). */
+  workspace: string;
   client: string;
   /** The files uploaded for each week (1-5) of the month. null = that week does not exist yet or has not started. */
   weekFiles: Array<FileEntry[] | null>;
@@ -133,14 +137,14 @@ export function buildMonthTable(rows: LogRow[], assigned: AssignedStore[], year:
   const curPrefix = today.slice(0, 8);
   const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
   const key = (p: ProjectKey, s: string) => `${p}|${normName(s)}`;
-  const stores = new Map<string, { project: ProjectKey; store: string; owner: string }>();
-  for (const a of assigned) stores.set(key(a.project, a.store), { project: a.project, store: a.store, owner: '' });
+  const stores = new Map<string, { project: ProjectKey; store: string; owner: string; workspace: string }>();
+  for (const a of assigned) stores.set(key(a.project, a.store), { project: a.project, store: a.store, owner: '', workspace: '' });
   const inMonth = rows.filter((r) => r.day.startsWith(prefix));
   for (const r of inMonth) if (r.store && r.store !== '-') {
     const k = key(r.project, r.store);
     const cur = stores.get(k);
-    if (!cur) stores.set(k, { project: r.project, store: r.store, owner: r.owner });
-    else if (!cur.owner && r.owner) cur.owner = r.owner;
+    if (!cur) stores.set(k, { project: r.project, store: r.store, owner: r.owner, workspace: r.workspace || '' });
+    else { if (!cur.owner && r.owner) cur.owner = r.owner; if (!cur.workspace && r.workspace) cur.workspace = r.workspace; }
   }
 
   const isCurrent = prefix === curPrefix;
@@ -169,7 +173,7 @@ export function buildMonthTable(rows: LogRow[], assigned: AssignedStore[], year:
       if (isCurrent) status = (weekFiles[todayBlock]?.length || 0) > 0 || list.some((r) => r.day >= sevenDaysAgo) ? 'on_schedule' : 'late';
       else status = weekFiles.every((w) => w === null || w.length > 0) ? 'on_schedule' : 'late';
     }
-    out.push({ project: s.project, store: s.store, client: clientOf(s.store) || s.owner || '-', weekFiles, status });
+    out.push({ project: s.project, store: s.store, workspace: s.workspace, client: clientOf(s.store) || s.owner || '-', weekFiles, status });
   }
   return out.sort((a, b) => a.project.localeCompare(b.project) || a.store.localeCompare(b.store));
 }

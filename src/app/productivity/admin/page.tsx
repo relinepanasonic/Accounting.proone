@@ -5,6 +5,7 @@ import { getDashboardUploadLogRange, getRelineUploadLogRange, jakartaDay } from 
 import { buildMonthTable, normalizeLogs, storeKey } from '@/lib/integrations/upload-performance';
 import { DivisionTabs } from '@/components/productivity/DivisionTabs';
 import { Shield } from 'lucide-react';
+import { loadReportStatuses } from '@/lib/wa/upload-trigger';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,6 +42,10 @@ export default async function AdminPerformancePage({ searchParams }: { searchPar
     return known.find((x) => x.key.length >= 5 && (k.includes(x.key) || x.key.includes(k)))?.name || '';
   };
 
+  // Which weekly reports were already made / sent (the 6th step of the checklist)
+  const { data: dev } = await createAdminClient().from('wa_devices').select('workspace_id').eq('active', true).limit(1).maybeSingle();
+  const reports = dev?.workspace_id ? await loadReportStatuses(dev.workspace_id, from, to) : {};
+
   const table = buildMonthTable(rows, assigned, year, month, clientOf);
   const todayBlock = year === curYear && month === curMonth ? Math.min(4, Math.floor((Number(today.slice(8, 10)) - 1) / 7)) : -1;
   const years = Array.from({ length: curYear - 2024 + 1 }, (_, i) => curYear - i);
@@ -55,7 +60,7 @@ export default async function AdminPerformancePage({ searchParams }: { searchPar
           <p className="text-sm text-zinc-400 mt-1">What each store uploaded, week by week</p>
         </div>
       </div>
-      <AdminPerformance rows={table} errors={errors} year={year} month={month} years={years} todayBlock={todayBlock} daysInMonth={daysInMonth} />
+      <AdminPerformance rows={table} errors={errors} year={year} month={month} years={years} todayBlock={todayBlock} daysInMonth={daysInMonth} reports={reports} />
     </div>
   );
 }

@@ -2,7 +2,10 @@
 
 import React, { useMemo, useState } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { AlertTriangle, Check, X as XIcon, Loader2 } from 'lucide-react';
+import { AlertTriangle, Check, X as XIcon, Loader2, Send } from 'lucide-react';
+import { CHECKLIST, buildChecklist, reportMondayOfBlock } from '@/lib/integrations/upload-checklist';
+import { reportLabel } from '@/lib/integrations/report-label';
+import { sendStoreWeeklyReport } from '@/app/actions/upload-report';
 import { SortArrows } from '@/components/ui/SortArrows';
 import { LOG_TIMEZONE } from '@/lib/integrations/upload-log-shared';
 import { PROJECT_FILTERS, projectLabel, type MonthStoreRow } from '@/lib/integrations/upload-performance';
@@ -18,7 +21,7 @@ const stamp = (iso: string) => {
 type SortKey = 'project' | 'client' | 'store' | 'status';
 
 /** Admin > Performance: per store the files uploaded in each week of the month. Click a week to see those files. */
-export function AdminPerformance({ rows, errors, year, month, years, todayBlock, daysInMonth }: { rows: MonthStoreRow[]; errors: string[]; year: number; month: number; years: number[]; todayBlock: number; daysInMonth: number }) {
+export function AdminPerformance({ rows, errors, year, month, years, todayBlock, daysInMonth, reports }: { rows: MonthStoreRow[]; errors: string[]; year: number; month: number; years: number[]; todayBlock: number; daysInMonth: number; reports: Record<string, { status: string; sentAt: string | null; hasGroup: boolean }> }) {
   const router = useRouter();
   const pathname = usePathname();
   const search = useSearchParams();
@@ -26,6 +29,12 @@ export function AdminPerformance({ rows, errors, year, month, years, todayBlock,
   const [project, setProject] = useState('all');
   const [sort, setSort] = useState<{ key: SortKey; asc: boolean }>({ key: 'project', asc: true });
   const [open, setOpen] = useState<{ row: MonthStoreRow; week: number } | null>(null);
+  const [sending, setSending] = useState(false);
+  const [sendMsg, setSendMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [justSent, setJustSent] = useState<Record<string, boolean>>({});
+  const monday = (b: number) => reportMondayOfBlock(year, month, b);
+  const reportOf = (r: MonthStoreRow, b: number) => { const m = monday(b); return m ? reports[`${reportLabel(r)}|${m}`] : undefined; };
+  const isSent = (r: MonthStoreRow, b: number) => reportOf(r, b)?.status === 'sent' || justSent[`${r.project}|${r.store}|${b}`] === true;
 
   const go = (key: 'year' | 'month', value: string) => {
     const p = new URLSearchParams(search.toString());
@@ -47,6 +56,17 @@ export function AdminPerformance({ rows, errors, year, month, years, todayBlock,
   );
   const range = (b: number) => `${b * 7 + 1}-${b === 4 ? daysInMonth : (b + 1) * 7}`;
   const openFiles = open?.row.weekFiles[open.week] || [];
+  const openList = buildChecklist(openFiles);
+  const doSend = async (resend: boolean) => {
+    if (!open) return;
+    const m = monday(open.week);
+    if (!m) { setSendMsg({ ok: false, text: 'This week has no Monday, so there is no weekly report.' }); return; }
+    setSending(true); setSendMsg(null);
+    const r = await sendStoreWeeklyReport({ project: open.row.project, store: open.row.store, workspace: open.row.workspace, monday: m, resend });
+    setSending(false);
+    setSendMsg({ ok: r.ok, text: r.detail });
+    if (r.ok) { setJustSent((j) => ({ ...j, [`${open.row.project}|${open.row.store}|${open.week}`]: true })); router.refresh(); }
+  };
 
   return (
     <div className="space-y-4">
@@ -94,8 +114,8 @@ export function AdminPerformance({ rows, errors, year, month, years, todayBlock,
                   {r.weekFiles.map((w, b) => (
                     <td key={b} className={`px-2 py-2.5 text-center ${b === todayBlock ? 'bg-[#d4af37]/[0.06]' : ''}`}>
                       {w === null ? <span className="text-zinc-700">-</span> : w.length > 0 ? (
-                        <button onClick={() => setOpen({ row: r, week: b })} className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-emerald-400 hover:bg-emerald-500/10" title="Show the files">
-                          <Check className="h-3.5 w-3.5" />{w.length}
+                        <button onClick={() => { setSendMsg(null); setOpen({ row: r, week: b }); }} className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono hover:bg-emerald-500/10 ${buildChecklist(w).complete ? 'text-emerald-400' : 'text-amber-400'}`} title="Show the checklist">
+                          {buildChecklist(w).complete ? <Check className="h-3.5 w-3.5" /> : null}{buildChecklist(w).count}/5{isSent(r, b) && <Send className="h-3 w-3 text-sky-400" />}
                         </button>
                       ) : <XIcon className="mx-auto h-3.5 w-3.5 text-red-400/70" />}
                     </td>
@@ -111,7 +131,7 @@ export function AdminPerformance({ rows, errors, year, month, years, todayBlock,
           </table>
         </div>
       </div>
-      <p className="text-[11px] text-zinc-600">The week comes from the file name (&quot;... week 2.csv&quot;); a file without it counts in the week of its upload day. On Schedule: a file this week or in the last 7 days (a past month: every week has a file).</p>
+      <p className="text-[11px] text-zinc-600">Each week needs 5 files: Store Performance, Product Performance, Ads Total, Ads Inkubasi / GMV Max Auto and Ads Group. When all 5 are in, the weekly report is sent to the client&apos;s WhatsApp group (daily check, or press Send in the week). The week comes from the file name (&quot;... week 2.csv&quot;); a file without it counts in the week of its upload day. On Schedule: a file this week or in the last 7 days (a past month: every week has a file).</p>
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setOpen(null)}>
@@ -123,7 +143,33 @@ export function AdminPerformance({ rows, errors, year, month, years, todayBlock,
               </div>
               <button onClick={() => setOpen(null)} className="text-zinc-500 hover:text-zinc-200"><XIcon className="h-4 w-4" /></button>
             </div>
-            <div className="max-h-[60vh] overflow-auto rounded-xl border border-zinc-800">
+            <div className="mb-3 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
+              <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500">Checklist · {openList.count}/5 files{openList.complete ? ' · complete' : ''}</div>
+              <ul className="space-y-1.5 text-xs">
+                {CHECKLIST.map((c, i) => {
+                  const f = openList.done[c.key];
+                  return (
+                    <li key={c.key} className="flex items-center gap-2">
+                      {f ? <Check className="h-4 w-4 shrink-0 text-emerald-400" /> : <XIcon className="h-4 w-4 shrink-0 text-red-400/80" />}
+                      <span className={`w-56 shrink-0 font-semibold ${f ? 'text-zinc-100' : 'text-zinc-400'}`}>{i + 1}. {c.label}</span>
+                      <span className="truncate text-zinc-500">{f ? `${f.name} · ${stamp(f.at)}` : 'not uploaded yet'}</span>
+                    </li>
+                  );
+                })}
+                <li className="flex flex-wrap items-center gap-2 border-t border-zinc-800 pt-2">
+                  {isSent(open.row, open.week) ? <Check className="h-4 w-4 shrink-0 text-sky-400" /> : <XIcon className="h-4 w-4 shrink-0 text-zinc-600" />}
+                  <span className={`w-56 shrink-0 font-semibold ${isSent(open.row, open.week) ? 'text-zinc-100' : 'text-zinc-400'}`}>6. Report sent to the WhatsApp group</span>
+                  <span className="text-zinc-500">
+                    {isSent(open.row, open.week) ? `sent${reportOf(open.row, open.week)?.sentAt ? ' ' + stamp(reportOf(open.row, open.week)!.sentAt!) : ''}` : openList.complete ? 'will be sent automatically (or press Send)' : 'waits for the 5 files'}
+                  </span>
+                  <button disabled={sending || !monday(open.week) || (!openList.complete && !isSent(open.row, open.week))} onClick={() => doSend(isSent(open.row, open.week))} className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-[#d4af37]/40 bg-[#d4af37]/10 px-3 py-1 text-[11px] font-bold text-[#f5d77f] hover:brightness-125 disabled:opacity-40">
+                    {sending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}{isSent(open.row, open.week) ? 'Send again' : 'Send report'}
+                  </button>
+                </li>
+              </ul>
+              {sendMsg && <p className={`mt-2 text-[11px] ${sendMsg.ok ? 'text-emerald-400' : 'text-red-400'}`}>{sendMsg.text}</p>}
+            </div>
+            <div className="max-h-[40vh] overflow-auto rounded-xl border border-zinc-800">
               <table className="w-full text-left text-xs">
                 <thead className="sticky top-0 bg-zinc-900 text-[10px] uppercase tracking-wider text-zinc-400">
                   <tr><th className="px-3 py-2 font-bold">Type</th><th className="px-3 py-2 font-bold">File</th><th className="px-3 py-2 font-bold">Admin</th><th className="px-3 py-2 font-bold">Uploaded</th></tr>

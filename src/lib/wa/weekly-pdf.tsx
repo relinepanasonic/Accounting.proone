@@ -66,6 +66,23 @@ export function niceMax(max: number): number {
   return 10 * p;
 }
 
+/**
+ * Text the built-in PDF font can draw. Store, client and product names come from other apps and can hold characters Helvetica has no glyph
+ * for (a non-breaking hyphen U+2011, emoji, Chinese...), which would print as a gap or a stray mark. Dashes become "-", odd spaces become
+ * a space, invisible characters go, and whatever is outside Latin letters is dropped.
+ */
+export function pdfText(s: string): string {
+  return String(s ?? '')
+    .replace(/[\u2010-\u2015\u2212]/g, '-')
+    .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' ')
+    .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
+    .replace(/[\u201C\u201D\u201E]/g, '"')
+    .replace(/[\u200B-\u200F\u2028-\u202E\u2060\uFEFF]/g, '')
+    .replace(/[^\x20-\x7E\u00A1-\u00FF]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 const pctOf = (now: number, before: number | null | undefined) => (before && before > 0 ? ((now - before) / before) * 100 : null);
 const pctText = (p: number) => `${p > 0 ? '+' : p < 0 ? '-' : ''}${Math.abs(p) >= 10 ? Math.round(Math.abs(p)) : (Math.round(Math.abs(p) * 10) / 10).toString().replace('.', ',')}%`;
 const cut = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}...` : s);
@@ -189,7 +206,7 @@ function pointsOf(p: WeeklyPayload): WeekPoint[] {
 /** The opening sentence of page 1, like the executive summary of the monthly report. */
 export function summaryLine(p: WeeklyPayload): string {
   const { cur } = p;
-  const parts = [`Pada ${periodText(p.from, p.to)}, ${p.store} membukukan penjualan ${rp(cur.sales)}`];
+  const parts = [`Pada ${periodText(p.from, p.to)}, ${pdfText(p.store)} membukukan penjualan ${rp(cur.sales)}`];
   if (cur.traffic > 0) parts[0] += ` dari ${int(cur.traffic)} pengunjung`;
   if (cur.orders > 0) parts[0] += ` dengan ${int(cur.orders)} pesanan`;
   let s = `${parts[0]}.`;
@@ -209,10 +226,10 @@ export function WeeklyDocument({ p }: { p: WeeklyPayload }) {
   const a = cur.ads.total;
   const types = TYPES.map(([name, k]) => ({ name, ads: cur.ads[k] as PerfAds })).filter((t) => t.ads.cost > 0 || t.ads.sales > 0);
   const typeCost = types.reduce((s, t) => s + t.ads.cost, 0);
-  const products = p.products && p.products.length ? p.products : null;
+  const products = p.products && p.products.length ? p.products.map((x) => ({ ...x, name: pdfText(x.name) })).filter((x) => x.name) : null;
   const productSum = products ? products.reduce((s, x) => s + x.sales, 0) : 0;
   const analysis = analyze(cur, prev, p.series);
-  const who = p.client && p.client.toLowerCase() !== p.store.toLowerCase() ? `${p.store} · ${p.client}` : p.store;
+  const who = p.client && p.client.toLowerCase() !== p.store.toLowerCase() ? `${pdfText(p.store)} · ${pdfText(p.client)}` : pdfText(p.store);
 
   const Footer = () => (
     <View style={st.footer} fixed>

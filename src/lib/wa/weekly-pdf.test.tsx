@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { extractText, getDocumentProxy } from 'unpdf';
 import { normalizeRow, type PerfRow } from '@/lib/integrations/performance';
 import { sumRows, weeklySeries, type WeeklyPayload } from './weekly';
-import { barColumns, CHART_LEFT, CHART_W, niceMax, renderWeeklyPdf, shortRp, summaryLine } from './weekly-pdf';
+import { barColumns, CHART_LEFT, CHART_W, niceMax, pdfText, renderWeeklyPdf, shortRp, summaryLine } from './weekly-pdf';
 
 const row = (d: string, k: number): PerfRow => normalizeRow('dashboard', {
   store: 'onat.hardware', periodStart: d, periodEnd: d, granularity: 'week', sales: 100000000 * k, gmv: 100000000 * k, traffic: 12000 * k, addToCart: 38000 * k, orders: 1200 * k,
@@ -82,6 +82,26 @@ describe('weekly PDF', () => {
     expect(totalPages).toBe(2);
   });
 }, 60000);
+
+describe('pdfText', () => {
+  it('turns odd dashes and spaces into plain ones and drops what the PDF font cannot draw', () => {
+    expect(pdfText('AC Panasonic 1 PK CS\u2011YU9BKJ AC Split')).toBe('AC Panasonic 1 PK CS-YU9BKJ AC Split');
+    expect(pdfText('Toko\u00A0Maju\u2009Jaya \u2013 Cabang')).toBe('Toko Maju Jaya - Cabang');
+    expect(pdfText('\u201CPromo\u201D \uD83D\uDD25 Roda\u200B Caster')).toBe('"Promo" Roda Caster');
+    expect(pdfText('\u4E2D\u6587 Kawat')).toBe('Kawat');
+    expect(pdfText('Pompa Mini  Ban\n 3"')).toBe('Pompa Mini Ban 3"');
+  });
+  it('keeps accented Latin letters', () => {
+    expect(pdfText('Caf\u00E9 R\u00F6sti')).toBe('Caf\u00E9 R\u00F6sti');
+  });
+  it('a product name with a non-breaking hyphen and an emoji still makes a clean two-page PDF', async () => {
+    const p = payload({ products: [{ name: 'AC Panasonic 1 PK CS\u2011YU9BKJ \uD83D\uDD25', sales: 21730228 }, { name: '   ', sales: 5 }] });
+    const { totalPages, text } = await pages(p);
+    expect(totalPages).toBe(2);
+    expect(text[1]).toContain('AC Panasonic 1 PK CS-YU9BKJ');
+    expect(text[1]).not.toContain('\u2011');
+  });
+});
 
 describe('chart helpers', () => {
   it('the weekly charts share their columns: the same week is at the same x in both, so they can be read straight down', () => {

@@ -171,7 +171,7 @@ export function ClientStoreTable({ rows, canEditStart, canEditNames, canEditStat
   };
   const sorted = sort ? [...shown].sort((a, b) => val(a, sort.key).localeCompare(val(b, sort.key)) * (sort.asc ? 1 : -1)) : shown;
   const Th = ({ k, children }: { k: string; children: React.ReactNode }) => (
-    <th className="px-4 py-3 font-bold">
+    <th className="px-2.5 py-3 font-bold">
       <button onClick={() => setSort((p) => (p?.key === k ? { key: k, asc: !p.asc } : { key: k, asc: true }))} className={`inline-flex items-center gap-1.5 uppercase tracking-wider hover:text-zinc-200 ${sort?.key === k ? 'text-[#f5d77f]' : ''}`}>
         {children}<SortArrows dir={sort?.key === k ? (sort.asc ? 'asc' : 'desc') : null} />
       </button>
@@ -191,7 +191,16 @@ export function ClientStoreTable({ rows, canEditStart, canEditNames, canEditStat
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-[#d4af37]/20 bg-[#0e0f14] shadow-xl">
-        <table className="w-full text-left text-sm">
+        <table className="w-full table-fixed text-left text-sm [&_input]:w-full [&_input]:min-w-0 [&_select]:w-full [&_select]:min-w-0">
+          <colgroup>
+            {(() => {
+              // the columns that are shown share 100% of the width by weight, so the whole table fits one screen
+              const cols: Array<[number, boolean]> = [[15, true], [16, true], [8, canEditSales], [13, true], [11, true], [7, true], [9, assign], [9, assign], [12, Boolean(assign && waGroups)], [6, Boolean(reactivate)]];
+              const used = cols.filter(([, on]) => on);
+              const total = used.reduce((t, [w]) => t + w, 0);
+              return used.map(([w], i) => <col key={i} style={{ width: `${(w / total) * 100}%` }} />);
+            })()}
+          </colgroup>
           <thead className="border-b border-[#d4af37]/10 bg-zinc-900/60 text-[11px] uppercase tracking-wider text-zinc-400">
             <tr>
               <Th k="client">Client</Th>
@@ -202,8 +211,8 @@ export function ClientStoreTable({ rows, canEditStart, canEditNames, canEditStat
               <Th k="status">Status</Th>
               {assign && <Th k="advertiser">Advertiser</Th>}
               {assign && <Th k="admin">Admin</Th>}
-              {assign && waGroups && <th className="px-4 py-3 font-bold">WhatsApp Group</th>}
-              {reactivate && <th className="px-4 py-3 font-bold" />}
+              {assign && waGroups && <th className="px-2.5 py-3 font-bold">WhatsApp Group</th>}
+              {reactivate && <th className="px-2.5 py-3 font-bold" />}
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800/60">
@@ -212,22 +221,22 @@ export function ClientStoreTable({ rows, canEditStart, canEditNames, canEditStat
               const r = l.group[0];
               return (
                 <tr key={l.key} className="align-top hover:bg-zinc-900/30">
-                  <td className="px-4 py-3.5">
+                  <td className="px-2.5 py-3">
                     <div className="font-bold text-zinc-100">{r.clientName}</div>
                     {r.clientName !== 'Hidden client' && (r.brand || r.pic) && <div className="text-[10px] text-zinc-400">{[r.brand, r.pic && `PIC ${r.pic}`].filter(Boolean).join(' · ')}</div>}
                     {r.invoiceNumber && <div className="font-mono text-[10px] text-zinc-500">{r.invoiceNumber}</div>}
                   </td>
-                  <td className="px-4 py-3.5"><StoreCell line={l} canEdit={canEditNames} storeOptions={storeOptions} /></td>
-                  {canEditSales && <td className="px-4 py-3.5"><SalesCell row={r} /></td>}
-                  <td className="px-4 py-3.5 text-zinc-200">
+                  <td className="px-2.5 py-3"><StoreCell line={l} canEdit={canEditNames} storeOptions={storeOptions} /></td>
+                  {canEditSales && <td className="px-2.5 py-3"><SalesCell row={r} /></td>}
+                  <td className="px-2.5 py-3 text-zinc-200">
                     {l.group.map((x, i) => <div key={i}>{x.product}{x.quantity > 1 && <span className="ml-1 text-xs text-zinc-500">x{x.quantity}</span>}</div>)}
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3.5"><StartCell row={r} canEdit={canEditStart} /></td>
-                  <td className="px-4 py-3.5"><StatusCell row={r} canEdit={canEditStatus} /></td>
-                  {assign && <td className="px-4 py-3.5"><HandlerSelect clientId={r.clientId} job="advertising" current={r.advertiserId} people={advertisers!} /></td>}
-                  {assign && <td className="px-4 py-3.5"><HandlerSelect clientId={r.clientId} job="admin" current={r.adminId} people={admins!} /></td>}
-                  {assign && waGroups && <td className="min-w-[13rem] px-4 py-3.5"><WaGroupSelect clientIds={[r.clientId]} value={waByClient?.[r.clientId] || null} groups={waGroups} /></td>}
-                  {reactivate && <td className="px-4 py-3.5"><ReactivateButton invoiceId={r.invoiceId} /></td>}
+                  <td className="px-2.5 py-3"><StartCell row={r} canEdit={canEditStart} /></td>
+                  <td className="px-2.5 py-3"><StatusCell row={r} canEdit={canEditStatus} /></td>
+                  {assign && <td className="px-2.5 py-3"><HandlerSelect clientId={r.clientId} job="advertising" current={r.advertiserId} people={advertisers!} /></td>}
+                  {assign && <td className="px-2.5 py-3"><HandlerSelect clientId={r.clientId} job="admin" current={r.adminId} people={admins!} /></td>}
+                  {assign && waGroups && <td className="px-2.5 py-3"><WaGroupSelect clientIds={[r.clientId]} value={waByClient?.[r.clientId] || null} groups={waGroups} /></td>}
+                  {reactivate && <td className="px-2.5 py-3"><ReactivateButton invoiceId={r.invoiceId} /></td>}
                 </tr>
               );
             })}

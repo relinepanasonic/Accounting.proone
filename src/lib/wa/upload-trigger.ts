@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { getDashboardUploadLogRange, getRelineUploadLogRange, jakartaDay } from '@/lib/integrations/dashboard-uploads';
-import { buildMonthTable, normalizeLogs, type MonthStoreRow } from '@/lib/integrations/upload-performance';
+import { buildMonthTable, normalizeLogs, storeKey, type MonthStoreRow } from '@/lib/integrations/upload-performance';
+import { loadClientRows } from '@/lib/sales/client-table';
 import { buildChecklist, reportMondayOfBlock } from '@/lib/integrations/upload-checklist';
 import { storeKeyOf, storeLabel } from '@/lib/integrations/performance';
 import { prepareClientWeekly, sendOutboxItem } from './weekly-job';
@@ -39,6 +40,24 @@ export async function sendStoreWeek(workspaceId: string, userId: string | null, 
   return { ok: r.ok, detail: r.detail, sent: r.ok };
 }
 
+/** Says whether a store of the feed belongs to a client that churned (no report is sent for it). */
+async function churnedStoreCheck(workspaceId: string): Promise<(store: string) => boolean> {
+  try {
+    const db = createAdminClient();
+    const gone = await loadClientRows(db, workspaceId, { archived: 'only', maskName: (n) => n || '' });
+    const names = new Set(gone.map((g) => g.clientName));
+    if (!names.size) return () => false;
+    const { data } = await db.from('clients').select('name, company_name, store_name').limit(5000);
+    const keys: Array<{ key: string; churn: boolean }> = [];
+    for (const c of (data || []) as any[]) for (const v of [c.store_name, c.company_name, c.name]) if (v && storeKey(String(v)).length >= 4) keys.push({ key: storeKey(String(v)), churn: names.has(c.name) });
+    return (store) => {
+      const k = storeKey(store);
+      const hit = keys.find((x) => x.key === k) || keys.find((x) => x.key.length >= 5 && (k.includes(x.key) || x.key.includes(k)));
+      return !!hit?.churn;
+    };
+  } catch { return () => false; }
+}
+
 export interface TriggerResult { checked: number; ready: number; sent: string[]; skipped: string[]; errors: string[] }
 
 /**
@@ -51,6 +70,7 @@ export async function sendReadyWeeklyReports(workspaceId: string, opts: { today?
   const cutoff = jakartaDay(new Date(new Date(`${today}T12:00:00+07:00`).getTime() - 21 * 86400000));
   const months = Array.from(new Set([cutoff.slice(0, 7), today.slice(0, 7)]));
   const statuses: Record<string, ReportStatus> = {};
+  const isChurned = await churnedStoreCheck(workspaceId);
   for (const m of months) {
     const [y, mo] = m.split('-').map(Number);
     const last = new Date(Date.UTC(y, mo, 0)).getUTCDate();
@@ -61,6 +81,7 @@ export async function sendReadyWeeklyReports(workspaceId: string, opts: { today?
     res.errors.push(...errors);
     Object.assign(statuses, await loadReportStatuses(workspaceId, from, to));
     for (const store of buildMonthTable(rows, assigned, y, mo, () => '')) {
+      if (isChurned(store.store)) continue;
       for (let b = 0; b < 5; b++) {
         const files = store.weekFiles[b];
         if (!files?.length) continue;

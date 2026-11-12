@@ -5,6 +5,9 @@ import { getDashboardUploadLogRange, getRelineUploadLogRange, jakartaDay } from 
 import { buildMonthTable, normalizeLogs, storeKey } from '@/lib/integrations/upload-performance';
 import { DivisionTabs } from '@/components/productivity/DivisionTabs';
 import { Shield } from 'lucide-react';
+import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
+import { loadClientRows } from '@/lib/sales/client-table';
 import { loadReportStatuses } from '@/lib/wa/upload-trigger';
 
 export const dynamic = 'force-dynamic';
@@ -46,7 +49,15 @@ export default async function AdminPerformancePage({ searchParams }: { searchPar
   const { data: dev } = await createAdminClient().from('wa_devices').select('workspace_id').eq('active', true).limit(1).maybeSingle();
   const reports = dev?.workspace_id ? await loadReportStatuses(dev.workspace_id, from, to) : {};
 
-  const table = buildMonthTable(rows, assigned, year, month, clientOf);
+  // A client that churned is left out: its stores do not count in the Admin Performance (no late uploads, no reports).
+  const churned = new Set<string>();
+  try {
+    const ctx = await getAuthenticatedWorkspaceContext(await createClient());
+    const gone = await loadClientRows(createAdminClient(), ctx.activeWorkspaceId, { archived: 'only', maskName: (n) => n || '' });
+    for (const g of gone) churned.add(g.clientName);
+  } catch { /* no churn list: show everything */ }
+
+  const table = buildMonthTable(rows, assigned, year, month, clientOf).filter((r) => !churned.has(r.client));
   const todayBlock = year === curYear && month === curMonth ? Math.min(4, Math.floor((Number(today.slice(8, 10)) - 1) / 7)) : -1;
   const years = Array.from({ length: curYear - 2024 + 1 }, (_, i) => curYear - i);
 

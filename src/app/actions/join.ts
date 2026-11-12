@@ -37,7 +37,7 @@ export async function completeInvite(
 
   const { data: invite } = await db
     .from('workspace_invites')
-    .select('id, full_name, role, workspace_ids, expires_at, used_at')
+    .select('id, full_name, role, workspace_ids, expires_at, used_at, employment_status')
     .eq('token_hash', tokenHash)
     .maybeSingle();
   if (!invite || invite.used_at || new Date(invite.expires_at).getTime() < Date.now()) {
@@ -119,6 +119,7 @@ export async function completeInvite(
       role: invite.role,
       email,
       display_name: invite.full_name,
+      ...(invite.employment_status ? { employment_status: invite.employment_status } : {}),
     })),
     { onConflict: 'workspace_id,user_id' }
   );

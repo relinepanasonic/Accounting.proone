@@ -1143,7 +1143,7 @@ export async function updateTeamMemberAccess(payload: {
 
     const { data: member } = await supabase
       .from('workspace_members')
-      .select('id, user_id, email, display_name, role')
+      .select('id, user_id, email, display_name, role, employment_status')
       .eq('id', payload.memberId)
       .eq('workspace_id', ctx.activeWorkspaceId)
       .single();
@@ -1169,6 +1169,7 @@ export async function updateTeamMemberAccess(payload: {
           email: member.email,
           display_name: member.display_name,
           role: payload.role,
+          ...(member.employment_status ? { employment_status: member.employment_status } : {}),
         });
         if (error) return { success: false, error: error.message };
       } else if (wanted && existing && workspaceId === ctx.activeWorkspaceId) {
@@ -1181,6 +1182,7 @@ export async function updateTeamMemberAccess(payload: {
     }
 
     revalidatePath('/settings/team');
+    revalidatePath('/hrd/employees');
     return { success: true, removedFromCurrent: !selected.includes(ctx.activeWorkspaceId) };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Failed to update access.' };

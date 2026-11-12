@@ -17,6 +17,8 @@ export async function createInvite(input: {
   fullName: string;
   role: string;
   workspaceIds: string[];
+  /** Tetap (permanent) or Freelance, for tax purposes. */
+  employmentStatus?: 'tetap' | 'freelance';
 }): Promise<{ success?: boolean; link?: string; inviteId?: string; expiresAt?: string; error?: string }> {
   const ctx = await getAuthenticatedWorkspaceContext();
 
@@ -44,6 +46,7 @@ export async function createInvite(input: {
       full_name: fullName,
       role: input.role,
       workspace_ids: workspaceIds,
+      ...(input.employmentStatus === 'tetap' || input.employmentStatus === 'freelance' ? { employment_status: input.employmentStatus } : {}),
       invited_by: ctx.userId,
       expires_at: expiresAt,
     })
@@ -62,6 +65,7 @@ export async function createInvite(input: {
   const siteUrl = (process.env.SITE_URL || `${h.get('x-forwarded-proto') || 'http'}://${h.get('host') || 'localhost:3000'}`).replace(/\/$/, '');
 
   revalidatePath('/settings/team');
+  revalidatePath('/hrd/employees');
   return { success: true, link: `${siteUrl}/join/${token}`, inviteId: data.id, expiresAt };
 }
 

@@ -4,18 +4,16 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { getAuthenticatedWorkspaceContext, FINANCE_ROLES } from '@/lib/auth/workspace-context';
 import { founderEmails, isFounderEmail } from '@/lib/auth/founders';
+import { EmployeeDirectory, type Person, type PendingEmployeeInvite } from '@/components/hrd/EmployeeDirectory';
 
 export const dynamic = 'force-dynamic';
 
-const ROLE_LABEL: Record<string, string> = {
-  founder: 'Founder', superadmin: 'Superadmin', accounting: 'Accounting', admin: 'Admin', advertiser: 'Advertiser', sales: 'Sales', client: 'Client',
-};
 const ROLE_ORDER = ['founder', 'superadmin', 'accounting', 'admin', 'advertiser', 'sales', 'client'];
 
-const since = (iso: string | null) =>
-  iso ? new Date(iso).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta', day: '2-digit', month: 'short', year: 'numeric' }) : '-';
-
-/** HRD > Employee Directory: everyone who works in this company, with role and contact. */
+/**
+ * HRD > Employee Directory: everyone who works in this company, and the place to add them. An employee is also a user of the company:
+ * adding one creates an invitation with the role, the employment status (Tetap / Freelance, for tax) and the companies they can enter.
+ */
 export default async function EmployeeDirectoryPage() {
   const supabase = await createClient();
   const ctx = await getAuthenticatedWorkspaceContext(supabase);
@@ -28,63 +26,84 @@ export default async function EmployeeDirectoryPage() {
       </div>
     );
   }
+  const isOwner = ctx.role === 'superadmin' || ctx.role === 'founder';
 
   const db = createAdminClient();
-  const { data: members } = await db.from('workspace_members').select('user_id, role, created_at').eq('workspace_id', ctx.activeWorkspaceId);
-  const ids = (members || []).map((m: any) => m.user_id).filter(Boolean);
+  let membersRes: any = await db.from('workspace_members').select('id, user_id, role, created_at, employment_status').eq('workspace_id', ctx.activeWorkspaceId);
+  if (membersRes.error) membersRes = await db.from('workspace_members').select('id, user_id, role, created_at').eq('workspace_id', ctx.activeWorkspaceId); // before 20261114_employment_status.sql
+  const members: any[] = membersRes.data || [];
+  const ids = members.map((m) => m.user_id).filter(Boolean);
   const { data: profiles } = ids.length ? await db.from('profiles').select('id, full_name, email, phone').in('id', ids) : { data: [] as any[] };
   const { data: founderProfiles } = await db.from('profiles').select('id, full_name, email, phone').in('email', founderEmails());
 
-  const byId = new Map<string, any>((profiles || []).map((p: any) => [p.id, p]));
-  const people = (members || []).map((m: any) => {
-    const p = byId.get(m.user_id);
-    const email = p?.email || '';
-    return { id: m.user_id as string, name: p?.full_name || email.split('@')[0] || 'Staff', email, phone: p?.phone || '', role: isFounderEmail(email) ? 'founder' : m.role, since: m.created_at as string | null };
-  });
-  // The founder is not a member row in every workspace, but belongs in the directory.
-  for (const f of founderProfiles || []) {
-    if (!people.some((x) => x.id === f.id)) people.push({ id: f.id, name: f.full_name || f.email.split('@')[0], email: f.email, phone: f.phone || '', role: 'founder', since: null });
+  // The companies this viewer manages: a person's access to them is shown and can be changed.
+  const manageable = ctx.availableWorkspaces.filter((w) => w.role === 'founder' || w.role === 'superadmin').map((w) => ({ id: w.id, name: w.name }));
+  const accessByUser = new Map<string, string[]>();
+  if (ids.length && manageable.length) {
+    const { data: access } = await db.from('workspace_members').select('user_id, workspace_id').in('workspace_id', manageable.map((w) => w.id)).in('user_id', ids);
+    for (const a of access || []) accessByUser.set(a.user_id, [...(accessByUser.get(a.user_id) || []), a.workspace_id]);
   }
 
-  // Founders are only visible to the founder, like on the Team page. Clients with a login are not staff.
+  const byId = new Map<string, any>((profiles || []).map((p: any) => [p.id, p]));
+  const people: Person[] = members.map((m) => {
+    const p = byId.get(m.user_id);
+    const email = p?.email || '';
+    return {
+      memberId: m.id as string,
+      userId: m.user_id as string,
+      name: p?.full_name || email.split('@')[0] || 'Staff',
+      email,
+      phone: p?.phone || '',
+      role: isFounderEmail(email) ? 'founder' : m.role,
+      status: m.employment_status === 'tetap' || m.employment_status === 'freelance' ? m.employment_status : null,
+      since: (m.created_at as string | null) || null,
+      workspaceIds: accessByUser.get(m.user_id) || [ctx.activeWorkspaceId],
+      isCurrentUser: m.user_id === ctx.userId,
+    };
+  });
+  // The founder is not a member row in every company, but belongs in the directory.
+  for (const f of founderProfiles || []) {
+    if (!people.some((x) => x.userId === f.id)) {
+      people.push({ memberId: null, userId: f.id, name: f.full_name || f.email.split('@')[0], email: f.email, phone: f.phone || '', role: 'founder', status: null, since: null, workspaceIds: manageable.map((w) => w.id), isCurrentUser: f.id === ctx.userId });
+    }
+  }
+
+  // Founders are only visible to the founder. Clients with a login are not staff.
   const visible = people
     .filter((p) => (ctx.role === 'founder' ? true : p.role !== 'founder') && p.role !== 'client')
     .sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role) || a.name.localeCompare(b.name));
 
-  return (
-    <div className="mx-auto max-w-5xl space-y-6 px-4 py-8 lg:px-6 animate-in fade-in duration-300">
-      <div className="border-b border-[#d4af37]/20 pb-4">
-        <h1 className="flex items-center gap-2 text-lg font-extrabold uppercase tracking-wider text-white"><Users className="h-5 w-5 text-[#d4af37]" /> Employee Directory</h1>
-        <p className="mt-1 text-xs text-zinc-500">{ctx.activeWorkspaceName} · {visible.length} people. Add or remove people on the Team &amp; invites page (from the company chooser).</p>
-      </div>
+  // Invitations that were not used yet (an employee that was added but has not opened the link).
+  let pending: PendingEmployeeInvite[] = [];
+  if (isOwner && manageable.length) {
+    const { data: inviteRows } = await db
+      .from('workspace_invites')
+      .select('id, full_name, role, workspace_ids, expires_at')
+      .is('used_at', null)
+      .gt('expires_at', new Date().toISOString())
+      .overlaps('workspace_ids', manageable.map((w) => w.id))
+      .order('created_at', { ascending: false });
+    pending = (inviteRows || []).map((i: any) => ({ id: i.id, fullName: i.full_name, role: i.role, expiresAt: i.expires_at, workspaceIds: i.workspace_ids }));
+  }
 
-      <div className="overflow-x-auto rounded-xl border border-[#d4af37]/20 bg-[#0e0f14] shadow-xl">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-[#d4af37]/10 bg-zinc-900/50 text-[11px] uppercase tracking-wider text-zinc-400">
-            <tr>
-              <th className="px-4 py-3 font-bold">Name</th>
-              <th className="px-4 py-3 font-bold">Role</th>
-              <th className="px-4 py-3 font-bold">Email</th>
-              <th className="px-4 py-3 font-bold">Phone</th>
-              <th className="px-4 py-3 font-bold">Joined</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-800/50">
-            {visible.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-zinc-500">No people found.</td></tr>}
-            {visible.map((p) => (
-              <tr key={p.id} className="hover:bg-zinc-900/30">
-                <td className="px-4 py-3 font-bold text-zinc-100">{p.name}</td>
-                <td className="px-4 py-3">
-                  <span className="rounded-full border border-[#d4af37]/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#f5d77f]">{ROLE_LABEL[p.role] || p.role}</span>
-                </td>
-                <td className="px-4 py-3 text-zinc-300">{p.email || '-'}</td>
-                <td className="px-4 py-3 text-zinc-300">{p.phone || '-'}</td>
-                <td className="px-4 py-3 text-zinc-500">{since(p.since)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+  return (
+    <div className="space-y-6 p-4 lg:p-8 animate-in fade-in duration-300">
+      <div className="flex items-center gap-4">
+        <div className="rounded-xl bg-[#d4af37]/10 p-3 text-[#d4af37]"><Users className="h-7 w-7" /></div>
+        <div>
+          <h1 className="font-serif text-2xl font-extrabold text-zinc-100">Employee Directory</h1>
+          <p className="mt-1 text-sm text-zinc-400">{ctx.activeWorkspaceName} · everyone who works here. An employee is also a user of the company: add them here, set their role, tax status and the companies they can enter.</p>
+        </div>
       </div>
+      <EmployeeDirectory
+        people={visible}
+        companies={manageable}
+        activeWorkspaceId={ctx.activeWorkspaceId}
+        currentUserRole={ctx.role}
+        canManage={isOwner}
+        canSetStatus={isOwner || ctx.role === 'accounting'}
+        pendingInvites={pending}
+      />
     </div>
   );
 }

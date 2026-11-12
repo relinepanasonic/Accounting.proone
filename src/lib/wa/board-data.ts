@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/api/supabase-admin';
-import { cellOf, monthWeeks, parseSessionRef, weekDates, type BoardCell, type DayCell, type MonthWeek } from './board';
+import { cellOf, monthWeeks, parseSessionRef, sessionCells, weekDates, type BoardCell, type DayCell, type MonthWeek } from './board';
 
 export interface BoardRow { store: string; client: string; weeks: BoardCell[]; monthly: BoardCell }
 export interface Board { month: string; weeks: MonthWeek[]; rows: BoardRow[] }
@@ -50,8 +50,9 @@ export async function loadWeekDetail(workspaceId: string, store: string, weekFro
     db.from('wa_outbox').select('id, status').eq('workspace_id', workspaceId).eq('kind', 'client-weekly').eq('store_label', store).eq('period_from', weekFrom).maybeSingle(),
   ]);
   const clientId: string | null = cl?.id || null;
-  const days: DayCell[] = dates.map((date) => ({ date, logged: 0, sent: 0, sendId: null, hasCopy: false }));
-  const at = new Map(days.map((d) => [d.date, d]));
+  // per day: the sessions the advertiser logged, and the sessions Oli sent (with the send that holds the saved copy)
+  const loggedOn = new Map<string, Set<number>>(dates.map((d) => [d, new Set<number>()]));
+  const sentOn = new Map<string, Map<number, { id: string; hasCopy: boolean }>>(dates.map((d) => [d, new Map()]));
 
   if (clientId) {
     const [{ data: logs }, { data: sends }] = await Promise.all([
@@ -59,27 +60,17 @@ export async function loadWeekDetail(workspaceId: string, store: string, weekFro
       db.from('wa_sends').select('id, ref, report_date, file_path, created_at').eq('workspace_id', workspaceId).eq('kind', 'session').eq('ok', true).like('ref', `${clientId}|%`).gte('report_date', weekFrom).lte('report_date', to).order('created_at', { ascending: true }),
     ]);
     const mine = (s: string | null | undefined) => !s || s === store;   // a client with one store logs without a store label
-    const seenLogged = new Set<string>();
-    for (const l of logs || []) {
-      const k = `${l.report_date}|${l.session}`;
-      if (!mine(l.store_label) || seenLogged.has(k)) continue;
-      seenLogged.add(k);
-      const d = at.get(l.report_date as string);
-      if (d) d.logged++;
-    }
-    const seenSent = new Set<string>();
-    for (const s of sends || []) {
+    for (const l of logs || []) if (mine(l.store_label)) loggedOn.get(l.report_date as string)?.add(Number(l.session));
+    for (const s of sends || []) {                                      // oldest first: a later send of the same session replaces the earlier one
       const ref = parseSessionRef(s.ref);
       if (!ref || !mine(ref.store)) continue;
-      const d = at.get(ref.date);
-      if (!d) continue;
-      const k = `${ref.date}|${ref.session}`;
-      if (!seenSent.has(k)) { seenSent.add(k); d.sent++; }
-      if (s.file_path) { d.sendId = s.id as string; d.hasCopy = true; }   // the latest copy of that day wins (ordered oldest first)
-      else if (!d.hasCopy) d.sendId = s.id as string;
+      const m = sentOn.get(ref.date);
+      if (!m) continue;
+      const hasCopy = !!s.file_path;
+      const before = m.get(ref.session);
+      if (!before || hasCopy || !before.hasCopy) m.set(ref.session, { id: s.id as string, hasCopy });
     }
-    // sessions sent but never logged on that day (logged < sent) still count as logged
-    for (const d of days) if (d.logged < d.sent) d.logged = d.sent;
   }
+  const days: DayCell[] = dates.map((date) => ({ date, sessions: sessionCells(loggedOn.get(date)!, sentOn.get(date)!) }));
   return { client: cl?.name || null, clientId, days, week: cellOf(wk as any) };
 }

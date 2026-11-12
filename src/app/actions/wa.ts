@@ -206,11 +206,11 @@ export async function saveOutboxMessage(id: string, message: string) {
 }
 
 /** The approval: an admin checked the text and presses Send. Oli's number sends it to the client's group. */
-export async function sendOutbox(id: string, message?: string, asText = false) {
+export async function sendOutbox(id: string, message?: string, asText = false, resend = false) {
   const ctx = await waAccess();
   if (!ctx || !ctx.userId) return { error: 'Not allowed' };
   try {
-    const r = await sendOutboxItem(ctx.activeWorkspaceId, ctx.userId, id, { message: message?.slice(0, 4000), asText });
+    const r = await sendOutboxItem(ctx.activeWorkspaceId, ctx.userId, id, { message: message?.slice(0, 4000), asText, resend });
     revalidatePath('/hrd/wa', 'layout');
     return r.ok ? { ok: true, detail: r.detail } : { error: r.detail };
   } catch (e: any) {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cellOf, dayState, monthWeeks, parseSessionRef, sessionRef, shiftMonth, validMonth, weekDates } from './board';
+import { cellOf, monthWeeks, parseSessionRef, sessionCells, sessionRef, shiftMonth, validMonth, weekDates } from './board';
 
 describe('monthWeeks', () => {
   it('November 2026 has Mondays on 2, 9, 16, 23 and 30: five weeks, each Monday to Sunday', () => {
@@ -46,12 +46,20 @@ describe('cells', () => {
     expect(cellOf({ id: 'a', status: 'draft' }).state).toBe('draft');
     expect(cellOf({ id: 'a', status: 'sending' }).state).toBe('draft');
   });
-  it('a day is sent, partly sent, logged but not sent, or empty', () => {
-    expect(dayState({ logged: 3, sent: 3 })).toBe('sent');
-    expect(dayState({ logged: 3, sent: 1 })).toBe('partial');
-    expect(dayState({ logged: 2, sent: 0 })).toBe('logged');
-    expect(dayState({ logged: 0, sent: 0 })).toBe('none');
-    expect(dayState({ logged: 1, sent: 2 })).toBe('sent');
+  it('a day always has boxes for Sesi 1, 2 and 3: sent, logged-not-sent, or empty', () => {
+    const c = sessionCells(new Set([1, 2]), new Map([[1, { id: 'send-1', hasCopy: true }]]));
+    expect(c.map((x) => x.session)).toEqual([1, 2, 3]);
+    expect(c.map((x) => x.state)).toEqual(['sent', 'logged', 'none']);
+    expect(c[0]).toMatchObject({ sendId: 'send-1', hasCopy: true });
+    expect(c[1]).toMatchObject({ sendId: null, hasCopy: false });
+  });
+  it('a sent session counts even if the advertiser log of that session is gone, and a 4th session gets a box', () => {
+    const c = sessionCells(new Set([4]), new Map([[2, { id: 's2', hasCopy: false }]]));
+    expect(c.map((x) => x.state)).toEqual(['none', 'sent', 'none', 'logged']);
+    expect(c[1].hasCopy).toBe(false);
+  });
+  it('an empty day is three empty boxes', () => {
+    expect(sessionCells(new Set(), new Map()).map((x) => x.state)).toEqual(['none', 'none', 'none']);
   });
   it('a session reference round-trips, even when the store name has a bar in it', () => {
     const ref = sessionRef('c-1', 'ProOne - onat.hardware', '2026-11-11', 1);

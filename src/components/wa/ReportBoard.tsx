@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { getWeekDetail } from '@/app/actions/wa';
-import { DAY_LABELS, dayState, type BoardCell, type DayCell, type MonthWeek } from '@/lib/wa/board';
+import { DAY_LABELS, type BoardCell, type DayCell, type MonthWeek, type SessionCell } from '@/lib/wa/board';
 
 export interface BoardRowView { store: string; client: string; weeks: BoardCell[]; monthly: BoardCell }
 interface Detail { client: string | null; clientId: string | null; days: DayCell[]; week: BoardCell }
@@ -25,16 +25,19 @@ function Cell({ cell, onOpen, title }: { cell: BoardCell; onOpen?: (src: string)
   return <span className="px-2 text-zinc-700">–</span>;
 }
 
-/** One day of the detail: how many session reports were sent that day (click to see the last one), or logged and not sent yet. */
+/** One session box: sent to the client group (click to see what was sent), logged and not sent yet, or empty. */
+function SessionBox({ c, onOpen }: { c: SessionCell; onOpen: (src: string) => void }) {
+  const n = <span className="mr-0.5 text-[9px] font-normal text-zinc-500">{c.session}</span>;
+  if (c.state === 'none') return <span className="inline-flex min-w-[2rem] items-center justify-center rounded border border-zinc-800 px-1 py-0.5 text-[11px] text-zinc-700" title={`Sesi ${c.session}: nothing logged`}>{n}–</span>;
+  if (c.state === 'logged') return <span className="inline-flex min-w-[2rem] items-center justify-center rounded border border-amber-500/40 bg-amber-500/10 px-1 py-0.5 text-[11px] font-bold text-amber-400" title={`Sesi ${c.session}: logged by the advertiser, not sent to the client yet`}>{n}○</span>;
+  const cls = 'inline-flex min-w-[2rem] items-center justify-center rounded border border-emerald-500/40 bg-emerald-500/10 px-1 py-0.5 text-[11px] font-bold text-emerald-400';
+  return c.hasCopy && c.sendId
+    ? <button onClick={() => onOpen(`/api/wa/sent-image/${c.sendId}`)} className={`${cls} hover:bg-emerald-500/25`} title={`Sesi ${c.session}: sent. Click to see what was sent`}>{n}✓</button>
+    : <span className={cls} title={`Sesi ${c.session}: sent (no saved copy: it was sent before copies were kept)`}>{n}✓</span>;
+}
+
 function DayView({ d, onOpen }: { d: DayCell; onOpen: (src: string) => void }) {
-  const s = dayState(d);
-  if (s === 'none') return <span className="px-2 text-zinc-700">–</span>;
-  if (s === 'logged') return <span className="px-2 text-sm font-bold text-amber-400" title={`${d.logged} session report(s) logged, none sent to the client`}>○ {d.logged}</span>;
-  const label = s === 'sent' ? `✓ ${d.sent}` : `✓ ${d.sent}/${d.logged}`;
-  const color = s === 'sent' ? 'text-emerald-400 hover:bg-emerald-500/15' : 'text-lime-300 hover:bg-lime-500/15';
-  return d.hasCopy && d.sendId
-    ? <button onClick={() => onOpen(`/api/wa/sent-image/${d.sendId}`)} title={`${d.sent} sent of ${d.logged} logged. Click to see the last one`} className={`rounded px-2 py-0.5 text-sm font-bold ${color}`}>{label}</button>
-    : <span className={`px-2 text-sm font-bold ${color.split(' ')[0]}`} title={`${d.sent} sent of ${d.logged} logged (no saved copy of these)`}>{label}</span>;
+  return <div className="flex justify-center gap-1">{d.sessions.map((c) => <SessionBox key={c.session} c={c} onOpen={onOpen} />)}</div>;
 }
 
 function Modal({ src, onClose }: { src: string; onClose: () => void }) {
@@ -138,7 +141,7 @@ export function ReportBoard({ month, monthLabel, prevMonth, nextMonth, weeks, ro
                       </table>
                     )}
                     {detail && !detail.clientId && <p className="mt-2 text-[11px] text-amber-400">This store is not matched to a client with session reports, so the days stay empty.</p>}
-                    <p className="mt-2 text-[10px] text-zinc-600">Days: ✓ = session reports sent to the client group (✓ 2/3: two of three logged were sent), ○ = logged by the advertiser and not sent yet.</p>
+                    <p className="mt-2 text-[10px] text-zinc-600">Each day has a box per session (1, 2, 3): ✓ = that session report was sent to the client group (click to see it), ○ = logged by the advertiser and not sent yet, – = nothing logged.</p>
                   </td></tr>
                 )}
               </React.Fragment>

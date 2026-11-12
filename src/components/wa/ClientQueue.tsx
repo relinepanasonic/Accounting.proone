@@ -34,7 +34,7 @@ export function ClientQueue({ items, groups, period, sendFiles }: { items: Queue
           <h2 className="text-xs font-extrabold uppercase tracking-wider text-[#f5d77f]">Client weekly summaries (Oli)</h2>
           <p className="mt-1 text-[11px] text-zinc-500">
             {period ? `Week ${period.from} to ${period.to}. ` : ''}Drafts are made every Monday 08:00 from the Dashboard Prof and Reline numbers. Nothing goes to a client until you press Approve &amp; send.{' '}
-            {sendFiles ? 'Each one is sent as a PDF with the title below as its caption.' : 'PDF sending is off, so each one is sent as the title followed by the numbers in text (the Founder page switches PDFs on).'}
+            {sendFiles ? 'Each one is sent as an image (JPG) with the title below as its caption.' : 'File sending is off, so each one is sent as the title followed by the numbers in text (the Founder page switches files on).'}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -97,9 +97,9 @@ function QueueCard({ item, groups, sendFiles }: { item: QueueItem; groups: Queue
           )}
         </select>
         {!item.group_id && editable && <span className="text-[11px] text-amber-400">Link the client&apos;s group to send (Oli must be in that group). Or set it once for the whole client in Client Contacts.</span>}
-        {item.pdfUrl && <a href={item.pdfUrl} target="_blank" rel="noopener noreferrer" className="ml-auto text-[11px] font-bold text-[#f5d77f] underline">Preview PDF</a>}
+        {item.pdfUrl && <a href={item.pdfUrl} target="_blank" rel="noopener noreferrer" className="ml-auto text-[11px] font-bold text-[#f5d77f] underline">Preview image</a>}
       </div>
-      <div className="mt-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500">{sendFiles ? 'Caption (sent with the PDF)' : 'Title (the numbers follow it)'}</div>
+      <div className="mt-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500">{sendFiles ? 'Caption (sent with the image)' : 'Title (the numbers follow it)'}</div>
 
       <textarea
         value={text}
@@ -126,6 +126,19 @@ function QueueCard({ item, groups, sendFiles }: { item: QueueItem; groups: Queue
           )}
           <button disabled={pending || !dirty} className={ghost} onClick={() => start(async () => { const r: any = await saveOutboxMessage(item.id, text); setNote(r?.error || 'Saved.'); })}>Save edit</button>
           <button disabled={pending} className={ghost} onClick={() => start(async () => { await skipOutbox(item.id, true); })}>Skip this week</button>
+        </div>
+      )}
+      {item.status === 'sent' && (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <button
+            disabled={pending || !item.group_id}
+            className={ghost}
+            title="Send this report to the group once more (for a test, or after a correction)"
+            onClick={() => { if (!confirm(`This report was already sent. Send it AGAIN to "${group?.label || 'the group'}" now, as Oli?`)) return; start(async () => { setNote('Sending...'); const r: any = await sendOutbox(item.id, undefined, false, true); setNote(r?.error ? `Not sent: ${r.error}` : ''); }); }}
+          >
+            Send again
+          </button>
+          <span className="text-[11px] text-zinc-500">It reaches the client group a second time.</span>
         </div>
       )}
       {item.status === 'skipped' && <button disabled={pending} className={`${ghost} mt-2`} onClick={() => start(async () => { await skipOutbox(item.id, false); })}>Put back</button>}

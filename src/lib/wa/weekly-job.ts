@@ -89,11 +89,12 @@ export interface OutboxSendResult { ok: boolean; detail: string }
  * cannot send the same summary twice. With "send PDFs as files" ON (Fonnte Super package) the message is the PDF with the caption;
  * otherwise (or with asText) it is the caption followed by the numbers as text.
  */
-export async function sendOutboxItem(workspaceId: string, userId: string, id: string, opts: { message?: string; asText?: boolean } = {}): Promise<OutboxSendResult> {
+export async function sendOutboxItem(workspaceId: string, userId: string, id: string, opts: { message?: string; asText?: boolean; resend?: boolean } = {}): Promise<OutboxSendResult> {
   const db = createAdminClient();
   const { data: item } = await db.from('wa_outbox').select('id, status, group_id, message, payload').eq('id', id).eq('workspace_id', workspaceId).maybeSingle();
   if (!item) return { ok: false, detail: 'Summary not found.' };
-  if (item.status !== 'draft' && item.status !== 'failed') return { ok: false, detail: item.status === 'sent' ? 'Already sent.' : `It is ${item.status}.` };
+  const wasSent = item.status === 'sent';
+  if (item.status !== 'draft' && item.status !== 'failed' && !(wasSent && opts.resend)) return { ok: false, detail: wasSent ? 'Already sent. Use Send again to send it once more.' : `It is ${item.status}.` };
   if (!item.group_id) return { ok: false, detail: 'Link a WhatsApp group to this client first.' };
   const { data: group } = await db.from('wa_groups').select('wa_id, is_group').eq('id', item.group_id).eq('workspace_id', workspaceId).maybeSingle();
   if (!group) return { ok: false, detail: 'The linked group no longer exists.' };
@@ -105,7 +106,7 @@ export async function sendOutboxItem(workspaceId: string, userId: string, id: st
   const { data: settings } = await db.from('wa_settings').select('send_files').eq('workspace_id', workspaceId).maybeSingle();
   const asFile = !!settings?.send_files && !!payload?.cur && !opts.asText;
 
-  const { data: claimed } = await db.from('wa_outbox').update({ status: 'sending', message: caption }).eq('id', id).in('status', ['draft', 'failed']).select('id');
+  const { data: claimed } = await db.from('wa_outbox').update({ status: 'sending', message: caption }).eq('id', id).in('status', wasSent ? ['sent'] : ['draft', 'failed']).select('id');
   if (!claimed || claimed.length === 0) return { ok: false, detail: 'Someone else is sending this one.' };
 
   const target = group.is_group ? `${group.wa_id}@g.us` : group.wa_id;
@@ -127,6 +128,8 @@ export async function sendOutboxItem(workspaceId: string, userId: string, id: st
   }
   r = r!;
   const detail = `${sentAs}: ${r.detail}`;
-  await db.from('wa_outbox').update({ status: r.ok ? 'sent' : 'failed', detail, sent_at: r.ok ? new Date().toISOString() : null, sent_by: r.ok ? userId : null }).eq('id', id);
+  if (r.ok) await db.from('wa_outbox').update({ status: 'sent', detail: wasSent ? `Sent again. ${detail}` : detail, sent_at: new Date().toISOString(), sent_by: userId }).eq('id', id);
+  // a failed resend leaves the report marked as sent (it was), and says what went wrong
+  else await db.from('wa_outbox').update(wasSent ? { status: 'sent', detail: `Send again failed: ${detail}` } : { status: 'failed', detail, sent_at: null, sent_by: null }).eq('id', id);
   return { ok: r.ok, detail };
 }

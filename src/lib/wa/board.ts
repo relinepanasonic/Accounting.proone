@@ -48,13 +48,20 @@ export function cellOf(row?: { id: string; status: string } | null): BoardCell {
   return { state: 'draft', id: row.id };       // draft or sending
 }
 
-export interface DayCell { date: string; logged: number; sent: number; sendId: string | null; hasCopy: boolean }
+/** One session box of a day: sent to the client group (green), logged by the advertiser but not sent (amber), or nothing. */
+export interface SessionCell { session: number; state: 'sent' | 'logged' | 'none'; sendId: string | null; hasCopy: boolean }
+export interface DayCell { date: string; sessions: SessionCell[] }
 
-/** What a day shows: sent (green, with how many), logged but not sent (amber), or nothing. */
-export function dayState(d: Pick<DayCell, 'logged' | 'sent'>): 'sent' | 'partial' | 'logged' | 'none' {
-  if (d.sent > 0 && d.sent >= d.logged) return 'sent';
-  if (d.sent > 0) return 'partial';
-  return d.logged > 0 ? 'logged' : 'none';
+/** Sessions that are always shown for a day (the advertisers report 2-3 times a day). A higher session shows when it was logged or sent. */
+export const MIN_SESSIONS = 3;
+
+export function sessionCells(logged: Set<number>, sent: Map<number, { id: string; hasCopy: boolean }>): SessionCell[] {
+  const max = Math.max(MIN_SESSIONS, ...logged, ...sent.keys());
+  return Array.from({ length: max }, (_, i) => {
+    const n = i + 1;
+    const s = sent.get(n);
+    return { session: n, state: s ? 'sent' : logged.has(n) ? 'logged' : 'none', sendId: s?.id ?? null, hasCopy: !!s?.hasCopy } as SessionCell;
+  });
 }
 
 /** The key of a session send (what wa_sends.ref holds): client | store | date | session. */

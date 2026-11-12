@@ -5,7 +5,6 @@ import { waAccess, parseDays, TEAM_ROLES, type TeamRole } from '@/lib/wa/queries
 import { WaBoard } from '@/components/wa/WaBoard';
 import { WaNoAccess } from '@/components/wa/WaNoAccess';
 import { ClientQueue, type QueueItem } from '@/components/wa/ClientQueue';
-import { signedWeeklyPdfUrl } from '@/lib/wa/signed';
 import { ReportBoard } from '@/components/wa/ReportBoard';
 import { loadBoard } from '@/lib/wa/board-data';
 import { shiftMonth, validMonth } from '@/lib/wa/board';
@@ -38,7 +37,7 @@ export default async function WaRolePage({ params, searchParams }: { params: Pro
       db.from('wa_settings').select('send_files').eq('workspace_id', ws).maybeSingle(),
     ]);
     // A one-hour link to open each draft's PDF in a new tab (the PDF is drawn from the numbers saved with the draft).
-    const items = ((rows || []) as QueueItem[]).map((r) => ({ ...r, pdfUrl: signedWeeklyPdfUrl(r.id, 3600) }));
+    const items = ((rows || []) as QueueItem[]).map((r) => ({ ...r, pdfUrl: `/api/wa/report-image/${r.id}` }));
     const thisMonth = jakartaDate().slice(0, 7);
     const month = validMonth(one(sp.month), thisMonth);
     const board = await loadBoard(ws, month);

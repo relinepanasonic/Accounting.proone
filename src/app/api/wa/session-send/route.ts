@@ -68,8 +68,19 @@ export async function POST(request: Request) {
     fileArg = { data: new Uint8Array(await pdf.arrayBuffer()), filename: (pdf.name || (isImage ? 'Report.jpg' : 'Report.pdf')).replace(/[\\/:*?"<>|]/g, '').slice(0, 120), contentType: isImage ? 'image/jpeg' : 'application/pdf' };
   }
 
-  const r = await sendWhatsApp([target], message, fileArg ? { file: fileArg } : {});
-  const detail = `${attach ? (isImage ? 'Image' : 'PDF') : 'Text only'}: ${r.detail}`;
+  // WhatsApp keeps only about 1,000 characters of a caption. A longer report text goes as its own message right after the image,
+  // and the image keeps its first line as the caption.
+  const CAPTION_MAX = 1000;
+  const longText = !!fileArg && message.length > CAPTION_MAX;
+  const caption = longText ? message.split('\n')[0].slice(0, CAPTION_MAX) : message;
+  const r = await sendWhatsApp([target], caption, fileArg ? { file: fileArg } : {});
+  let followUp = '';
+  if (r.ok && longText) {
+    await new Promise((res) => setTimeout(res, 1500));
+    const t = await sendWhatsApp([target], message);
+    if (!t.ok) followUp = ` (the full text could not be sent: ${t.detail})`;
+  }
+  const detail = `${attach ? (isImage ? 'Image' : 'PDF') : 'Text only'}: ${r.detail}${followUp}`;
   const { data: logged } = await db.from('wa_sends').insert({ workspace_id: ws, kind: 'session', report_date: reportDate, trigger: 'manual', recipients: [target], ok: r.ok, detail, text: message, ref }).select('id').single();
 
   // Keep a copy of what was sent, so the status table can show it later (best effort: a failed copy never turns a sent report into an error).

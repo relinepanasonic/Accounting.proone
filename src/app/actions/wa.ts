@@ -271,6 +271,7 @@ export async function linkClientToGroup(clientId: string, groupId: string | null
   if (error) return { error: error.message };
   revalidatePath('/hrd/wa', 'layout');
   revalidatePath('/contacts');
+  revalidatePath('/optimizing/clients');
   return { ok: true };
 }
 

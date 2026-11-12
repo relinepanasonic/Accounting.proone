@@ -91,3 +91,23 @@ export async function loadMessages(workspaceId: string, sinceIso: string, groupI
 
 export const sinceDays = (days: number) => new Date(Date.now() - days * 86400000).toISOString();
 export const parseDays = (v: string | string[] | undefined): 1 | 7 | 30 => (v === '7' ? 7 : v === '30' ? 30 : 1);
+
+export interface GroupChoice { id: string; label: string; isGroup: boolean }
+
+/** The chats a client can be linked to: every WhatsApp group (by name), plus the private chats flagged as test targets. */
+export async function loadGroupChoices(workspaceId: string): Promise<GroupChoice[]> {
+  const { data } = await createAdminClient().from('wa_groups').select('id, wa_id, name, is_group')
+    .eq('workspace_id', workspaceId).or('is_group.eq.true,allow_target.eq.true').order('name');
+  return (data || []).map((g: any) => ({ id: g.id as string, isGroup: !!g.is_group, label: g.name || (g.is_group ? `Group ···${String(g.wa_id).slice(-6)}` : `+${g.wa_id}`) }));
+}
+
+/** client id -> the id of its WhatsApp group (clients without one are not in the map). */
+export async function loadClientGroupIds(clientIds: string[]): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  const db = createAdminClient();
+  for (let i = 0; i < clientIds.length; i += 200) {
+    const { data } = await db.from('clients').select('id, wa_group_id').in('id', clientIds.slice(i, i + 200)).not('wa_group_id', 'is', null);
+    for (const c of data || []) out[c.id as string] = c.wa_group_id as string;
+  }
+  return out;
+}

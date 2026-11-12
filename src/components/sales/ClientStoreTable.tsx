@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo, useState, useTransition } from 'react';
+import { WaGroupSelect } from '@/components/wa/WaGroupSelect';
 import { useRouter } from 'next/navigation';
 import type { ClientRow } from '@/lib/sales/client-table';
 import { addClientStore, removeClientStore, setClientStatus } from '@/app/actions/sales-flow';
@@ -134,9 +135,11 @@ function ReactivateButton({ invoiceId }: { invoiceId: string }) {
   );
 }
 
-export function ClientStoreTable({ rows, canEditStart, canEditNames, canEditStatus, canEditSales, advertisers, admins, storeOptions, reactivate }: {
+export function ClientStoreTable({ rows, canEditStart, canEditNames, canEditStatus, canEditSales, advertisers, admins, storeOptions, reactivate, waGroups, waByClient }: {
   rows: ClientRow[]; canEditStart: boolean; canEditNames: boolean; canEditStatus: boolean; canEditSales: boolean;
   advertisers?: Person[]; admins?: Person[]; storeOptions?: string[]; reactivate?: boolean;
+  /** WhatsApp groups to choose from (WA Control > Chats); leave out to hide the WhatsApp Group column. */
+  waGroups?: { id: string; label: string; isGroup?: boolean }[]; waByClient?: Record<string, string>;
 }) {
   const assign = Boolean(advertisers && admins);
   const [search, setSearch] = useState('');
@@ -199,11 +202,12 @@ export function ClientStoreTable({ rows, canEditStart, canEditNames, canEditStat
               <Th k="status">Status</Th>
               {assign && <Th k="advertiser">Advertiser</Th>}
               {assign && <Th k="admin">Admin</Th>}
+              {assign && waGroups && <th className="px-4 py-3 font-bold">WhatsApp Group</th>}
               {reactivate && <th className="px-4 py-3 font-bold" />}
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800/60">
-            {sorted.length === 0 && <tr><td colSpan={9} className="p-8 text-center text-zinc-500">No client matches.</td></tr>}
+            {sorted.length === 0 && <tr><td colSpan={10} className="p-8 text-center text-zinc-500">No client matches.</td></tr>}
             {sorted.map((l) => {
               const r = l.group[0];
               return (
@@ -222,6 +226,7 @@ export function ClientStoreTable({ rows, canEditStart, canEditNames, canEditStat
                   <td className="px-4 py-3.5"><StatusCell row={r} canEdit={canEditStatus} /></td>
                   {assign && <td className="px-4 py-3.5"><HandlerSelect clientId={r.clientId} job="advertising" current={r.advertiserId} people={advertisers!} /></td>}
                   {assign && <td className="px-4 py-3.5"><HandlerSelect clientId={r.clientId} job="admin" current={r.adminId} people={admins!} /></td>}
+                  {assign && waGroups && <td className="min-w-[13rem] px-4 py-3.5"><WaGroupSelect clientIds={[r.clientId]} value={waByClient?.[r.clientId] || null} groups={waGroups} /></td>}
                   {reactivate && <td className="px-4 py-3.5"><ReactivateButton invoiceId={r.invoiceId} /></td>}
                 </tr>
               );

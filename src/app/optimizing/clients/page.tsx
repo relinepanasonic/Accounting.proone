@@ -10,6 +10,7 @@ import { loadHandlers } from '@/lib/sales/people';
 import { loadClientPics } from '@/lib/sales/client-pics';
 import { ClientStoreTable } from '@/components/sales/ClientStoreTable';
 import { fetchPerformance, storeLabel } from '@/lib/integrations/performance';
+import { loadGroupChoices, loadClientGroupIds } from '@/lib/wa/queries';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,13 +67,22 @@ export default async function OptimizingClientsPage({ searchParams }: { searchPa
   const [dashStores, relineStores] = await Promise.all([fetchPerformance('dashboard', `${year}-01-01`, `${year}-12-31`, 8000), fetchPerformance('reline', `${year}-01-01`, `${year}-12-31`, 8000)]);
   const storeOptions = Array.from(new Set([...(dashStores.ok ? dashStores.rows : []), ...(relineStores.ok ? relineStores.rows : [])].map((r) => storeLabel(r)))).sort((a, b) => a.localeCompare(b));
 
+  // The WhatsApp group of each client (WA Control: Oli sends the weekly and session reports there). If the table is not there, the column is hidden.
+  let waGroups: Awaited<ReturnType<typeof loadGroupChoices>> | undefined;
+  let waByClient: Record<string, string> = {};
+  if (tab === 'assign') {
+    try {
+      [waGroups, waByClient] = await Promise.all([loadGroupChoices(ctx.activeWorkspaceId), loadClientGroupIds(Array.from(new Set(rows.map((r) => r.clientId))))]);
+    } catch { waGroups = undefined; }
+  }
+
   return (
     <div className="p-4 lg:p-8 space-y-6 animate-in fade-in zoom-in-95 duration-300">
       <div>
         <h1 className="text-2xl font-extrabold text-zinc-100 font-serif">Optimizing · Clients</h1>
       </div>
       {TabBar}
-      <ClientStoreTable rows={rows} canEditStart canEditNames canEditStatus canEditSales={owner} advertisers={handlers?.advertisers} admins={handlers?.admins} storeOptions={storeOptions} reactivate={tab === 'churn'} />
+      <ClientStoreTable rows={rows} canEditStart canEditNames canEditStatus canEditSales={owner} advertisers={handlers?.advertisers} admins={handlers?.admins} storeOptions={storeOptions} reactivate={tab === 'churn'} waGroups={waGroups} waByClient={waByClient} />
     </div>
   );
 }

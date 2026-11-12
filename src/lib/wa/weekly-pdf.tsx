@@ -1,7 +1,11 @@
 import React from 'react';
-import { Document, Page, View, Text, Svg, Rect, Line, Polyline, Circle, StyleSheet, renderToBuffer } from '@react-pdf/renderer';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { Document, Page, View, Text, Svg, Rect, Line, Polyline, Circle, StyleSheet, Font, renderToBuffer } from '@react-pdf/renderer';
 import type { PerfAds } from '@/lib/integrations/performance';
 import { analyze } from './analysis';
+import { ROBOTO_400_WOFF_BASE64, ROBOTO_700_WOFF_BASE64 } from './fonts';
 import { cvrOf, int, periodText, roasOf, roasText, rp, weekLabel, type WeekPoint, type WeeklyPayload } from './weekly';
 
 /**
@@ -10,6 +14,33 @@ import { cvrOf, int, periodText, roasOf, roasText, rp, weekLabel, type WeekPoint
  *   Below: Penjualan and Biaya Iklan & ROAS per week (this week and the 4 before it), then the 5 best-selling products when the app sends them.
  * Same figures and words as the monthly report of Dashboard Prof, in a lighter form.
  */
+
+
+/**
+ * Roboto is embedded in the PDF (instead of PDF's built-in Helvetica) so the report looks the same everywhere, and so it can be turned into
+ * an image on a server that has no fonts of its own. react-pdf reads a font from a file, so the two files are written to the temp folder once.
+ */
+let fontsReady = false;
+export function ensureFonts() {
+  if (fontsReady) return;
+  const dir = path.join(os.tmpdir(), 'wa-report-fonts');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = (name: string, b64: string) => {
+    const f = path.join(dir, name);
+    const bytes = Buffer.from(b64, 'base64');
+    if (!fs.existsSync(f) || fs.statSync(f).size !== bytes.length) fs.writeFileSync(f, bytes);
+    return f;
+  };
+  Font.register({
+    family: 'Roboto',
+    fonts: [
+      { src: file('roboto-latin-400.woff', ROBOTO_400_WOFF_BASE64), fontWeight: 400 },
+      { src: file('roboto-latin-700.woff', ROBOTO_700_WOFF_BASE64), fontWeight: 700 },
+    ],
+  });
+  Font.registerHyphenationCallback((word) => [word]);   // never split a word with a hyphen
+  fontsReady = true;
+}
 
 const GOLD = '#b8901f';
 const INK = '#111827';
@@ -23,27 +54,27 @@ const AMBER = '#d97706';
 const AMBER_LIGHT = '#fde68a';
 
 const st = StyleSheet.create({
-  page: { padding: 30, paddingBottom: 46, fontFamily: 'Helvetica', fontSize: 9.5, color: INK },
+  page: { padding: 30, paddingBottom: 46, fontFamily: 'Roboto', fontSize: 9.5, color: INK },
   band: { backgroundColor: '#1f2937', borderRadius: 6, paddingVertical: 11, paddingHorizontal: 14, marginBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   kicker: { fontSize: 7.5, color: '#fcd34d', letterSpacing: 1.4 },
-  title: { fontSize: 15, fontFamily: 'Helvetica-Bold', color: '#ffffff', marginTop: 2 },
+  title: { fontSize: 15, fontFamily: 'Roboto', fontWeight: 700, color: '#ffffff', marginTop: 2 },
   bandRight: { alignItems: 'flex-end' },
-  period: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: '#ffffff' },
+  period: { fontSize: 11, fontFamily: 'Roboto', fontWeight: 700, color: '#ffffff' },
   storeName: { fontSize: 8.5, color: '#d1d5db', marginTop: 2 },
   lead: { fontSize: 9, color: '#374151', lineHeight: 1.45, marginBottom: 9 },
-  h2: { fontSize: 10.5, fontFamily: 'Helvetica-Bold', color: GOLD, marginTop: 8, marginBottom: 2 },
+  h2: { fontSize: 10.5, fontFamily: 'Roboto', fontWeight: 700, color: GOLD, marginTop: 8, marginBottom: 2 },
   hint: { fontSize: 7.5, color: MUTED, marginBottom: 4 },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   kpi: { width: '31.6%', marginRight: '2%', marginBottom: 6, borderWidth: 1, borderColor: LINE, borderRadius: 5, padding: 7 },
   kpiLabel: { fontSize: 7, color: MUTED, letterSpacing: 0.6 },
-  kpiValue: { fontSize: 12.5, fontFamily: 'Helvetica-Bold', marginTop: 3 },
+  kpiValue: { fontSize: 12.5, fontFamily: 'Roboto', fontWeight: 700, marginTop: 3 },
   kpiChange: { fontSize: 7.5, marginTop: 2 },
-  th: { fontSize: 7, color: MUTED, fontFamily: 'Helvetica-Bold', letterSpacing: 0.5 },
+  th: { fontSize: 7, color: MUTED, fontFamily: 'Roboto', fontWeight: 700, letterSpacing: 0.5 },
   head: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: INK, paddingBottom: 3 },
   row: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: LINE, paddingVertical: 4 },
   card: { borderWidth: 1, borderColor: LINE, borderRadius: 5, padding: 8, marginBottom: 6 },
-  tag: { fontSize: 6.5, fontFamily: 'Helvetica-Bold', letterSpacing: 1.2, marginBottom: 2 },
-  cardTitle: { fontSize: 9.5, fontFamily: 'Helvetica-Bold' },
+  tag: { fontSize: 6.5, fontFamily: 'Roboto', fontWeight: 700, letterSpacing: 1.2, marginBottom: 2 },
+  cardTitle: { fontSize: 9.5, fontFamily: 'Roboto', fontWeight: 700 },
   cardText: { fontSize: 8.5, color: '#374151', marginTop: 2, lineHeight: 1.4 },
   tipsBox: { backgroundColor: '#fffbeb', borderWidth: 1, borderColor: AMBER_LIGHT, borderRadius: 5, padding: 9, marginTop: 4 },
   footer: { position: 'absolute', bottom: 20, left: 30, right: 30, fontSize: 7.5, color: MUTED, flexDirection: 'row', justifyContent: 'space-between' },
@@ -82,6 +113,9 @@ export function pdfText(s: string): string {
     .replace(/\s+/g, ' ')
     .trim();
 }
+
+/** "fi" is drawn as one ligature glyph, which the image step spaces wrongly ("E f siensi"). A zero-width non-joiner keeps the two letters apart. */
+export const noLig = (s: string) => s.replace(/f(?=i)/g, 'f\u200C');
 
 const pctOf = (now: number, before: number | null | undefined) => (before && before > 0 ? ((now - before) / before) * 100 : null);
 const pctText = (p: number) => `${p > 0 ? '+' : p < 0 ? '-' : ''}${Math.abs(p) >= 10 ? Math.round(Math.abs(p)) : (Math.round(Math.abs(p) * 10) / 10).toString().replace('.', ',')}%`;
@@ -177,8 +211,8 @@ export function WeekBars({ points, values, fmt, color, light, barName, line, hei
         return (
           <React.Fragment key={p.from}>
             <Rect x={x} y={y(v)} width={bw} height={Math.max(0.8, TOP + plotH - y(v))} fill={last ? color : light} />
-            <Text x={x + bw / 2} y={inside ? TOP + plotH - 4 : y(v) - 3} fill={inside && last ? '#ffffff' : INK} style={{ fontSize: 7, fontFamily: 'Helvetica-Bold' }} textAnchor="middle">{v > 0 ? fmt(v) : '-'}</Text>
-            <Text x={x + bw / 2} y={H - BOTTOM + 11} fill={last ? INK : MUTED} style={{ fontSize: 7, fontFamily: last ? 'Helvetica-Bold' : 'Helvetica' }} textAnchor="middle">{weekLabel(p.from, p.to)}</Text>
+            <Text x={x + bw / 2} y={inside ? TOP + plotH - 4 : y(v) - 3} fill={inside && last ? '#ffffff' : INK} style={{ fontSize: 7, fontFamily: 'Roboto', fontWeight: 700 }} textAnchor="middle">{v > 0 ? fmt(v) : '-'}</Text>
+            <Text x={x + bw / 2} y={H - BOTTOM + 11} fill={last ? INK : MUTED} style={{ fontSize: 7, fontFamily: 'Roboto', fontWeight: last ? 700 : 400 }} textAnchor="middle">{weekLabel(p.from, p.to)}</Text>
           </React.Fragment>
         );
       })}
@@ -187,7 +221,7 @@ export function WeekBars({ points, values, fmt, color, light, barName, line, hei
         <React.Fragment key={`d${i}`}>
           <Circle cx={cx(i)} cy={y2(v)} r={3} fill="#ffffff" stroke={LINE_COLOR} strokeWidth={1.6} />
           <Rect x={cx(i) - 15} y={y2(v) - 16} width={30} height={10} fill="#ffffff" fillOpacity={0.85} />
-          <Text x={cx(i)} y={y2(v) - 8.5} fill={LINE_COLOR} style={{ fontSize: 7.5, fontFamily: 'Helvetica-Bold' }} textAnchor="middle">{line.fmt(v)}</Text>
+          <Text x={cx(i)} y={y2(v) - 8.5} fill={LINE_COLOR} style={{ fontSize: 7.5, fontFamily: 'Roboto', fontWeight: 700 }} textAnchor="middle">{line.fmt(v)}</Text>
         </React.Fragment>
       ))}
     </Svg>
@@ -262,7 +296,7 @@ export function WeeklyDocument({ p }: { p: WeeklyPayload }) {
             </View>
             {types.length > 0 && typeCost > 0 && (
               <View wrap={false}>
-                <Text style={[st.h2, { marginTop: 4 }]}>Efisiensi Iklan Minggu Ini</Text>
+                <Text style={[st.h2, { marginTop: 4 }]}>{noLig('Efisiensi Iklan Minggu Ini')}</Text>
                 <View style={st.head}>
                   <Text style={[st.th, { width: '34%' }]}>JENIS IKLAN</Text>
                   <Text style={[st.th, { width: '26%', textAlign: 'right' }]}>BIAYA</Text>
@@ -286,14 +320,14 @@ export function WeeklyDocument({ p }: { p: WeeklyPayload }) {
             {findings.map((f, i) => (
               <View key={i} style={[st.card, { padding: 6, marginBottom: 4, borderLeftWidth: 3, borderLeftColor: f.tone === 'win' ? GREEN : AMBER }]} wrap={false}>
                 <Text style={[st.tag, { color: f.tone === 'win' ? GREEN : AMBER }]}>{f.tone === 'win' ? 'WIN' : 'PERHATIAN'}</Text>
-                <Text style={[st.cardTitle, { fontSize: 8.5 }]}>{f.title}</Text>
-                <Text style={[st.cardText, { fontSize: 7.5, marginTop: 1 }]}>{f.text}</Text>
+                <Text style={[st.cardTitle, { fontSize: 8.5 }]}>{noLig(f.title)}</Text>
+                <Text style={[st.cardText, { fontSize: 7.5, marginTop: 1 }]}>{noLig(f.text)}</Text>
               </View>
             ))}
             <View style={[st.tipsBox, { padding: 6, marginTop: 2 }]} wrap={false}>
               <Text style={[st.tag, { color: AMBER }]}>REKOMENDASI MINGGU BERIKUTNYA</Text>
               {tips.map((t, i) => (
-                <Text key={i} style={[st.cardText, { fontSize: 7.5, marginTop: 2 }]}>{i + 1}. {t}</Text>
+                <Text key={i} style={[st.cardText, { fontSize: 7.5, marginTop: 2 }]}>{i + 1}. {noLig(t)}</Text>
               ))}
             </View>
           </View>
@@ -339,5 +373,6 @@ export function WeeklyDocument({ p }: { p: WeeklyPayload }) {
 }
 
 export async function renderWeeklyPdf(p: WeeklyPayload): Promise<Buffer> {
+  ensureFonts();
   return renderToBuffer(<WeeklyDocument p={p} />);
 }

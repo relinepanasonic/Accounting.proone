@@ -56,19 +56,29 @@ export async function POST(request: Request) {
   }
 
   const { data: settings } = await db.from('wa_settings').select('send_files').eq('workspace_id', ws).maybeSingle();
+  const isImage = file instanceof File && file.type === 'image/jpeg' && file.size > 0;
   const isPdf = file instanceof File && file.type === 'application/pdf' && file.size > 0;
-  const attach = !!settings?.send_files && isPdf;
+  const attach = !!settings?.send_files && (isImage || isPdf);
 
   let fileArg: { data: Uint8Array; filename: string; contentType: string } | undefined;
   if (attach) {
-    const pdf = file as File;
-    if (pdf.size > MAX_BYTES) return json({ error: 'The PDF is over 4 MB (Fonnte limit). Switch off the screenshot in the report and try again.' }, 413);
+    const pdf = file as File;   // the report as an image (preferred: it shows inline in the chat) or as a PDF
+    if (pdf.size > MAX_BYTES) return json({ error: 'The file is over 4 MB (Fonnte limit). Switch off the screenshot in the report and try again.' }, 413);
     // The PDF that came from the screen is uploaded to Fonnte as a real file: nothing is stored on our side.
-    fileArg = { data: new Uint8Array(await pdf.arrayBuffer()), filename: (pdf.name || 'Report.pdf').replace(/[\\/:*?"<>|]/g, '').slice(0, 120), contentType: 'application/pdf' };
+    fileArg = { data: new Uint8Array(await pdf.arrayBuffer()), filename: (pdf.name || (isImage ? 'Report.jpg' : 'Report.pdf')).replace(/[\\/:*?"<>|]/g, '').slice(0, 120), contentType: isImage ? 'image/jpeg' : 'application/pdf' };
   }
 
   const r = await sendWhatsApp([target], message, fileArg ? { file: fileArg } : {});
-  const detail = `${attach ? 'PDF' : 'Text only'}: ${r.detail}`;
-  await db.from('wa_sends').insert({ workspace_id: ws, kind: 'session', report_date: reportDate, trigger: 'manual', recipients: [target], ok: r.ok, detail, text: message, ref });
+  const detail = `${attach ? (isImage ? 'Image' : 'PDF') : 'Text only'}: ${r.detail}`;
+  const { data: logged } = await db.from('wa_sends').insert({ workspace_id: ws, kind: 'session', report_date: reportDate, trigger: 'manual', recipients: [target], ok: r.ok, detail, text: message, ref }).select('id').single();
+
+  // Keep a copy of what was sent, so the status table can show it later (best effort: a failed copy never turns a sent report into an error).
+  if (r.ok && attach && fileArg && logged?.id) {
+    try {
+      const path = `session/${ws}/${reportDate.slice(0, 7)}/${logged.id}.${isImage ? 'jpg' : 'pdf'}`;
+      const up = await db.storage.from('wa-files').upload(path, fileArg.data, { contentType: fileArg.contentType, upsert: true });
+      if (!up.error) await db.from('wa_sends').update({ file_path: path }).eq('id', logged.id);
+    } catch { /* ignore */ }
+  }
   return r.ok ? json({ ok: true, attached: attach, client: client.name, detail }) : json({ error: detail }, 502);
 }

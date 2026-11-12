@@ -17,3 +17,6 @@ CREATE INDEX IF NOT EXISTS idx_wa_sends_ref ON public.wa_sends (workspace_id, ki
 
 -- A private chat that may be chosen as a report target (used for tests: send the reports to a personal number). Groups can always be chosen.
 ALTER TABLE public.wa_groups ADD COLUMN IF NOT EXISTS allow_target BOOLEAN NOT NULL DEFAULT false;
+
+-- The image or PDF that was sent (bucket wa-files), kept so the WA Control status table can show what went out.
+ALTER TABLE public.wa_sends ADD COLUMN IF NOT EXISTS file_path TEXT;

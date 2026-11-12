@@ -6,6 +6,7 @@ import { waAccess, waFounderAccess, loadPeople } from '@/lib/wa/queries';
 import { previewPerformance, sendPerformance } from '@/lib/wa/performance';
 import { prepareClientWeekly, sendOutboxItem } from '@/lib/wa/weekly-job';
 import { fetchFonnteGroups } from '@/lib/wa/fonnte-groups';
+import { loadWeekDetail } from '@/lib/wa/board-data';
 import { generateReports } from '@/lib/wa/report';
 import { normalizeIdPhone } from '@/lib/wa/stats';
 
@@ -314,4 +315,13 @@ export async function syncWaGroups(refresh = false) {
   revalidatePath('/hrd/wa', 'layout');
   revalidatePath('/contacts');
   return { ok: true, found: r.groups.length, created, named };
+}
+
+/** The status table's detail: one store, one week (Monday to Sunday). */
+export async function getWeekDetail(store: string, weekFrom: string) {
+  const ctx = await waAccess();
+  if (!ctx) return { error: 'Not allowed' };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(weekFrom) || new Date(`${weekFrom}T12:00:00Z`).getUTCDay() !== 1) return { error: 'A week starts on a Monday.' };
+  try { return { ok: true, detail: await loadWeekDetail(ctx.activeWorkspaceId, String(store).slice(0, 200), weekFrom) }; }
+  catch (e: any) { return { error: e?.message || 'Could not load the week' }; }
 }

@@ -282,11 +282,13 @@ export function AdvertiserLogDetail({
       fd.set('storeLabel', log.store_label || '');
       fd.set('message', reportMessage);
       if (force) fd.set('force', '1');
-      fd.set('file', new File([pdf.blob], pdf.fileName, { type: 'application/pdf' }));
+      // The image shows inline in the client's chat; the PDF is only used if the image is not ready.
+      if (jpeg.blob && jpeg.fileName) fd.set('file', new File([jpeg.blob], jpeg.fileName, { type: 'image/jpeg' }));
+      else fd.set('file', new File([pdf.blob], pdf.fileName, { type: 'application/pdf' }));
       const res = await fetch('/api/wa/session-send', { method: 'POST', body: fd });
       const out = await res.json().catch(() => ({} as any));
       if (res.ok) {
-        setShareNotice(`Sent to the ${out.client || 'client'} group by Oli${out.attached ? ' (with the PDF).' : ' (text only: PDF sending is off).'}`);
+        setShareNotice(`Sent to the ${out.client || 'client'} group by Oli${out.attached ? ' (with the report image).' : ' (text only: file sending is off).'}`);
       } else if (out.already && window.confirm(`${out.error}\n\nSend it again?`)) {
         setOliSending(false);
         return handleSendOli(true);

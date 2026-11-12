@@ -7,6 +7,7 @@ import { jakartaDate } from './report-text';
 import { hasActivity, lastFullWeek, seriesFrom, sumRows, weeklyCaption, weeklyFigures, weeklyFileName, weeklySeries, type WeeklyPayload } from './weekly';
 import { sendWhatsApp } from './send';
 import { renderWeeklyPdf } from './weekly-pdf';
+import { renderWeeklyJpeg } from './report-image';
 
 export interface PrepareResult { from: string; to: string; created: number; refreshed: number; kept: number; noData: number; errors: string[] }
 
@@ -109,16 +110,23 @@ export async function sendOutboxItem(workspaceId: string, userId: string, id: st
 
   const target = group.is_group ? `${group.wa_id}@g.us` : group.wa_id;
   let r;
+  let sentAs = 'Text';
   if (asFile) {
-    // The PDF is drawn here from the numbers saved with the draft and uploaded to Fonnte as a real file.
-    let pdf: Uint8Array | null = null;
-    try { pdf = new Uint8Array(await renderWeeklyPdf(payload!)); } catch (e: any) { r = { ok: false, parts: 0, detail: `Could not make the PDF: ${e?.message || e}` }; }
-    if (pdf) r = await sendWhatsApp([target], caption, { file: { data: pdf, filename: weeklyFileName(payload!.store, payload!.from, payload!.to), contentType: 'application/pdf' } });
+    // The report is drawn here from the numbers saved with the draft and uploaded to Fonnte as a real file: a JPG (it shows inline in the
+    // chat), or the PDF if the image cannot be made.
+    const pdfName = weeklyFileName(payload!.store, payload!.from, payload!.to);
+    let file: { data: Uint8Array; filename: string; contentType: string } | null = null;
+    try { file = { data: await renderWeeklyJpeg(payload!), filename: pdfName.replace(/\.pdf$/i, '.jpg'), contentType: 'image/jpeg' }; } catch { /* use the PDF */ }
+    if (!file) {
+      try { file = { data: new Uint8Array(await renderWeeklyPdf(payload!)), filename: pdfName, contentType: 'application/pdf' }; }
+      catch (e: any) { r = { ok: false, parts: 0, detail: `Could not make the report: ${e?.message || e}` }; }
+    }
+    if (file) { r = await sendWhatsApp([target], caption, { file }); sentAs = file.contentType === 'image/jpeg' ? 'Image' : 'PDF'; }
   } else {
     r = await sendWhatsApp([target], payload?.cur ? `${caption}\n\n${weeklyFigures(payload.cur, payload.prev)}` : caption);
   }
   r = r!;
-  const detail = `${asFile ? 'PDF' : 'Text'}: ${r.detail}`;
+  const detail = `${sentAs}: ${r.detail}`;
   await db.from('wa_outbox').update({ status: r.ok ? 'sent' : 'failed', detail, sent_at: r.ok ? new Date().toISOString() : null, sent_by: r.ok ? userId : null }).eq('id', id);
   return { ok: r.ok, detail };
 }

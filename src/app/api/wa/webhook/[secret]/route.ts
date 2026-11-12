@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { parseFonnteWebhook, readWebhookPayload } from '@/lib/wa/parse-webhook';
 import { deviceBySecret, ingestMessage } from '@/lib/wa/ingest';
+import { runSalesBot } from '@/lib/wa/bot/run';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -44,6 +45,11 @@ export async function POST(request: Request, ctx: { params: Promise<{ secret: st
     try {
       const res = await ingestMessage(device, parsed, payload);
       await logCall(device, res.stored ? 'stored' : 'ignored', res.reason ?? null, contentType, payload);
+      // A sales number: the bot may answer a new lead. It runs after the reply to Fonnte, and a retried webhook (not new) never triggers it.
+      if (res.stored && res.isNew && res.groupId && device.role === 'sales') {
+        const groupId = res.groupId;
+        after(() => runSalesBot(device, parsed, groupId).catch((e) => console.error('sales bot failed', e)));
+      }
       return NextResponse.json({ ok: true, ...res }, { headers: NO_STORE });
     } catch (err: any) {
       await logCall(device, 'error', String(err?.message || err).slice(0, 300), contentType, payload);

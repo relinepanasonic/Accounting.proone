@@ -3,7 +3,7 @@
 import React, { useState, useTransition } from 'react';
 import {
   previewPerformanceReport, sendPerformanceReportNow, setPerformanceAutoSend,
-  addReportRecipient, updateReportRecipient, removeReportRecipient,
+  addReportRecipient, updateReportRecipient, removeReportRecipient, setSendFiles,
 } from '@/app/actions/wa';
 
 export interface Recipient { id: string; phone: string; name: string | null; active: boolean }
@@ -18,7 +18,7 @@ const input = 'rounded-md border border-zinc-800 bg-[#0e0f14] px-2.5 py-1.5 text
 const jakarta = (iso: string) => new Date(iso).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
 const KIND: Record<string, string> = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly', none: 'No report' };
 
-export function FounderPanel({ recipients, autoSend, sends, tokenSet }: { recipients: Recipient[]; autoSend: boolean; sends: SendRow[]; tokenSet: boolean }) {
+export function FounderPanel({ recipients, autoSend, sends, tokenSet, sendFiles }: { recipients: Recipient[]; autoSend: boolean; sends: SendRow[]; tokenSet: boolean; sendFiles: boolean }) {
   const [pending, start] = useTransition();
   const [date, setDate] = useState('');
   const [preview, setPreview] = useState<{ kind: string; date: string; text: string; message: string; send: boolean } | null>(null);
@@ -87,6 +87,16 @@ export function FounderPanel({ recipients, autoSend, sends, tokenSet }: { recipi
               <button disabled={pending || !tokenSet} onClick={() => start(async () => { const r: any = await setPerformanceAutoSend(!autoSend); say(r, autoSend ? 'Automatic sending is off.' : 'Automatic sending is ON.'); })}
                 className={`shrink-0 rounded-full border px-3 py-1 text-[11px] font-bold uppercase ${autoSend ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-300' : 'border-zinc-700 text-zinc-400'} disabled:opacity-40`}>
                 {autoSend ? 'On' : 'Off'}
+              </button>
+            </div>
+            <div className="flex items-start justify-between gap-4 border-t border-zinc-800/70 pt-3">
+              <div>
+                <div className="font-bold text-zinc-100">Send reports as PDF files</div>
+                <p className="mt-1 text-[11px] text-zinc-500">Sends the weekly PDFs (and the client weekly report) as real files instead of links or text. It needs the Fonnte Super package. Turn it on only after Fonnte has confirmed it; if a PDF is refused you can send that one as text.</p>
+              </div>
+              <button disabled={pending} onClick={() => start(async () => { const r: any = await setSendFiles(!sendFiles); say(r, sendFiles ? 'PDF files are off.' : 'PDF files are ON.'); })}
+                className={`shrink-0 rounded-full border px-3 py-1 text-[11px] font-bold uppercase ${sendFiles ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-300' : 'border-zinc-700 text-zinc-400'} disabled:opacity-40`}>
+                {sendFiles ? 'On' : 'Off'}
               </button>
             </div>
             <div className="border-t border-zinc-800/70 pt-3">

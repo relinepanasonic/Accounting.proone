@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { lastFullWeek, sumRows, hasActivity, changeText, weeklyMessage } from './weekly';
+import { lastFullWeek, sumRows, hasActivity, changeText, weeklyMessage, weeklyCaption, weeklyFileName, periodText } from './weekly';
 import { normalizeRow, type PerfRow } from '@/lib/integrations/performance';
 
 const row = (periodStart: string, over: any = {}): PerfRow => normalizeRow('dashboard', {
@@ -46,15 +46,29 @@ describe('changeText', () => {
   });
 });
 
+describe('periodText / caption / file name', () => {
+  it('writes the week the way a formal report does', () => {
+    expect(periodText('2026-11-02', '2026-11-08')).toBe('2 - 8 Nov 2026');
+    expect(periodText('2026-10-26', '2026-11-01')).toBe('26 Okt - 1 Nov 2026');
+    expect(periodText('2026-12-28', '2027-01-03')).toBe('28 Des 2026 - 3 Jan 2027');
+  });
+  it('the caption is the formal title and the store, nothing else', () => {
+    expect(weeklyCaption({ store: 'ProOne - Toko A', client: '', from: '2026-11-02', to: '2026-11-08' })).toBe('*Weekly Report* 2 - 8 Nov 2026\nProOne - Toko A');
+    expect(weeklyCaption({ store: 'ProOne - Toko A', client: 'Studio Blair', from: '2026-11-02', to: '2026-11-08' })).toBe('*Weekly Report* 2 - 8 Nov 2026\nProOne - Toko A (Studio Blair)');
+  });
+  it('the file name has no forbidden characters', () => {
+    expect(weeklyFileName('ProOne - Toko: A/B', '2026-11-02', '2026-11-08')).toBe('Weekly Report 2-8 Nov 2026 - ProOne - Toko AB.pdf');
+  });
+});
+
 describe('weeklyMessage', () => {
   const cur = sumRows([row('2026-11-09', { gmv: 12000000 })], '2026-11-09', '2026-11-15')!;
   const prev = sumRows([row('2026-11-02', { gmv: 10000000 })], '2026-11-02', '2026-11-08')!;
   const msg = weeklyMessage({ client: 'Studio Blair', store: 'ProOne - Toko A', from: '2026-11-09', to: '2026-11-15', cur, prev });
 
-  it('is addressed to the client and signed as Oli', () => {
-    expect(msg.startsWith('Halo tim Studio Blair, saya Oli dari Professor Online.')).toBe(true);
-    expect(msg.endsWith('Salam,\nOli | Admin Professor Online')).toBe(true);
-    expect(msg).toContain('(9 Nov - 15 Nov 2026)');
+  it('is a formal report: title first, no greeting, no sign-off', () => {
+    expect(msg.startsWith('*Weekly Report* 9 - 15 Nov 2026\nProOne - Toko A (Studio Blair)\n\n')).toBe(true);
+    expect(msg).not.toMatch(/Halo|Salam|saya Oli/);
   });
   it('shows the figures with the change from last week', () => {
     expect(msg).toContain('GMV Toko: Rp 12.000.000 (naik 20% dari minggu lalu)');
@@ -69,10 +83,8 @@ describe('weeklyMessage', () => {
     const one = sumRows([row('2026-11-09', { ads: { total: { cost: 10, sales: 20 }, gmvMax: { cost: 10, sales: 20 } } })], '2026-11-09', '2026-11-15')!;
     expect(weeklyMessage({ client: '', store: 'S', from: '2026-11-09', to: '2026-11-15', cur: one, prev: null })).not.toContain('Rincian iklan');
   });
-  it('falls back to the store name and skips comparisons without a previous week', () => {
-    const m = weeklyMessage({ client: '', store: 'ProOne - Toko A', from: '2026-11-09', to: '2026-11-15', cur, prev: null });
-    expect(m).toContain('Halo tim ProOne - Toko A,');
-    expect(m).not.toContain('dari minggu lalu');
+  it('skips comparisons without a previous week', () => {
+    expect(weeklyMessage({ client: '', store: 'S', from: '2026-11-09', to: '2026-11-15', cur, prev: null })).not.toContain('dari minggu lalu');
   });
   it('leaves out the ads block for a store without ads', () => {
     const none = sumRows([row('2026-11-09', { ads: {} })], '2026-11-09', '2026-11-15')!;

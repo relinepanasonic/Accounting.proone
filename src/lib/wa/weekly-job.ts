@@ -1,9 +1,11 @@
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { loadStorePerformance } from '@/lib/integrations/store-performance';
 import { storeKeyOf, storeLabel, type PerfRow } from '@/lib/integrations/performance';
+import { clientGroupMap, pickGroup } from './group-pick';
 import { jakartaDate } from './report-text';
-import { hasActivity, lastFullWeek, sumRows, weeklyMessage } from './weekly';
+import { hasActivity, lastFullWeek, sumRows, weeklyCaption, weeklyFigures, weeklyFileName, type WeeklyPayload } from './weekly';
 import { sendWhatsApp } from './send';
+import { signedWeeklyPdfUrl } from './signed';
 
 export interface PrepareResult { from: string; to: string; created: number; refreshed: number; kept: number; noData: number; errors: string[] }
 
@@ -28,11 +30,13 @@ export async function prepareClientWeekly(workspaceId: string, opts: { today?: s
     byStore.set(k, list);
   }
 
-  const [{ data: links }, { data: existingRows }] = await Promise.all([
+  const [{ data: links }, { data: existingRows }, { data: clients }] = await Promise.all([
     db.from('wa_store_groups').select('store_label, group_id').eq('workspace_id', workspaceId),
     db.from('wa_outbox').select('id, store_label, status').eq('workspace_id', workspaceId).eq('kind', 'client-weekly').eq('period_from', week.from),
+    db.from('clients').select('name, company_name, wa_group_id').eq('workspace_id', workspaceId).not('wa_group_id', 'is', null),
   ]);
-  const groupOf = new Map<string, string>((links || []).map((l: any) => [l.store_label as string, l.group_id as string]));
+  const storeGroup = new Map<string, string>((links || []).map((l: any) => [l.store_label as string, l.group_id as string]));
+  const clientGroup = clientGroupMap((clients || []) as any[]);
   const existing = new Map<string, { id: string; status: string }>((existingRows || []).map((e: any) => [e.store_label as string, { id: e.id as string, status: e.status as string }]));
 
   const inserts: Record<string, unknown>[] = [];
@@ -41,8 +45,8 @@ export async function prepareClientWeekly(workspaceId: string, opts: { today?: s
     if (!hasActivity(cur)) { res.noData++; continue; }
     const label = storeLabel(rows[0]);
     const client = perf.teams[key]?.client || '';
-    const message = weeklyMessage({ client, store: label, from: week.from, to: week.to, cur: cur!, prev: sumRows(rows, week.prevFrom, week.prevTo) });
-    const fields = { client_name: client || null, group_id: groupOf.get(label) || null, message, detail: null as string | null };
+    const payload: WeeklyPayload = { store: label, client, from: week.from, to: week.to, cur: cur!, prev: sumRows(rows, week.prevFrom, week.prevTo) };
+    const fields = { client_name: client || null, group_id: pickGroup(label, client, storeGroup, clientGroup), message: weeklyCaption(payload), payload, detail: null as string | null };
 
     const ex = existing.get(label);
     if (!ex) {
@@ -68,25 +72,33 @@ export interface OutboxSendResult { ok: boolean; detail: string }
 
 /**
  * Sends one approved draft to its client group. The row is claimed first (draft/failed -> sending), so a double click or two admins
- * cannot send the same summary twice.
+ * cannot send the same summary twice. With "send PDFs as files" ON (Fonnte Super package) the message is the PDF with the caption;
+ * otherwise (or with asText) it is the caption followed by the numbers as text.
  */
-export async function sendOutboxItem(workspaceId: string, userId: string, id: string, editedMessage?: string): Promise<OutboxSendResult> {
+export async function sendOutboxItem(workspaceId: string, userId: string, id: string, opts: { message?: string; asText?: boolean } = {}): Promise<OutboxSendResult> {
   const db = createAdminClient();
-  const { data: item } = await db.from('wa_outbox').select('id, status, group_id, message').eq('id', id).eq('workspace_id', workspaceId).maybeSingle();
+  const { data: item } = await db.from('wa_outbox').select('id, status, group_id, message, payload').eq('id', id).eq('workspace_id', workspaceId).maybeSingle();
   if (!item) return { ok: false, detail: 'Summary not found.' };
   if (item.status !== 'draft' && item.status !== 'failed') return { ok: false, detail: item.status === 'sent' ? 'Already sent.' : `It is ${item.status}.` };
-  if (!item.group_id) return { ok: false, detail: 'Link a WhatsApp group to this store first.' };
+  if (!item.group_id) return { ok: false, detail: 'Link a WhatsApp group to this client first.' };
   const { data: group } = await db.from('wa_groups').select('wa_id, is_group').eq('id', item.group_id).eq('workspace_id', workspaceId).maybeSingle();
   if (!group) return { ok: false, detail: 'The linked group no longer exists.' };
 
-  const text = (editedMessage ?? item.message).trim();
-  if (!text) return { ok: false, detail: 'The message is empty.' };
+  const caption = (opts.message ?? item.message).trim();
+  if (!caption) return { ok: false, detail: 'The message is empty.' };
+  const payload = item.payload as WeeklyPayload | null;
 
-  const { data: claimed } = await db.from('wa_outbox').update({ status: 'sending', message: text }).eq('id', id).in('status', ['draft', 'failed']).select('id');
+  const { data: settings } = await db.from('wa_settings').select('send_files').eq('workspace_id', workspaceId).maybeSingle();
+  const asFile = !!settings?.send_files && !!payload?.cur && !opts.asText;
+
+  const { data: claimed } = await db.from('wa_outbox').update({ status: 'sending', message: caption }).eq('id', id).in('status', ['draft', 'failed']).select('id');
   if (!claimed || claimed.length === 0) return { ok: false, detail: 'Someone else is sending this one.' };
 
   const target = group.is_group ? `${group.wa_id}@g.us` : group.wa_id;
-  const r = await sendWhatsApp([target], text);
-  await db.from('wa_outbox').update({ status: r.ok ? 'sent' : 'failed', detail: r.detail, sent_at: r.ok ? new Date().toISOString() : null, sent_by: r.ok ? userId : null }).eq('id', id);
-  return { ok: r.ok, detail: r.detail };
+  const r = asFile
+    ? await sendWhatsApp([target], caption, { file: { url: signedWeeklyPdfUrl(id), filename: weeklyFileName(payload!.store, payload!.from, payload!.to) } })
+    : await sendWhatsApp([target], payload?.cur ? `${caption}\n\n${weeklyFigures(payload.cur, payload.prev)}` : caption);
+  const detail = `${asFile ? 'PDF' : 'Text'}: ${r.detail}`;
+  await db.from('wa_outbox').update({ status: r.ok ? 'sent' : 'failed', detail, sent_at: r.ok ? new Date().toISOString() : null, sent_by: r.ok ? userId : null }).eq('id', id);
+  return { ok: r.ok, detail };
 }

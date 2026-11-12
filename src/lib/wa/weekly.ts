@@ -1,8 +1,8 @@
 import { addRow, emptyTotals, roas, type PerfRow, type PerfTotals } from '@/lib/integrations/performance';
-import { OLI_NAME } from './oli';
 
 /**
- * The weekly summary Oli sends to a client's WhatsApp group. Pure: rows in, text out.
+ * The weekly report Oli sends to a client's WhatsApp group: a formal title ("Weekly Report 2 - 8 Nov 2026"), the store, and the PDF.
+ * Without the PDF (file sending off), the same numbers are sent as text. Pure: rows in, text out.
  * Numbers come from the store performance feed of Dashboard Prof / Reline (the same one as the Advertiser dashboard):
  * a row belongs to a week when its period STARTS inside that Monday-to-Sunday week, exactly as the ERP's own charts count it.
  */
@@ -29,10 +29,30 @@ export function sumRows(rows: PerfRow[], from: string, to: string): PerfTotals |
 
 export const hasActivity = (t: PerfTotals | null) => !!t && (t.gmv > 0 || t.orders > 0 || t.ads.total.cost > 0 || t.ads.total.sales > 0);
 
-const rp = (n: number) => `Rp ${Math.round(n).toLocaleString('id-ID')}`;
-const int = (n: number) => Math.round(n).toLocaleString('id-ID');
+export const rp = (n: number) => `Rp ${Math.round(n).toLocaleString('id-ID')}`;
+export const int = (n: number) => Math.round(n).toLocaleString('id-ID');
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des'];
-const dm = (d: string) => `${Number(d.slice(8, 10))} ${MONTHS[Number(d.slice(5, 7)) - 1]}`;
+const day = (d: string) => String(Number(d.slice(8, 10)));
+const mon = (d: string) => MONTHS[Number(d.slice(5, 7)) - 1];
+
+/** "2 - 8 Nov 2026", "28 Okt - 3 Nov 2026", or with both years when the week crosses New Year. */
+export function periodText(from: string, to: string): string {
+  if (from.slice(0, 4) !== to.slice(0, 4)) return `${day(from)} ${mon(from)} ${from.slice(0, 4)} - ${day(to)} ${mon(to)} ${to.slice(0, 4)}`;
+  if (from.slice(5, 7) !== to.slice(5, 7)) return `${day(from)} ${mon(from)} - ${day(to)} ${mon(to)} ${to.slice(0, 4)}`;
+  return `${day(from)} - ${day(to)} ${mon(to)} ${to.slice(0, 4)}`;
+}
+
+/** The formal title of the report and the store it is about: this is also the caption of the PDF. */
+export function weeklyCaption(o: { store: string; client?: string; from: string; to: string }): string {
+  const who = o.client && o.client.toLowerCase() !== o.store.toLowerCase() ? `${o.store} (${o.client})` : o.store;
+  return `*Weekly Report* ${periodText(o.from, o.to)}\n${who}`;
+}
+
+/** The file name of the PDF: "Weekly Report 2-8 Nov 2026 - ProOne - Toko A.pdf" (no characters a file name cannot hold). */
+export function weeklyFileName(store: string, from: string, to: string): string {
+  const safe = store.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim() || 'Store';
+  return `Weekly Report ${periodText(from, to).replace(/ - /, '-')} - ${safe}.pdf`;
+}
 
 /** "naik 12%" / "turun 5%" / "sama seperti minggu lalu"; empty when last week has nothing to compare with. */
 export function changeText(now: number, before: number | null | undefined): string {
@@ -42,16 +62,11 @@ export function changeText(now: number, before: number | null | undefined): stri
   return ` (${p > 0 ? 'naik' : 'turun'} ${Math.abs(p) >= 10 ? Math.round(Math.abs(p)) : (Math.round(Math.abs(p) * 10) / 10).toString().replace('.', ',')}% dari minggu lalu)`;
 }
 
-const roasText = (sales: number, cost: number) => (cost > 0 ? `${(Math.round(roas(sales, cost) * 10) / 10).toString().replace('.', ',')}x` : '-');
+export const roasText = (sales: number, cost: number) => (cost > 0 ? `${(Math.round(roas(sales, cost) * 10) / 10).toString().replace('.', ',')}x` : '-');
 
-export function weeklyMessage(o: { client: string; store: string; from: string; to: string; cur: PerfTotals; prev: PerfTotals | null }): string {
-  const { cur, prev } = o;
-  const who = o.client || o.store;
-  const out: string[] = [
-    `Halo tim ${who}, saya ${OLI_NAME} dari Professor Online.`,
-    `Berikut ringkasan performa toko ${o.store} minggu ini (${dm(o.from)} - ${dm(o.to)} ${o.to.slice(0, 4)}):`,
-    '',
-  ];
+/** The numbers as text lines (used when the PDF cannot be attached). */
+export function weeklyFigures(cur: PerfTotals, prev: PerfTotals | null): string {
+  const out: string[] = [];
   out.push(`GMV Toko: ${rp(cur.gmv)}${changeText(cur.gmv, prev?.gmv)}`);
   if (cur.orders > 0 || prev?.orders) out.push(`Pesanan: ${int(cur.orders)}${changeText(cur.orders, prev?.orders)}`);
   if (cur.traffic > 0) out.push(`Pengunjung: ${int(cur.traffic)}${changeText(cur.traffic, prev?.traffic)}`);
@@ -68,6 +83,13 @@ export function weeklyMessage(o: { client: string; store: string; from: string; 
     const lines = parts.filter(([, x]) => x.cost > 0 || x.sales > 0).map(([name, x]) => `- ${name}: biaya ${rp(x.cost)}, penjualan ${rp(x.sales)}, ROAS ${roasText(x.sales, x.cost)}`);
     if (lines.length > 1) out.push('', 'Rincian iklan:', ...lines);
   }
-  out.push('', 'Salam,', `${OLI_NAME} | Admin Professor Online`);
   return out.join('\n');
 }
+
+/** The whole text message: title, store, then the numbers. No greeting and no sign-off. */
+export function weeklyMessage(o: { client: string; store: string; from: string; to: string; cur: PerfTotals; prev: PerfTotals | null }): string {
+  return `${weeklyCaption(o)}\n\n${weeklyFigures(o.cur, o.prev)}`;
+}
+
+/** What is saved with a draft, so the PDF is drawn from exactly the numbers the admin saw. */
+export interface WeeklyPayload { store: string; client: string; from: string; to: string; cur: PerfTotals; prev: PerfTotals | null }

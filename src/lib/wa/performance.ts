@@ -2,7 +2,7 @@ import { createAdminClient } from '@/lib/api/supabase-admin';
 import { buildWhatsAppReport } from '@/lib/reports/whatsapp-report';
 import { signedReportUrl, SHARE_TTL_SECONDS } from '@/lib/reports/signed-url';
 import { sendWhatsApp } from './send';
-import { signAsOli } from './oli';
+import { sendReportPdfs, type ReportPdf } from './report-files';
 
 /**
  * The team performance report (Sales, Admin, Advertiser, To Do, Accounting) for Nico, Herlan and Lucy.
@@ -21,6 +21,8 @@ export interface PerformanceReport {
   to?: string;
   text: string;                        // the full report (what the Founder page shows)
   message: string;                     // what goes to WhatsApp: the text on a daily, a headline + PDF links on weekly / monthly
+  headline?: string;                   // weekly / monthly: the title line(s) above the PDFs
+  files?: ReportPdf[];                 // weekly / monthly: one PDF per company (sent as files when "PDF files" is ON)
 }
 
 /** Builds the report for a day (default: today) without sending anything. */
@@ -28,13 +30,13 @@ export async function previewPerformance(dateOverride?: string): Promise<Perform
   const res: any = await buildWhatsAppReport(dateOverride);
   if (!res.send) return { send: false, kind: 'none', date: res.date, text: '', message: '' };
   let message: string = res.text;
+  let files: ReportPdf[] | undefined;
   if (res.kind !== 'daily') {
     // Weekly / monthly: a short headline and a link to each company's PDF (the links last over a year).
-    const links = ((res.files || []) as { company: string }[]).map((f) => `${f.company}: ${signedReportUrl(ERP_ORIGIN, f.company, res.date, SHARE_TTL_SECONDS)}`);
-    message = [res.headline, ...links].filter(Boolean).join('\n');
+    files = ((res.files || []) as { company: string; name: string }[]).map((f) => ({ company: f.company, name: f.name, url: signedReportUrl(ERP_ORIGIN, f.company, res.date, SHARE_TTL_SECONDS) }));
+    message = [res.headline, ...files.map((f) => `${f.company}: ${f.url}`)].filter(Boolean).join('\n');
   }
-  // The WhatsApp message is written as coming from Oli; `text` stays the plain report for the Founder page.
-  return { send: true, kind: res.kind, date: res.date, from: res.from, to: res.to, text: res.text, message: signAsOli(res.kind, message) };
+  return { send: true, kind: res.kind, date: res.date, from: res.from, to: res.to, text: res.text, message, headline: res.headline || undefined, files };
 }
 
 export interface SendOutcome { sent: boolean; reason?: string; kind?: string; date?: string; recipients?: number; detail?: string }
@@ -58,7 +60,11 @@ export async function sendPerformance(workspaceId: string, opts: { trigger: 'cro
   if (opts.trigger === 'test') phones = phones.filter((p) => (opts.onlyPhones || []).includes(p));
   if (phones.length === 0) return { sent: false, reason: opts.trigger === 'test' ? 'That number is not an active recipient.' : 'No active recipient.', kind: report.kind, date: report.date };
 
-  const r = await sendWhatsApp(phones, report.message);
+  // Weekly / monthly with "send PDFs as files" ON: each PDF is a real file (a refused one falls back to its link). Everything else is text.
+  const { data: settings } = await db.from('wa_settings').select('send_files').eq('workspace_id', workspaceId).maybeSingle();
+  const r = report.kind !== 'daily' && settings?.send_files && report.files && report.files.length
+    ? await sendReportPdfs(phones, report.headline || '', report.files)
+    : await sendWhatsApp(phones, report.message);
   await db.from('wa_sends').insert({ workspace_id: workspaceId, kind: report.kind, report_date: report.date, trigger: opts.trigger, recipients: phones, ok: r.ok, detail: r.detail, text: report.message });
   return { sent: r.ok, reason: r.ok ? undefined : r.detail, kind: report.kind, date: report.date, recipients: phones.length, detail: r.detail };
 }

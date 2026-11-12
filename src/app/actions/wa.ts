@@ -204,11 +204,11 @@ export async function saveOutboxMessage(id: string, message: string) {
 }
 
 /** The approval: an admin checked the text and presses Send. Oli's number sends it to the client's group. */
-export async function sendOutbox(id: string, message?: string) {
+export async function sendOutbox(id: string, message?: string, asText = false) {
   const ctx = await waAccess();
   if (!ctx || !ctx.userId) return { error: 'Not allowed' };
   try {
-    const r = await sendOutboxItem(ctx.activeWorkspaceId, ctx.userId, id, message?.slice(0, 4000));
+    const r = await sendOutboxItem(ctx.activeWorkspaceId, ctx.userId, id, { message: message?.slice(0, 4000), asText });
     revalidatePath('/hrd/wa', 'layout');
     return r.ok ? { ok: true, detail: r.detail } : { error: r.detail };
   } catch (e: any) {
@@ -243,5 +243,32 @@ export async function linkStoreToGroup(storeLabel: string, groupId: string | nul
     await db.from('wa_outbox').update({ group_id: groupId }).eq('workspace_id', ws).eq('store_label', storeLabel).in('status', ['draft', 'failed']);
   }
   revalidatePath('/hrd/wa', 'layout');
+  return { ok: true };
+}
+
+/** The switch for sending PDFs as files. Turn it on only after Fonnte confirms the Super package can send files. */
+export async function setSendFiles(on: boolean) {
+  const ctx = await waFounderAccess();
+  if (!ctx) return { error: 'Not allowed' };
+  const { error } = await createAdminClient().from('wa_settings').upsert({ workspace_id: ctx.activeWorkspaceId, send_files: on, updated_at: new Date().toISOString() }, { onConflict: 'workspace_id' });
+  if (error) return { error: error.message };
+  revalidatePath('/hrd/wa', 'layout');
+  return { ok: true };
+}
+
+/** Links a client to its WhatsApp group (one group per client: its brands and stores share it), or unlinks it. */
+export async function linkClientToGroup(clientId: string, groupId: string | null) {
+  const ctx = await waAccess();
+  if (!ctx) return { error: 'Not allowed' };
+  const db = createAdminClient();
+  const ws = ctx.activeWorkspaceId;
+  if (groupId) {
+    const { data: g } = await db.from('wa_groups').select('id').eq('id', groupId).eq('workspace_id', ws).maybeSingle();
+    if (!g) return { error: 'That group is not in this company.' };
+  }
+  const { error } = await db.from('clients').update({ wa_group_id: groupId }).eq('id', clientId).eq('workspace_id', ws);
+  if (error) return { error: error.message };
+  revalidatePath('/hrd/wa', 'layout');
+  revalidatePath('/contacts');
   return { ok: true };
 }

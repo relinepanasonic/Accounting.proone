@@ -148,6 +148,7 @@ export function AdvertiserLogDetail({
   const [pdf, setPdf] = useState<{ status: 'building' | 'ready' | 'error'; blob?: Blob; fileName?: string; error?: string }>({ status: 'building' });
   const [jpeg, setJpeg] = useState<{ blob?: Blob; fileName?: string; error?: string }>({});
   const [shareNotice, setShareNotice] = useState<string | null>(null);
+  const [oliSending, setOliSending] = useState(false);
   const [prev, setPrev] = useState<{ loaded: boolean; data: PreviousSession | null }>({ loaded: false, data: null });
   // The big screenshot makes the PDF/JPEG heavy, so it is left out unless asked for.
   const [includeShot, setIncludeShot] = useState(false);
@@ -265,6 +266,38 @@ export function AdvertiserLogDetail({
     window.open(`https://web.whatsapp.com/send?text=${encodeURIComponent(message)}`, '_blank', 'noopener');
     downloadBlob(pdf.blob, pdf.fileName);
     setShareNotice(`Saved "${pdf.fileName}" to your downloads and opened WhatsApp Web. Choose the chat, then drag the file from your browser's download list into it, or click + and Document.`);
+  };
+
+  // Oli's WhatsApp number posts the report to the client's group (linked in Client Contact), so nobody sends it from a personal phone.
+  const handleSendOli = async (force = false): Promise<void> => {
+    if (pdf.status !== 'ready' || !pdf.blob || !pdf.fileName || !current || oliSending) return;
+    if (!force && !window.confirm(`Send Sesi ${current.session} of ${log.client_name} to the client's WhatsApp group now, from Oli?`)) return;
+    setOliSending(true);
+    setShareNotice('Sending to the client group...');
+    try {
+      const fd = new FormData();
+      fd.set('clientId', log.client_id);
+      fd.set('reportDate', log.report_date);
+      fd.set('session', String(current.session));
+      fd.set('storeLabel', log.store_label || '');
+      fd.set('message', reportMessage);
+      if (force) fd.set('force', '1');
+      fd.set('file', new File([pdf.blob], pdf.fileName, { type: 'application/pdf' }));
+      const res = await fetch('/api/wa/session-send', { method: 'POST', body: fd });
+      const out = await res.json().catch(() => ({} as any));
+      if (res.ok) {
+        setShareNotice(`Sent to the ${out.client || 'client'} group by Oli${out.attached ? ' (with the PDF).' : ' (text only: PDF sending is off).'}`);
+      } else if (out.already && window.confirm(`${out.error}\n\nSend it again?`)) {
+        setOliSending(false);
+        return handleSendOli(true);
+      } else {
+        setShareNotice(`Not sent: ${out.error || `error ${res.status}`}`);
+      }
+    } catch (err: any) {
+      setShareNotice(`Not sent: ${err?.message || 'network error'}`);
+    } finally {
+      setOliSending(false);
+    }
   };
 
   const handleWhatsApp = async () => {
@@ -391,6 +424,15 @@ export function AdvertiserLogDetail({
                       className="inline-flex items-center gap-1.5 text-xs bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 px-3 py-1.5 rounded-lg text-white font-bold"
                     >
                       {pdf.status === 'building' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageCircle className="w-3.5 h-3.5" />} WhatsApp Web
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSendOli()}
+                      disabled={pdf.status !== 'ready' || oliSending}
+                      title="Oli's number sends this report to the client's WhatsApp group"
+                      className="inline-flex items-center gap-1.5 text-xs bg-[#d4af37] hover:bg-[#f5d77f] disabled:opacity-50 px-3 py-1.5 rounded-lg text-black font-bold"
+                    >
+                      {pdf.status === 'building' || oliSending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageCircle className="w-3.5 h-3.5" />} Send to client group (Oli)
                     </button>
                     <button
                       type="button"

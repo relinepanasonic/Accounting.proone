@@ -7,8 +7,9 @@ import type { ClientRow } from '@/lib/sales/client-table';
 import { updateClientContact, createClientContact } from '@/app/actions/sales-flow';
 import { SortArrows } from '@/components/ui/SortArrows';
 import { StoreCell, type StoreLine } from '@/components/sales/ClientStoreTable';
+import { WaGroupSelect } from '@/components/wa/WaGroupSelect';
 
-export interface ContactRow { clientId: string; name: string; brand: string; pic: string; address: string; row: ClientRow }
+export interface ContactRow { clientId: string; name: string; brand: string; pic: string; address: string; row: ClientRow; waGroupId?: string | null }
 
 const AVATAR = ['#38bdf8', '#f472b6', '#34d399', '#fbbf24', '#a78bfa', '#fb923c', '#f87171', '#2dd4bf'];
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
@@ -145,7 +146,8 @@ type Filter = 'all' | 'nostore' | 'nopic' | 'nobrand';
  * Accounting > Client Contact: Company Name | Brand Name | Store Name | PIC Name for every client. It is the same client data as
  * Optimizing > Clients (one source), so a change made in either place is the other's too.
  */
-export function ClientContactTable({ rows, canEdit, storeOptions }: { rows: ContactRow[]; canEdit: boolean; storeOptions?: string[] }) {
+export function ClientContactTable({ rows, canEdit, storeOptions, waGroups }: { rows: ContactRow[]; canEdit: boolean; storeOptions?: string[]; /** WhatsApp groups to choose from; leave out to hide the column. */ waGroups?: { id: string; label: string }[] }) {
+  const showWa = !!waGroups;
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<{ key: 'name' | 'brand' | 'store' | 'pic' | 'address'; asc: boolean }>({ key: 'name', asc: true });
@@ -207,11 +209,11 @@ export function ClientContactTable({ rows, canEdit, storeOptions }: { rows: Cont
       <div className="max-h-[calc(100vh-238px)] min-h-[360px] overflow-auto rounded-2xl border border-[#d4af37]/20 bg-[#0e0f14] shadow-xl">
         <table className="w-full table-fixed text-left">
           <thead className="sticky top-0 z-10 border-b border-[#d4af37]/10 bg-zinc-950 text-[11px] text-zinc-400">
-            <tr><Th k="name" w="22%">Company Name</Th><Th k="brand" w="15%">Brand Name</Th><Th k="store" w="21%">Store Name</Th><Th k="pic" w="15%">PIC Name</Th><Th k="address" w="27%">Address</Th></tr>
+            <tr><Th k="name" w={showWa ? '19%' : '22%'}>Company Name</Th><Th k="brand" w={showWa ? '13%' : '15%'}>Brand Name</Th><Th k="store" w={showWa ? '19%' : '21%'}>Store Name</Th><Th k="pic" w={showWa ? '13%' : '15%'}>PIC Name</Th><Th k="address" w={showWa ? '19%' : '27%'}>Address</Th>{showWa && <th className="px-3 py-3 font-bold uppercase tracking-wider" style={{ width: '17%' }}>WhatsApp Group</th>}</tr>
           </thead>
           <tbody className="divide-y divide-zinc-800/50">
             {groups.length === 0 && (
-              <tr><td colSpan={5} className="p-12 text-center text-sm text-zinc-500">{rows.length === 0 ? 'No client yet.' : 'No client matches.'}</td></tr>
+              <tr><td colSpan={showWa ? 6 : 5} className="p-12 text-center text-sm text-zinc-500">{rows.length === 0 ? 'No client yet.' : 'No client matches.'}</td></tr>
             )}
             {groups.map((g) => {
               const memberRow = (r: ContactRow, tree: boolean) => {
@@ -240,6 +242,7 @@ export function ClientContactTable({ rows, canEdit, storeOptions }: { rows: Cont
                       </div>
                     </td>
                     <td className="px-3 py-3"><EditCell clientId={r.clientId} kind="address" value={r.address} canEdit={canEdit} placeholder="Add address" /></td>
+                    {showWa && <td className="px-3 py-3">{tree ? null : <WaGroupSelect clientIds={[r.clientId]} value={r.waGroupId || null} groups={waGroups!} />}</td>}
                   </tr>
                 );
               };
@@ -249,12 +252,18 @@ export function ClientContactTable({ rows, canEdit, storeOptions }: { rows: Cont
               return (
                 <React.Fragment key={`company:${head.name.trim().toLowerCase()}`}>
                   <tr className="bg-zinc-900/50">
-                    <td colSpan={5} className="px-3 py-3">
+                    <td colSpan={showWa ? 6 : 5} className="px-3 py-3">
                       <div className="flex flex-wrap items-center gap-3">
                         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[11px] font-extrabold text-black" style={{ background: colorOf(head.name) }} aria-hidden>{initials(head.name)}</span>
                         <div className="min-w-[220px] max-w-[360px] flex-1"><EditCell clientId={head.clientId} ids={g.map((x) => x.clientId)} kind="name" value={head.name} canEdit={canEdit} placeholder="Company name" /></div>
                         <span className="rounded-full border border-[#d4af37]/30 bg-[#d4af37]/10 px-2.5 py-0.5 text-[11px] font-bold text-[#f5d77f]">{g.length} brands</span>
                         {canEdit && <AddBrand company={head.name} />}
+                        {showWa && canEdit && (
+                          <span className="ml-auto flex items-center gap-2 text-[11px] text-zinc-500">
+                            WhatsApp group for all brands
+                            <span className="w-56"><WaGroupSelect clientIds={g.map((x) => x.clientId)} value={g.find((x) => x.waGroupId)?.waGroupId || null} groups={waGroups!} /></span>
+                          </span>
+                        )}
                       </div>
                     </td>
                   </tr>

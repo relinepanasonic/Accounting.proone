@@ -46,6 +46,7 @@ const MODULES = {
       { name: 'Team Payroll', href: '/payroll' },
       { name: 'Absensi', href: '/hrd/absensi' },
       { name: 'Employee Directory', href: '/hrd/employees' },
+      { name: 'WA Control', href: '/hrd/wa' },
     ]
   },
   system: {

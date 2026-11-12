@@ -4,7 +4,7 @@ import React, { useState, useTransition } from 'react';
 import { prepareWeeklyNow, saveOutboxMessage, sendOutbox, skipOutbox, linkStoreToGroup } from '@/app/actions/wa';
 
 export interface QueueItem { id: string; store_label: string; client_name: string | null; group_id: string | null; message: string; status: string; detail: string | null; sent_at: string | null; period_from: string; period_to: string; pdfUrl?: string | null }
-export interface QueueGroup { id: string; label: string }
+export interface QueueGroup { id: string; label: string; isGroup?: boolean }
 
 const card = 'rounded-xl border border-[#d4af37]/15 bg-[#0e0f14]/70 p-4';
 const btn = 'rounded-md border border-[#d4af37]/40 bg-[#d4af37]/15 px-3 py-1.5 text-xs font-bold text-[#f5d77f] disabled:opacity-40';
@@ -85,7 +85,16 @@ function QueueCard({ item, groups, sendFiles }: { item: QueueItem; groups: Queue
           className="max-w-[16rem] rounded-md border border-zinc-800 bg-[#0e0f14] px-2 py-1 text-xs text-zinc-200 disabled:opacity-60"
         >
           <option value="">Not linked</option>
-          {groups.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
+          {groups.some((g) => g.isGroup !== false) && (
+            <optgroup label="WhatsApp groups">
+              {groups.filter((g) => g.isGroup !== false).map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
+            </optgroup>
+          )}
+          {groups.some((g) => g.isGroup === false) && (
+            <optgroup label="Private chats (for tests)">
+              {groups.filter((g) => g.isGroup === false).map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
+            </optgroup>
+          )}
         </select>
         {!item.group_id && editable && <span className="text-[11px] text-amber-400">Link the client&apos;s group to send (Oli must be in that group). Or set it once for the whole client in Client Contacts.</span>}
         {item.pdfUrl && <a href={item.pdfUrl} target="_blank" rel="noopener noreferrer" className="ml-auto text-[11px] font-bold text-[#f5d77f] underline">Preview PDF</a>}

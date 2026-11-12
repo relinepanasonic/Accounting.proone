@@ -37,15 +37,15 @@ export default async function ClientContactPage() {
 
   // The WhatsApp group of each client (WA Control: Oli sends the weekly and session reports there). If the column or table is not
   // there yet, the page works as before without the group column.
-  let waGroups: { id: string; label: string }[] | undefined;
+  let waGroups: { id: string; label: string; isGroup: boolean }[] | undefined;
   const waOf = new Map<string, string | null>();
   try {
     const [{ data: groups, error: gErr }, { data: links, error: lErr }] = await Promise.all([
-      db.from('wa_groups').select('id, wa_id, name').eq('workspace_id', ctx.activeWorkspaceId).eq('is_group', true).order('name'),
+      db.from('wa_groups').select('id, wa_id, name, is_group').eq('workspace_id', ctx.activeWorkspaceId).or('is_group.eq.true,allow_target.eq.true').order('name'),
       ids.length ? db.from('clients').select('id, wa_group_id').in('id', ids) : Promise.resolve({ data: [] as any[], error: null }),
     ]);
     if (!gErr && !lErr) {
-      waGroups = (groups || []).map((g: any) => ({ id: g.id as string, label: g.name || `Group ···${String(g.wa_id).slice(-6)}` }));
+      waGroups = (groups || []).map((g: any) => ({ id: g.id as string, isGroup: !!g.is_group, label: g.name || (g.is_group ? `Group ···${String(g.wa_id).slice(-6)}` : `+${g.wa_id}`) }));
       for (const l of links || []) waOf.set(l.id, l.wa_group_id || null);
     }
   } catch { /* column not available */ }

@@ -29,7 +29,7 @@ export default async function WaRolePage({ params, searchParams }: { params: Pro
       periodFrom
         ? db.from('wa_outbox').select('id, store_label, client_name, group_id, message, status, detail, sent_at, period_from, period_to').eq('workspace_id', ws).eq('kind', 'client-weekly').eq('period_from', periodFrom)
         : Promise.resolve({ data: [] as any[] }),
-      db.from('wa_groups').select('id, wa_id, name, is_group').eq('workspace_id', ws).eq('is_group', true).order('name'),
+      db.from('wa_groups').select('id, wa_id, name, is_group').eq('workspace_id', ws).or('is_group.eq.true,allow_target.eq.true').order('name'),
       db.from('wa_settings').select('send_files').eq('workspace_id', ws).maybeSingle(),
     ]);
     // A one-hour link to open each draft's PDF in a new tab (the PDF is drawn from the numbers saved with the draft).
@@ -39,7 +39,7 @@ export default async function WaRolePage({ params, searchParams }: { params: Pro
         items={items}
         sendFiles={!!settings?.send_files}
         period={items[0] ? { from: items[0].period_from, to: items[0].period_to } : null}
-        groups={(groups || []).map((g: any) => ({ id: g.id as string, label: g.name || `Group ···${String(g.wa_id).slice(-6)}` }))}
+        groups={(groups || []).map((g: any) => ({ id: g.id as string, isGroup: !!g.is_group, label: g.name || (g.is_group ? `Group ···${String(g.wa_id).slice(-6)}` : `+${g.wa_id}`) }))}
       />
     );
   }

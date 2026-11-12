@@ -14,3 +14,6 @@ INSERT INTO storage.buckets (id, name, public) VALUES ('wa-files', 'wa-files', f
 -- A reference to what a send was about (e.g. the advertiser session report: client|store|date|session), to stop the same one going out twice.
 ALTER TABLE public.wa_sends ADD COLUMN IF NOT EXISTS ref TEXT;
 CREATE INDEX IF NOT EXISTS idx_wa_sends_ref ON public.wa_sends (workspace_id, kind, ref, created_at DESC);
+
+-- A private chat that may be chosen as a report target (used for tests: send the reports to a personal number). Groups can always be chosen.
+ALTER TABLE public.wa_groups ADD COLUMN IF NOT EXISTS allow_target BOOLEAN NOT NULL DEFAULT false;

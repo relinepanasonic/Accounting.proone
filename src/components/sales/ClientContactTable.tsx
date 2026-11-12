@@ -146,7 +146,7 @@ type Filter = 'all' | 'nostore' | 'nopic' | 'nobrand';
  * Accounting > Client Contact: Company Name | Brand Name | Store Name | PIC Name for every client. It is the same client data as
  * Optimizing > Clients (one source), so a change made in either place is the other's too.
  */
-export function ClientContactTable({ rows, canEdit, storeOptions, waGroups }: { rows: ContactRow[]; canEdit: boolean; storeOptions?: string[]; /** WhatsApp groups to choose from; leave out to hide the column. */ waGroups?: { id: string; label: string }[] }) {
+export function ClientContactTable({ rows, canEdit, storeOptions, waGroups }: { rows: ContactRow[]; canEdit: boolean; storeOptions?: string[]; /** WhatsApp groups to choose from; leave out to hide the column. */ waGroups?: { id: string; label: string; isGroup?: boolean }[] }) {
   const showWa = !!waGroups;
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<Filter>('all');

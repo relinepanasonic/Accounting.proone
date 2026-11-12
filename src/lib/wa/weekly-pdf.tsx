@@ -5,9 +5,9 @@ import { analyze } from './analysis';
 import { cvrOf, int, periodText, roasOf, roasText, rp, weekLabel, type WeekPoint, type WeeklyPayload } from './weekly';
 
 /**
- * The weekly client report as a PDF: two A4 pages, no cover, drawn from the numbers saved with the draft (server-side, no browser).
- *   Page 1: the key numbers, then Penjualan and Biaya Iklan per week for this week and the 4 before it.
- *   Page 2: the 10 best-selling products, then "Temuan & Langkah Berikutnya" (findings and tips written from the numbers).
+ * The weekly client report as ONE A4 page (so it also works as an image), no cover, drawn from the numbers saved with the draft (server-side).
+ *   Top left: the key numbers and the ad types. Top right: "Temuan & Langkah Berikutnya" (findings and tips written from the numbers).
+ *   Below: Penjualan and Biaya Iklan & ROAS per week (this week and the 4 before it), then the 5 best-selling products when the app sends them.
  * Same figures and words as the monthly report of Dashboard Prof, in a lighter form.
  */
 
@@ -87,11 +87,11 @@ const pctOf = (now: number, before: number | null | undefined) => (before && bef
 const pctText = (p: number) => `${p > 0 ? '+' : p < 0 ? '-' : ''}${Math.abs(p) >= 10 ? Math.round(Math.abs(p)) : (Math.round(Math.abs(p) * 10) / 10).toString().replace('.', ',')}%`;
 const cut = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}...` : s);
 
-function Kpi({ label, value, now, before, neutral = false, suffix = 'vs minggu lalu' }: { label: string; value: string; now: number; before: number | null | undefined; neutral?: boolean; suffix?: string }) {
+function Kpi({ label, value, now, before, neutral = false, suffix = 'vs minggu lalu', half = false }: { label: string; value: string; now: number; before: number | null | undefined; neutral?: boolean; suffix?: string; half?: boolean }) {
   const p = pctOf(now, before);
   const color = p === null || Math.abs(p) < 0.5 ? MUTED : neutral ? AMBER : p > 0 ? GREEN : RED;
   return (
-    <View style={st.kpi} wrap={false}>
+    <View style={[st.kpi, half ? { width: '48.5%', marginRight: '1.5%', marginBottom: 5, padding: 6 } : {}]} wrap={false}>
       <Text style={st.kpiLabel}>{label}</Text>
       <Text style={st.kpiValue}>{value}</Text>
       <Text style={[st.kpiChange, { color }]}>{p === null ? '-' : Math.abs(p) < 0.5 ? `0% ${suffix}` : `${pctText(p)} ${suffix}`}</Text>
@@ -118,15 +118,15 @@ export function barColumns(count: number) {
  * Bars per week (left axis) with a value label, the week under each bar, and optionally a LINE (ROAS) with a dot and a value label on every
  * week; the line has no axis of its own, its labels are the numbers. The last bar is the report week. A week without a line value (no ad spend) breaks the line instead of dropping to 0.
  */
-export function WeekBars({ points, values, fmt, color, light, barName, line }: {
+export function WeekBars({ points, values, fmt, color, light, barName, line, height }: {
   points: WeekPoint[]; values: number[]; fmt: (n: number) => string; color: string; light: string;
-  barName?: string;
+  barName?: string; height?: number;
   line?: { values: number[]; fmt: (n: number) => string; name: string };
 }) {
   // Both weekly charts use the same width and left margin (and no right-hand axis), so a week's bars sit in the SAME column in both:
   // read straight down to see whether ad cost and sales moved together.
   const W = CHART_W, LEFT = CHART_LEFT, RIGHT = 0, TOP = line ? 26 : 14, BOTTOM = 22;
-  const H = line ? 150 : 128;
+  const H = height ?? (line ? 150 : 128);
   const plotH = H - TOP - BOTTOM;
   const top = niceMax(Math.max(...values, 0));
   const top2 = line ? niceMax(Math.max(...line.values, 0)) : 1;
@@ -226,21 +226,15 @@ export function WeeklyDocument({ p }: { p: WeeklyPayload }) {
   const a = cur.ads.total;
   const types = TYPES.map(([name, k]) => ({ name, ads: cur.ads[k] as PerfAds })).filter((t) => t.ads.cost > 0 || t.ads.sales > 0);
   const typeCost = types.reduce((s, t) => s + t.ads.cost, 0);
-  const products = p.products && p.products.length ? p.products.map((x) => ({ ...x, name: pdfText(x.name) })).filter((x) => x.name) : null;
+  const products = p.products && p.products.length ? p.products.map((x) => ({ ...x, name: pdfText(x.name) })).filter((x) => x.name).slice(0, 5) : null;
   const productSum = products ? products.reduce((s, x) => s + x.sales, 0) : 0;
   const analysis = analyze(cur, prev, p.series);
+  const findings = analysis.findings.slice(0, 3);
+  const tips = analysis.tips.slice(0, 2);
   const who = p.client && p.client.toLowerCase() !== p.store.toLowerCase() ? `${pdfText(p.store)} · ${pdfText(p.client)}` : pdfText(p.store);
-
-  const Footer = () => (
-    <View style={st.footer} fixed>
-      <Text>Professor Online · Weekly Report {periodText(p.from, p.to)} · ROAS = Penjualan / Biaya Iklan</Text>
-      <Text render={({ pageNumber, totalPages }) => `${pageNumber}/${totalPages}`} />
-    </View>
-  );
 
   return (
     <Document title={`Weekly Report ${periodText(p.from, p.to)} - ${p.store}`} author="Professor Online">
-      {/* ---------- Page 1: key numbers + Penjualan and Biaya Iklan per week ---------- */}
       <Page size="A4" style={st.page}>
         <View style={st.band}>
           <View>
@@ -255,18 +249,59 @@ export function WeeklyDocument({ p }: { p: WeeklyPayload }) {
 
         <Text style={st.lead}>{summaryLine(p)}</Text>
 
-        <View style={st.grid}>
-          <Kpi label="TOTAL PENJUALAN" value={rp(cur.sales)} now={cur.sales} before={prev?.sales} />
-          <Kpi label="TRAFFIC" value={int(cur.traffic)} now={cur.traffic} before={prev?.traffic} />
-          <Kpi label="PESANAN" value={int(cur.orders)} now={cur.orders} before={prev?.orders} />
-          <Kpi label="BIAYA IKLAN" value={rp(a.cost)} now={a.cost} before={prev?.ads.total.cost} neutral />
-          <Kpi label="ROAS (PENJUALAN / IKLAN)" value={roasNow > 0 ? roasText(cur.sales, a.cost) : '-'} now={roasNow} before={roasPrev > 0 ? roasPrev : null} />
-          <Kpi label="CONVERSION RATE" value={cvrNow > 0 ? `${(Math.round(cvrNow * 100) / 100).toString().replace('.', ',')}%` : '-'} now={cvrNow} before={cvrPrev > 0 ? cvrPrev : null} />
+        {/* Top: the numbers on the left, the analysis on the right */}
+        <View style={{ flexDirection: 'row' }}>
+          <View style={{ width: '54%', paddingRight: 10 }}>
+            <View style={st.grid}>
+              <Kpi label="TOTAL PENJUALAN" value={rp(cur.sales)} now={cur.sales} before={prev?.sales} half />
+              <Kpi label="TRAFFIC" value={int(cur.traffic)} now={cur.traffic} before={prev?.traffic} half />
+              <Kpi label="PESANAN" value={int(cur.orders)} now={cur.orders} before={prev?.orders} half />
+              <Kpi label="BIAYA IKLAN" value={rp(a.cost)} now={a.cost} before={prev?.ads.total.cost} neutral half />
+              <Kpi label="ROAS (PENJUALAN / IKLAN)" value={roasNow > 0 ? roasText(cur.sales, a.cost) : '-'} now={roasNow} before={roasPrev > 0 ? roasPrev : null} half />
+              <Kpi label="CONVERSION RATE" value={cvrNow > 0 ? `${(Math.round(cvrNow * 100) / 100).toString().replace('.', ',')}%` : '-'} now={cvrNow} before={cvrPrev > 0 ? cvrPrev : null} half />
+            </View>
+            {types.length > 0 && typeCost > 0 && (
+              <View wrap={false}>
+                <Text style={[st.h2, { marginTop: 4 }]}>Efisiensi Iklan Minggu Ini</Text>
+                <View style={st.head}>
+                  <Text style={[st.th, { width: '34%' }]}>JENIS IKLAN</Text>
+                  <Text style={[st.th, { width: '26%', textAlign: 'right' }]}>BIAYA</Text>
+                  <Text style={[st.th, { width: '28%', textAlign: 'right' }]}>PENJUALAN</Text>
+                  <Text style={[st.th, { width: '12%', textAlign: 'right' }]}>ROAS</Text>
+                </View>
+                {types.map((t) => (
+                  <View key={t.name} style={[st.row, { paddingVertical: 3 }]}>
+                    <Text style={{ width: '34%', fontSize: 8 }}>{t.name}</Text>
+                    <Text style={{ width: '26%', textAlign: 'right', fontSize: 8 }}>{shortRp(t.ads.cost)}</Text>
+                    <Text style={{ width: '28%', textAlign: 'right', fontSize: 8 }}>{shortRp(t.ads.sales)}</Text>
+                    <Text style={{ width: '12%', textAlign: 'right', fontSize: 8 }}>{roasText(t.ads.sales, t.ads.cost)}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+
+          <View style={{ width: '46%' }}>
+            <Text style={[st.h2, { marginTop: 0 }]}>Temuan & Langkah Berikutnya</Text>
+            {findings.map((f, i) => (
+              <View key={i} style={[st.card, { padding: 6, marginBottom: 4, borderLeftWidth: 3, borderLeftColor: f.tone === 'win' ? GREEN : AMBER }]} wrap={false}>
+                <Text style={[st.tag, { color: f.tone === 'win' ? GREEN : AMBER }]}>{f.tone === 'win' ? 'WIN' : 'PERHATIAN'}</Text>
+                <Text style={[st.cardTitle, { fontSize: 8.5 }]}>{f.title}</Text>
+                <Text style={[st.cardText, { fontSize: 7.5, marginTop: 1 }]}>{f.text}</Text>
+              </View>
+            ))}
+            <View style={[st.tipsBox, { padding: 6, marginTop: 2 }]} wrap={false}>
+              <Text style={[st.tag, { color: AMBER }]}>REKOMENDASI MINGGU BERIKUTNYA</Text>
+              {tips.map((t, i) => (
+                <Text key={i} style={[st.cardText, { fontSize: 7.5, marginTop: 2 }]}>{i + 1}. {t}</Text>
+              ))}
+            </View>
+          </View>
         </View>
 
         <Text style={st.h2}>Penjualan per Minggu</Text>
         <Text style={st.hint}>Minggu ini dan {Math.max(0, pts.length - 1)} minggu sebelumnya (biru tua = minggu laporan). Tiap minggu sejajar dengan batang biaya iklan di bawahnya.</Text>
-        <WeekBars points={pts} values={pts.map((x) => x.sales)} fmt={shortRp} color={BLUE} light={BLUE_LIGHT} />
+        <WeekBars points={pts} values={pts.map((x) => x.sales)} fmt={shortRp} color={BLUE} light={BLUE_LIGHT} height={108} />
 
         <Text style={st.h2}>Biaya Iklan & ROAS per Minggu</Text>
         <Text style={st.hint}>Batang: biaya iklan per minggu, sejajar dengan batang penjualan di atas. Garis: ROAS minggu itu (penjualan dibagi biaya iklan)</Text>
@@ -277,74 +312,27 @@ export function WeeklyDocument({ p }: { p: WeeklyPayload }) {
           color={AMBER}
           light={AMBER_LIGHT}
           barName="Biaya Iklan"
+          height={128}
           line={{ values: pts.map((x) => (x.adCost > 0 ? x.sales / x.adCost : 0)), fmt: (n) => roasText(n, 1), name: 'ROAS' }}
         />
 
-        {types.length > 0 && typeCost > 0 && (
+        {products && (
           <View wrap={false}>
-            <Text style={st.h2}>Efisiensi Iklan Minggu Ini</Text>
-            <View style={st.head}>
-              <Text style={[st.th, { width: '28%' }]}>JENIS IKLAN</Text>
-              <Text style={[st.th, { width: '24%', textAlign: 'right' }]}>BIAYA IKLAN</Text>
-              <Text style={[st.th, { width: '24%', textAlign: 'right' }]}>PENJUALAN</Text>
-              <Text style={[st.th, { width: '12%', textAlign: 'right' }]}>ROAS</Text>
-              <Text style={[st.th, { width: '12%', textAlign: 'right' }]}>PORSI BIAYA</Text>
-            </View>
-            {types.map((t) => (
-              <View key={t.name} style={st.row}>
-                <Text style={{ width: '28%' }}>{t.name}</Text>
-                <Text style={{ width: '24%', textAlign: 'right' }}>{rp(t.ads.cost)}</Text>
-                <Text style={{ width: '24%', textAlign: 'right' }}>{rp(t.ads.sales)}</Text>
-                <Text style={{ width: '12%', textAlign: 'right' }}>{roasText(t.ads.sales, t.ads.cost)}</Text>
-                <Text style={{ width: '12%', textAlign: 'right' }}>{Math.round((t.ads.cost / typeCost) * 100)}%</Text>
+            <Text style={st.h2}>5 Produk Terlaris</Text>
+            {products.map((x, i) => (
+              <View key={`${i}-${x.name}`} style={[st.row, { paddingVertical: 2.5 }]}>
+                <Text style={{ width: '5%', color: MUTED, fontSize: 8 }}>{i + 1}</Text>
+                <Text style={{ width: '65%', fontSize: 8 }}>{cut(x.name, 78)}</Text>
+                <Text style={{ width: '18%', textAlign: 'right', fontSize: 8 }}>{rp(x.sales)}</Text>
+                <Text style={{ width: '12%', textAlign: 'right', fontSize: 8 }}>{productSum > 0 ? `${((x.sales / productSum) * 100).toFixed(1).replace('.', ',')}%` : '-'}</Text>
               </View>
             ))}
           </View>
         )}
-        <Footer />
-      </Page>
 
-      {/* ---------- Page 2: top products + findings ---------- */}
-      <Page size="A4" style={st.page}>
-        <Text style={[st.h2, { marginTop: 0 }]}>10 Produk Terlaris — {periodText(p.from, p.to)}</Text>
-        {products ? (
-          <View wrap={false}>
-            <View style={st.head}>
-              <Text style={[st.th, { width: '6%' }]}>#</Text>
-              <Text style={[st.th, { width: '62%' }]}>PRODUK</Text>
-              <Text style={[st.th, { width: '20%', textAlign: 'right' }]}>PENJUALAN</Text>
-              <Text style={[st.th, { width: '12%', textAlign: 'right' }]}>% TOP 10</Text>
-            </View>
-            {products.slice(0, 10).map((x, i) => (
-              <View key={`${i}-${x.name}`} style={st.row}>
-                <Text style={{ width: '6%', color: MUTED }}>{i + 1}</Text>
-                <Text style={{ width: '62%' }}>{cut(x.name, 70)}</Text>
-                <Text style={{ width: '20%', textAlign: 'right' }}>{rp(x.sales)}</Text>
-                <Text style={{ width: '12%', textAlign: 'right' }}>{productSum > 0 ? `${((x.sales / productSum) * 100).toFixed(1).replace('.', ',')}%` : '-'}</Text>
-              </View>
-            ))}
-          </View>
-        ) : (
-          <View style={[st.card, { borderStyle: 'dashed' }]}>
-            <Text style={st.cardText}>Data produk minggu ini belum tersedia. Daftar produk terlaris akan tampil di sini setelah data produk dari dashboard toko tersambung.</Text>
-          </View>
-        )}
-
-        <Text style={[st.h2, { marginTop: 14 }]}>Temuan & Langkah Berikutnya</Text>
-        {analysis.findings.map((f, i) => (
-          <View key={i} style={[st.card, { borderLeftWidth: 3, borderLeftColor: f.tone === 'win' ? GREEN : AMBER }]} wrap={false}>
-            <Text style={[st.tag, { color: f.tone === 'win' ? GREEN : AMBER }]}>{f.tone === 'win' ? 'WIN' : 'PERHATIAN'}</Text>
-            <Text style={st.cardTitle}>{f.title}</Text>
-            <Text style={st.cardText}>{f.text}</Text>
-          </View>
-        ))}
-        <View style={st.tipsBox} wrap={false}>
-          <Text style={[st.tag, { color: AMBER }]}>REKOMENDASI TINDAKAN — MINGGU BERIKUTNYA</Text>
-          {analysis.tips.map((t, i) => (
-            <Text key={i} style={[st.cardText, { marginTop: 3 }]}>{i + 1}. {t}</Text>
-          ))}
+        <View style={st.footer} fixed>
+          <Text>Professor Online · Weekly Report {periodText(p.from, p.to)} · ROAS = Penjualan / Biaya Iklan</Text>
         </View>
-        <Footer />
       </Page>
     </Document>
   );

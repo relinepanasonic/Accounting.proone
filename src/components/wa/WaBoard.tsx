@@ -3,7 +3,7 @@ import { Image as ImageIcon, MessageSquare, Users, Clock, Radio } from 'lucide-r
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { loadGroups, loadMessages, loadPeople, sinceDays, type TeamRole } from '@/lib/wa/queries';
 import { fmtMinutes, memberStats, median, responseTimes, type WaMsg } from '@/lib/wa/stats';
-import { WaFilters, LinkNumber, TrackToggle, RenameGroup, GenerateReport, ActionRow } from './WaClient';
+import { WaFilters, LinkNumber, TrackToggle, RenameGroup, GenerateReport, ActionRow, SyncGroups } from './WaClient';
 
 const WEBHOOK_ORIGIN = 'https://erp.profesoronline.id';
 const ROLE_LABEL: Record<string, string> = { admin: 'Admin', advertiser: 'Advertiser', sales: 'Sales', superadmin: 'Superadmin', accounting: 'Accounting', founder: 'Founder' };
@@ -206,7 +206,10 @@ export async function WaBoard({ workspaceId, role, days, groupId, q }: { workspa
 
           {!role && (
             <section className={card}>
-              <h2 className="mb-3 text-xs font-extrabold uppercase tracking-wider text-[#f5d77f]">Chats</h2>
+              <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                <h2 className="text-xs font-extrabold uppercase tracking-wider text-[#f5d77f]">Chats</h2>
+                <SyncGroups />
+              </div>
               {groups.length === 0 ? <p className="py-4 text-center text-xs text-zinc-500">None yet.</p> : (
                 <ul className="max-h-72 divide-y divide-zinc-800/70 overflow-y-auto">
                   {groups.map((g) => (

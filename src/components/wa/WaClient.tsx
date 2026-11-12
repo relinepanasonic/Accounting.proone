@@ -3,7 +3,7 @@
 import React, { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { linkWaNumber, setWaGroupTracked, renameWaGroup, generateWaReportNow, setWaActionStatus, convertWaActionToTask } from '@/app/actions/wa';
+import { linkWaNumber, setWaGroupTracked, renameWaGroup, generateWaReportNow, setWaActionStatus, convertWaActionToTask, syncWaGroups } from '@/app/actions/wa';
 
 const TABS = [
   { name: 'Dashboard', href: '/hrd/wa' },
@@ -170,6 +170,24 @@ export function ActionRow({ id, hasTask }: { id: string; hasTask: boolean }) {
       <button disabled={pending} className={btn} onClick={() => start(async () => { await setWaActionStatus(id, 'done'); })}>Done</button>
       <button disabled={pending} className={btn} onClick={() => start(async () => { await setWaActionStatus(id, 'dismissed'); })}>Dismiss</button>
       {note && <span className="text-[10px] text-amber-400">{note}</span>}
+    </div>
+  );
+}
+
+/** Fills the chat list from Fonnte (every group Oli is in, with its name). The second button refreshes Fonnte's own list first. */
+export function SyncGroups() {
+  const [pending, start] = useTransition();
+  const [msg, setMsg] = useState('');
+  const run = (refresh: boolean) => start(async () => {
+    setMsg(refresh ? 'Refreshing from WhatsApp...' : 'Asking Fonnte...');
+    const r: any = await syncWaGroups(refresh);
+    setMsg(r?.error ? `Problem: ${r.error}` : `Fonnte lists ${r.found} group(s): ${r.created} new, ${r.named} named.`);
+  });
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      <button disabled={pending} className="rounded-md border border-[#d4af37]/40 bg-[#d4af37]/15 px-2.5 py-1 text-[11px] font-bold text-[#f5d77f] disabled:opacity-50" onClick={() => run(false)}>{pending ? 'Working...' : 'Sync groups from Fonnte'}</button>
+      <button disabled={pending} className="rounded-md border border-zinc-700 px-2.5 py-1 text-[11px] font-bold text-zinc-300 hover:border-[#d4af37]/50 disabled:opacity-50" title="Fonnte asks WhatsApp for the current group list. Use it only after Oli joined a new group: overusing it can get the number banned." onClick={() => { if (confirm('Refresh the group list from WhatsApp? Use this only after Oli has joined a new group; overusing it can get the number banned.')) run(true); }}>Refresh from WhatsApp</button>
+      {msg && <span className="w-full text-right text-[10px] text-zinc-400">{msg}</span>}
     </div>
   );
 }

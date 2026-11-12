@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/api/supabase-admin';
 import { waAccess, waFounderAccess, loadPeople } from '@/lib/wa/queries';
 import { previewPerformance, sendPerformance } from '@/lib/wa/performance';
 import { prepareClientWeekly, sendOutboxItem } from '@/lib/wa/weekly-job';
+import { fetchFonnteGroups } from '@/lib/wa/fonnte-groups';
 import { generateReports } from '@/lib/wa/report';
 import { normalizeIdPhone } from '@/lib/wa/stats';
 
@@ -271,4 +272,45 @@ export async function linkClientToGroup(clientId: string, groupId: string | null
   revalidatePath('/hrd/wa', 'layout');
   revalidatePath('/contacts');
   return { ok: true };
+}
+
+/**
+ * Fills the chat list from Fonnte: every WhatsApp group Oli's number is in, with its real name (the webhook never gives names). New groups are
+ * added; a group that has no name yet gets it; names you typed yourself are never overwritten. With `refresh`, Fonnte's list is refreshed from
+ * WhatsApp first: do that only after Oli joined a new group (Fonnte warns that overusing it can get the number banned).
+ */
+export async function syncWaGroups(refresh = false) {
+  const ctx = await waAccess();
+  if (!ctx) return { error: 'Not allowed' };
+  const r = await fetchFonnteGroups({ refresh });
+  if (!r.ok) return { error: r.error };
+
+  const db = createAdminClient();
+  const ws = ctx.activeWorkspaceId;
+  const [{ data: dev }, { data: existing }] = await Promise.all([
+    db.from('wa_devices').select('id').eq('workspace_id', ws).eq('active', true).limit(1).maybeSingle(),
+    db.from('wa_groups').select('id, wa_id, name').eq('workspace_id', ws),
+  ]);
+  const byId = new Map((existing || []).map((g: any) => [g.wa_id as string, g as { id: string; wa_id: string; name: string | null }]));
+
+  const inserts: Record<string, unknown>[] = [];
+  let named = 0;
+  for (const g of r.groups) {
+    const ex = byId.get(g.waId);
+    if (!ex) inserts.push({ workspace_id: ws, device_id: dev?.id || null, wa_id: g.waId, name: g.name || null, is_group: true });
+    else if (!ex.name && g.name) {
+      const { error } = await db.from('wa_groups').update({ name: g.name }).eq('id', ex.id);
+      if (!error) named++;
+    }
+  }
+  let created = 0;
+  for (let i = 0; i < inserts.length; i += 100) {
+    const chunk = inserts.slice(i, i + 100);
+    const { error } = await db.from('wa_groups').insert(chunk);
+    if (error) return { error: `Could not save the groups: ${error.message}` };
+    created += chunk.length;
+  }
+  revalidatePath('/hrd/wa', 'layout');
+  revalidatePath('/contacts');
+  return { ok: true, found: r.groups.length, created, named };
 }

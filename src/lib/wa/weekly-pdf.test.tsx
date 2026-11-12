@@ -28,58 +28,71 @@ async function pages(p: WeeklyPayload) {
 }
 
 describe('weekly PDF', () => {
-  it('is exactly two pages and has no cover page', async () => {
+  it('is exactly ONE page (so it also works as an image) and has no cover', async () => {
     const { totalPages, text } = await pages(payload());
-    expect(totalPages).toBe(2);
+    expect(totalPages).toBe(1);
     expect(text[0]).toContain('Weekly Report');
-    expect(text[0]).toContain('TOTAL PENJUALAN');           // page 1 opens with the numbers, not a cover
+    expect(text[0]).toContain('TOTAL PENJUALAN');           // it opens with the numbers, not a cover
     expect(text[0]).not.toMatch(/DISIAPKAN UNTUK|Dibuat/);
   });
 
-  it('page 1: summary, key numbers, the two weekly charts (5 weeks) and the ad types', async () => {
+  it('has the summary, the key numbers, the ad types and the analysis (top right) on the one page', async () => {
     const { text } = await pages(payload());
     const p1 = text[0];
     expect(p1).toContain('Pada 9 - 15 Nov 2026, ProOne - onat.hardware membukukan penjualan Rp 120.000.000 dari 14.400 pengunjung');
+    expect(p1).toContain('Efisiensi Iklan Minggu Ini');
+    expect(p1).toContain('GMV Max Auto');
+    expect(p1).toContain('Temuan & Langkah Berikutnya');
+    const squeezed = p1.replace(/\s+/g, '');                // the labels are letter-spaced, so the extractor puts spaces between their letters
+    expect(squeezed).toMatch(/WIN|PERHATIAN/);
+    expect(squeezed).toContain('REKOMENDASIMINGGUBERIKUTNYA');
+  });
+
+  it('has the two weekly charts with 5 weeks and the ROAS line', async () => {
+    const { text } = await pages(payload());
+    const p1 = text[0];
     expect(p1).toContain('Penjualan per Minggu');
     expect(p1).toContain('Biaya Iklan & ROAS per Minggu');
     for (const w of ['12-18 Okt', '19-25 Okt', '26 Okt-1 Nov', '2-8 Nov', '9-15 Nov']) expect(p1).toContain(w);
-    // the ROAS line carries a label on each of the 5 weeks, and its axis and legend
     expect((p1.match(/16,7x/g) || []).length).toBeGreaterThanOrEqual(5);
     expect(p1).toContain('(garis)');
     expect(p1).toContain('(batang)');
-    expect(p1).toContain('Efisiensi Iklan Minggu Ini');
-    expect(p1).toContain('GMV Max Auto');
   });
 
-  it('page 2: the 10 products and the findings', async () => {
-    const { text } = await pages(payload());
-    const p2 = text[1];
-    expect(p2).toContain('10 Produk Terlaris');
-    expect(p2).toContain('ONAT Roda Caster Nylon PU PVC Orange 3 Inch Medium Duty');
-    expect(p2).toContain('Temuan & Langkah Berikutnya');
-    // the labels are letter-spaced in the PDF, so the extractor puts spaces between their letters
-    const squeezed = p2.replace(/\s+/g, '');
-    expect(squeezed).toMatch(/WIN|PERHATIAN/);
-    expect(squeezed).toContain('REKOMENDASITINDAKAN');
+  it('shows the 5 best products when the app sends them, and still fits the one page', async () => {
+    const { totalPages, text } = await pages(payload());      // the payload holds 10 products: only 5 are drawn
+    expect(totalPages).toBe(1);
+    expect(text[0]).toContain('5 Produk Terlaris');
+    expect(text[0]).toContain('ONAT Roda Caster Nylon PU PVC Orange 3 Inch Medium Duty');
+    expect(text[0]).toContain('ONAT Roda Caster Nylon PU PVC Orange 7 Inch Medium Duty');       // the 5th
+    expect(text[0]).not.toContain('ONAT Roda Caster Nylon PU PVC Orange 8 Inch Medium Duty');   // the 6th is left out
   });
 
-  it('without product data page 2 says so instead of inventing a list', async () => {
+  it('without product data the products block is simply left out', async () => {
     const { totalPages, text } = await pages(payload({ products: null }));
-    expect(totalPages).toBe(2);
-    expect(text[1]).toContain('Data produk minggu ini belum tersedia');
-    expect(text[1]).toContain('Temuan & Langkah Berikutnya');
+    expect(totalPages).toBe(1);
+    expect(text[0]).not.toContain('Produk Terlaris');
+    expect(text[0]).toContain('Temuan & Langkah Berikutnya');
   });
 
-  it('an older draft without the weekly series still makes two pages', async () => {
+  it('the worst case still fits one page: long product names, three findings and two tips', async () => {
+    const long = Array.from({ length: 10 }, (_, i) => ({ name: `ONAT Roda pagar pintu gerbang geser rel bubut besi katrol model tipe U ukuran ${i + 1} sangat panjang sekali nama produknya di marketplace`, sales: (11 - i) * 1000000 }));
+    const weak = normalizeRow('dashboard', { store: 'onat.hardware', periodStart: '2026-11-09', sales: 60000000, gmv: 70000000, traffic: 15000, addToCart: 40000, orders: 700,
+      ads: { total: { cost: 30000000, sales: 50000000 }, gmvMax: { cost: 1000000, sales: 24000000 }, group: { cost: 25000000, sales: 30000000 }, independent: { cost: 4000000, sales: 6000000 } } })!;
+    const { totalPages } = await pages(payload({ cur: sumRows([weak], '2026-11-09', '2026-11-15')!, products: long }));
+    expect(totalPages).toBe(1);
+  });
+
+  it('an older draft without the weekly series still makes one page', async () => {
     const { totalPages, text } = await pages(payload({ series: undefined, products: undefined }));
-    expect(totalPages).toBe(2);
+    expect(totalPages).toBe(1);
     expect(text[0]).toContain('Penjualan per Minggu');
   });
 
-  it('a store with no ads and no previous week still renders', async () => {
+  it('a store with no ads and no previous week still renders on one page', async () => {
     const quiet = normalizeRow('dashboard', { store: 'Toko Kecil', periodStart: '2026-11-09', sales: 5000000, orders: 20, traffic: 400 })!;
     const { totalPages } = await pages({ store: 'ProOne - Toko Kecil', client: '', from: '2026-11-09', to: '2026-11-15', cur: sumRows([quiet], '2026-11-09', '2026-11-15')!, prev: null, series: weeklySeries([quiet], '2026-11-09'), products: null });
-    expect(totalPages).toBe(2);
+    expect(totalPages).toBe(1);
   });
 }, 60000);
 
@@ -94,12 +107,12 @@ describe('pdfText', () => {
   it('keeps accented Latin letters', () => {
     expect(pdfText('Caf\u00E9 R\u00F6sti')).toBe('Caf\u00E9 R\u00F6sti');
   });
-  it('a product name with a non-breaking hyphen and an emoji still makes a clean two-page PDF', async () => {
+  it('a product name with a non-breaking hyphen and an emoji still makes a clean one-page PDF', async () => {
     const p = payload({ products: [{ name: 'AC Panasonic 1 PK CS\u2011YU9BKJ \uD83D\uDD25', sales: 21730228 }, { name: '   ', sales: 5 }] });
     const { totalPages, text } = await pages(p);
-    expect(totalPages).toBe(2);
-    expect(text[1]).toContain('AC Panasonic 1 PK CS-YU9BKJ');
-    expect(text[1]).not.toContain('\u2011');
+    expect(totalPages).toBe(1);
+    expect(text[0]).toContain('AC Panasonic 1 PK CS-YU9BKJ');
+    expect(text[0]).not.toContain('\u2011');
   });
 });
 

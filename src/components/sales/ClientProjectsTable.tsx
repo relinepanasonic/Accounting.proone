@@ -182,7 +182,7 @@ export function StatusCell({ row, canEdit }: { row: ClientRow; canEdit: boolean 
       {life === 'churn' && churnDate && <div className="text-[10px] text-zinc-500">since {dmy(churnDate)}</div>}
       {editable && open && (
         <div className="flex flex-col items-start gap-1 rounded-lg border border-zinc-800 bg-zinc-950 p-1.5">
-          {([['auto', 'Auto (by dates)'], ['active', 'Active'], ['finished', 'Finished (client stays)'], ['freeze', 'Freeze'], ['churn', 'Churn (client left)']] as const).map(([k, label]) => (
+          {([['auto', 'Auto'], ['active', 'Active'], ['finished', 'Finished'], ['churn', 'Churn']] as const).map(([k, label]) => (
             <button
               key={k}
               type="button"

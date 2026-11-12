@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { isOptimizingPath, isPabrikPath, isAccountingPath, OPTIMIZING_CHILDREN } from '@/components/navigation/nav-config';
+import { isOptimizingPath, isPabrikPath, isAccountingPath, isHrdPath, OPTIMIZING_CHILDREN } from '@/components/navigation/nav-config';
 
 const MODULES = {
   accounting: {
@@ -99,7 +99,7 @@ export function ModuleSubNav({ role }: { role?: string }) {
   return (
     <>
     {optimizingSwitcher}
-    <div className="w-full bg-[#0e0f14]/90 backdrop-blur-md border-b border-[#d4af37]/20 px-6 py-3 flex items-center gap-6 overflow-x-auto scrollbar-hide sticky top-0 z-30">
+    <div className={`w-full bg-[#0e0f14]/90 backdrop-blur-md border-b border-[#d4af37]/20 px-6 py-3 flex items-center gap-6 overflow-x-auto scrollbar-hide sticky top-0 z-30 ${isHrdPath(pathname) ? 'lg:hidden' : ''}`}>
       {activeModule.items.filter((item) => !(role === 'sales' && item.href === '/sales/reimbursement'))
         // Sales staff only reach the Absensi page of HRD, never payroll.
         .filter((item) => !(role === 'sales' && activeModule.match.includes('/hrd') && item.href !== '/hrd/absensi')).map(item => {

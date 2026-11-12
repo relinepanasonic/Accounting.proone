@@ -51,3 +51,11 @@ export const ACCOUNTING_CHILDREN = [
   { name: 'Vendors', href: '/vendors', isActive: (p: string) => p === '/vendors' || p.startsWith('/vendors/') },
   { name: 'Company Settings', href: '/settings/workspaces', isActive: (p: string) => p === '/settings' || p.startsWith('/settings/') },
 ] as const;
+
+// "HRD" header = Team Payroll + Absensi + Employee Directory + WA Control (a group in the sidebar, like Accounting and Optimizing).
+export const HRD_CHILDREN = [
+  { name: 'Team Payroll', href: '/payroll', isActive: (p: string) => p === '/payroll' || p.startsWith('/payroll/') },
+  { name: 'Absensi', href: '/hrd/absensi', isActive: (p: string) => p === '/hrd/absensi' || p.startsWith('/hrd/absensi/') },
+  { name: 'Employee Directory', href: '/hrd/employees', isActive: (p: string) => p === '/hrd/employees' || p.startsWith('/hrd/employees/') },
+  { name: 'WA Control', href: '/hrd/wa', isActive: (p: string) => p === '/hrd/wa' || p.startsWith('/hrd/wa/') },
+] as const;

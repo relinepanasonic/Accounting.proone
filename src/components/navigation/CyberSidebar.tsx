@@ -32,6 +32,9 @@ import {
   Network,
   Package,
   Truck,
+  Wallet,
+  CalendarCheck,
+  MessageCircle,
   CircleDot
 } from 'lucide-react';
 import {
@@ -42,6 +45,7 @@ import {
   isOptimizingPath,
   OPTIMIZING_CHILDREN,
   ACCOUNTING_CHILDREN,
+  HRD_CHILDREN,
 } from '@/components/navigation/nav-config';
 
 type NavEntry =
@@ -70,9 +74,17 @@ const ACCOUNTING_ICONS: Record<string, React.ReactNode> = {
   'Company Settings': <Settings className="w-3.5 h-3.5" />,
 };
 
+const HRD_ICONS: Record<string, React.ReactNode> = {
+  'Team Payroll': <Wallet className="w-3.5 h-3.5" />,
+  Absensi: <CalendarCheck className="w-3.5 h-3.5" />,
+  'Employee Directory': <Users className="w-3.5 h-3.5" />,
+  'WA Control': <MessageCircle className="w-3.5 h-3.5" />,
+};
+
 const GROUP_ICONS: Record<string, Record<string, React.ReactNode>> = {
   Optimizing: OPTIMIZING_ICONS,
   Accounting: ACCOUNTING_ICONS,
+  HRD: HRD_ICONS,
 };
 
 const MAIN_MODULES: NavEntry[] = [
@@ -81,7 +93,7 @@ const MAIN_MODULES: NavEntry[] = [
   { type: 'group', name: 'Accounting', icon: <LayoutDashboard className="w-4 h-4" />, isActive: isAccountingPath, children: ACCOUNTING_CHILDREN },
   { type: 'group', name: 'Optimizing', icon: <TrendingUp className="w-4 h-4" />, isActive: isOptimizingPath, children: OPTIMIZING_CHILDREN },
   { type: 'link', name: 'Dream of AI', href: '/productivity/pabrik-sosmed', icon: <Share2 className="w-4 h-4" />, isActive: isPabrikPath },
-  { type: 'link', name: 'HRD', href: '/payroll', icon: <Users className="w-4 h-4" />, isActive: isHrdPath },
+  { type: 'group', name: 'HRD', icon: <Users className="w-4 h-4" />, isActive: isHrdPath, children: HRD_CHILDREN },
 ];
 
 const FOUNDER_ONLY: NavEntry = { type: 'link', name: 'Subscriptions', href: '/subscriptions', icon: <CreditCard className="w-4 h-4" />, isActive: (p) => p === '/subscriptions' || p.startsWith('/subscriptions/') };
@@ -130,6 +142,7 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
       let changed = false;
       if (isOptimizingPath(pathname) && !next.Optimizing) { next.Optimizing = true; changed = true; }
       if (isAccountingPath(pathname) && !next.Accounting) { next.Accounting = true; changed = true; }
+      if (isHrdPath(pathname) && !next.HRD) { next.HRD = true; changed = true; }
       if (changed) {
         try { window.localStorage.setItem('sidebar-open-groups', JSON.stringify(next)); } catch {}
         return next;

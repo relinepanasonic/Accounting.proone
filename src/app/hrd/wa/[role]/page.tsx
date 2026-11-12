@@ -9,6 +9,8 @@ import { ReportBoard } from '@/components/wa/ReportBoard';
 import { loadBoard } from '@/lib/wa/board-data';
 import { shiftMonth, validMonth } from '@/lib/wa/board';
 import { jakartaDate } from '@/lib/wa/report-text';
+import { SalesBotPanel } from '@/components/wa/SalesBotPanel';
+import { DEFAULT_BOT_KNOWLEDGE } from '@/lib/wa/bot/default-knowledge';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120; // "Prepare now" and "Approve & send" run here
@@ -59,11 +61,34 @@ export default async function WaRolePage({ params, searchParams }: { params: Pro
     );
   }
 
+  let botPanel: React.ReactNode = null;
+  if (role === 'sales') {
+    const db = createAdminClient();
+    const ws = ctx.activeWorkspaceId;
+    const [{ data: cfg }, { data: devs }, { data: chats }, { data: log }] = await Promise.all([
+      db.from('wa_bot_config').select('*').eq('workspace_id', ws).maybeSingle(),
+      db.from('wa_devices').select('phone, label, webhook_secret').eq('workspace_id', ws).eq('role', 'sales'),
+      db.from('wa_bot_chats').select('group_id, status, replies, reason, lead, updated_at, wa_groups(name, wa_id)').eq('workspace_id', ws).order('updated_at', { ascending: false }).limit(40),
+      db.from('wa_bot_log').select('id, in_reply_to, reply, handoff, ok, detail, created_at, wa_groups(name, wa_id)').eq('workspace_id', ws).order('created_at', { ascending: false }).limit(30),
+    ]);
+    const chatName = (g: any) => g?.name || (g?.wa_id ? `+${g.wa_id}` : 'Chat');
+    botPanel = (
+      <SalesBotPanel
+        tokenSet={!!process.env.FONNTE_TOKEN_SALES}
+        config={{ enabled: !!cfg?.enabled, persona_name: cfg?.persona_name || 'Fefe', company_name: cfg?.company_name || 'Prof Toko Online', hours_from: cfg?.hours_from || '08:00', hours_to: cfg?.hours_to || '21:00', max_replies: cfg?.max_replies || 4, knowledge: cfg?.knowledge || DEFAULT_BOT_KNOWLEDGE }}
+        devices={(devs || []).map((d: any) => ({ phone: d.phone, label: d.label, webhookUrl: `https://erp.profesoronline.id/api/wa/webhook/${d.webhook_secret}` }))}
+        chats={(chats || []).map((x: any) => ({ group_id: x.group_id, name: chatName(x.wa_groups), status: x.status, replies: x.replies, reason: x.reason, lead: x.lead, updated_at: x.updated_at }))}
+        log={(log || []).map((l: any) => ({ id: l.id, chat: chatName(l.wa_groups), in_reply_to: l.in_reply_to, reply: l.reply, handoff: l.handoff, ok: l.ok, detail: l.detail, created_at: l.created_at }))}
+      />
+    );
+  }
+
   const teamBoard = <WaBoard workspaceId={ctx.activeWorkspaceId} role={role as TeamRole} days={parseDays(sp.days)} groupId={one(sp.group)} q={one(sp.q)} />;
   return (
     <div className="space-y-6">
       {boardNode}
       {queue}
+      {botPanel}
       {role === 'admin'
         ? <details className="rounded-xl border border-zinc-800 p-3"><summary className="cursor-pointer text-xs font-extrabold uppercase tracking-wider text-zinc-400">Admin team activity in the chats</summary><div className="mt-3">{teamBoard}</div></details>
         : teamBoard}

@@ -4,6 +4,9 @@ import type { ParsedWaMessage } from './parse-webhook';
 export interface IngestResult {
   stored: boolean;
   duplicate?: boolean;
+  /** The chat this message belongs to, and whether this call saved it for the first time (a retried webhook is not new). */
+  groupId?: string;
+  isNew?: boolean;
   reason?: string;
 }
 
@@ -13,11 +16,11 @@ export async function deviceBySecret(secret: string) {
   const db = createAdminClient();
   const { data } = await db
     .from('wa_devices')
-    .select('id, workspace_id, phone, active')
+    .select('id, workspace_id, phone, active, role')
     .eq('webhook_secret', secret)
     .eq('active', true)
     .maybeSingle();
-  return data as { id: string; workspace_id: string; phone: string; active: boolean } | null;
+  return data as { id: string; workspace_id: string; phone: string; active: boolean; role: string } | null;
 }
 
 /** Saves one parsed message: finds or creates its group and sender, then inserts it (a repeat is ignored). */
@@ -59,7 +62,7 @@ export async function ingestMessage(
   }
 
   // 3. The message. The unique dedupe key makes a retried webhook a no-op.
-  const { error: mErr } = await db.from('wa_messages').upsert(
+  const { data: inserted, error: mErr } = await db.from('wa_messages').upsert(
     {
       workspace_id: ws,
       group_id: group.id,
@@ -77,7 +80,7 @@ export async function ingestMessage(
       source: 'webhook',
     },
     { onConflict: 'workspace_id,dedupe_key', ignoreDuplicates: true },
-  );
+  ).select('id');
   if (mErr) throw new Error(`wa_messages insert failed: ${mErr.message}`);
-  return { stored: true };
+  return { stored: true, groupId: group.id as string, isNew: (inserted || []).length > 0 };
 }

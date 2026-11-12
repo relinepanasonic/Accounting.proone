@@ -59,16 +59,12 @@ export async function POST(request: Request) {
   const isPdf = file instanceof File && file.type === 'application/pdf' && file.size > 0;
   const attach = !!settings?.send_files && isPdf;
 
-  let fileArg: { url: string; filename: string } | undefined;
+  let fileArg: { data: Uint8Array; filename: string; contentType: string } | undefined;
   if (attach) {
     const pdf = file as File;
     if (pdf.size > MAX_BYTES) return json({ error: 'The PDF is over 4 MB (Fonnte limit). Switch off the screenshot in the report and try again.' }, 413);
-    const path = `session/${ws}/${reportDate.slice(0, 7)}/${crypto.randomUUID()}.pdf`;
-    const up = await db.storage.from('wa-files').upload(path, new Uint8Array(await pdf.arrayBuffer()), { contentType: 'application/pdf', upsert: false });
-    if (up.error) return json({ error: `Could not store the PDF: ${up.error.message}` }, 500);
-    const signed = await db.storage.from('wa-files').createSignedUrl(path, 24 * 3600);
-    if (signed.error || !signed.data?.signedUrl) return json({ error: 'Could not make a link for the PDF.' }, 500);
-    fileArg = { url: signed.data.signedUrl, filename: (pdf.name || 'Report.pdf').replace(/[\\/:*?"<>|]/g, '').slice(0, 120) };
+    // The PDF that came from the screen is uploaded to Fonnte as a real file: nothing is stored on our side.
+    fileArg = { data: new Uint8Array(await pdf.arrayBuffer()), filename: (pdf.name || 'Report.pdf').replace(/[\\/:*?"<>|]/g, '').slice(0, 120), contentType: 'application/pdf' };
   }
 
   const r = await sendWhatsApp([target], message, fileArg ? { file: fileArg } : {});

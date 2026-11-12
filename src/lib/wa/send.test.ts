@@ -75,6 +75,32 @@ describe('sendWhatsApp', () => {
     expect(bad.detail).toMatch(/https/);
   });
 
+  it('uploads the file itself as multipart: real name and type, caption as the message, no url', async () => {
+    let seen: any;
+    const bytes = new Uint8Array([37, 80, 68, 70, 45, 49, 46, 52, 10, 1, 2, 3]);   // "%PDF-1.4" + a few bytes
+    const r = await sendWhatsApp(['120363012345678901@g.us'], '*Weekly Report* 2 - 8 Nov 2026\nToko A', {
+      token: 'TOK', file: { data: bytes, filename: 'Weekly Report 2-8 Nov 2026 - Toko A.pdf', contentType: 'application/pdf' },
+      fetchImpl: (async (_u: any, init: any) => { seen = init; return new Response(JSON.stringify({ status: true, detail: 'success! message in queue' })); }) as any,
+    });
+    expect(r).toMatchObject({ ok: true, parts: 1 });
+    expect(seen.body).toBeInstanceOf(FormData);
+    expect(seen.headers.Authorization).toBe('TOK');
+    expect(seen.headers['Content-Type']).toBeUndefined();            // fetch adds the multipart boundary itself
+    expect(seen.body.get('target')).toBe('120363012345678901@g.us');
+    expect(seen.body.get('message')).toBe('*Weekly Report* 2 - 8 Nov 2026\nToko A');
+    expect(seen.body.get('url')).toBeNull();
+    const file = seen.body.get('file') as File;
+    expect(file.name).toBe('Weekly Report 2-8 Nov 2026 - Toko A.pdf');
+    expect(file.type).toBe('application/pdf');
+    expect(file.size).toBe(bytes.length);
+  });
+
+  it('refuses an empty file and a file over 4 MB before calling Fonnte', async () => {
+    const never = (async () => { throw new Error('must not be called'); }) as any;
+    expect((await sendWhatsApp(['6281234567890'], 'cap', { token: 't', file: { data: new Uint8Array(0), filename: 'a.pdf' }, fetchImpl: never })).detail).toMatch(/empty/);
+    expect((await sendWhatsApp(['6281234567890'], 'cap', { token: 't', file: { data: new Uint8Array(4 * 1024 * 1024 + 1), filename: 'a.pdf' }, fetchImpl: never })).detail).toMatch(/4 MB/);
+  });
+
   it('reports Fonnte refusing', async () => {
     const r = await sendWhatsApp(['6281234567890'], 'hi', { token: 't', fetchImpl: reply({ status: false, reason: 'token invalid' }) as any });
     expect(r.ok).toBe(false);

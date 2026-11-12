@@ -25,9 +25,17 @@ export async function sendReportPdfs(
   const failed: Array<{ file: ReportPdf; reason: string }> = [];
 
   for (const file of files) {
-    // The first request to a report link makes and stores the PDF (it can take half a minute): do that now, not while Fonnte waits.
-    try { await f(file.url, { signal: AbortSignal.timeout(90000) }); } catch { /* Fonnte will try the link itself */ }
-    const r = await sendWhatsApp(phones, pdfCaption(headline, file.company), { token: opts.token, fetchImpl: opts.fetchImpl, file: { url: file.url, filename: file.name } });
+    // The first request to a report link makes and stores the PDF (it can take half a minute). We fetch it ourselves and upload the bytes
+    // to Fonnte as a real file; only if that fails do we hand Fonnte the link (which it may refuse: it wants the format in the link).
+    let data: Uint8Array | undefined;
+    try {
+      const res = await f(file.url, { signal: AbortSignal.timeout(90000) });
+      if (res.ok && /pdf/i.test(res.headers.get('content-type') || 'pdf')) data = new Uint8Array(await res.arrayBuffer());
+    } catch { /* fall back to the link */ }
+    const r = await sendWhatsApp(phones, pdfCaption(headline, file.company), {
+      token: opts.token, fetchImpl: opts.fetchImpl,
+      file: data && data.byteLength > 0 ? { data, filename: file.name, contentType: 'application/pdf' } : { url: file.url, filename: file.name },
+    });
     if (r.ok) sent.push(file.company); else failed.push({ file, reason: r.detail });
     await pause(2000);
   }

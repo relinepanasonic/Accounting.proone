@@ -6,7 +6,7 @@ import { clientGroupMap, pickGroup } from './group-pick';
 import { jakartaDate } from './report-text';
 import { hasActivity, lastFullWeek, seriesFrom, sumRows, weeklyCaption, weeklyFigures, weeklyFileName, weeklySeries, type WeeklyPayload } from './weekly';
 import { sendWhatsApp } from './send';
-import { signedWeeklyPdfUrl } from './signed';
+import { renderWeeklyPdf } from './weekly-pdf';
 
 export interface PrepareResult { from: string; to: string; created: number; refreshed: number; kept: number; noData: number; errors: string[] }
 
@@ -108,9 +108,16 @@ export async function sendOutboxItem(workspaceId: string, userId: string, id: st
   if (!claimed || claimed.length === 0) return { ok: false, detail: 'Someone else is sending this one.' };
 
   const target = group.is_group ? `${group.wa_id}@g.us` : group.wa_id;
-  const r = asFile
-    ? await sendWhatsApp([target], caption, { file: { url: signedWeeklyPdfUrl(id), filename: weeklyFileName(payload!.store, payload!.from, payload!.to) } })
-    : await sendWhatsApp([target], payload?.cur ? `${caption}\n\n${weeklyFigures(payload.cur, payload.prev)}` : caption);
+  let r;
+  if (asFile) {
+    // The PDF is drawn here from the numbers saved with the draft and uploaded to Fonnte as a real file.
+    let pdf: Uint8Array | null = null;
+    try { pdf = new Uint8Array(await renderWeeklyPdf(payload!)); } catch (e: any) { r = { ok: false, parts: 0, detail: `Could not make the PDF: ${e?.message || e}` }; }
+    if (pdf) r = await sendWhatsApp([target], caption, { file: { data: pdf, filename: weeklyFileName(payload!.store, payload!.from, payload!.to), contentType: 'application/pdf' } });
+  } else {
+    r = await sendWhatsApp([target], payload?.cur ? `${caption}\n\n${weeklyFigures(payload.cur, payload.prev)}` : caption);
+  }
+  r = r!;
   const detail = `${asFile ? 'PDF' : 'Text'}: ${r.detail}`;
   await db.from('wa_outbox').update({ status: r.ok ? 'sent' : 'failed', detail, sent_at: r.ok ? new Date().toISOString() : null, sent_by: r.ok ? userId : null }).eq('id', id);
   return { ok: r.ok, detail };

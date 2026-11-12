@@ -11,15 +11,18 @@ import { adminMediaStorage } from './media-storage';
 import { renderWeeklyPdf } from './weekly-pdf';
 import { renderWeeklyJpeg } from './report-image';
 
+const addDaysIso = (day: string, n: number) => new Date(new Date(`${day}T12:00:00Z`).getTime() + n * 86400000).toISOString().slice(0, 10);
+
 export interface PrepareResult { from: string; to: string; created: number; refreshed: number; kept: number; noData: number; errors: string[] }
 
 /**
  * Prepares one DRAFT per store for the last full week (Monday to Sunday). It never sends anything.
  * A draft that already exists is left alone (an admin may have edited it) unless `refresh` is true; sent and skipped ones are never touched.
  */
-export async function prepareClientWeekly(workspaceId: string, opts: { today?: string; refresh?: boolean } = {}): Promise<PrepareResult> {
+export async function prepareClientWeekly(workspaceId: string, opts: { today?: string; refresh?: boolean; onlyKey?: string; week?: string } = {}): Promise<PrepareResult> {
   const db = createAdminClient();
-  const week = lastFullWeek(opts.today || jakartaDate());
+  // a given Monday is that week; else the last full week before today
+  const week = opts.week ? { from: opts.week, to: addDaysIso(opts.week, 6), prevFrom: addDaysIso(opts.week, -7), prevTo: addDaysIso(opts.week, -1) } : lastFullWeek(opts.today || jakartaDate());
   const res: PrepareResult = { from: week.from, to: week.to, created: 0, refreshed: 0, kept: 0, noData: 0, errors: [] };
 
   // The feeds of Dashboard Prof and Reline, for every store (the owner view): the report week and the 4 weeks before it (the charts),
@@ -54,6 +57,7 @@ export async function prepareClientWeekly(workspaceId: string, opts: { today?: s
 
   const inserts: Record<string, unknown>[] = [];
   for (const [key, rows] of byStore) {
+    if (opts.onlyKey && key !== opts.onlyKey) continue;      // one store only (asked by Dashboard Prof / Reline)
     const cur = sumRows(rows, week.from, week.to);
     if (!hasActivity(cur)) { res.noData++; continue; }
     const label = storeLabel(rows[0]);
@@ -91,7 +95,7 @@ export interface OutboxSendResult { ok: boolean; detail: string }
  * cannot send the same summary twice. With "send PDFs as files" ON (Fonnte Super package) the message is the PDF with the caption;
  * otherwise (or with asText) it is the caption followed by the numbers as text.
  */
-export async function sendOutboxItem(workspaceId: string, userId: string, id: string, opts: { message?: string; asText?: boolean; resend?: boolean } = {}): Promise<OutboxSendResult> {
+export async function sendOutboxItem(workspaceId: string, userId: string | null, id: string, opts: { message?: string; asText?: boolean; resend?: boolean } = {}): Promise<OutboxSendResult> {
   const db = createAdminClient();
   const { data: item } = await db.from('wa_outbox').select('id, status, group_id, message, payload').eq('id', id).eq('workspace_id', workspaceId).maybeSingle();
   if (!item) return { ok: false, detail: 'Summary not found.' };

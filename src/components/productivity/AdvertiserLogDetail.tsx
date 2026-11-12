@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import { getClientWaGroup } from '@/app/actions/wa';
 import { publicStoreName } from '@/lib/wa/public-name';
 import { X, Loader2, Pencil, Download, MessageCircle } from 'lucide-react';
 import { deleteAdvertiserLog, fetchAdvertiserLogDetail, fetchPreviousSession } from '@/app/actions/advertiser';
@@ -150,6 +151,8 @@ export function AdvertiserLogDetail({
   const [jpeg, setJpeg] = useState<{ blob?: Blob; fileName?: string; error?: string }>({});
   const [shareNotice, setShareNotice] = useState<string | null>(null);
   const [oliSending, setOliSending] = useState(false);
+  // The client's WhatsApp group (name), null when none is linked, undefined while we ask. With a group the advertiser only needs the Oli button.
+  const [waGroup, setWaGroup] = useState<string | null | undefined>(undefined);
   const [prev, setPrev] = useState<{ loaded: boolean; data: PreviousSession | null }>({ loaded: false, data: null });
   // The big screenshot makes the PDF/JPEG heavy, so it is left out unless asked for.
   const [includeShot, setIncludeShot] = useState(false);
@@ -167,6 +170,12 @@ export function AdvertiserLogDetail({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [log.client_id, log.report_date, log.store_label]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getClientWaGroup(log.client_id).then((r: any) => { if (!cancelled) setWaGroup(r?.group ?? null); }).catch(() => { if (!cancelled) setWaGroup(null); });
+    return () => { cancelled = true; };
+  }, [log.client_id]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -384,7 +393,8 @@ export function AdvertiserLogDetail({
                     {' '}by <span className="text-zinc-300">{current.advertiser_name}</span>
                   </p>
                   <div className="flex flex-wrap items-center gap-2">
-                    <button
+                    {waGroup === null && (
+<button
                       type="button"
                       onClick={handleDownload}
                       disabled={pdf.status !== 'ready'}
@@ -392,6 +402,7 @@ export function AdvertiserLogDetail({
                     >
                       {pdf.status === 'building' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} PDF
                     </button>
+)}
                     <button
                       type="button"
                       onClick={handleCopyText}
@@ -401,7 +412,8 @@ export function AdvertiserLogDetail({
                     >
                       <MessageCircle className="w-3.5 h-3.5" /> Copy text
                     </button>
-                    <button
+                    {waGroup === null && (
+<button
                       type="button"
                       onClick={handleDownloadJpeg}
                       disabled={!jpeg.blob}
@@ -410,7 +422,9 @@ export function AdvertiserLogDetail({
                     >
                       {!jpeg.blob && !jpeg.error ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} JPEG
                     </button>
-                    <button
+)}
+                    {waGroup === null && (
+<button
                       type="button"
                       onClick={handleWhatsApp}
                       disabled={pdf.status !== 'ready'}
@@ -419,7 +433,9 @@ export function AdvertiserLogDetail({
                     >
                       {pdf.status === 'building' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageCircle className="w-3.5 h-3.5" />} WhatsApp
                     </button>
-                    <button
+)}
+                    {waGroup === null && (
+<button
                       type="button"
                       onClick={handleWhatsAppWeb}
                       disabled={pdf.status !== 'ready'}
@@ -428,7 +444,9 @@ export function AdvertiserLogDetail({
                     >
                       {pdf.status === 'building' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageCircle className="w-3.5 h-3.5" />} WhatsApp Web
                     </button>
-                    <button
+)}
+                    {waGroup && (
+<button
                       type="button"
                       onClick={() => handleSendOli()}
                       disabled={pdf.status !== 'ready' || oliSending}
@@ -437,6 +455,7 @@ export function AdvertiserLogDetail({
                     >
                       {pdf.status === 'building' || oliSending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageCircle className="w-3.5 h-3.5" />} Send to client group (Oli)
                     </button>
+)}
                     <button
                       type="button"
                       onClick={() => onEdit(current.session)}
@@ -458,6 +477,7 @@ export function AdvertiserLogDetail({
                     </button>
                   </div>
                 </div>
+                {waGroup && <p className="text-[11px] text-zinc-500">This client has a WhatsApp group (<span className="text-zinc-300">{waGroup}</span>): send the report with the gold button. Oli's number posts it, so the manual WhatsApp buttons are hidden.</p>}
                 {(pdf.status === 'error' || shareNotice) && (
                   <p className={`text-xs ${pdf.status === 'error' ? 'text-red-400' : 'text-emerald-400'}`}>
                     {pdf.status === 'error' ? `PDF failed: ${pdf.error}` : shareNotice}

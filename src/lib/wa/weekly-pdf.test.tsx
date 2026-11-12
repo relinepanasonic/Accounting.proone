@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { extractText, getDocumentProxy } from 'unpdf';
 import { normalizeRow, type PerfRow } from '@/lib/integrations/performance';
 import { sumRows, weeklySeries, type WeeklyPayload } from './weekly';
-import { niceMax, renderWeeklyPdf, shortRp, summaryLine } from './weekly-pdf';
+import { barColumns, CHART_LEFT, CHART_W, niceMax, renderWeeklyPdf, shortRp, summaryLine } from './weekly-pdf';
 
 const row = (d: string, k: number): PerfRow => normalizeRow('dashboard', {
   store: 'onat.hardware', periodStart: d, periodEnd: d, granularity: 'week', sales: 100000000 * k, gmv: 100000000 * k, traffic: 12000 * k, addToCart: 38000 * k, orders: 1200 * k,
@@ -45,8 +45,8 @@ describe('weekly PDF', () => {
     for (const w of ['12-18 Okt', '19-25 Okt', '26 Okt-1 Nov', '2-8 Nov', '9-15 Nov']) expect(p1).toContain(w);
     // the ROAS line carries a label on each of the 5 weeks, and its axis and legend
     expect((p1.match(/16,7x/g) || []).length).toBeGreaterThanOrEqual(5);
-    expect(p1).toContain('sumbu kanan');
-    expect(p1).toContain('sumbu kiri');
+    expect(p1).toContain('(garis)');
+    expect(p1).toContain('(batang)');
     expect(p1).toContain('Efisiensi Iklan Minggu Ini');
     expect(p1).toContain('GMV Max Auto');
   });
@@ -84,6 +84,18 @@ describe('weekly PDF', () => {
 }, 60000);
 
 describe('chart helpers', () => {
+  it('the weekly charts share their columns: the same week is at the same x in both, so they can be read straight down', () => {
+    const a = barColumns(5);
+    const b = barColumns(5);
+    expect(a.centers).toEqual(b.centers);
+    expect(a.barWidth).toBe(b.barWidth);
+    // 5 equal columns between the amount labels and the right edge, each bar centred in its column
+    expect(a.slot).toBeCloseTo((CHART_W - CHART_LEFT) / 5, 6);
+    expect(a.centers[0]).toBeCloseTo(CHART_LEFT + a.slot / 2, 6);
+    expect(a.centers[4]).toBeCloseTo(CHART_W - a.slot / 2, 6);
+    a.centers.forEach((c, i) => { if (i) expect(c - a.centers[i - 1]).toBeCloseTo(a.slot, 6); });
+  });
+
   it('shortRp writes money short', () => {
     expect(shortRp(0)).toBe('0');
     expect(shortRp(850000)).toBe('850 rb');

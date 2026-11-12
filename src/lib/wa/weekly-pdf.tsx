@@ -82,29 +82,42 @@ function Kpi({ label, value, now, before, neutral = false, suffix = 'vs minggu l
   );
 }
 
-/** The x of the line chart's points: the middle of each week's slot. */
 const LINE_COLOR = '#1d4ed8';
 
+/** Chart width and the room left of the bars (for the amount labels). Every weekly chart uses these, so their columns line up. */
+export const CHART_W = 535;
+export const CHART_LEFT = 46;
+
 /**
- * Bars per week (left axis) with a value label, the week under each bar, and optionally a LINE on a right axis (ROAS) with a dot and
- * a label on every week. The last bar is the report week. A week without a line value (no ad spend) breaks the line instead of dropping to 0.
+ * Where the bars of a weekly chart stand: the middle (x) of each week's column and the bar width. It depends only on how many weeks
+ * there are, so the Penjualan chart and the Biaya Iklan chart put the same week at the same x: read straight down to compare them.
+ */
+export function barColumns(count: number) {
+  const slot = (CHART_W - CHART_LEFT) / Math.max(1, count);
+  return { slot, barWidth: Math.min(46, slot * 0.5), centers: Array.from({ length: count }, (_, i) => CHART_LEFT + slot * i + slot / 2) };
+}
+
+/**
+ * Bars per week (left axis) with a value label, the week under each bar, and optionally a LINE (ROAS) with a dot and a value label on every
+ * week; the line has no axis of its own, its labels are the numbers. The last bar is the report week. A week without a line value (no ad spend) breaks the line instead of dropping to 0.
  */
 export function WeekBars({ points, values, fmt, color, light, barName, line }: {
   points: WeekPoint[]; values: number[]; fmt: (n: number) => string; color: string; light: string;
   barName?: string;
   line?: { values: number[]; fmt: (n: number) => string; name: string };
 }) {
-  const W = 535, LEFT = 46, RIGHT = line ? 40 : 0, TOP = line ? 26 : 14, BOTTOM = 22;
+  // Both weekly charts use the same width and left margin (and no right-hand axis), so a week's bars sit in the SAME column in both:
+  // read straight down to see whether ad cost and sales moved together.
+  const W = CHART_W, LEFT = CHART_LEFT, RIGHT = 0, TOP = line ? 26 : 14, BOTTOM = 22;
   const H = line ? 150 : 128;
   const plotH = H - TOP - BOTTOM;
-  const plotW = W - LEFT - RIGHT;
   const top = niceMax(Math.max(...values, 0));
   const top2 = line ? niceMax(Math.max(...line.values, 0)) : 1;
-  const slot = plotW / points.length;
-  const bw = Math.min(46, slot * 0.5);
+  const cols = barColumns(points.length);
+  const bw = cols.barWidth;
   const y = (v: number) => TOP + plotH - (plotH * v) / top;
   const y2 = (v: number) => TOP + plotH - (plotH * v) / top2;
-  const cx = (i: number) => LEFT + slot * i + slot / 2;
+  const cx = (i: number) => cols.centers[i];
 
   // the line, cut into runs of weeks that have a value
   const runs: Array<Array<{ x: number; y: number }>> = [];
@@ -122,10 +135,10 @@ export function WeekBars({ points, values, fmt, color, light, barName, line }: {
       {line && (
         <>
           <Rect x={LEFT} y={4} width={8} height={8} fill={color} />
-          <Text x={LEFT + 12} y={11} fill={MUTED} style={{ fontSize: 7 }}>{barName || 'Biaya'} (sumbu kiri)</Text>
+          <Text x={LEFT + 12} y={11} fill={MUTED} style={{ fontSize: 7 }}>{barName || 'Biaya'} (batang)</Text>
           <Line x1={LEFT + 140} x2={LEFT + 154} y1={8} y2={8} stroke={LINE_COLOR} strokeWidth={1.8} />
           <Circle cx={LEFT + 147} cy={8} r={2.4} fill={LINE_COLOR} />
-          <Text x={LEFT + 158} y={11} fill={MUTED} style={{ fontSize: 7 }}>{line.name} (sumbu kanan)</Text>
+          <Text x={LEFT + 158} y={11} fill={MUTED} style={{ fontSize: 7 }}>{line.name} (garis)</Text>
         </>
       )}
       {[0, 1, 2, 3, 4].map((i) => {
@@ -134,7 +147,6 @@ export function WeekBars({ points, values, fmt, color, light, barName, line }: {
           <React.Fragment key={i}>
             <Line x1={LEFT} x2={W - RIGHT} y1={y(v)} y2={y(v)} stroke={LINE} strokeWidth={0.6} />
             <Text x={LEFT - 5} y={y(v) + 2.5} fill={MUTED} style={{ fontSize: 6.5 }} textAnchor="end">{v === 0 ? '0' : shortRp(v)}</Text>
-            {line && <Text x={W - RIGHT + 5} y={y(v) + 2.5} fill={LINE_COLOR} style={{ fontSize: 6.5 }} textAnchor="start">{i === 0 ? '0' : line.fmt((top2 * i) / 4)}</Text>}
           </React.Fragment>
         );
       })}
@@ -236,11 +248,11 @@ export function WeeklyDocument({ p }: { p: WeeklyPayload }) {
         </View>
 
         <Text style={st.h2}>Penjualan per Minggu</Text>
-        <Text style={st.hint}>Minggu ini dan {Math.max(0, pts.length - 1)} minggu sebelumnya (biru tua = minggu laporan)</Text>
+        <Text style={st.hint}>Minggu ini dan {Math.max(0, pts.length - 1)} minggu sebelumnya (biru tua = minggu laporan). Tiap minggu sejajar dengan batang biaya iklan di bawahnya.</Text>
         <WeekBars points={pts} values={pts.map((x) => x.sales)} fmt={shortRp} color={BLUE} light={BLUE_LIGHT} />
 
         <Text style={st.h2}>Biaya Iklan & ROAS per Minggu</Text>
-        <Text style={st.hint}>Batang: biaya iklan per minggu. Garis: ROAS minggu itu (penjualan dibagi biaya iklan)</Text>
+        <Text style={st.hint}>Batang: biaya iklan per minggu, sejajar dengan batang penjualan di atas. Garis: ROAS minggu itu (penjualan dibagi biaya iklan)</Text>
         <WeekBars
           points={pts}
           values={pts.map((x) => x.adCost)}

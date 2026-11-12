@@ -750,8 +750,8 @@ export async function setPaidDate(invoiceId: string, date: string): Promise<Resu
 }
 
 /** Accounting sets a client's status by hand: Freeze (something happened), Churn, or back to Auto (Active / Scheduled by the dates). */
-export async function setClientStatus(invoiceId: string, status: 'auto' | 'freeze' | 'churn' | 'finished'): Promise<Result> {
-  if (!['auto', 'freeze', 'churn', 'finished'].includes(status)) return { success: false, error: 'Unknown status.' };
+export async function setClientStatus(invoiceId: string, status: 'auto' | 'freeze' | 'churn' | 'finished' | 'active'): Promise<Result> {
+  if (!['auto', 'freeze', 'churn', 'finished', 'active'].includes(status)) return { success: false, error: 'Unknown status.' };
   const a = await actor();
   if (!a || !FINANCE.includes(a.ctx.role)) return { success: false, error: 'Only Accounting, Admin and the owners can change the status.' };
   const today = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
@@ -760,7 +760,7 @@ export async function setClientStatus(invoiceId: string, status: 'auto' | 'freez
     .update({ client_status: status === 'auto' ? null : status, client_status_at: status === 'auto' ? null : today })
     .eq('id', invoiceId)
     .or(invoiceScope(a.ctx.activeWorkspaceId));
-  if (error) return { success: false, error: error.code === '23514' ? 'Run supabase/migrations/20261019_client_status_finished.sql in Supabase first.' : error.code === '42703' || /client_status/.test(error.message) ? 'Run supabase/migrations/20261010_client_status.sql in Supabase first.' : error.message };
+  if (error) return { success: false, error: error.code === '23514' ? 'Run supabase/migrations/20261115_client_status_active.sql in Supabase first.' : error.code === '42703' || /client_status/.test(error.message) ? 'Run supabase/migrations/20261010_client_status.sql in Supabase first.' : error.message };
   revalidatePath('/sales/clients');
   revalidatePath('/sales/churn');
   revalidatePath('/optimizing/clients');

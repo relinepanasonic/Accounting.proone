@@ -41,7 +41,7 @@ export interface ClientRow {
   /** Active / Scheduled (project not started) / Freeze (set by hand) / Churn (project ended). */
   lifecycle: Lifecycle;
   /** Freeze or Churn set by hand; null = automatic. */
-  override: 'freeze' | 'churn' | 'finished' | null;
+  override: 'freeze' | 'churn' | 'finished' | 'active' | null;
   /** Day the project ended (or was marked churn). */
   churnDate: string | null;
   /** Churned in an earlier month: lives on the Churn page, not in Client. */
@@ -165,7 +165,7 @@ async function loadInvoiceRows(db: Db, workspaceId: string, opts: LoadOpts): Pro
   };
 
   const today = todayJakarta();
-  type Pending = { inv: any; client: any; deal: any; lines: RequestItem[]; start: string | null; pickedStart: string | null; projectEnd: string | null; override: 'freeze' | 'churn' | 'finished' | null; lifecycle: Lifecycle | 'ended'; churnDate: string | null; paidAt: string | null; paid: boolean; isDeal: boolean };
+  type Pending = { inv: any; client: any; deal: any; lines: RequestItem[]; start: string | null; pickedStart: string | null; projectEnd: string | null; override: 'freeze' | 'churn' | 'finished' | 'active' | null; lifecycle: Lifecycle | 'ended'; churnDate: string | null; paidAt: string | null; paid: boolean; isDeal: boolean };
   const pending: Pending[] = [];
   for (const inv of invoices) {
     const client = clientById.get(inv.client_id);
@@ -180,7 +180,7 @@ async function loadInvoiceRows(db: Db, workspaceId: string, opts: LoadOpts): Pro
     const projectDate = /\[ProjectDate:(\d{4}-\d{2}-\d{2})\]/.exec(inv.notes || '')?.[1] || null;
     const pickedStart: string | null = projectByInvoice.get(inv.id)?.start_date || null;
     const start: string | null = pickedStart || (isDeal ? projectDate : null);
-    const override: 'freeze' | 'churn' | 'finished' | null = inv.client_status === 'freeze' || inv.client_status === 'churn' || inv.client_status === 'finished' ? inv.client_status : null;
+    const override: 'freeze' | 'churn' | 'finished' | 'active' | null = inv.client_status === 'freeze' || inv.client_status === 'churn' || inv.client_status === 'finished' || inv.client_status === 'active' ? inv.client_status : null;
     const ends = lines.map((it) => (start ? computeProjectTerms([it], start).endDate : null)).filter(Boolean) as string[];
     const projectEnd = ends.length ? ends.sort()[ends.length - 1] : null;
     let lifecycle: Lifecycle | 'ended';
@@ -188,6 +188,7 @@ async function loadInvoiceRows(db: Db, workspaceId: string, opts: LoadOpts): Pro
     if (override === 'churn') { lifecycle = 'churn'; churnDate = inv.client_status_at || today; }
     else if (override === 'freeze') lifecycle = 'freeze';
     else if (override === 'finished') lifecycle = 'finished';
+    else if (override === 'active') lifecycle = 'active';
     else if (!start || start > today) lifecycle = 'scheduled';
     else if (projectEnd && projectEnd < today) lifecycle = 'ended'; // decided below: Finished or Churn
     else lifecycle = 'active';

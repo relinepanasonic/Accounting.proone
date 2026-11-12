@@ -156,7 +156,7 @@ export function StatusCell({ row, canEdit }: { row: ClientRow; canEdit: boolean 
   const editable = canEdit && Boolean(row.invoiceId);
   const badge = `inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${LIFE_STYLE[life]}`;
 
-  const choose = (status: 'auto' | 'freeze' | 'churn' | 'finished') => {
+  const choose = (status: 'auto' | 'active' | 'freeze' | 'churn' | 'finished') => {
     setError('');
     const before = { life, override, churnDate };
     setOpen(false);
@@ -182,7 +182,7 @@ export function StatusCell({ row, canEdit }: { row: ClientRow; canEdit: boolean 
       {life === 'churn' && churnDate && <div className="text-[10px] text-zinc-500">since {dmy(churnDate)}</div>}
       {editable && open && (
         <div className="flex flex-col items-start gap-1 rounded-lg border border-zinc-800 bg-zinc-950 p-1.5">
-          {([['auto', 'Auto (by dates)'], ['finished', 'Finished (client stays)'], ['freeze', 'Freeze'], ['churn', 'Churn (client left)']] as const).map(([k, label]) => (
+          {([['auto', 'Auto (by dates)'], ['active', 'Active'], ['finished', 'Finished (client stays)'], ['freeze', 'Freeze'], ['churn', 'Churn (client left)']] as const).map(([k, label]) => (
             <button
               key={k}
               type="button"

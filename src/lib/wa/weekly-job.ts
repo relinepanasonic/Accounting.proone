@@ -1,9 +1,10 @@
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { loadStorePerformance } from '@/lib/integrations/store-performance';
 import { storeKeyOf, storeLabel, type PerfRow } from '@/lib/integrations/performance';
+import { fetchTopProducts, productsKey } from '@/lib/integrations/top-products';
 import { clientGroupMap, pickGroup } from './group-pick';
 import { jakartaDate } from './report-text';
-import { hasActivity, lastFullWeek, sumRows, weeklyCaption, weeklyFigures, weeklyFileName, type WeeklyPayload } from './weekly';
+import { hasActivity, lastFullWeek, seriesFrom, sumRows, weeklyCaption, weeklyFigures, weeklyFileName, weeklySeries, type WeeklyPayload } from './weekly';
 import { sendWhatsApp } from './send';
 import { signedWeeklyPdfUrl } from './signed';
 
@@ -18,9 +19,18 @@ export async function prepareClientWeekly(workspaceId: string, opts: { today?: s
   const week = lastFullWeek(opts.today || jakartaDate());
   const res: PrepareResult = { from: week.from, to: week.to, created: 0, refreshed: 0, kept: 0, noData: 0, errors: [] };
 
-  // The feeds of Dashboard Prof and Reline, for every store (the owner view).
-  const perf = await loadStorePerformance({ from: week.prevFrom, to: week.to }, { userId: null, role: 'founder' });
+  // The feeds of Dashboard Prof and Reline, for every store (the owner view): the report week and the 4 weeks before it (the charts),
+  // and the best-selling products of the report week. Products are best effort: an app that does not send them yet leaves page 2 without the list.
+  const [perf, prodDash, prodReline] = await Promise.all([
+    loadStorePerformance({ from: seriesFrom(week.from), to: week.to }, { userId: null, role: 'founder' }),
+    fetchTopProducts('dashboard', week.from, week.to),
+    fetchTopProducts('reline', week.from, week.to),
+  ]);
   res.errors.push(...perf.errors);
+  const productsOf = new Map<string, { name: string; sales: number }[]>();
+  for (const r of [prodDash, prodReline]) if (r.ok) for (const s of r.stores) if (s.products.length) productsOf.set(productsKey(s), s.products);
+  const productErrors = [prodDash, prodReline].flatMap((r, i) => (r.ok ? [] : [`${i === 0 ? 'Profesor Dashboard' : 'Reline'}: ${r.error}`]));
+  if (productErrors.length) res.errors.push(`Top products (the PDF's page 2 list): ${productErrors.join(' | ')}`);
 
   const byStore = new Map<string, PerfRow[]>();
   for (const r of perf.rows) {
@@ -45,7 +55,10 @@ export async function prepareClientWeekly(workspaceId: string, opts: { today?: s
     if (!hasActivity(cur)) { res.noData++; continue; }
     const label = storeLabel(rows[0]);
     const client = perf.teams[key]?.client || '';
-    const payload: WeeklyPayload = { store: label, client, from: week.from, to: week.to, cur: cur!, prev: sumRows(rows, week.prevFrom, week.prevTo) };
+    const payload: WeeklyPayload = {
+      store: label, client, from: week.from, to: week.to, cur: cur!, prev: sumRows(rows, week.prevFrom, week.prevTo),
+      series: weeklySeries(rows, week.from), products: productsOf.get(key) || null,
+    };
     const fields = { client_name: client || null, group_id: pickGroup(label, client, storeGroup, clientGroup), message: weeklyCaption(payload), payload, detail: null as string | null };
 
     const ex = existing.get(label);

@@ -28,3 +28,16 @@ export function validWeeklyPdfSignature(id: string, exp: string | null, sig: str
   if (!Number.isFinite(e) || e < Math.floor(now / 1000)) return false;
   return same(hmac(`wa-weekly|${id}|${e}`), sig);
 }
+
+/** A link to the weekly report IMAGE of one draft; it ends in ".jpg" so anything that opens it knows it is an image. */
+export function signedWeeklyImageUrl(id: string, ttlSeconds = 3600, origin = ERP_ORIGIN, now = Date.now()): string {
+  const exp = Math.floor(now / 1000) + ttlSeconds;
+  return `${origin}/api/wa/image/${encodeURIComponent(id)}/Weekly-Report.jpg?exp=${exp}&sig=${hmac(`wa-weekly-img|${id}|${exp}`)}`;
+}
+
+export function validWeeklyImageSignature(id: string, exp: string | null, sig: string | null, now = Date.now()): boolean {
+  if (!process.env.ERP_API_KEY || !exp || !sig) return false;
+  const e = Number(exp);
+  if (!Number.isFinite(e) || e < Math.floor(now / 1000)) return false;
+  return same(hmac(`wa-weekly-img|${id}|${e}`), sig);
+}

@@ -2,10 +2,12 @@
 
 import { revalidatePath } from 'next/cache';
 import { createAdminClient } from '@/lib/api/supabase-admin';
+import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedWorkspaceContext, FINANCE_ROLES } from '@/lib/auth/workspace-context';
 import { waAccess, waFounderAccess, loadPeople } from '@/lib/wa/queries';
 import { previewPerformance, sendPerformance } from '@/lib/wa/performance';
 import { prepareClientWeekly, sendOutboxItem } from '@/lib/wa/weekly-job';
-import { fetchFonnteGroups } from '@/lib/wa/fonnte-groups';
+import { syncGroupsFor } from '@/lib/wa/group-sync';
 import { loadWeekDetail } from '@/lib/wa/board-data';
 import { generateReports } from '@/lib/wa/report';
 import { normalizeIdPhone } from '@/lib/wa/stats';
@@ -284,37 +286,9 @@ export async function linkClientToGroup(clientId: string, groupId: string | null
 export async function syncWaGroups(refresh = false) {
   const ctx = await waAccess();
   if (!ctx) return { error: 'Not allowed' };
-  const r = await fetchFonnteGroups({ refresh });
-  if (!r.ok) return { error: r.error };
-
-  const db = createAdminClient();
-  const ws = ctx.activeWorkspaceId;
-  const [{ data: dev }, { data: existing }] = await Promise.all([
-    db.from('wa_devices').select('id').eq('workspace_id', ws).eq('active', true).limit(1).maybeSingle(),
-    db.from('wa_groups').select('id, wa_id, name').eq('workspace_id', ws),
-  ]);
-  const byId = new Map((existing || []).map((g: any) => [g.wa_id as string, g as { id: string; wa_id: string; name: string | null }]));
-
-  const inserts: Record<string, unknown>[] = [];
-  let named = 0;
-  for (const g of r.groups) {
-    const ex = byId.get(g.waId);
-    if (!ex) inserts.push({ workspace_id: ws, device_id: dev?.id || null, wa_id: g.waId, name: g.name || null, is_group: true });
-    else if (!ex.name && g.name) {
-      const { error } = await db.from('wa_groups').update({ name: g.name }).eq('id', ex.id);
-      if (!error) named++;
-    }
-  }
-  let created = 0;
-  for (let i = 0; i < inserts.length; i += 100) {
-    const chunk = inserts.slice(i, i + 100);
-    const { error } = await db.from('wa_groups').insert(chunk);
-    if (error) return { error: `Could not save the groups: ${error.message}` };
-    created += chunk.length;
-  }
-  revalidatePath('/hrd/wa', 'layout');
-  revalidatePath('/contacts');
-  return { ok: true, found: r.groups.length, created, named };
+  const r = await syncGroupsFor(ctx.activeWorkspaceId, refresh);
+  if ('ok' in r) { revalidatePath('/hrd/wa', 'layout'); revalidatePath('/contacts'); revalidatePath('/optimizing/clients'); }
+  return r;
 }
 
 /** The status table's detail: one store, one week (Monday to Sunday). */
@@ -324,4 +298,20 @@ export async function getWeekDetail(store: string, weekFrom: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(weekFrom) || new Date(`${weekFrom}T12:00:00Z`).getUTCDay() !== 1) return { error: 'A week starts on a Monday.' };
   try { return { ok: true, detail: await loadWeekDetail(ctx.activeWorkspaceId, String(store).slice(0, 200), weekFrom) }; }
   catch (e: any) { return { error: e?.message || 'Could not load the week' }; }
+}
+
+/**
+ * Does this client have a WhatsApp group linked? The advertiser screen asks, to decide which buttons to show: with a group, only "Send to client
+ * group (Oli)"; without one, the manual WhatsApp buttons. Open to advertisers and finance roles. Returns the group's name, or null.
+ */
+export async function getClientWaGroup(clientId: string) {
+  const supabase = await createClient();
+  const ctx = await getAuthenticatedWorkspaceContext(supabase);
+  if (!ctx.userId || !ctx.activeWorkspaceId || !(FINANCE_ROLES.includes(ctx.role) || ctx.role === 'advertiser')) return { error: 'Not allowed' };
+  const db = createAdminClient();
+  const { data: c } = await db.from('clients').select('wa_group_id').eq('id', clientId).eq('workspace_id', ctx.activeWorkspaceId).maybeSingle();
+  if (!c?.wa_group_id) return { ok: true, group: null as string | null };
+  const { data: g } = await db.from('wa_groups').select('name, wa_id, is_group').eq('id', c.wa_group_id).eq('workspace_id', ctx.activeWorkspaceId).maybeSingle();
+  if (!g) return { ok: true, group: null as string | null };
+  return { ok: true, group: (g.name || (g.is_group ? `Group ···${String(g.wa_id).slice(-6)}` : `+${g.wa_id}`)) as string | null };
 }

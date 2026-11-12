@@ -23,3 +23,6 @@ ALTER TABLE public.wa_sends ADD COLUMN IF NOT EXISTS file_path TEXT;
 
 -- How Oli sends report images through Fonnte: link (Fonnte fetches a link; WhatsApp can show a preview) or upload (grey box until downloaded).
 ALTER TABLE public.wa_settings ADD COLUMN IF NOT EXISTS image_delivery TEXT NOT NULL DEFAULT 'link' CHECK (image_delivery IN ('link', 'upload'));
+
+-- The daily group sync (12:01 Jakarta) only READS Fonnte's list; set this on to make it also refresh the list from WhatsApp first (Fonnte warns that overuse can get the number banned).
+ALTER TABLE public.wa_settings ADD COLUMN IF NOT EXISTS group_sync_refresh BOOLEAN NOT NULL DEFAULT false;

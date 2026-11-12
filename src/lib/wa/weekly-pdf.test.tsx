@@ -43,7 +43,10 @@ describe('weekly PDF', () => {
     expect(p1).toContain('Penjualan per Minggu');
     expect(p1).toContain('Biaya Iklan & ROAS per Minggu');
     for (const w of ['12-18 Okt', '19-25 Okt', '26 Okt-1 Nov', '2-8 Nov', '9-15 Nov']) expect(p1).toContain(w);
-    expect(p1).toContain('ROAS 16,7x');
+    // the ROAS line carries a label on each of the 5 weeks, and its axis and legend
+    expect((p1.match(/16,7x/g) || []).length).toBeGreaterThanOrEqual(5);
+    expect(p1).toContain('sumbu kanan');
+    expect(p1).toContain('sumbu kiri');
     expect(p1).toContain('Efisiensi Iklan Minggu Ini');
     expect(p1).toContain('GMV Max Auto');
   });

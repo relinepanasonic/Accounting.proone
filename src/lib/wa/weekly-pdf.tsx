@@ -1,5 +1,5 @@
 import React from 'react';
-import { Document, Page, View, Text, Svg, Rect, Line, StyleSheet, renderToBuffer } from '@react-pdf/renderer';
+import { Document, Page, View, Text, Svg, Rect, Line, Polyline, Circle, StyleSheet, renderToBuffer } from '@react-pdf/renderer';
 import type { PerfAds } from '@/lib/integrations/performance';
 import { analyze } from './analysis';
 import { cvrOf, int, periodText, roasOf, roasText, rp, weekLabel, type WeekPoint, type WeeklyPayload } from './weekly';
@@ -82,38 +82,85 @@ function Kpi({ label, value, now, before, neutral = false, suffix = 'vs minggu l
   );
 }
 
-/** Bars per week with a value label on top, the week under it, and optional extra lines (ROAS) under that. The last bar is the report week. */
-export function WeekBars({ points, values, fmt, color, light, sub }: { points: WeekPoint[]; values: number[]; fmt: (n: number) => string; color: string; light: string; sub?: string[] }) {
-  const W = 535, H = 128, LEFT = 46, TOP = 14, BOTTOM = sub ? 36 : 22;
+/** The x of the line chart's points: the middle of each week's slot. */
+const LINE_COLOR = '#1d4ed8';
+
+/**
+ * Bars per week (left axis) with a value label, the week under each bar, and optionally a LINE on a right axis (ROAS) with a dot and
+ * a label on every week. The last bar is the report week. A week without a line value (no ad spend) breaks the line instead of dropping to 0.
+ */
+export function WeekBars({ points, values, fmt, color, light, barName, line }: {
+  points: WeekPoint[]; values: number[]; fmt: (n: number) => string; color: string; light: string;
+  barName?: string;
+  line?: { values: number[]; fmt: (n: number) => string; name: string };
+}) {
+  const W = 535, LEFT = 46, RIGHT = line ? 40 : 0, TOP = line ? 26 : 14, BOTTOM = 22;
+  const H = line ? 150 : 128;
   const plotH = H - TOP - BOTTOM;
+  const plotW = W - LEFT - RIGHT;
   const top = niceMax(Math.max(...values, 0));
-  const slot = (W - LEFT) / points.length;
+  const top2 = line ? niceMax(Math.max(...line.values, 0)) : 1;
+  const slot = plotW / points.length;
   const bw = Math.min(46, slot * 0.5);
   const y = (v: number) => TOP + plotH - (plotH * v) / top;
+  const y2 = (v: number) => TOP + plotH - (plotH * v) / top2;
+  const cx = (i: number) => LEFT + slot * i + slot / 2;
+
+  // the line, cut into runs of weeks that have a value
+  const runs: Array<Array<{ x: number; y: number }>> = [];
+  if (line) {
+    let run: Array<{ x: number; y: number }> = [];
+    line.values.forEach((v, i) => {
+      if (v > 0) run.push({ x: cx(i), y: y2(v) });
+      else if (run.length) { runs.push(run); run = []; }
+    });
+    if (run.length) runs.push(run);
+  }
+
   return (
     <Svg width={W} height={H}>
+      {line && (
+        <>
+          <Rect x={LEFT} y={4} width={8} height={8} fill={color} />
+          <Text x={LEFT + 12} y={11} fill={MUTED} style={{ fontSize: 7 }}>{barName || 'Biaya'} (sumbu kiri)</Text>
+          <Line x1={LEFT + 140} x2={LEFT + 154} y1={8} y2={8} stroke={LINE_COLOR} strokeWidth={1.8} />
+          <Circle cx={LEFT + 147} cy={8} r={2.4} fill={LINE_COLOR} />
+          <Text x={LEFT + 158} y={11} fill={MUTED} style={{ fontSize: 7 }}>{line.name} (sumbu kanan)</Text>
+        </>
+      )}
       {[0, 1, 2, 3, 4].map((i) => {
         const v = (top * i) / 4;
         return (
           <React.Fragment key={i}>
-            <Line x1={LEFT} x2={W} y1={y(v)} y2={y(v)} stroke={LINE} strokeWidth={0.6} />
+            <Line x1={LEFT} x2={W - RIGHT} y1={y(v)} y2={y(v)} stroke={LINE} strokeWidth={0.6} />
             <Text x={LEFT - 5} y={y(v) + 2.5} fill={MUTED} style={{ fontSize: 6.5 }} textAnchor="end">{v === 0 ? '0' : shortRp(v)}</Text>
+            {line && <Text x={W - RIGHT + 5} y={y(v) + 2.5} fill={LINE_COLOR} style={{ fontSize: 6.5 }} textAnchor="start">{i === 0 ? '0' : line.fmt((top2 * i) / 4)}</Text>}
           </React.Fragment>
         );
       })}
       {points.map((p, i) => {
         const v = values[i];
-        const x = LEFT + slot * i + (slot - bw) / 2;
+        const x = cx(i) - bw / 2;
         const last = i === points.length - 1;
+        const tall = TOP + plotH - y(v) > 16;
+        // with a line over the bars, the value goes inside the bar at its base, where the line's labels almost never reach
+        const inside = !!line && tall;
         return (
           <React.Fragment key={p.from}>
             <Rect x={x} y={y(v)} width={bw} height={Math.max(0.8, TOP + plotH - y(v))} fill={last ? color : light} />
-            <Text x={x + bw / 2} y={y(v) - 3} fill={INK} style={{ fontSize: 7, fontFamily: 'Helvetica-Bold' }} textAnchor="middle">{v > 0 ? fmt(v) : '-'}</Text>
+            <Text x={x + bw / 2} y={inside ? TOP + plotH - 4 : y(v) - 3} fill={inside && last ? '#ffffff' : INK} style={{ fontSize: 7, fontFamily: 'Helvetica-Bold' }} textAnchor="middle">{v > 0 ? fmt(v) : '-'}</Text>
             <Text x={x + bw / 2} y={H - BOTTOM + 11} fill={last ? INK : MUTED} style={{ fontSize: 7, fontFamily: last ? 'Helvetica-Bold' : 'Helvetica' }} textAnchor="middle">{weekLabel(p.from, p.to)}</Text>
-            {sub && <Text x={x + bw / 2} y={H - BOTTOM + 22} fill={MUTED} style={{ fontSize: 6.5 }} textAnchor="middle">{sub[i]}</Text>}
           </React.Fragment>
         );
       })}
+      {runs.map((r, i) => r.length > 1 && <Polyline key={`l${i}`} points={r.map((pt) => `${pt.x},${pt.y}`).join(' ')} stroke={LINE_COLOR} strokeWidth={1.8} fill="none" />)}
+      {line && line.values.map((v, i) => v > 0 && (
+        <React.Fragment key={`d${i}`}>
+          <Circle cx={cx(i)} cy={y2(v)} r={3} fill="#ffffff" stroke={LINE_COLOR} strokeWidth={1.6} />
+          <Rect x={cx(i) - 15} y={y2(v) - 16} width={30} height={10} fill="#ffffff" fillOpacity={0.85} />
+          <Text x={cx(i)} y={y2(v) - 8.5} fill={LINE_COLOR} style={{ fontSize: 7.5, fontFamily: 'Helvetica-Bold' }} textAnchor="middle">{line.fmt(v)}</Text>
+        </React.Fragment>
+      ))}
     </Svg>
   );
 }
@@ -193,8 +240,16 @@ export function WeeklyDocument({ p }: { p: WeeklyPayload }) {
         <WeekBars points={pts} values={pts.map((x) => x.sales)} fmt={shortRp} color={BLUE} light={BLUE_LIGHT} />
 
         <Text style={st.h2}>Biaya Iklan & ROAS per Minggu</Text>
-        <Text style={st.hint}>Biaya iklan per minggu; di bawah tanggal: ROAS minggu itu (penjualan dibagi biaya iklan)</Text>
-        <WeekBars points={pts} values={pts.map((x) => x.adCost)} fmt={shortRp} color={AMBER} light={AMBER_LIGHT} sub={pts.map((x) => (x.adCost > 0 ? `ROAS ${roasText(x.sales, x.adCost)}` : 'ROAS -'))} />
+        <Text style={st.hint}>Batang: biaya iklan per minggu. Garis: ROAS minggu itu (penjualan dibagi biaya iklan)</Text>
+        <WeekBars
+          points={pts}
+          values={pts.map((x) => x.adCost)}
+          fmt={shortRp}
+          color={AMBER}
+          light={AMBER_LIGHT}
+          barName="Biaya Iklan"
+          line={{ values: pts.map((x) => (x.adCost > 0 ? x.sales / x.adCost : 0)), fmt: (n) => roasText(n, 1), name: 'ROAS' }}
+        />
 
         {types.length > 0 && typeCost > 0 && (
           <View wrap={false}>

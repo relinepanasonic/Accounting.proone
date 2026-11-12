@@ -6,6 +6,7 @@ import { Document, Page, View, Text, Svg, Rect, Line, Polyline, Circle, StyleShe
 import type { PerfAds } from '@/lib/integrations/performance';
 import { analyze } from './analysis';
 import { ROBOTO_400_WOFF_BASE64, ROBOTO_700_WOFF_BASE64 } from './fonts';
+import { publicStoreName } from './public-name';
 import { cvrOf, int, periodText, roasOf, roasText, rp, weekLabel, type WeekPoint, type WeeklyPayload } from './weekly';
 
 /**
@@ -114,9 +115,6 @@ export function pdfText(s: string): string {
     .trim();
 }
 
-/** "fi" is drawn as one ligature glyph, which the image step spaces wrongly ("E f siensi"). A zero-width non-joiner keeps the two letters apart. */
-export const noLig = (s: string) => s.replace(/f(?=i)/g, 'f\u200C');
-
 const pctOf = (now: number, before: number | null | undefined) => (before && before > 0 ? ((now - before) / before) * 100 : null);
 const pctText = (p: number) => `${p > 0 ? '+' : p < 0 ? '-' : ''}${Math.abs(p) >= 10 ? Math.round(Math.abs(p)) : (Math.round(Math.abs(p) * 10) / 10).toString().replace('.', ',')}%`;
 const cut = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}...` : s);
@@ -182,50 +180,61 @@ export function WeekBars({ points, values, fmt, color, light, barName, line, hei
   }
 
   return (
-    <Svg width={W} height={H}>
-      {line && (
-        <>
-          <Rect x={LEFT} y={4} width={8} height={8} fill={color} />
-          <Text x={LEFT + 12} y={11} fill={MUTED} style={{ fontSize: 7 }}>{barName || 'Biaya'} (batang)</Text>
-          <Line x1={LEFT + 140} x2={LEFT + 154} y1={8} y2={8} stroke={LINE_COLOR} strokeWidth={1.8} />
-          <Circle cx={LEFT + 147} cy={8} r={2.4} fill={LINE_COLOR} />
-          <Text x={LEFT + 158} y={11} fill={MUTED} style={{ fontSize: 7 }}>{line.name} (garis)</Text>
-        </>
-      )}
+    <View style={{ width: W, height: H, position: 'relative' }}>
+      {/* The shapes. react-pdf ignores font settings on text INSIDE an svg (it falls back to the built-in Helvetica, which a server without
+          fonts cannot draw), so every label below is normal text placed on top of the shapes. */}
+      <Svg width={W} height={H} style={{ position: 'absolute', left: 0, top: 0 }}>
+        {line && (
+          <>
+            <Rect x={LEFT} y={4} width={8} height={8} fill={color} />
+            <Line x1={LEFT + 140} x2={LEFT + 154} y1={8} y2={8} stroke={LINE_COLOR} strokeWidth={1.8} />
+            <Circle cx={LEFT + 147} cy={8} r={2.4} fill={LINE_COLOR} />
+          </>
+        )}
+        {[0, 1, 2, 3, 4].map((i) => {
+          const v = (top * i) / 4;
+          return <Line key={i} x1={LEFT} x2={W - RIGHT} y1={y(v)} y2={y(v)} stroke={LINE} strokeWidth={0.6} />;
+        })}
+        {points.map((p, i) => {
+          const v = values[i];
+          const last = i === points.length - 1;
+          return <Rect key={p.from} x={cx(i) - bw / 2} y={y(v)} width={bw} height={Math.max(0.8, TOP + plotH - y(v))} fill={last ? color : light} />;
+        })}
+        {runs.map((r, i) => r.length > 1 && <Polyline key={`l${i}`} points={r.map((pt) => `${pt.x},${pt.y}`).join(' ')} stroke={LINE_COLOR} strokeWidth={1.8} fill="none" />)}
+        {line && line.values.map((v, i) => v > 0 && (
+          <React.Fragment key={`d${i}`}>
+            <Circle cx={cx(i)} cy={y2(v)} r={3} fill="#ffffff" stroke={LINE_COLOR} strokeWidth={1.6} />
+            <Rect x={cx(i) - 15} y={y2(v) - 16} width={30} height={10} fill="#ffffff" fillOpacity={0.85} />
+          </React.Fragment>
+        ))}
+      </Svg>
+
+      {line && <Lbl x={LEFT + 12} y={11} w={120} align="left" size={7} color={MUTED}>{barName || 'Biaya'} (batang)</Lbl>}
+      {line && <Lbl x={LEFT + 158} y={11} w={120} align="left" size={7} color={MUTED}>{line.name} (garis)</Lbl>}
       {[0, 1, 2, 3, 4].map((i) => {
         const v = (top * i) / 4;
-        return (
-          <React.Fragment key={i}>
-            <Line x1={LEFT} x2={W - RIGHT} y1={y(v)} y2={y(v)} stroke={LINE} strokeWidth={0.6} />
-            <Text x={LEFT - 5} y={y(v) + 2.5} fill={MUTED} style={{ fontSize: 6.5 }} textAnchor="end">{v === 0 ? '0' : shortRp(v)}</Text>
-          </React.Fragment>
-        );
+        return <Lbl key={`a${i}`} x={LEFT - 5} y={y(v) + 2.5} w={LEFT - 8} align="right" size={6.5} color={MUTED}>{v === 0 ? '0' : shortRp(v)}</Lbl>;
       })}
       {points.map((p, i) => {
         const v = values[i];
-        const x = cx(i) - bw / 2;
         const last = i === points.length - 1;
-        const tall = TOP + plotH - y(v) > 16;
-        // with a line over the bars, the value goes inside the bar at its base, where the line's labels almost never reach
-        const inside = !!line && tall;
+        const inside = !!line && TOP + plotH - y(v) > 16;    // with a line over the bars, the value goes inside the bar at its base
         return (
-          <React.Fragment key={p.from}>
-            <Rect x={x} y={y(v)} width={bw} height={Math.max(0.8, TOP + plotH - y(v))} fill={last ? color : light} />
-            <Text x={x + bw / 2} y={inside ? TOP + plotH - 4 : y(v) - 3} fill={inside && last ? '#ffffff' : INK} style={{ fontSize: 7, fontFamily: 'Roboto', fontWeight: 700 }} textAnchor="middle">{v > 0 ? fmt(v) : '-'}</Text>
-            <Text x={x + bw / 2} y={H - BOTTOM + 11} fill={last ? INK : MUTED} style={{ fontSize: 7, fontFamily: 'Roboto', fontWeight: last ? 700 : 400 }} textAnchor="middle">{weekLabel(p.from, p.to)}</Text>
+          <React.Fragment key={`t${p.from}`}>
+            <Lbl x={cx(i)} y={inside ? TOP + plotH - 4 : y(v) - 3} w={70} align="center" size={7} bold color={inside && last ? '#ffffff' : INK}>{v > 0 ? fmt(v) : '-'}</Lbl>
+            <Lbl x={cx(i)} y={H - BOTTOM + 11} w={90} align="center" size={7} bold={last} color={last ? INK : MUTED}>{weekLabel(p.from, p.to)}</Lbl>
           </React.Fragment>
         );
       })}
-      {runs.map((r, i) => r.length > 1 && <Polyline key={`l${i}`} points={r.map((pt) => `${pt.x},${pt.y}`).join(' ')} stroke={LINE_COLOR} strokeWidth={1.8} fill="none" />)}
-      {line && line.values.map((v, i) => v > 0 && (
-        <React.Fragment key={`d${i}`}>
-          <Circle cx={cx(i)} cy={y2(v)} r={3} fill="#ffffff" stroke={LINE_COLOR} strokeWidth={1.6} />
-          <Rect x={cx(i) - 15} y={y2(v) - 16} width={30} height={10} fill="#ffffff" fillOpacity={0.85} />
-          <Text x={cx(i)} y={y2(v) - 8.5} fill={LINE_COLOR} style={{ fontSize: 7.5, fontFamily: 'Roboto', fontWeight: 700 }} textAnchor="middle">{line.fmt(v)}</Text>
-        </React.Fragment>
-      ))}
-    </Svg>
+      {line && line.values.map((v, i) => v > 0 && <Lbl key={`r${i}`} x={cx(i)} y={y2(v) - 8.5} w={50} align="center" size={7.5} bold color={LINE_COLOR}>{line.fmt(v)}</Lbl>)}
+    </View>
   );
+}
+
+/** A chart label as normal text (so it uses the embedded font) placed by its baseline point, like SVG text. */
+function Lbl({ x, y, w, align, size, bold, color, children }: { x: number; y: number; w: number; align: 'left' | 'center' | 'right'; size: number; bold?: boolean; color: string; children: React.ReactNode }) {
+  const left = align === 'center' ? x - w / 2 : align === 'right' ? x - w : x;
+  return <Text style={{ position: 'absolute', left, top: y - size * 0.92, width: w, textAlign: align, fontSize: size, fontFamily: 'Roboto', fontWeight: bold ? 700 : 400, color, lineHeight: 1 }}>{children}</Text>;
 }
 
 /** The weeks to draw: the saved series, or (an older draft) this week and the week before. */
@@ -240,7 +249,7 @@ function pointsOf(p: WeeklyPayload): WeekPoint[] {
 /** The opening sentence of page 1, like the executive summary of the monthly report. */
 export function summaryLine(p: WeeklyPayload): string {
   const { cur } = p;
-  const parts = [`Pada ${periodText(p.from, p.to)}, ${pdfText(p.store)} membukukan penjualan ${rp(cur.sales)}`];
+  const parts = [`Pada ${periodText(p.from, p.to)}, ${pdfText(publicStoreName(p.store))} membukukan penjualan ${rp(cur.sales)}`];
   if (cur.traffic > 0) parts[0] += ` dari ${int(cur.traffic)} pengunjung`;
   if (cur.orders > 0) parts[0] += ` dengan ${int(cur.orders)} pesanan`;
   let s = `${parts[0]}.`;
@@ -265,10 +274,11 @@ export function WeeklyDocument({ p }: { p: WeeklyPayload }) {
   const analysis = analyze(cur, prev, p.series);
   const findings = analysis.findings.slice(0, 3);
   const tips = analysis.tips.slice(0, 2);
-  const who = p.client && p.client.toLowerCase() !== p.store.toLowerCase() ? `${pdfText(p.store)} · ${pdfText(p.client)}` : pdfText(p.store);
+  const shownStore = pdfText(publicStoreName(p.store));      // the company (ProOne, Reline...) is not for the client
+  const who = p.client && p.client.toLowerCase() !== shownStore.toLowerCase() ? `${shownStore} · ${pdfText(p.client)}` : shownStore;
 
   return (
-    <Document title={`Weekly Report ${periodText(p.from, p.to)} - ${p.store}`} author="Professor Online">
+    <Document title={`Weekly Report ${periodText(p.from, p.to)} - ${publicStoreName(p.store)}`} author="Professor Online">
       <Page size="A4" style={st.page}>
         <View style={st.band}>
           <View>
@@ -296,7 +306,7 @@ export function WeeklyDocument({ p }: { p: WeeklyPayload }) {
             </View>
             {types.length > 0 && typeCost > 0 && (
               <View wrap={false}>
-                <Text style={[st.h2, { marginTop: 4 }]}>{noLig('Efisiensi Iklan Minggu Ini')}</Text>
+                <Text style={[st.h2, { marginTop: 4 }]}>{'Efisiensi Iklan Minggu Ini'}</Text>
                 <View style={st.head}>
                   <Text style={[st.th, { width: '34%' }]}>JENIS IKLAN</Text>
                   <Text style={[st.th, { width: '26%', textAlign: 'right' }]}>BIAYA</Text>
@@ -320,14 +330,14 @@ export function WeeklyDocument({ p }: { p: WeeklyPayload }) {
             {findings.map((f, i) => (
               <View key={i} style={[st.card, { padding: 6, marginBottom: 4, borderLeftWidth: 3, borderLeftColor: f.tone === 'win' ? GREEN : AMBER }]} wrap={false}>
                 <Text style={[st.tag, { color: f.tone === 'win' ? GREEN : AMBER }]}>{f.tone === 'win' ? 'WIN' : 'PERHATIAN'}</Text>
-                <Text style={[st.cardTitle, { fontSize: 8.5 }]}>{noLig(f.title)}</Text>
-                <Text style={[st.cardText, { fontSize: 7.5, marginTop: 1 }]}>{noLig(f.text)}</Text>
+                <Text style={[st.cardTitle, { fontSize: 8.5 }]}>{f.title}</Text>
+                <Text style={[st.cardText, { fontSize: 7.5, marginTop: 1 }]}>{f.text}</Text>
               </View>
             ))}
             <View style={[st.tipsBox, { padding: 6, marginTop: 2 }]} wrap={false}>
               <Text style={[st.tag, { color: AMBER }]}>REKOMENDASI MINGGU BERIKUTNYA</Text>
               {tips.map((t, i) => (
-                <Text key={i} style={[st.cardText, { fontSize: 7.5, marginTop: 2 }]}>{i + 1}. {noLig(t)}</Text>
+                <Text key={i} style={[st.cardText, { fontSize: 7.5, marginTop: 2 }]}>{i + 1}. {t}</Text>
               ))}
             </View>
           </View>

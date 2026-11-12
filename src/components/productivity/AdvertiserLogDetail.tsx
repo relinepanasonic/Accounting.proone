@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import { publicStoreName } from '@/lib/wa/public-name';
 import { X, Loader2, Pencil, Download, MessageCircle } from 'lucide-react';
 import { deleteAdvertiserLog, fetchAdvertiserLogDetail, fetchPreviousSession } from '@/app/actions/advertiser';
 import {
@@ -327,7 +328,7 @@ export function AdvertiserLogDetail({
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/80 p-3 md:p-8 overflow-y-auto" onClick={onClose}>
-      {current && <AdvertiserSessionReport ref={reportRef} clientName={log.store_label ? `${log.client_name} - ${log.store_label}` : log.client_name} reportDate={log.report_date} data={current} previous={prev.data} includeScreenshot={includeShot} />}
+      {current && <AdvertiserSessionReport ref={reportRef} clientName={log.store_label ? `${log.client_name} - ${publicStoreName(log.store_label)}` : log.client_name} reportDate={log.report_date} data={current} previous={prev.data} includeScreenshot={includeShot} />}
       <div className="w-full max-w-5xl rounded-2xl border border-[#d4af37]/30 bg-[#0e0f14] shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-4 p-5 border-b border-zinc-800">
           <div>

@@ -70,11 +70,12 @@ describe('periodText / weekLabel / caption / file name', () => {
     expect(weekLabel('2026-10-26', '2026-11-01')).toBe('26 Okt-1 Nov');
   });
   it('the caption is the formal title and the store, nothing else', () => {
-    expect(weeklyCaption({ store: 'ProOne - Toko A', client: '', from: '2026-11-02', to: '2026-11-08' })).toBe('*Weekly Report* 2 - 8 Nov 2026\nProOne - Toko A');
-    expect(weeklyCaption({ store: 'ProOne - Toko A', client: 'Studio Blair', from: '2026-11-02', to: '2026-11-08' })).toBe('*Weekly Report* 2 - 8 Nov 2026\nProOne - Toko A (Studio Blair)');
+    expect(weeklyCaption({ store: 'ProOne - Toko A', client: '', from: '2026-11-02', to: '2026-11-08' })).toBe('*Weekly Report* 2 - 8 Nov 2026\nToko A');
+    expect(weeklyCaption({ store: 'ProOne - Toko A', client: 'Studio Blair', from: '2026-11-02', to: '2026-11-08' })).toBe('*Weekly Report* 2 - 8 Nov 2026\nToko A (Studio Blair)');
+    expect(weeklyCaption({ store: 'Reline - Dealer X', client: 'Dealer X', from: '2026-11-02', to: '2026-11-08' })).toBe('*Weekly Report* 2 - 8 Nov 2026\nDealer X');
   });
   it('the file name has no forbidden characters', () => {
-    expect(weeklyFileName('ProOne - Toko: A/B', '2026-11-02', '2026-11-08')).toBe('Weekly Report 2-8 Nov 2026 - ProOne - Toko AB.pdf');
+    expect(weeklyFileName('ProOne - Toko: A/B', '2026-11-02', '2026-11-08')).toBe('Weekly Report 2-8 Nov 2026 - Toko AB.pdf');
   });
 });
 
@@ -95,8 +96,9 @@ describe('weeklyMessage (the text version, when the PDF cannot be attached)', ()
   const msg = weeklyMessage({ client: 'Studio Blair', store: 'ProOne - Toko A', from: '2026-11-09', to: '2026-11-15', cur, prev });
 
   it('is a formal report: title first, no greeting, no sign-off', () => {
-    expect(msg.startsWith('*Weekly Report* 9 - 15 Nov 2026\nProOne - Toko A (Studio Blair)\n\n')).toBe(true);
+    expect(msg.startsWith('*Weekly Report* 9 - 15 Nov 2026\nToko A (Studio Blair)\n\n')).toBe(true);
     expect(msg).not.toMatch(/Halo|Salam|saya Oli/);
+    expect(msg).not.toMatch(/ProOne|Reline/);
   });
   it('uses Penjualan and ROAS = Penjualan / Biaya Iklan, with the change from last week', () => {
     expect(msg).toContain('Penjualan: Rp 12.000.000 (naik 20% dari minggu lalu)');

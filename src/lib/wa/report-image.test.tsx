@@ -3,7 +3,8 @@ import { writeFileSync } from 'fs';
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 import { normalizeRow } from '@/lib/integrations/performance';
 import { sumRows, weeklySeries, type WeeklyPayload } from './weekly';
-import { IMAGE_SCALE, renderWeeklyJpeg } from './report-image';
+import { darkShare, IMAGE_SCALE, MIN_DARK_SHARE, pdfToJpeg, renderWeeklyJpeg } from './report-image';
+import { renderWeeklyPdf } from './weekly-pdf';
 
 const k = [0.82, 0.9, 1.0, 1.08, 1.2];
 const adk = [0.95, 1.1, 0.9, 1.0, 1.25];
@@ -49,5 +50,35 @@ describe('weekly report as a JPG', () => {
     expect(dark / total).toBeGreaterThan(0.004);      // text is there
     expect(blue).toBeGreaterThan(300);
     expect(amber).toBeGreaterThan(300);
+  }, 120000);
+
+  it('the PDF embeds every font it uses (Roboto only): nothing relies on fonts installed on the server', async () => {
+    const pdf = Buffer.from(await renderWeeklyPdf(payload)).toString('latin1');
+    const names = Array.from(new Set((pdf.match(/\/BaseFont\s*\/[A-Za-z0-9+_-]+/g) || []).map((m) => m.replace(/\/BaseFont\s*\//, ''))));
+    expect(names.length).toBeGreaterThan(0);
+    for (const n of names) expect(n, `font ${n} is not an embedded Roboto subset`).toMatch(/Roboto/);
+    expect(pdf).not.toMatch(/\/BaseFont\s*\/(Helvetica|Times|Courier|Arial)/);
+  });
+
+  it('drawing the page makes no font warnings (a warning here means the text depends on the host)', async () => {
+    const warnings: string[] = [];
+    const spyWarn = console.warn; const spyLog = console.log;
+    console.warn = (...a: unknown[]) => { warnings.push(a.join(' ')); };
+    console.log = (...a: unknown[]) => { warnings.push(a.join(' ')); };
+    try { await renderWeeklyJpeg(payload); } finally { console.warn = spyWarn; console.log = spyLog; }
+    const bad = warnings.filter((w) => /substitute the font|sumPrecise|standardFontDataUrl|Unable to load font|font/i.test(w));
+    expect(bad).toEqual([]);
+  }, 120000);
+
+  it('refuses a picture without text: a blank page is never returned', async () => {
+    expect(darkShare(new Uint8ClampedArray(4 * 1000).fill(255))).toBe(0);
+    const dark = new Uint8ClampedArray(4 * 1000); for (let i = 0; i < dark.length; i += 4) dark[i + 3] = 255;
+    expect(darkShare(dark)).toBe(1);
+    expect(MIN_DARK_SHARE).toBeGreaterThan(0);
+    // a PDF whose only content is a coloured box (no text) must be refused
+    const { renderToBuffer, Document, Page, View } = await import('@react-pdf/renderer');
+    const React = (await import('react')).default;
+    const boxOnly = new Uint8Array(await renderToBuffer(React.createElement(Document, null, React.createElement(Page, { size: 'A4' }, React.createElement(View, { style: { width: 300, height: 200, backgroundColor: '#2563eb', margin: 40 } })))));
+    await expect(pdfToJpeg(boxOnly)).rejects.toThrow(/no text/);
   }, 120000);
 });

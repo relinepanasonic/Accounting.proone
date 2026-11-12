@@ -39,7 +39,8 @@ describe('weekly PDF', () => {
   it('has the summary, the key numbers, the ad types and the analysis (top right) on the one page', async () => {
     const { text } = await pages(payload());
     const p1 = text[0];
-    expect(p1).toContain('Pada 9 - 15 Nov 2026, ProOne - onat.hardware membukukan penjualan Rp 120.000.000 dari 14.400 pengunjung');
+    expect(p1).toContain('Pada 9 - 15 Nov 2026, onat.hardware membukukan penjualan Rp 120.000.000 dari 14.400 pengunjung');
+    expect(p1).not.toMatch(/ProOne|Reline/);          // the company is not for the client
     expect(p1).toContain('Efisiensi Iklan Minggu Ini');
     expect(p1).toContain('GMV Max Auto');
     expect(p1).toContain('Temuan & Langkah Berikutnya');

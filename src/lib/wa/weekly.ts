@@ -9,6 +9,8 @@ import { addRow, emptyTotals, type PerfRow, type PerfTotals } from '@/lib/integr
  * ROAS = Penjualan / Biaya Iklan.
  */
 
+import { publicStoreName } from './public-name';
+
 const addDays = (day: string, n: number) => new Date(new Date(`${day}T12:00:00Z`).getTime() + n * 86400000).toISOString().slice(0, 10);
 
 export interface WeekRanges { from: string; to: string; prevFrom: string; prevTo: string }
@@ -77,13 +79,14 @@ export function weekLabel(from: string, to: string): string {
 
 /** The formal title of the report and the store it is about: this is also the caption of the PDF. */
 export function weeklyCaption(o: { store: string; client?: string; from: string; to: string }): string {
-  const who = o.client && o.client.toLowerCase() !== o.store.toLowerCase() ? `${o.store} (${o.client})` : o.store;
+  const store = publicStoreName(o.store);           // the company (ProOne, Reline...) is not for the client
+  const who = o.client && o.client.toLowerCase() !== store.toLowerCase() ? `${store} (${o.client})` : store;
   return `*Weekly Report* ${periodText(o.from, o.to)}\n${who}`;
 }
 
 /** The file name of the PDF: "Weekly Report 2-8 Nov 2026 - ProOne - Toko A.pdf" (no characters a file name cannot hold). */
 export function weeklyFileName(store: string, from: string, to: string): string {
-  const safe = store.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim() || 'Store';
+  const safe = publicStoreName(store).replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim() || 'Store';
   return `Weekly Report ${periodText(from, to).replace(/ - /, '-')} - ${safe}.pdf`;
 }
 

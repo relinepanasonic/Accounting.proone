@@ -3,7 +3,7 @@ import { Image as ImageIcon, MessageSquare, Users, Clock, Radio } from 'lucide-r
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { loadGroups, loadMessages, loadPeople, sinceDays, type TeamRole } from '@/lib/wa/queries';
 import { fmtMinutes, memberStats, median, responseTimes, type WaMsg } from '@/lib/wa/stats';
-import { WaFilters, LinkNumber, TrackToggle } from './WaClient';
+import { WaFilters, LinkNumber, TrackToggle, RenameGroup, GenerateReport, ActionRow } from './WaClient';
 
 const WEBHOOK_ORIGIN = 'https://erp.profesoronline.id';
 const ROLE_LABEL: Record<string, string> = { admin: 'Admin', advertiser: 'Advertiser', sales: 'Sales', superadmin: 'Superadmin', accounting: 'Accounting', founder: 'Founder' };
@@ -71,13 +71,21 @@ export async function WaBoard({ workspaceId, role, days, groupId, q }: { workspa
     unlinked = [...seen.entries()].map(([phone, v]) => ({ phone, ...v })).sort((a, b) => b.count - a.count).slice(0, 12);
     const [d, r, a] = await Promise.all([
       db.from('wa_devices').select('phone, label, webhook_secret').eq('workspace_id', workspaceId),
-      db.from('wa_reports').select('id, report_date, group_id, summary, message_count').eq('workspace_id', workspaceId).order('report_date', { ascending: false }).limit(3),
-      db.from('wa_action_items').select('id, title, owner_phone, due_date, status').eq('workspace_id', workspaceId).eq('status', 'open').order('created_at', { ascending: false }).limit(8),
+      db.from('wa_reports').select('id, report_date, group_id, summary, message_count, created_at').eq('workspace_id', workspaceId).order('report_date', { ascending: false }).order('created_at', { ascending: false }).limit(60),
+      db.from('wa_action_items').select('id, title, detail, owner_phone, due_date, group_id, staff_task_id').eq('workspace_id', workspaceId).eq('status', 'open').order('created_at', { ascending: false }).limit(30),
     ]);
     devices = (d.data || []) as any;
     reports = r.data || [];
     actions = a.data || [];
   }
+
+  // Latest report day: the digest (all chats) first, then one report per chat.
+  const latestDate: string | null = reports[0]?.report_date || null;
+  const dayReports = reports.filter((r) => r.report_date === latestDate);
+  const digest = dayReports.find((r) => !r.group_id) || null;
+  const chatReports = dayReports.filter((r) => r.group_id);
+  const nameOfGroup = (id: string | null) => (id ? groupName.get(id) || 'Chat' : null);
+  const personOfPhone = (p: string | null) => (p ? byPhone.get(p)?.name || `+${p}` : null);
 
   const periodLabel = days === 1 ? 'last 24h' : `last ${days} days`;
   const nameOf = (m: WaMsg) => byPhone.get(m.sender_phone || '')?.name || m.sender_name || m.sender_phone || '-';
@@ -98,6 +106,45 @@ export async function WaBoard({ workspaceId, role, days, groupId, q }: { workspa
         <div className={`${card} text-sm text-zinc-300`}>
           No chats captured yet. Point the Fonnte webhook of your device to the address under <b>Connect a device</b> below, then send a message in a group.
         </div>
+      )}
+
+      {!role && (
+        <section className={card}>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-xs font-extrabold uppercase tracking-wider text-[#f5d77f]">Daily AI report{latestDate ? ` · ${latestDate}` : ''}</h2>
+            <GenerateReport />
+          </div>
+          {!latestDate ? (
+            <p className="py-4 text-center text-xs text-zinc-500">No report yet. It is written automatically every day at 18:00 (Jakarta) once chats have messages, or press Generate now.</p>
+          ) : (
+            <div className="grid gap-6 xl:grid-cols-[1.2fr_1fr]">
+              <div className="space-y-3">
+                {digest && <div className="rounded-lg border border-[#d4af37]/25 bg-[#d4af37]/5 p-3"><div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-[#f5d77f]">All chats · {digest.message_count} messages</div><p className="whitespace-pre-wrap text-sm text-zinc-200">{digest.summary}</p></div>}
+                {chatReports.map((r) => (
+                  <details key={r.id} className="rounded-lg border border-zinc-800 p-3">
+                    <summary className="cursor-pointer text-xs font-bold text-zinc-200">{nameOfGroup(r.group_id)} <span className="font-normal text-zinc-500">· {r.message_count} messages</span></summary>
+                    <p className="mt-2 whitespace-pre-wrap text-xs text-zinc-300">{r.summary}</p>
+                  </details>
+                ))}
+              </div>
+              <div>
+                <h3 className="mb-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500">Follow-ups ({actions.length})</h3>
+                {actions.length === 0 ? <p className="text-xs text-zinc-500">Nothing open.</p> : (
+                  <ul className="max-h-[28rem] divide-y divide-zinc-800/70 overflow-y-auto">
+                    {actions.map((a) => (
+                      <li key={a.id} className="space-y-1.5 py-2.5">
+                        <div className="text-sm text-zinc-200">{a.title}</div>
+                        {a.detail && <div className="text-[11px] text-zinc-500">{a.detail}</div>}
+                        <div className="text-[10px] text-zinc-500">{[nameOfGroup(a.group_id), personOfPhone(a.owner_phone) && `owner: ${personOfPhone(a.owner_phone)}`, a.due_date && `due ${a.due_date}`].filter(Boolean).join(' · ')}</div>
+                        <ActionRow id={a.id} hasTask={!!a.staff_task_id} />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          )}
+        </section>
       )}
 
       <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
@@ -162,7 +209,7 @@ export async function WaBoard({ workspaceId, role, days, groupId, q }: { workspa
                   {groups.map((g) => (
                     <li key={g.id} className="flex items-center gap-3 py-2 text-xs">
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-zinc-200">{g.name || (g.is_group ? `Group ${g.wa_id.slice(-6)}` : `+${g.wa_id}`)}</div>
+                        <RenameGroup groupId={g.id} name={g.name} fallback={g.is_group ? `Group ${g.wa_id.slice(-6)}` : `+${g.wa_id}`} />
                         <div className="text-[10px] text-zinc-500">{g.is_group ? 'Group' : 'Private'} · {perGroup.get(g.id) || 0} msgs · {g.last_message_at ? jakarta(g.last_message_at) : 'no messages'}</div>
                       </div>
                       <TrackToggle groupId={g.id} tracked={g.tracked} />
@@ -193,15 +240,8 @@ export async function WaBoard({ workspaceId, role, days, groupId, q }: { workspa
           </section>
 
           <section className={card}>
-            <h2 className="mb-3 text-xs font-extrabold uppercase tracking-wider text-[#f5d77f]">Daily AI report &amp; follow-ups</h2>
-            {reports.length === 0 && actions.length === 0 ? (
-              <p className="py-3 text-center text-xs text-zinc-500">The daily AI report and the follow-up list are not switched on yet. Chats are being stored so they will have history from day one.</p>
-            ) : (
-              <>
-                {reports.map((r) => <div key={r.id} className="mb-3"><div className="text-[10px] uppercase text-zinc-500">{r.report_date} · {r.message_count} msgs</div><p className="whitespace-pre-wrap text-xs text-zinc-300">{r.summary}</p></div>)}
-                {actions.length > 0 && <ul className="space-y-1 text-xs text-zinc-300">{actions.map((a) => <li key={a.id}>• {a.title}{a.due_date ? ` (due ${a.due_date})` : ''}</li>)}</ul>}
-              </>
-            )}
+            <h2 className="mb-1 text-xs font-extrabold uppercase tracking-wider text-[#f5d77f]">Reports</h2>
+            <p className="text-[11px] text-zinc-500">Written every day at 18:00 (Jakarta). Press Generate now to write today&apos;s report right away. Make.com can fetch it from <code className="text-zinc-400">/api/v1/erp/wa-report</code>.</p>
           </section>
         </div>
       )}

@@ -4,6 +4,7 @@ import { WaBoard } from '@/components/wa/WaBoard';
 import { WaNoAccess } from '@/components/wa/WaNoAccess';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 300; // "Generate now" runs here
 
 /** HRD > WA Control > Dashboard: every chat and every team member of this company. */
 export default async function WaDashboardPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {

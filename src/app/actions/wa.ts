@@ -2,7 +2,8 @@
 
 import { revalidatePath } from 'next/cache';
 import { createAdminClient } from '@/lib/api/supabase-admin';
-import { waAccess } from '@/lib/wa/queries';
+import { waAccess, loadPeople } from '@/lib/wa/queries';
+import { generateReports } from '@/lib/wa/report';
 import { normalizeIdPhone } from '@/lib/wa/stats';
 
 /**
@@ -30,6 +31,69 @@ export async function linkWaNumber(phoneRaw: string, userId: string | null, disp
   if (error) return { error: error.message };
   revalidatePath('/hrd/wa', 'layout');
   return { ok: true };
+}
+
+/** Gives a chat a name (Fonnte does not send group names). An empty name goes back to "Group ···123456". */
+export async function renameWaGroup(groupId: string, name: string) {
+  const ctx = await waAccess();
+  if (!ctx) return { error: 'Not allowed' };
+  const clean = name.replace(/\s+/g, ' ').trim().slice(0, 80);
+  const { error } = await createAdminClient().from('wa_groups').update({ name: clean || null }).eq('id', groupId).eq('workspace_id', ctx.activeWorkspaceId);
+  if (error) return { error: error.message };
+  revalidatePath('/hrd/wa', 'layout');
+  return { ok: true };
+}
+
+/** "Generate now" button: writes today's reports for this company (the same job the 18:00 cron runs). */
+export async function generateWaReportNow() {
+  const ctx = await waAccess();
+  if (!ctx) return { error: 'Not allowed' };
+  try {
+    const run = await generateReports(ctx.activeWorkspaceId);
+    revalidatePath('/hrd/wa', 'layout');
+    return { ok: true, run };
+  } catch (e: any) {
+    return { error: e?.message || 'Report failed' };
+  }
+}
+
+/** Marks a follow-up done, dismissed, or open again. */
+export async function setWaActionStatus(itemId: string, status: 'open' | 'done' | 'dismissed') {
+  const ctx = await waAccess();
+  if (!ctx) return { error: 'Not allowed' };
+  if (!['open', 'done', 'dismissed'].includes(status)) return { error: 'Bad status' };
+  const { error } = await createAdminClient().from('wa_action_items').update({ status }).eq('id', itemId).eq('workspace_id', ctx.activeWorkspaceId);
+  if (error) return { error: error.message };
+  revalidatePath('/hrd/wa', 'layout');
+  return { ok: true };
+}
+
+/** Turns a follow-up into an ERP task for its owner (matched by phone), or for you when the owner is unknown. */
+export async function convertWaActionToTask(itemId: string) {
+  const ctx = await waAccess();
+  if (!ctx || !ctx.userId) return { error: 'Not allowed' };
+  const db = createAdminClient();
+  const { data: item } = await db.from('wa_action_items').select('id, title, detail, owner_phone, due_date, staff_task_id').eq('id', itemId).eq('workspace_id', ctx.activeWorkspaceId).maybeSingle();
+  if (!item) return { error: 'Follow-up not found' };
+  if (item.staff_task_id) return { error: 'Already a task' };
+
+  const { byPhone } = await loadPeople(ctx.activeWorkspaceId);
+  const owner = item.owner_phone ? byPhone.get(item.owner_phone) : undefined;
+  const assignedTo = owner?.userId || ctx.userId;
+
+  const { data: task, error } = await db.from('staff_tasks').insert({
+    workspace_id: ctx.activeWorkspaceId,
+    title: item.title,
+    note: [item.detail, 'From WhatsApp (WA Control).'].filter(Boolean).join('\n'),
+    assigned_to: assignedTo,
+    assigned_by: ctx.userId,
+    due_date: item.due_date,
+    priority: 'medium',
+  }).select('id').single();
+  if (error || !task) return { error: error?.message || 'Could not create the task' };
+  await db.from('wa_action_items').update({ staff_task_id: task.id }).eq('id', itemId);
+  revalidatePath('/hrd/wa', 'layout');
+  return { ok: true, assignedToYou: assignedTo === ctx.userId };
 }
 
 /** Turns reporting on or off for one group (its messages are still stored). */

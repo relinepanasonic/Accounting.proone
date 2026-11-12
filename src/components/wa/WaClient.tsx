@@ -3,7 +3,7 @@
 import React, { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { linkWaNumber, setWaGroupTracked } from '@/app/actions/wa';
+import { linkWaNumber, setWaGroupTracked, renameWaGroup, generateWaReportNow, setWaActionStatus, convertWaActionToTask } from '@/app/actions/wa';
 
 const TABS = [
   { name: 'Dashboard', href: '/hrd/wa' },
@@ -102,5 +102,73 @@ export function TrackToggle({ groupId, tracked }: { groupId: string; tracked: bo
     >
       {tracked ? 'Reporting' : 'Muted'}
     </button>
+  );
+}
+
+/** Click a chat name to rename it (Fonnte does not send group names). */
+export function RenameGroup({ groupId, name, fallback }: { groupId: string; name: string | null; fallback: string }) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(name || '');
+  const [pending, start] = useTransition();
+  if (!editing) {
+    return (
+      <button onClick={() => { setVal(name || ''); setEditing(true); }} title="Rename" className="max-w-full truncate text-left text-zinc-200 hover:text-[#f5d77f]">
+        {name || fallback} <span className="text-[10px] text-zinc-600">✎</span>
+      </button>
+    );
+  }
+  const save = () => start(async () => { await renameWaGroup(groupId, val); setEditing(false); });
+  return (
+    <input
+      autoFocus
+      value={val}
+      disabled={pending}
+      maxLength={80}
+      placeholder={fallback}
+      onChange={(e) => setVal(e.target.value)}
+      onBlur={save}
+      onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
+      className="w-full rounded border border-[#d4af37]/50 bg-[#0e0f14] px-2 py-0.5 text-xs text-zinc-100 focus:outline-none"
+    />
+  );
+}
+
+/** Writes today's reports now (the same job the 18:00 cron runs). Takes up to a minute or two. */
+export function GenerateReport() {
+  const [pending, start] = useTransition();
+  const [msg, setMsg] = useState('');
+  return (
+    <div className="flex items-center gap-3">
+      <button
+        disabled={pending}
+        onClick={() => start(async () => {
+          setMsg('');
+          const r: any = await generateWaReportNow();
+          if (r?.error) setMsg(r.error);
+          else setMsg(`${r.run.groups} chat report(s)${r.run.digest ? ' + digest' : ''}, ${r.run.items} follow-up(s)${r.run.skipped ? `, ${r.run.skipped} chat(s) too quiet` : ''}${r.run.errors.length ? `. Problems: ${r.run.errors.join('; ')}` : '.'}`);
+        })}
+        className="rounded-md border border-[#d4af37]/40 bg-[#d4af37]/15 px-3 py-1.5 text-xs font-bold text-[#f5d77f] disabled:opacity-50"
+      >
+        {pending ? 'Writing reports... (up to 2 min)' : 'Generate now'}
+      </button>
+      {msg && <span className="text-[11px] text-zinc-400">{msg}</span>}
+    </div>
+  );
+}
+
+/** One follow-up: mark done, dismiss, or turn it into an ERP task. */
+export function ActionRow({ id, hasTask }: { id: string; hasTask: boolean }) {
+  const [pending, start] = useTransition();
+  const [note, setNote] = useState('');
+  const btn = 'rounded border border-zinc-700 px-2 py-0.5 text-[10px] font-bold uppercase text-zinc-300 hover:border-[#d4af37]/50 hover:text-[#f5d77f] disabled:opacity-40';
+  return (
+    <div className="flex shrink-0 items-center gap-1.5">
+      {hasTask ? <span className="text-[10px] font-bold uppercase text-emerald-400">Task created</span> : (
+        <button disabled={pending} className={btn} onClick={() => start(async () => { const r: any = await convertWaActionToTask(id); setNote(r?.error || (r?.assignedToYou ? 'Assigned to you (no owner matched)' : '')); })}>Make task</button>
+      )}
+      <button disabled={pending} className={btn} onClick={() => start(async () => { await setWaActionStatus(id, 'done'); })}>Done</button>
+      <button disabled={pending} className={btn} onClick={() => start(async () => { await setWaActionStatus(id, 'dismissed'); })}>Dismiss</button>
+      {note && <span className="text-[10px] text-amber-400">{note}</span>}
+    </div>
   );
 }

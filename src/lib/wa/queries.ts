@@ -13,6 +13,12 @@ export async function waAccess(): Promise<WorkspaceContextInfo | null> {
   return FINANCE_ROLES.includes(ctx.role) && ctx.activeWorkspaceId ? ctx : null;
 }
 
+/** The Founder page (team performance report, who it is sent to) is for the founder and superadmin only. */
+export async function waFounderAccess(): Promise<WorkspaceContextInfo | null> {
+  const ctx = await waAccess();
+  return ctx && (ctx.role === 'founder' || ctx.role === 'superadmin') ? ctx : null;
+}
+
 export interface WaGroupRow { id: string; wa_id: string; name: string | null; is_group: boolean; tracked: boolean; last_message_at: string | null }
 
 /** Everyone on the ERP team of this workspace, with the WhatsApp number we know for them. */

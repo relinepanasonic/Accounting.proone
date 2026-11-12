@@ -2,7 +2,8 @@
 
 import { revalidatePath } from 'next/cache';
 import { createAdminClient } from '@/lib/api/supabase-admin';
-import { waAccess, loadPeople } from '@/lib/wa/queries';
+import { waAccess, waFounderAccess, loadPeople } from '@/lib/wa/queries';
+import { previewPerformance, sendPerformance } from '@/lib/wa/performance';
 import { generateReports } from '@/lib/wa/report';
 import { normalizeIdPhone } from '@/lib/wa/stats';
 
@@ -101,6 +102,74 @@ export async function setWaGroupTracked(groupId: string, tracked: boolean) {
   const ctx = await waAccess();
   if (!ctx) return { error: 'Not allowed' };
   const { error } = await createAdminClient().from('wa_groups').update({ tracked }).eq('id', groupId).eq('workspace_id', ctx.activeWorkspaceId);
+  if (error) return { error: error.message };
+  revalidatePath('/hrd/wa', 'layout');
+  return { ok: true };
+}
+
+// ---- Founder page: the team performance report -------------------------------------------------------------
+
+/** Builds the report (daily, weekly or monthly by the date) and returns it without sending. Takes up to ~30 seconds. */
+export async function previewPerformanceReport(date?: string) {
+  if (!(await waFounderAccess())) return { error: 'Not allowed' };
+  try {
+    const r = await previewPerformance(date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined);
+    return { ok: true, report: r };
+  } catch (e: any) {
+    return { error: e?.message || 'Could not build the report' };
+  }
+}
+
+/** Sends the report now: to one recipient (a test) or to everyone active. */
+export async function sendPerformanceReportNow(phone?: string) {
+  const ctx = await waFounderAccess();
+  if (!ctx) return { error: 'Not allowed' };
+  try {
+    const out = await sendPerformance(ctx.activeWorkspaceId, phone ? { trigger: 'test', onlyPhones: [normalizeIdPhone(phone)] } : { trigger: 'manual' });
+    revalidatePath('/hrd/wa', 'layout');
+    return { ok: true, out };
+  } catch (e: any) {
+    return { error: e?.message || 'Could not send' };
+  }
+}
+
+/** The 09:00 cron sends only while this is on. Turn it on when the Make.com scenario is off, so nobody gets it twice. */
+export async function setPerformanceAutoSend(on: boolean) {
+  const ctx = await waFounderAccess();
+  if (!ctx) return { error: 'Not allowed' };
+  const { error } = await createAdminClient().from('wa_settings').upsert({ workspace_id: ctx.activeWorkspaceId, auto_send: on, updated_at: new Date().toISOString() }, { onConflict: 'workspace_id' });
+  if (error) return { error: error.message };
+  revalidatePath('/hrd/wa', 'layout');
+  return { ok: true };
+}
+
+export async function addReportRecipient(phoneRaw: string, name: string) {
+  const ctx = await waFounderAccess();
+  if (!ctx) return { error: 'Not allowed' };
+  const phone = normalizeIdPhone(phoneRaw);
+  if (!/^62\d{8,13}$/.test(phone)) return { error: 'Use an Indonesian number, like 0812... or 62812...' };
+  const { error } = await createAdminClient().from('wa_recipients').upsert({ workspace_id: ctx.activeWorkspaceId, phone, name: name.trim().slice(0, 60) || null, active: true }, { onConflict: 'workspace_id,phone' });
+  if (error) return { error: error.message };
+  revalidatePath('/hrd/wa', 'layout');
+  return { ok: true };
+}
+
+export async function updateReportRecipient(id: string, patch: { name?: string; active?: boolean }) {
+  const ctx = await waFounderAccess();
+  if (!ctx) return { error: 'Not allowed' };
+  const row: Record<string, unknown> = {};
+  if (patch.name !== undefined) row.name = patch.name.trim().slice(0, 60) || null;
+  if (patch.active !== undefined) row.active = patch.active;
+  const { error } = await createAdminClient().from('wa_recipients').update(row).eq('id', id).eq('workspace_id', ctx.activeWorkspaceId);
+  if (error) return { error: error.message };
+  revalidatePath('/hrd/wa', 'layout');
+  return { ok: true };
+}
+
+export async function removeReportRecipient(id: string) {
+  const ctx = await waFounderAccess();
+  if (!ctx) return { error: 'Not allowed' };
+  const { error } = await createAdminClient().from('wa_recipients').delete().eq('id', id).eq('workspace_id', ctx.activeWorkspaceId);
   if (error) return { error: error.message };
   revalidatePath('/hrd/wa', 'layout');
   return { ok: true };

@@ -13,11 +13,12 @@ const TABS = [
 ];
 
 /** WA Control sub pages: Dashboard | Admin | Advertiser | Sales. */
-export function WaTabs() {
+export function WaTabs({ showFounder = false }: { showFounder?: boolean }) {
   const pathname = usePathname();
+  const tabs = showFounder ? [...TABS, { name: 'Founder', href: '/hrd/wa/founder' }] : TABS;
   return (
     <div className="flex items-center gap-2 overflow-x-auto">
-      {TABS.map((t) => {
+      {tabs.map((t) => {
         const active = t.href === '/hrd/wa' ? pathname === '/hrd/wa' : pathname === t.href;
         return (
           <Link

@@ -46,6 +46,13 @@ describe('sendWhatsApp', () => {
     expect(seen.init.body.get('countryCode')).toBe('62');
   });
 
+  it('accepts a WhatsApp group id (id@g.us) as a target', async () => {
+    let seen: any;
+    const r = await sendWhatsApp(['120363012345678901@g.us'], 'hi', { token: 't', fetchImpl: (async (_u: any, init: any) => { seen = init; return new Response(JSON.stringify({ status: true })); }) as any });
+    expect(r.ok).toBe(true);
+    expect(seen.body.get('target')).toBe('120363012345678901@g.us');
+  });
+
   it('reports Fonnte refusing', async () => {
     const r = await sendWhatsApp(['6281234567890'], 'hi', { token: 't', fetchImpl: reply({ status: false, reason: 'token invalid' }) as any });
     expect(r.ok).toBe(false);

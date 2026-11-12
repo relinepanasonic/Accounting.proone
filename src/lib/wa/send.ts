@@ -46,7 +46,8 @@ export async function sendWhatsApp(
 ): Promise<SendResult> {
   const token = opts.token ?? process.env.FONNTE_TOKEN;
   if (!token) return { ok: false, parts: 0, detail: 'FONNTE_TOKEN is not set on the server.' };
-  const targets = Array.from(new Set(phones.filter((p) => /^\d{8,15}$/.test(p))));
+  // A person is digits (62...); a WhatsApp group is its id plus @g.us.
+  const targets = Array.from(new Set(phones.filter((p) => /^\d{8,15}$/.test(p) || /^\d{10,25}@g\.us$/.test(p))));
   if (targets.length === 0) return { ok: false, parts: 0, detail: 'No valid recipient number.' };
   const parts = chunkMessage(text);
   if (parts.length === 0) return { ok: false, parts: 0, detail: 'Nothing to send.' };

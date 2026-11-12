@@ -1,0 +1,73 @@
+import { addRow, emptyTotals, roas, type PerfRow, type PerfTotals } from '@/lib/integrations/performance';
+import { OLI_NAME } from './oli';
+
+/**
+ * The weekly summary Oli sends to a client's WhatsApp group. Pure: rows in, text out.
+ * Numbers come from the store performance feed of Dashboard Prof / Reline (the same one as the Advertiser dashboard):
+ * a row belongs to a week when its period STARTS inside that Monday-to-Sunday week, exactly as the ERP's own charts count it.
+ */
+
+const addDays = (day: string, n: number) => new Date(new Date(`${day}T12:00:00Z`).getTime() + n * 86400000).toISOString().slice(0, 10);
+
+export interface WeekRanges { from: string; to: string; prevFrom: string; prevTo: string }
+
+/** The last full Monday-to-Sunday week before `today` (a Jakarta day), and the week before it. Run on a Monday it gives the week that just ended. */
+export function lastFullWeek(today: string): WeekRanges {
+  const dow = new Date(`${today}T12:00:00Z`).getUTCDay();          // 0 = Sunday
+  const mondayThis = addDays(today, -((dow + 6) % 7));
+  const from = addDays(mondayThis, -7);
+  return { from, to: addDays(mondayThis, -1), prevFrom: addDays(from, -7), prevTo: addDays(from, -1) };
+}
+
+/** Adds up the rows whose period starts in [from, to]. Null when the store has no row there. */
+export function sumRows(rows: PerfRow[], from: string, to: string): PerfTotals | null {
+  const t = emptyTotals();
+  let n = 0;
+  for (const r of rows) if (r.periodStart >= from && r.periodStart <= to) { addRow(t, r); n++; }
+  return n ? t : null;
+}
+
+export const hasActivity = (t: PerfTotals | null) => !!t && (t.gmv > 0 || t.orders > 0 || t.ads.total.cost > 0 || t.ads.total.sales > 0);
+
+const rp = (n: number) => `Rp ${Math.round(n).toLocaleString('id-ID')}`;
+const int = (n: number) => Math.round(n).toLocaleString('id-ID');
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des'];
+const dm = (d: string) => `${Number(d.slice(8, 10))} ${MONTHS[Number(d.slice(5, 7)) - 1]}`;
+
+/** "naik 12%" / "turun 5%" / "sama seperti minggu lalu"; empty when last week has nothing to compare with. */
+export function changeText(now: number, before: number | null | undefined): string {
+  if (!before || before <= 0) return '';
+  const p = ((now - before) / before) * 100;
+  if (Math.abs(p) < 0.5) return ' (sama seperti minggu lalu)';
+  return ` (${p > 0 ? 'naik' : 'turun'} ${Math.abs(p) >= 10 ? Math.round(Math.abs(p)) : (Math.round(Math.abs(p) * 10) / 10).toString().replace('.', ',')}% dari minggu lalu)`;
+}
+
+const roasText = (sales: number, cost: number) => (cost > 0 ? `${(Math.round(roas(sales, cost) * 10) / 10).toString().replace('.', ',')}x` : '-');
+
+export function weeklyMessage(o: { client: string; store: string; from: string; to: string; cur: PerfTotals; prev: PerfTotals | null }): string {
+  const { cur, prev } = o;
+  const who = o.client || o.store;
+  const out: string[] = [
+    `Halo tim ${who}, saya ${OLI_NAME} dari Professor Online.`,
+    `Berikut ringkasan performa toko ${o.store} minggu ini (${dm(o.from)} - ${dm(o.to)} ${o.to.slice(0, 4)}):`,
+    '',
+  ];
+  out.push(`GMV Toko: ${rp(cur.gmv)}${changeText(cur.gmv, prev?.gmv)}`);
+  if (cur.orders > 0 || prev?.orders) out.push(`Pesanan: ${int(cur.orders)}${changeText(cur.orders, prev?.orders)}`);
+  if (cur.traffic > 0) out.push(`Pengunjung: ${int(cur.traffic)}${changeText(cur.traffic, prev?.traffic)}`);
+
+  const a = cur.ads.total;
+  if (a.cost > 0 || a.sales > 0) {
+    out.push('');
+    out.push(`Biaya Iklan: ${rp(a.cost)}${changeText(a.cost, prev?.ads.total.cost)}`);
+    out.push(`Penjualan dari Iklan: ${rp(a.sales)}${changeText(a.sales, prev?.ads.total.sales)}`);
+    const before = prev && prev.ads.total.cost > 0 ? `, minggu lalu ${roasText(prev.ads.total.sales, prev.ads.total.cost)}` : '';
+    out.push(`ROAS: ${roasText(a.sales, a.cost)}${before}`);
+
+    const parts: Array<[string, typeof a]> = [['GMV Max Auto', cur.ads.gmvMax], ['Group Ads', cur.ads.group], ['Iklan Mandiri', cur.ads.independent]];
+    const lines = parts.filter(([, x]) => x.cost > 0 || x.sales > 0).map(([name, x]) => `- ${name}: biaya ${rp(x.cost)}, penjualan ${rp(x.sales)}, ROAS ${roasText(x.sales, x.cost)}`);
+    if (lines.length > 1) out.push('', 'Rincian iklan:', ...lines);
+  }
+  out.push('', 'Salam,', `${OLI_NAME} | Admin Professor Online`);
+  return out.join('\n');
+}

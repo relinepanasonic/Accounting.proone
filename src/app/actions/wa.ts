@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { waAccess, waFounderAccess, loadPeople } from '@/lib/wa/queries';
 import { previewPerformance, sendPerformance } from '@/lib/wa/performance';
+import { prepareClientWeekly, sendOutboxItem } from '@/lib/wa/weekly-job';
 import { generateReports } from '@/lib/wa/report';
 import { normalizeIdPhone } from '@/lib/wa/stats';
 
@@ -171,6 +172,76 @@ export async function removeReportRecipient(id: string) {
   if (!ctx) return { error: 'Not allowed' };
   const { error } = await createAdminClient().from('wa_recipients').delete().eq('id', id).eq('workspace_id', ctx.activeWorkspaceId);
   if (error) return { error: error.message };
+  revalidatePath('/hrd/wa', 'layout');
+  return { ok: true };
+}
+
+// ---- Admin: client weekly summaries (Oli -> client groups, after an admin approves) --------------------------
+
+/** Builds this week's drafts now (the Monday cron does the same). With refresh, unsent drafts are rebuilt from the latest numbers (edits are lost). */
+export async function prepareWeeklyNow(refresh = false) {
+  const ctx = await waAccess();
+  if (!ctx) return { error: 'Not allowed' };
+  try {
+    const run = await prepareClientWeekly(ctx.activeWorkspaceId, { refresh });
+    revalidatePath('/hrd/wa', 'layout');
+    return { ok: true, run };
+  } catch (e: any) {
+    return { error: e?.message || 'Could not prepare the summaries' };
+  }
+}
+
+/** Saves an admin's edit of a draft's text. */
+export async function saveOutboxMessage(id: string, message: string) {
+  const ctx = await waAccess();
+  if (!ctx) return { error: 'Not allowed' };
+  const text = message.trim().slice(0, 4000);
+  if (!text) return { error: 'The message is empty.' };
+  const { error } = await createAdminClient().from('wa_outbox').update({ message: text }).eq('id', id).eq('workspace_id', ctx.activeWorkspaceId).in('status', ['draft', 'failed']);
+  if (error) return { error: error.message };
+  revalidatePath('/hrd/wa', 'layout');
+  return { ok: true };
+}
+
+/** The approval: an admin checked the text and presses Send. Oli's number sends it to the client's group. */
+export async function sendOutbox(id: string, message?: string) {
+  const ctx = await waAccess();
+  if (!ctx || !ctx.userId) return { error: 'Not allowed' };
+  try {
+    const r = await sendOutboxItem(ctx.activeWorkspaceId, ctx.userId, id, message?.slice(0, 4000));
+    revalidatePath('/hrd/wa', 'layout');
+    return r.ok ? { ok: true, detail: r.detail } : { error: r.detail };
+  } catch (e: any) {
+    return { error: e?.message || 'Could not send' };
+  }
+}
+
+/** Do not send this one this week (it can be put back). */
+export async function skipOutbox(id: string, skip = true) {
+  const ctx = await waAccess();
+  if (!ctx) return { error: 'Not allowed' };
+  const { error } = await createAdminClient().from('wa_outbox').update({ status: skip ? 'skipped' : 'draft' }).eq('id', id).eq('workspace_id', ctx.activeWorkspaceId).in('status', skip ? ['draft', 'failed'] : ['skipped']);
+  if (error) return { error: error.message };
+  revalidatePath('/hrd/wa', 'layout');
+  return { ok: true };
+}
+
+/** Links a store ("ProOne - Toko A") to the client's WhatsApp group, or unlinks it with no group. Drafts of that store follow. */
+export async function linkStoreToGroup(storeLabel: string, groupId: string | null) {
+  const ctx = await waAccess();
+  if (!ctx) return { error: 'Not allowed' };
+  const db = createAdminClient();
+  const ws = ctx.activeWorkspaceId;
+  if (!groupId) {
+    await db.from('wa_store_groups').delete().eq('workspace_id', ws).eq('store_label', storeLabel);
+    await db.from('wa_outbox').update({ group_id: null }).eq('workspace_id', ws).eq('store_label', storeLabel).in('status', ['draft', 'failed']);
+  } else {
+    const { data: g } = await db.from('wa_groups').select('id').eq('id', groupId).eq('workspace_id', ws).maybeSingle();
+    if (!g) return { error: 'That group is not in this company.' };
+    const { error } = await db.from('wa_store_groups').upsert({ workspace_id: ws, store_label: storeLabel, group_id: groupId }, { onConflict: 'workspace_id,store_label' });
+    if (error) return { error: error.message };
+    await db.from('wa_outbox').update({ group_id: groupId }).eq('workspace_id', ws).eq('store_label', storeLabel).in('status', ['draft', 'failed']);
+  }
   revalidatePath('/hrd/wa', 'layout');
   return { ok: true };
 }

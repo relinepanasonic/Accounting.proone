@@ -15,6 +15,10 @@
     {
       "path": "/api/wa/performance-cron",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/wa/weekly-cron",
+      "schedule": "0 1 * * 1"
     }
   ]
 }

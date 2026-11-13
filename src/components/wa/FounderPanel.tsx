@@ -6,7 +6,7 @@ import {
   addReportRecipient, updateReportRecipient, removeReportRecipient, setSendFiles,
 } from '@/app/actions/wa';
 
-export interface Recipient { id: string; phone: string; name: string | null; active: boolean }
+export interface Recipient { id: string; phone: string; name: string | null; active: boolean; receives_daily?: boolean }
 export interface SendRow { id: string; created_at: string; kind: string; report_date: string; trigger: string; ok: boolean; detail: string | null; text: string | null; recipients: string[] }
 
 const card = 'rounded-xl border border-[#d4af37]/15 bg-[#0e0f14]/70 p-4';
@@ -55,7 +55,8 @@ export function FounderPanel({ recipients, autoSend, sends, tokenSet, sendFiles 
               <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap rounded-lg bg-black/40 p-3 text-xs leading-relaxed text-zinc-200">{preview.text}</pre>
             </div>
             <div>
-              <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">What WhatsApp receives{preview.kind !== 'daily' ? ' (headline + PDF links)' : ''}</div>
+              <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">What WhatsApp receives{preview.kind !== 'daily' ? ' (headline + PDF links)' : ' (the 3-page PDF; this text is only the fallback)'}</div>
+              {preview.kind === 'daily' && <a href={`/api/wa/bod-daily-pdf?date=${preview.date}`} target="_blank" rel="noreferrer" className="mb-2 inline-block rounded-md border border-[#d4af37]/40 bg-[#d4af37]/15 px-3 py-1.5 text-xs font-bold text-[#f5d77f]">Open the daily PDF</a>}
               <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap rounded-lg bg-black/40 p-3 text-xs leading-relaxed text-emerald-200/90">{preview.message}</pre>
             </div>
           </div>
@@ -151,6 +152,7 @@ function RecipientRow({ r, tokenSet, onMsg }: { r: Recipient; tokenSet: boolean;
         <div className="text-[10px] text-zinc-500">+{r.phone}</div>
       </div>
       <button disabled={pending || !tokenSet} className={ghost} title="Send today's report to this number only" onClick={() => start(async () => { onMsg({ ok: true }); const x: any = await sendPerformanceReportNow(r.phone); onMsg(x); })}>Test</button>
+      <button disabled={pending} className={ghost} title="The daily BOD PDF (Tuesday to Saturday). Weekly and monthly reports are unaffected." onClick={() => start(async () => { await updateReportRecipient(r.id, { daily: r.receives_daily === false }); })}>{r.receives_daily === false ? 'Daily: off' : 'Daily: on'}</button>
       <button disabled={pending} className={ghost} onClick={() => start(async () => { await updateReportRecipient(r.id, { active: !r.active }); })}>{r.active ? 'Pause' : 'Resume'}</button>
       <button disabled={pending} className={ghost} onClick={() => { if (confirm(`Remove ${r.name || r.phone}?`)) start(async () => { await removeReportRecipient(r.id); }); }}>Remove</button>
     </li>

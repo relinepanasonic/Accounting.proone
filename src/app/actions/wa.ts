@@ -159,12 +159,13 @@ export async function addReportRecipient(phoneRaw: string, name: string) {
   return { ok: true };
 }
 
-export async function updateReportRecipient(id: string, patch: { name?: string; active?: boolean }) {
+export async function updateReportRecipient(id: string, patch: { name?: string; active?: boolean; daily?: boolean }) {
   const ctx = await waFounderAccess();
   if (!ctx) return { error: 'Not allowed' };
   const row: Record<string, unknown> = {};
   if (patch.name !== undefined) row.name = patch.name.trim().slice(0, 60) || null;
   if (patch.active !== undefined) row.active = patch.active;
+  if (patch.daily !== undefined) row.receives_daily = patch.daily;
   const { error } = await createAdminClient().from('wa_recipients').update(row).eq('id', id).eq('workspace_id', ctx.activeWorkspaceId);
   if (error) return { error: error.message };
   revalidatePath('/hrd/wa', 'layout');

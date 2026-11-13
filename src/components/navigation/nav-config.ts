@@ -9,8 +9,9 @@ export const isOptimizingAdminPath = (p: string) => p === '/productivity/admin' 
 export const isOptimizingSalesPath = (p: string) => p === '/sales' || p.startsWith('/sales/');
 export const isOptimizingAdvertiserPath = (p: string) => p === '/productivity/advertiser' || p.startsWith('/productivity/advertiser/');
 export const isOptimizingClientsPath = (p: string) => p === '/optimizing/clients' || p.startsWith('/optimizing/clients/');
+export const isOptimizingChurnPath = (p: string) => p === '/optimizing/churn' || p.startsWith('/optimizing/churn/');
 export const isOptimizingCatalogPath = (p: string) => p === '/optimizing/catalog' || p.startsWith('/optimizing/catalog/');
-export const isOptimizingPath = (p: string) => isOptimizingAdminPath(p) || isOptimizingSalesPath(p) || isOptimizingAdvertiserPath(p) || isOptimizingClientsPath(p) || isOptimizingCatalogPath(p);
+export const isOptimizingPath = (p: string) => isOptimizingAdminPath(p) || isOptimizingSalesPath(p) || isOptimizingAdvertiserPath(p) || isOptimizingClientsPath(p) || isOptimizingChurnPath(p) || isOptimizingCatalogPath(p);
 
 export const isPabrikPath = (p: string) => p === '/productivity/pabrik-sosmed' || p.startsWith('/productivity/pabrik-sosmed/');
 
@@ -31,6 +32,7 @@ export const isHrdPath = (p: string) => p.startsWith('/payroll') || p.startsWith
 export const OPTIMIZING_CHILDREN = [
   // Clients come first: that is where each client is handed to an admin and an advertiser.
   { name: 'Clients', href: '/optimizing/clients', isActive: isOptimizingClientsPath },
+  { name: 'Churn', href: '/optimizing/churn', isActive: isOptimizingChurnPath },
   { name: 'Sales', href: '/sales', isActive: isOptimizingSalesPath },
   { name: 'Admin', href: '/productivity/admin', isActive: isOptimizingAdminPath },
   { name: 'Advertiser', href: '/productivity/advertiser', isActive: isOptimizingAdvertiserPath },

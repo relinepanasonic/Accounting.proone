@@ -19,7 +19,7 @@ export default async function WaFounderPage() {
   const db = createAdminClient();
   const ws = ctx.activeWorkspaceId;
   const [{ data: recipients }, { data: settings }, { data: sends }] = await Promise.all([
-    db.from('wa_recipients').select('id, phone, name, active').eq('workspace_id', ws).order('created_at'),
+    db.from('wa_recipients').select('id, phone, name, active, receives_daily').eq('workspace_id', ws).order('created_at'),
     db.from('wa_settings').select('auto_send, send_files').eq('workspace_id', ws).maybeSingle(),
     db.from('wa_sends').select('id, created_at, kind, report_date, trigger, ok, detail, text, recipients').eq('workspace_id', ws).order('created_at', { ascending: false }).limit(20),
   ]);

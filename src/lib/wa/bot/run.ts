@@ -1,6 +1,8 @@
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { askBotModel } from './model';
 import { loadKnowledge, loadSocialScript } from '@/lib/chat/bible';
+import { availableSlots, bookMeeting, meetingContext } from '@/lib/chat/meetings';
+import { offerSlots, slotLabel } from '@/lib/chat/meet-rules';
 import { recordBotMessage } from './store';
 import { humanPauseMs, sendToChat, showTyping } from '@/lib/chat/send-any';
 import type { ParsedWaMessage } from '../parse-webhook';
@@ -65,10 +67,14 @@ export async function runSalesBot(device: BotDevice, m: ParsedWaMessage, groupId
 
   // Instagram and Messenger: people ask how to sell more on the marketplaces, so the bot follows the DM script there (and the same knowledge for prices).
   const channel = isMetaChat(m.chatId) ? 'social' : 'whatsapp';
-  const [knowledge, socialScript] = await Promise.all([loadKnowledge(ws), channel === 'social' ? loadSocialScript(ws) : Promise.resolve('')]);
+  const [knowledge, socialScript, meet] = await Promise.all([
+    loadKnowledge(ws), channel === 'social' ? loadSocialScript(ws) : Promise.resolve(''),
+    meetingContext(ws, groupId).catch(() => null),             // the goal: a free consultation (free times to offer, or the booking)
+  ]);
   const allowed = `${knowledge}\n${socialScript}`;   // links may come from either
   const { system, prompt } = buildBotPrompt({
     persona: cfg.persona_name, company: cfg.company_name, knowledge, history, replyNo, channel, socialScript,
+    meeting: meet?.enabled ? { minutes: meet.minutes, offer: meet.offer, booked: meet.booked } : null,
     inHours: inOpenHours(new Date(), cfg.hours_from || '08:00', cfg.hours_to || '21:00'),
   });
 
@@ -92,6 +98,17 @@ export async function runSalesBot(device: BotDevice, m: ParsedWaMessage, groupId
   // If the lead wrote again while we were thinking, the run for the newest message answers (with the whole conversation): one reply per burst.
   const { data: newer } = await db.from('wa_messages').select('id').eq('group_id', groupId).eq('is_from_me', false).gt('sent_at', m.sentAt.toISOString()).limit(1);
   if (newer && newer.length > 0) return { done: 'superseded' };
+
+  // The lead picked a time: book it, and add the exact time and Meet link to the reply (the model never writes the link itself).
+  if (answer.booking && meet?.enabled && !meet.booked) {
+    const leadName = answer.lead.name || (chat?.lead as any)?.name || null;
+    const b = await bookMeeting(ws, { groupId, start: answer.booking, leadName, store: answer.lead.store || (chat?.lead as any)?.store || null, by: 'bot' }).catch((e) => ({ ok: false as const, status: 500, error: String(e?.message || e) }));
+    if (b.ok) answer = { ...answer, reply: `${answer.reply}\n\n${b.text}` };
+    else {
+      const other = offerSlots(await availableSlots(ws, true).catch(() => [])).slice(0, 3).map(slotLabel);
+      answer = { ...answer, reply: other.length ? `Maaf kak, jam itu barusan sudah terisi. Yang masih kosong: ${other.join('; ')}. Kakak pilih yang mana?` : 'Maaf kak, jadwalnya barusan penuh. Tim kami akan menghubungi kakak untuk atur waktu ya.', handoff: !other.length };
+    }
+  }
 
   // The words that always need a person decide, whatever the model said.
   const forced = needsHuman(m.body);

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { decideBot, isBotEcho, inOpenHours, needsHuman, type BotInput } from './decide';
-import { buildBotPrompt, parseBotAnswer, sanitizeReply } from './prompt';
+import { buildBotPrompt, parseBotAnswer, replyMax, sanitizeReply } from './prompt';
+import { DEFAULT_SOCIAL_SCRIPT } from './social-script';
 
 const base: BotInput = { enabled: true, deviceRole: 'sales', isGroup: false, isFromMe: false, body: 'Halo kak, info iklan shopee', mediaType: null, state: { status: null, replies: 0 }, maxReplies: 4, echoOfBot: false };
 
@@ -110,5 +111,32 @@ describe('parseBotAnswer / sanitizeReply', () => {
     const out = sanitizeReply(long, '', 200);
     expect(out.length).toBeLessThanOrEqual(200);
     expect(out.endsWith('.')).toBe(true);
+  });
+});
+
+describe('Instagram and Messenger script', () => {
+  const base = { persona: 'Fefe', company: 'Prof Toko Online', knowledge: 'Paket Juragan Rp 3.000.000 per bulan.', history: [{ from: 'lead' as const, text: 'Kak gimana caranya biar toko Shopee ga sepi?' }], inHours: true, replyNo: 1 };
+  it('DMs get the helping-first instructions and the DM script; prices still only from the knowledge', () => {
+    const { system } = buildBotPrompt({ ...base, channel: 'social', socialScript: DEFAULT_SOCIAL_SCRIPT });
+    expect(system).toContain('membalas DM Instagram dan Facebook');
+    expect(system).toContain('SCRIPT DM');
+    expect(system).toContain('Toko sepi');
+    expect(system).toContain('Harga, paket, promo dan layanan kami HANYA dari bagian PENGETAHUAN');
+    expect(system).toContain('Paket Juragan Rp 3.000.000');
+    expect(system).not.toContain('Jawab HANYA dari bagian PENGETAHUAN');
+  });
+  it('WhatsApp keeps the sales instructions', () => {
+    const { system } = buildBotPrompt(base);
+    expect(system).toContain('Jawab HANYA dari bagian PENGETAHUAN');
+    expect(system).not.toContain('SCRIPT DM');
+  });
+  it('outside team hours a DM is still answered', () => {
+    expect(buildBotPrompt({ ...base, channel: 'social', inHours: false }).system).toContain('Tetap jawab pertanyaannya');
+  });
+  it('a DM answer may be longer (a few tips), a WhatsApp answer stays short', () => {
+    const long = 'Tips pertama. '.repeat(55);
+    expect(replyMax('social')).toBe(900);
+    expect(parseBotAnswer(JSON.stringify({ reply: long, handoff: false }), '', replyMax('social'))!.reply.length).toBeGreaterThan(600);
+    expect(parseBotAnswer(JSON.stringify({ reply: long, handoff: false }))!.reply.length).toBeLessThanOrEqual(600);
   });
 });

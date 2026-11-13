@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { askBotModel } from '@/lib/wa/bot/model';
 import { forget, memo } from './cache';
+import { DEFAULT_SOCIAL_SCRIPT, SOCIAL_KIND, SOCIAL_TITLE } from '@/lib/wa/bot/social-script';
 import { ASK_SYSTEM, BIBLE_BUCKET, buildKnowledge, checkUpload, DECK_SYSTEM, DECK_USER, storagePath, type BibleDocText } from './bible-text';
 
 /**
@@ -34,7 +35,7 @@ const COLS = 'id, title, kind, file_name, file_size, status, error, active, vers
 
 export async function listDocs(ws: string): Promise<BibleDocRow[]> {
   const db = createAdminClient();
-  const { data } = await db.from('ai_bible_docs').select(`${COLS}, text`).eq('workspace_id', ws).order('created_at', { ascending: false }).limit(100);
+  const { data } = await db.from('ai_bible_docs').select(`${COLS}, text`).eq('workspace_id', ws).neq('kind', SOCIAL_KIND).order('created_at', { ascending: false }).limit(100);
   return (data || []).map((d: any) => { const { text, ...rest } = d; return { ...rest, chars: String(text || '').length } as BibleDocRow; });
 }
 
@@ -158,10 +159,30 @@ export const loadKnowledge = (ws: string, scriptOverride?: string) => memo(`know
   const db = createAdminClient();
   const [{ data: cfg }, { data: docs }] = await Promise.all([
     scriptOverride === undefined ? db.from('wa_bot_config').select('knowledge').eq('workspace_id', ws).maybeSingle() : Promise.resolve({ data: { knowledge: scriptOverride } }),
-    db.from('ai_bible_docs').select('title, text, text_updated_at, active, status').eq('workspace_id', ws).eq('active', true).eq('status', 'ready'),
+    db.from('ai_bible_docs').select('title, text, text_updated_at, active, status').eq('workspace_id', ws).eq('active', true).eq('status', 'ready').neq('kind', SOCIAL_KIND),
   ]);
   return buildKnowledge(String((cfg as any)?.knowledge || ''), (docs || []) as BibleDocText[]);
 });
+
+/** The script for Instagram and Messenger DMs (the default until the team saves its own). Kept for 30 seconds, dropped when it is saved. */
+export const loadSocialScript = (ws: string) => memo(`social:${ws}`, 30_000, async () => (await socialScriptRow(ws))?.text?.trim() || DEFAULT_SOCIAL_SCRIPT);
+
+async function socialScriptRow(ws: string): Promise<{ id: string; text: string } | null> {
+  const { data } = await createAdminClient().from('ai_bible_docs').select('id, text').eq('workspace_id', ws).eq('kind', SOCIAL_KIND).order('created_at', { ascending: true }).limit(1).maybeSingle();
+  return (data as { id: string; text: string } | null) ?? null;
+}
+
+async function saveSocialScript(ws: string, text: string, by: string | null): Promise<{ ok: true } | Fail> {
+  const db = createAdminClient();
+  const now = new Date().toISOString();
+  const row = await socialScriptRow(ws);
+  const { error } = row
+    ? await db.from('ai_bible_docs').update({ text, text_updated_at: now, text_updated_by: by }).eq('id', row.id)
+    : await db.from('ai_bible_docs').insert({ workspace_id: ws, title: SOCIAL_TITLE, kind: SOCIAL_KIND, text, status: 'ready', active: true, uploaded_by: by, text_updated_by: by });
+  if (error) return fail(500, error.message);
+  forget(`social:${ws}`);
+  return { ok: true };
+}
 
 /** The team asks the AI a question, to check it read the deck right. Nothing is stored or sent. */
 export async function askBible(ws: string, question: string): Promise<{ ok: true; answer: string; model: string } | Fail> {
@@ -177,12 +198,13 @@ export async function askBible(ws: string, question: string): Promise<{ ok: true
 }
 
 // ---------------------------------------------------------------- the bot's settings (also edited here, so nobody has to open the ERP)
-export interface BotSettings { enabled: boolean; media_enabled: boolean; persona_name: string; company_name: string; hours_from: string; hours_to: string; max_replies: number; knowledge: string }
-const DEFAULTS: BotSettings = { enabled: false, media_enabled: false, persona_name: 'Fefe', company_name: 'Prof Toko Online', hours_from: '08:00', hours_to: '21:00', max_replies: 4, knowledge: '' };
+export interface BotSettings { enabled: boolean; media_enabled: boolean; persona_name: string; company_name: string; hours_from: string; hours_to: string; max_replies: number; knowledge: string; social_script: string }
+const DEFAULTS: BotSettings = { enabled: false, media_enabled: false, persona_name: 'Fefe', company_name: 'Prof Toko Online', hours_from: '08:00', hours_to: '21:00', max_replies: 4, knowledge: '', social_script: '' };
 
 export async function getSettings(ws: string): Promise<BotSettings> {
   const { data } = await createAdminClient().from('wa_bot_config').select('*').eq('workspace_id', ws).maybeSingle();
-  return { ...DEFAULTS, ...Object.fromEntries(Object.entries((data as any) || {}).filter(([k]) => k in DEFAULTS)) } as BotSettings;
+  const base = { ...DEFAULTS, ...Object.fromEntries(Object.entries((data as any) || {}).filter(([k]) => k in DEFAULTS)) } as BotSettings;
+  return { ...base, social_script: await loadSocialScript(ws) };
 }
 
 export async function saveSettings(ws: string, patch: Partial<BotSettings>, by: Who | null = null): Promise<{ ok: true } | Fail> {
@@ -196,6 +218,10 @@ export async function saveSettings(ws: string, patch: Partial<BotSettings>, by: 
   if (patch.hours_to !== undefined) { const v = time(patch.hours_to); if (!v) return fail(400, 'Closing time must look like 21:00.'); row.hours_to = v; }
   if (patch.max_replies !== undefined) { const n = Math.round(Number(patch.max_replies)); if (!(n >= 1 && n <= 10)) return fail(400, 'Messages per chat must be 1 to 10.'); row.max_replies = n; }
   if (typeof patch.knowledge === 'string') row.knowledge = patch.knowledge.slice(0, 12000);
+  if (typeof patch.social_script === 'string') {
+    const s = await saveSocialScript(ws, patch.social_script.slice(0, 12000), by?.name ?? null);
+    if (!s.ok) return s;
+  }
   const { error } = await createAdminClient().from('wa_bot_config').upsert(row, { onConflict: 'workspace_id' });
   if (error) return fail(500, error.message);
   forget(`knowledge:${ws}`); forget(`media:${ws}`);
@@ -203,6 +229,7 @@ export async function saveSettings(ws: string, patch: Partial<BotSettings>, by: 
   if (typeof patch.enabled === 'boolean') what.push(patch.enabled ? 'The bot was switched ON' : 'The bot was switched OFF');
   if (typeof patch.media_enabled === 'boolean') what.push(patch.media_enabled ? 'Sending photos was switched ON' : 'Sending photos was switched OFF');
   if (typeof patch.knowledge === 'string') what.push('The script was saved');
+  if (typeof patch.social_script === 'string') what.push('The Instagram & Messenger script was saved');
   if (['persona_name', 'company_name', 'hours_from', 'hours_to', 'max_replies'].some((k) => (patch as any)[k] !== undefined)) what.push('The name, hours or message limit were saved');
   if (what.length) await writeLog(ws, { id: null, title: 'Bot script and settings' }, 'settings', by?.name ?? null, what.join('. ') + '.');
   return { ok: true };

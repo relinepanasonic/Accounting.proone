@@ -13,6 +13,14 @@ describe('cleanPhone', () => {
 });
 
 describe('parseFonnteWebhook', () => {
+  it('inboxid 0 means "no id": two different messages do not share one dedupe key', () => {
+    const a = parseFonnteWebhook({ device: '6281', sender: '6282', message: 'first', inboxid: 0 }, NOW)!;
+    const b = parseFonnteWebhook({ device: '6281', sender: '6282', message: 'second', inboxid: 0 }, NOW)!;
+    expect(a.externalId).toBeNull();
+    expect(a.dedupeKey).not.toBe('fonnte:0');
+    expect(a.dedupeKey).not.toBe(b.dedupeKey);
+    expect(parseFonnteWebhook({ device: '6281', sender: '6282', message: 'x', inboxid: '0' }, NOW)!.externalId).toBeNull();
+  });
   it('a group message: the group is the chat and the member is the author', () => {
     const m = parseFonnteWebhook({ device: '628972341717', sender: '120363012345678901@g.us', member: '6281234567890', name: 'Budi', message: 'Order masuk 3 pcs' }, NOW)!;
     expect(m.isGroup).toBe(true);

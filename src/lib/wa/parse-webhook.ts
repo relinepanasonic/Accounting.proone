@@ -77,7 +77,9 @@ export function parseFonnteWebhook(payload: Record<string, unknown>, now: Date =
   // Nothing to keep: no text and no media (e.g. a read receipt or a status ping).
   if (!body && !mediaType) return null;
 
-  const externalId = str(payload.inboxid) ?? str(payload.id);
+  // Fonnte sends inboxid 0 for many messages: that is "no id", not an id (every message would share the key "fonnte:0" and all but the first would be dropped as duplicates).
+  const realId = (v: unknown) => { const x = str(v); return x && !/^0+$/.test(x) ? x : null; };
+  const externalId = realId(payload.inboxid) ?? realId(payload.id);
   // Fonnte's own "timestamp" (epoch seconds or milliseconds) is when WhatsApp received it; fall back to now.
   const ts = Number(payload.timestamp);
   const fromFonnte = Number.isFinite(ts) && ts > 0 ? new Date(ts < 1e12 ? ts * 1000 : ts) : null;

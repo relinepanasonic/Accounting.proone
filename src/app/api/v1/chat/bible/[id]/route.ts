@@ -12,4 +12,4 @@ export const GET = chatRoute(async ({ me, id }) => (await bible.getDoc(me.worksp
 export const POST = chatRoute(({ me, id, body }) => bible.saveDoc(me.workspaceId, id, { title: body?.title, text: body?.text, active: typeof body?.active === 'boolean' ? body.active : undefined }, me), { needsBody: true, roles: BIBLE_EDITORS });
 
 /** DELETE /api/v1/chat/bible/<id>: remove the document and its file. Admins only. */
-export const DELETE = chatRoute(({ me, id }) => bible.deleteDoc(me.workspaceId, id), { roles: BIBLE_EDITORS });
+export const DELETE = chatRoute(({ me, id }) => bible.deleteDoc(me.workspaceId, id, me.name), { roles: BIBLE_EDITORS });

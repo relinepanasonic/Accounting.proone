@@ -65,6 +65,6 @@ describe('the instructions to the model', () => {
   it('the question box answers only from the knowledge and admits when it is not there', () => {
     const s = ASK_SYSTEM('Paket Lapak: Rp 2.000.000');
     expect(s).toContain('Paket Lapak: Rp 2.000.000');
-    expect(s).toMatch(/belum ada di AI Bible/);
+    expect(s).toMatch(/belum ada di AI Kamus/);
   });
 });

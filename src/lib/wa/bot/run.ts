@@ -57,7 +57,7 @@ export async function runSalesBot(device: BotDevice, m: ParsedWaMessage, groupId
   const { data: msgs } = await db.from('wa_messages').select('body, media_type, is_from_me, sent_at').eq('group_id', groupId).order('sent_at', { ascending: false }).limit(12);
   const history: BotTurn[] = (msgs || []).reverse().map((x: any) => ({ from: x.is_from_me ? 'team' : 'lead', text: x.body || `(${x.media_type || 'pesan'})`, }));
 
-  const knowledge = await loadKnowledge(ws);          // the script plus the Sales Deck and other AI Bible documents
+  const knowledge = await loadKnowledge(ws);          // the script plus the Sales Deck and other AI Kamus documents
   const { system, prompt } = buildBotPrompt({
     persona: cfg.persona_name, company: cfg.company_name, knowledge, history, replyNo,
     inHours: inOpenHours(new Date(), cfg.hours_from || '08:00', cfg.hours_to || '21:00'),

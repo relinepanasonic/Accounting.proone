@@ -55,5 +55,5 @@ async function lookupUser(token: string): Promise<ChatUser | null> {
   return { userId: user.id, name, email: user.email || '', role, workspaceId };
 }
 
-/** Who may change the AI Bible (the Sales Deck, the bot's script and settings). Everyone with a chat role may read it and ask it questions. */
+/** Who may change the AI Kamus (the Sales Deck, the bot's script and settings). Everyone with a chat role may read it and ask it questions. */
 export const BIBLE_EDITORS = ['founder', 'superadmin', 'admin'] as const;

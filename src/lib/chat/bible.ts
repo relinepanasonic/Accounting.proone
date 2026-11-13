@@ -5,7 +5,7 @@ import { forget, memo } from './cache';
 import { ASK_SYSTEM, BIBLE_BUCKET, buildKnowledge, checkUpload, DECK_SYSTEM, DECK_USER, storagePath, type BibleDocText } from './bible-text';
 
 /**
- * The AI Bible (server side): the Sales Deck and other documents the sales bot and "Suggest reply" read.
+ * The AI Kamus (server side): the Sales Deck and other documents the sales bot and "Suggest reply" read.
  * A PDF goes straight from the browser to a private bucket (a signed upload link, so a big deck never passes through a function), then Claude reads it
  * once and its text is saved here: the team can correct it, and a price change is a text edit or a new upload. Older versions are kept.
  */
@@ -18,6 +18,18 @@ export interface BibleDocRow {
   id: string; title: string; kind: string; file_name: string | null; file_size: number | null; status: 'processing' | 'ready' | 'failed'; error: string | null;
   active: boolean; version: number; replaces: string | null; uploaded_by: string | null; created_at: string; text_updated_at: string; text_updated_by: string | null; chars: number;
 }
+export interface BibleLogEntry { id: string; doc_id: string | null; doc_title: string; action: string; by_name: string | null; detail: string | null; created_at: string }
+
+/** One line in the history: who did what to which document, and when. Never throws: a log problem must not undo a change. */
+async function writeLog(ws: string, doc: { id?: string | null; title: string }, action: string, by: string | null, detail?: string) {
+  try { await createAdminClient().from('ai_bible_log').insert({ workspace_id: ws, doc_id: doc.id ?? null, doc_title: doc.title, action, by_name: by, detail: detail ? detail.slice(0, 400) : null }); } catch { /* ignore */ }
+}
+
+export async function listLog(ws: string, limit = 60): Promise<BibleLogEntry[]> {
+  const { data } = await createAdminClient().from('ai_bible_log').select('id, doc_id, doc_title, action, by_name, detail, created_at').eq('workspace_id', ws).order('created_at', { ascending: false }).limit(limit);
+  return (data || []) as BibleLogEntry[];
+}
+
 const COLS = 'id, title, kind, file_name, file_size, status, error, active, version, replaces, uploaded_by, created_at, text_updated_at, text_updated_by';
 
 export async function listDocs(ws: string): Promise<BibleDocRow[]> {
@@ -96,16 +108,21 @@ export async function ingestDeck(ws: string, input: { path: string; title: strin
     await db.from('ai_bible_docs').update({ text, status: 'ready', active: true, error: null, text_updated_at: now }).eq('id', id);
   } catch (e: any) {
     await db.from('ai_bible_docs').update({ status: 'failed', error: String(e?.message || e).slice(0, 300) }).eq('id', id);
+    await writeLog(ws, { id, title }, 'upload_failed', by.name, String(e?.message || e).slice(0, 200));
     forget(`knowledge:${ws}`);
     return fail(502, String(e?.message || e).slice(0, 300));
   }
   forget(`knowledge:${ws}`);
+  const kb = Math.max(1, Math.round(bytes.byteLength / 1024));
+  await writeLog(ws, { id, title }, input.replaces ? 'new_version' : 'uploaded', by.name, `${input.path.split('/').pop()} (${kb} KB), version ${version}${input.replaces ? `. The previous version was switched off.` : ''}`);
   return { ok: true, doc: await getDoc(ws, id) };
 }
 
 /** Change the title, the text the AI reads (a price fix), or switch the document on or off. */
 export async function saveDoc(ws: string, id: string, patch: { title?: string; text?: string; active?: boolean }, by: Who): Promise<{ ok: true } | Fail> {
   const row: Record<string, unknown> = {};
+  const { data: before } = await createAdminClient().from('ai_bible_docs').select('title, text, active').eq('id', id).eq('workspace_id', ws).maybeSingle();
+  if (!before) return fail(404, 'Document not found.');
   if (typeof patch.title === 'string') { const t = patch.title.trim().slice(0, 100); if (!t) return fail(400, 'The title cannot be empty.'); row.title = t; }
   if (typeof patch.text === 'string') {
     if (patch.text.length > 60000) return fail(400, 'The text is too long (max 60,000 characters).');
@@ -117,16 +134,21 @@ export async function saveDoc(ws: string, id: string, patch: { title?: string; t
   if (error) return fail(500, error.message);
   if (!data) return fail(404, 'Document not found.');
   forget(`knowledge:${ws}`);
+  const b: any = before; const shown = (row.title as string) || b.title;
+  if (typeof row.title === 'string' && row.title !== b.title) await writeLog(ws, { id, title: shown }, 'renamed', by.name, `"${b.title}" to "${row.title}"`);
+  if (typeof row.text === 'string' && row.text !== b.text) await writeLog(ws, { id, title: shown }, 'edited', by.name, `The text was changed by hand (${String(b.text).length} to ${(row.text as string).length} characters).`);
+  if (typeof row.active === 'boolean' && row.active !== b.active) await writeLog(ws, { id, title: shown }, row.active ? 'switched_on' : 'switched_off', by.name);
   return { ok: true };
 }
 
-export async function deleteDoc(ws: string, id: string): Promise<{ ok: true } | Fail> {
+export async function deleteDoc(ws: string, id: string, by = ''): Promise<{ ok: true } | Fail> {
   const db = createAdminClient();
-  const { data } = await db.from('ai_bible_docs').select('file_path').eq('id', id).eq('workspace_id', ws).maybeSingle();
+  const { data } = await db.from('ai_bible_docs').select('file_path, title').eq('id', id).eq('workspace_id', ws).maybeSingle();
   if (!data) return fail(404, 'Document not found.');
   if ((data as any).file_path) await db.storage.from(BIBLE_BUCKET).remove([(data as any).file_path]);
   const { error } = await db.from('ai_bible_docs').delete().eq('id', id).eq('workspace_id', ws);
   forget(`knowledge:${ws}`);
+  if (!error) await writeLog(ws, { id: null, title: String((data as any).title || 'Document') }, 'deleted', by || null, 'The document and its file were deleted.');
   return error ? fail(500, error.message) : { ok: true };
 }
 
@@ -163,7 +185,7 @@ export async function getSettings(ws: string): Promise<BotSettings> {
   return { ...DEFAULTS, ...Object.fromEntries(Object.entries((data as any) || {}).filter(([k]) => k in DEFAULTS)) } as BotSettings;
 }
 
-export async function saveSettings(ws: string, patch: Partial<BotSettings>): Promise<{ ok: true } | Fail> {
+export async function saveSettings(ws: string, patch: Partial<BotSettings>, by: Who | null = null): Promise<{ ok: true } | Fail> {
   const row: Record<string, unknown> = { workspace_id: ws, updated_at: new Date().toISOString() };
   const time = (v: string | undefined) => (v && /^([01]\d|2[0-3]):[0-5]\d$/.test(v) ? v : undefined);
   if (typeof patch.enabled === 'boolean') row.enabled = patch.enabled;
@@ -176,5 +198,10 @@ export async function saveSettings(ws: string, patch: Partial<BotSettings>): Pro
   const { error } = await createAdminClient().from('wa_bot_config').upsert(row, { onConflict: 'workspace_id' });
   if (error) return fail(500, error.message);
   forget(`knowledge:${ws}`);
+  const what: string[] = [];
+  if (typeof patch.enabled === 'boolean') what.push(patch.enabled ? 'The bot was switched ON' : 'The bot was switched OFF');
+  if (typeof patch.knowledge === 'string') what.push('The script was saved');
+  if (['persona_name', 'company_name', 'hours_from', 'hours_to', 'max_replies'].some((k) => (patch as any)[k] !== undefined)) what.push('The name, hours or message limit were saved');
+  if (what.length) await writeLog(ws, { id: null, title: 'Bot script and settings' }, 'settings', by?.name ?? null, what.join('. ') + '.');
   return { ok: true };
 }

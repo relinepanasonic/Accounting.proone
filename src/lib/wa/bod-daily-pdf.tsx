@@ -2,7 +2,7 @@ import React from 'react';
 import { Document, Page, View, Text, Svg, Polyline, Circle, StyleSheet, renderToBuffer } from '@react-pdf/renderer';
 import { dmy, rp } from '@/lib/reports/whatsapp-report';
 import { ensureFonts, pdfText, shortRp } from './weekly-pdf';
-import { STAGES, type BodDaily } from './bod-daily';
+import { STAGES, ENDING_WINDOW_DAYS, type BodDaily, type EndingClient } from './bod-daily';
 
 /**
  * The daily BOD report as a PDF for Nico and Herlan: Advertising, Admin, Sales (each starts on its own page; a long table continues on the next).
@@ -72,6 +72,32 @@ const Kpi = ({ label, value, note }: { label: string; value: string; note?: stri
 
 // Sales and ROAS: up is good (green), down is bad (red). Ad cost going up or down is neither: amber.
 const trendColor = (p: number | null, neutral = false) => (p === null || Math.abs(p) < 0.5 ? MUTED : neutral ? AMBER : p > 0 ? GREEN : RED);
+
+function EndingTable({ title, rows, ago, empty }: { title: string; rows: EndingClient[]; ago?: boolean; empty: string }) {
+  return (
+    <View>
+      <Text style={st.h2}>{title} ({rows.length})</Text>
+      {rows.length === 0 ? <Text style={{ fontSize: 8.5, color: MUTED }}>{empty}</Text> : (
+        <View>
+          <View style={st.head}>
+            <Text style={[st.th, { width: '44%' }]}>CLIENT</Text>
+            <Text style={[st.th, { width: '20%' }]}>SELESAI</Text>
+            <Text style={[st.th, { width: '18%', textAlign: 'right' }]}>{ago ? 'SUDAH' : 'SISA'}</Text>
+            <Text style={[st.th, { width: '18%', textAlign: 'right' }]}>SALES</Text>
+          </View>
+          {rows.map((r) => (
+            <View key={`${r.client}|${r.endDate}`} style={st.row} wrap={false}>
+              <Text style={{ width: '44%', fontSize: 8.5, fontFamily: 'Roboto', fontWeight: 700 }}>{cut(pdfText(r.client), 38)}</Text>
+              <Text style={{ width: '20%', fontSize: 8.5 }}>{dmy(r.endDate)}</Text>
+              <Text style={{ width: '18%', fontSize: 8.5, textAlign: 'right', color: ago ? RED : AMBER }}>{r.days === 0 ? 'hari ini' : `${r.days} hari`}</Text>
+              <Text style={{ width: '18%', fontSize: 8, textAlign: 'right', color: MUTED }}>{cut(pdfText(r.sales) || '-', 14)}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
 
 export function BodDailyDocument({ d }: { d: BodDaily }) {
   const s = d.sessions;
@@ -202,6 +228,8 @@ export function BodDailyDocument({ d }: { d: BodDaily }) {
             <Text style={{ width: '7%', fontSize: 8.5, textAlign: 'right' }}>{p.movedOnDay}</Text>
           </View>
         ))}
+        <EndingTable title={`Project sudah berakhir (${ENDING_WINDOW_DAYS} hari terakhir)`} rows={d.endings.ended} ago empty="Tidak ada project yang berakhir dalam 2 minggu terakhir." />
+        <EndingTable title={`Project berakhir dalam ${ENDING_WINDOW_DAYS} hari ke depan`} rows={d.endings.soon} empty="Tidak ada project yang berakhir dalam 2 minggu ke depan." />
         <Text style={[st.hint, { marginTop: 6 }]}>BARU = deal yang dimasukkan kemarin. PINDAH = deal yang berpindah tahap kemarin. Cold Case = deal yang sudah ditinggalkan.</Text>
         <View style={st.footer} fixed><Text>Professor Online · Daily BOD Report {dmy(d.reportDay)}</Text></View>
       </Page>

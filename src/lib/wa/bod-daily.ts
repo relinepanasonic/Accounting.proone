@@ -106,6 +106,35 @@ export function pipelineOf(deals: Array<{ salesman_name?: string | null; stage?:
   return { stages, bySales: Array.from(by.values()).sort((a, b) => b.total - a.total || a.name.localeCompare(b.name)), total: deals.length, newOnDay, movedOnDay };
 }
 
+// ---------------------------------------------------------------- projects ending
+
+export interface EndingClient { client: string; endDate: string; days: number; sales: string }
+export interface Endings { ended: EndingClient[]; soon: EndingClient[] }
+export const ENDING_WINDOW_DAYS = 14;
+
+const dayDiff = (a: string, b: string) => Math.round((Date.parse(`${a}T12:00:00Z`) - Date.parse(`${b}T12:00:00Z`)) / 86400000);
+
+/**
+ * Clients whose project end date (clients.service_end_date, set when a deal or invoice is made) is
+ *  - ended: within the last 14 days up to `today`, newest first (days = how many days ago);
+ *  - soon: from tomorrow to 14 days ahead, nearest first (days = how many days left).
+ * A client that renewed has a later end date, so it is not listed.
+ */
+export function endingsOf(clients: Array<{ name?: string | null; sales_name?: string | null; service_end_date?: string | null }>, today: string): Endings {
+  const ended: EndingClient[] = []; const soon: EndingClient[] = [];
+  for (const c of clients) {
+    const end = String(c.service_end_date || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(end)) continue;
+    const row = { client: String(c.name || 'Client'), endDate: end, sales: String(c.sales_name || '').trim() };
+    const diff = dayDiff(end, today);                       // negative = already over
+    if (diff <= 0 && diff >= -ENDING_WINDOW_DAYS) ended.push({ ...row, days: Math.abs(diff) });
+    else if (diff > 0 && diff <= ENDING_WINDOW_DAYS) soon.push({ ...row, days: diff });
+  }
+  ended.sort((a, b) => a.days - b.days || a.client.localeCompare(b.client));
+  soon.sort((a, b) => a.days - b.days || a.client.localeCompare(b.client));
+  return { ended, soon };
+}
+
 // ---------------------------------------------------------------- the whole report
 
 export interface BodDaily {
@@ -117,6 +146,7 @@ export interface BodDaily {
   totals: AdTotals;
   admin: { lines: Array<{ name: string; files: number; total: number; uploaded: number; uploadedNames: string[]; pendingNames: string[] }>; errors: string[]; fo: { startedOnDay: string[]; ongoing: number } };
   pipeline: Pipeline;
+  endings: Endings;
 }
 
 /** Reads everything the daily BOD PDF shows. `today` is the Jakarta day the report is made on (it reports on yesterday). */
@@ -130,7 +160,7 @@ export async function loadBodDaily(today: string): Promise<BodDaily | null> {
   const [{ data: reps }, { data: asg }, { data: clients }, { data: deals }, { data: fo }, admin] = await Promise.all([
     db.from('advertiser_reports').select('client_id, report_date, session, store_label, data_inkubasi, data_group, data_mandiri').gte('report_date', addDays(reportDay, -SPARK_DAYS)).lte('report_date', reportDay).limit(8000),
     db.from('client_assignments').select('client_id, user_id').eq('job', 'advertising'),
-    db.from('clients').select('id, name'),
+    db.from('clients').select('id, name, sales_name, service_end_date'),
     db.from('crm_deals').select('salesman_name, stage, value, created_at, stage_changed_at'),
     db.from('fake_order_projects').select('client_name, start_date, finished_at'),
     adminSection(db, plan, today).catch(() => null),
@@ -160,5 +190,6 @@ export async function loadBodDaily(today: string): Promise<BodDaily | null> {
       },
     },
     pipeline: pipelineOf(deals || [], reportDay),
+    endings: endingsOf(clients || [], today),
   };
 }

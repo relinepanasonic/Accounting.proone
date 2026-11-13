@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { adTotals, advertisingRows, pipelineOf, sessionStatus, SPARK_DAYS, type BodDaily } from './bod-daily';
+import { adTotals, advertisingRows, endingsOf, pipelineOf, sessionStatus, SPARK_DAYS, type BodDaily } from './bod-daily';
 import { renderBodDailyPdf } from './bod-daily-pdf';
 
 const row = (r: Partial<{ biaya: string; penjualan: string }> = {}) => [{ biayaIklan: r.biaya ?? '', penjualan: r.penjualan ?? '' }];
@@ -74,6 +74,26 @@ describe('pipelineOf', () => {
   });
 });
 
+describe('endingsOf', () => {
+  const clients = [
+    { name: 'Ended today', service_end_date: '2026-11-13' },
+    { name: 'Ended 3 days ago', service_end_date: '2026-11-10', sales_name: 'Lucy' },
+    { name: 'Ended 14 days ago', service_end_date: '2026-10-30' },
+    { name: 'Ended 15 days ago', service_end_date: '2026-10-29' },
+    { name: 'Ends tomorrow', service_end_date: '2026-11-14' },
+    { name: 'Ends in 14 days', service_end_date: '2026-11-27' },
+    { name: 'Ends in 15 days', service_end_date: '2026-11-28' },
+    { name: 'No date', service_end_date: null },
+    { name: 'Bad date', service_end_date: 'soon' },
+  ];
+  it('lists the projects that ended in the last 14 days (newest first) and those ending in the next 14 days (nearest first)', () => {
+    const e = endingsOf(clients, '2026-11-13');
+    expect(e.ended.map((x) => [x.client, x.days])).toEqual([['Ended today', 0], ['Ended 3 days ago', 3], ['Ended 14 days ago', 14]]);
+    expect(e.soon.map((x) => [x.client, x.days])).toEqual([['Ends tomorrow', 1], ['Ends in 14 days', 14]]);
+    expect(e.ended[1].sales).toBe('Lucy');
+  });
+});
+
 describe('renderBodDailyPdf', () => {
   const sample: BodDaily = {
     reportDay: '2026-11-12', dataDay: '2026-11-11',
@@ -83,6 +103,7 @@ describe('renderBodDailyPdf', () => {
     totals: { sales: 600000, cost: 120000, roas: 5, salesSeries: [0, 0, 0, 0, 0, 400000, 600000], costSeries: [0, 0, 0, 0, 0, 100000, 120000], roasSeries: [0, 0, 0, 0, 0, 4, 5] },
     admin: { lines: [{ name: 'Vani', files: 4, total: 8, uploaded: 2, uploadedNames: ['onat.hardware', 'botanea'], pendingNames: ['mery.farma'] }], errors: [], fo: { startedOnDay: ['Client Satu'], ongoing: 3 } },
     pipeline: pipelineOf([{ salesman_name: 'Lucy', stage: 'Lead', value: 1, created_at: '2026-11-12T03:00:00Z' }], '2026-11-12'),
+    endings: endingsOf([{ name: 'Client Lama', service_end_date: '2026-11-10', sales_name: 'Lucy' }, { name: 'Client Baru', service_end_date: '2026-11-20' }], '2026-11-13'),
   };
   it('makes a 3-page PDF (one page per section) from the data', async () => {
     const pdf = await renderBodDailyPdf(sample);
@@ -91,7 +112,7 @@ describe('renderBodDailyPdf', () => {
     expect(pages).toBe(3);
   }, 60000);
   it('still makes the PDF when there is no data at all', async () => {
-    const empty: BodDaily = { ...sample, ads: [], totals: { sales: 0, cost: 0, roas: 0, salesSeries: [], costSeries: [], roasSeries: [] }, advertisers: [], admin: { lines: [], errors: [], fo: { startedOnDay: [], ongoing: 0 } }, pipeline: pipelineOf([], '2026-11-12') };
+    const empty: BodDaily = { ...sample, ads: [], totals: { sales: 0, cost: 0, roas: 0, salesSeries: [], costSeries: [], roasSeries: [] }, advertisers: [], admin: { lines: [], errors: [], fo: { startedOnDay: [], ongoing: 0 } }, pipeline: pipelineOf([], '2026-11-12'), endings: { ended: [], soon: [] } };
     const pdf = await renderBodDailyPdf(empty);
     expect(pdf.byteLength).toBeGreaterThan(1000);
   }, 60000);

@@ -5,6 +5,8 @@ const upserts: any[] = [];
 const updates: any[] = [];
 let docsResult: any[] = [];
 let cfgResult: any = { knowledge: 'SCRIPT' };
+const inserts: Array<{ table: string; row: any }> = [];
+let docRow: any = null;
 
 vi.mock('@/lib/api/supabase-admin', () => ({
   createAdminClient: () => ({
@@ -14,7 +16,9 @@ vi.mock('@/lib/api/supabase-admin', () => ({
         select: () => chain, eq: () => chain, limit: () => chain, order: () => chain,
         upsert: async (row: any) => { upserts.push({ table, row }); return { error: null }; },
         update: (row: any) => { updates.push({ table, row }); return chain; },
-        maybeSingle: async () => ({ data: table === 'wa_bot_config' ? cfgResult : null }),
+        insert: (row: any) => { inserts.push({ table, row }); return chain; },
+        delete: () => chain,
+        maybeSingle: async () => ({ data: table === 'wa_bot_config' ? cfgResult : table === 'ai_bible_docs' ? docRow : null }),
         then: (res: any) => res({ data: table === 'ai_bible_docs' ? docsResult : [], error: null }),
       };
       return chain;
@@ -22,7 +26,7 @@ vi.mock('@/lib/api/supabase-admin', () => ({
   }),
 }));
 vi.mock('@/lib/wa/bot/model', () => ({ askBotModel: vi.fn() }));
-import { createUploadUrl, ingestDeck, loadKnowledge, saveSettings } from './bible';
+import { createUploadUrl, deleteDoc, ingestDeck, loadKnowledge, saveDoc, saveSettings } from './bible';
 
 describe('saveSettings', () => {
   beforeEach(() => { clearCache(); upserts.length = 0; });
@@ -73,5 +77,55 @@ describe('loadKnowledge', () => {
     expect(k).toContain('SCRIPT TEXT');
     expect(k).toContain('DOKUMEN: Sales Deck');
     expect(k).toContain('Paket Sultan: Rp 4.000.000');
+  });
+});
+
+const logs = () => inserts.filter((i) => i.table === 'ai_bible_log').map((i) => i.row);
+const BY = { userId: 'u1', name: 'Nico' };
+
+describe('the history log', () => {
+  beforeEach(() => { clearCache(); inserts.length = 0; updates.length = 0; upserts.length = 0; docRow = { title: 'Sales Deck Nov', text: 'Paket Sultan: Rp 4.000.000', active: true, file_path: 'w1/x.pdf' }; });
+
+  it('a price edited by hand is logged with who did it and how the text changed', async () => {
+    expect(await saveDoc('w1', 'd1', { text: 'Paket Sultan: Rp 4.500.000' }, BY)).toEqual({ ok: true });
+    expect(logs()).toHaveLength(1);
+    expect(logs()[0]).toMatchObject({ workspace_id: 'w1', doc_id: 'd1', doc_title: 'Sales Deck Nov', action: 'edited', by_name: 'Nico' });
+    expect(logs()[0].detail).toMatch(/changed by hand/);
+  });
+
+  it('a rename, and switching a document on or off, are logged', async () => {
+    await saveDoc('w1', 'd1', { title: 'Deck Desember' }, BY);
+    await saveDoc('w1', 'd1', { active: false }, BY);
+    expect(logs().map((l) => l.action)).toEqual(['renamed', 'switched_off']);
+    expect(logs()[0].detail).toBe('"Sales Deck Nov" to "Deck Desember"');
+    expect(logs()[1].doc_title).toBe('Sales Deck Nov');
+  });
+
+  it('nothing is logged when nothing really changed (same text, same state)', async () => {
+    await saveDoc('w1', 'd1', { text: 'Paket Sultan: Rp 4.000.000', active: true }, BY);
+    expect(logs()).toHaveLength(0);
+  });
+
+  it('an unknown document is a 404 and logs nothing', async () => {
+    docRow = null;
+    expect(await saveDoc('w1', 'nope', { text: 'x' }, BY)).toMatchObject({ ok: false, status: 404 });
+    expect(logs()).toHaveLength(0);
+  });
+
+  it('deleting a document is logged with its title (the row itself is gone)', async () => {
+    expect(await deleteDoc('w1', 'd1', 'Nico')).toEqual({ ok: true });
+    expect(logs()[0]).toMatchObject({ action: 'deleted', doc_title: 'Sales Deck Nov', doc_id: null, by_name: 'Nico' });
+  });
+
+  it('switching the bot on and saving the script are logged as settings changes', async () => {
+    await saveSettings('w1', { enabled: true, knowledge: 'script' }, BY);
+    expect(logs()[0]).toMatchObject({ action: 'settings', doc_title: 'Bot script and settings', by_name: 'Nico' });
+    expect(logs()[0].detail).toMatch(/switched ON/);
+    expect(logs()[0].detail).toMatch(/script was saved/);
+  });
+
+  it('a failed settings change (bad time) logs nothing', async () => {
+    await saveSettings('w1', { hours_from: 'late' }, BY);
+    expect(logs()).toHaveLength(0);
   });
 });

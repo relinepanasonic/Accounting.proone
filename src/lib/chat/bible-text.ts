@@ -1,5 +1,5 @@
 /**
- * The AI Bible, pure parts (no database, no network): checking an upload, how the documents are joined into what the AI reads, how old the prices are,
+ * The AI Kamus (the AI's dictionary), pure parts (no database, no network): checking an upload, how the documents are joined into what the AI reads, how old the prices are,
  * and the instruction the model gets to read a Sales Deck. Tested.
  */
 
@@ -65,7 +65,7 @@ export const DECK_USER = 'Baca seluruh deck ini dan tuliskan isinya sesuai instr
 export const ASK_SYSTEM = (knowledge: string) => [
   'Kamu membantu tim sales Prof Toko Online menjawab pertanyaan tentang paket, harga, dan layanan.',
   'Jawab HANYA dari PENGETAHUAN di bawah, singkat dan jelas, Bahasa Indonesia. Sebut nama paket dan harga persis seperti tertulis.',
-  'Kalau jawabannya tidak ada di PENGETAHUAN, katakan terus terang: "Itu belum ada di AI Bible." Jangan mengarang.',
+  'Kalau jawabannya tidak ada di PENGETAHUAN, katakan terus terang: "Itu belum ada di AI Kamus." Jangan mengarang.',
   '',
   'PENGETAHUAN',
   knowledge.trim() || '(kosong)',

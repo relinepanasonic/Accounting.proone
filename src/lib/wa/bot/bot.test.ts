@@ -94,6 +94,13 @@ describe('parseBotAnswer / sanitizeReply', () => {
     expect(parseBotAnswer('{"reply": ""}')).toBeNull();
     expect(parseBotAnswer('{bad json}')).toBeNull();
   });
+  it('recovers the reply from slightly broken JSON (a raw line break inside the text, a trailing comma)', () => {
+    const broken = '```json\n{"reply": "Wah, mainan mobil aki ya kak.\nToko kakak sudah di Shopee?", "handoff": false, "lead": {"store": "kyrakidz"},}\n```';
+    const a = parseBotAnswer(broken);
+    expect(a?.reply).toBe('Wah, mainan mobil aki ya kak.\nToko kakak sudah di Shopee?');
+    expect(a?.handoff).toBe(false);
+    expect(parseBotAnswer('{"reply": "Fefe cek dulu ya kak", "handoff": true,}')).toMatchObject({ reply: 'Fefe cek dulu ya kak', handoff: true });
+  });
   it('removes Markdown and links that are not in the knowledge, and keeps the ones that are', () => {
     expect(sanitizeReply('**Halo kak** cek https://evil.test/x ya')).toBe('Halo kak cek ya');
     expect(sanitizeReply('Lihat https://profesoronline.id/info ya', 'Info: https://profesoronline.id/info')).toContain('https://profesoronline.id/info');

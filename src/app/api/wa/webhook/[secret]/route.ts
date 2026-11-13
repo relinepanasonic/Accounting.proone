@@ -5,6 +5,7 @@ import { deviceBySecret, ingestMessage } from '@/lib/wa/ingest';
 import { runSalesBot } from '@/lib/wa/bot/run';
 import { captureLeadSource } from '@/lib/chat/sources';
 import { runFlowsFor } from '@/lib/chat/flows';
+import { archiveInboundMedia } from '@/lib/chat/crm-data';
 
 export const dynamic = 'force-dynamic';
 // The sales bot runs after the answer to Fonnte, inside this same function: it needs room for the model call (at most ~35 s) and the send.
@@ -53,7 +54,10 @@ export async function POST(request: Request, ctx: { params: Promise<{ secret: st
         const groupId = res.groupId;
         // Where did this lead come from? The first message of the chat is compared with the ads' messages. Independent of the bot, and never in its way.
         // One sequence, in this order: 1) find the source, 2) a matching scenario flow, 3) the normal bot unless a flow already answered.
+        const messageId = res.messageId;
         after(async () => {
+          // an image or file from a lead is kept in our storage (Fonnte's link may not last)
+          if (!parsed.isGroup && parsed.mediaUrl && messageId) void archiveInboundMedia(device.workspace_id, groupId, messageId, parsed.mediaUrl, parsed.mediaType);
           if (!parsed.isGroup && !parsed.isFromMe) await captureLeadSource(device.workspace_id, groupId).catch((e) => console.error('lead source failed', e));
           const flow = await runFlowsFor(device, parsed, groupId).catch((e) => { console.error('flows failed', e); return { handled: false }; });
           if (!flow.handled) await runSalesBot(device, parsed, groupId).catch((e) => console.error('sales bot failed', e));

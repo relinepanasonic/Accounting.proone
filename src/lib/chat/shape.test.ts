@@ -26,7 +26,7 @@ describe('conversationsOf', () => {
   });
   it('filters by tab and by a search over name, number, last text and lead details; counts per tab', () => {
     const list = conversationsOf(groups, msgs, bot);
-    expect(countsOf(list)).toEqual({ all: 3, mine: 0, unserved: 2, bot: 1, human: 1, resolved: 0 });
+    expect(countsOf(list)).toEqual({ all: 3, mine: 0, unserved: 2, bot: 1, human: 1, resolved: 0, followup: 0 });
     expect(filterConversations(list, 'unserved', '').map((c) => c.id).sort()).toEqual(['b', 'c']);
     expect(filterConversations(list, 'bot', '').map((c) => c.id)).toEqual(['a']);
     expect(filterConversations(list, 'all', 'budi').map((c) => c.id)).toEqual(['a']);
@@ -133,5 +133,17 @@ describe('messages saved by the bot or a flow', () => {
   it('a message with a named sender is still a person\'s, even if it matches a bot text', () => {
     const t = threadOf([m('2', 'a', '2026-11-13T04:00:05Z', true, 'Hi kak', { raw: { sentBy: { name: 'Rani' } } })], ['Hi kak']);
     expect(t[0]).toMatchObject({ sender: 'team', senderName: 'Rani' });
+  });
+});
+
+describe('labels and follow-ups in the inbox', () => {
+  it('the follow-up tab shows open chats with a reminder that is due today or overdue; search finds label names', () => {
+    const list = conversationsOf([g('a', 'A'), g('b', 'B'), g('c', 'C')], [m('1', 'a', '2026-11-13T04:00:00Z', false), m('2', 'b', '2026-11-13T04:00:00Z', false), m('3', 'c', '2026-11-13T04:00:00Z', false)], []);
+    list.find((c) => c.id === 'a')!.nextReminder = { id: 'r1', dueAt: '2026-11-13T02:00:00Z', note: null, state: 'overdue' };
+    list.find((c) => c.id === 'b')!.nextReminder = { id: 'r2', dueAt: '2026-11-20T02:00:00Z', note: null, state: 'later' };
+    list.find((c) => c.id === 'c')!.labels = [{ id: 'l1', name: 'Hot lead', color: 'red' }];
+    expect(filterConversations(list, 'followup', '').map((c) => c.id)).toEqual(['a']);
+    expect(countsOf(list).followup).toBe(1);
+    expect(filterConversations(list, 'all', 'hot').map((c) => c.id)).toEqual(['c']);
   });
 });

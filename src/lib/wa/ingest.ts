@@ -7,6 +7,7 @@ export interface IngestResult {
   /** The chat this message belongs to, and whether this call saved it for the first time (a retried webhook is not new). */
   groupId?: string;
   isNew?: boolean;
+  messageId?: string;
   reason?: string;
 }
 
@@ -82,5 +83,5 @@ export async function ingestMessage(
     { onConflict: 'workspace_id,dedupe_key', ignoreDuplicates: true },
   ).select('id');
   if (mErr) throw new Error(`wa_messages insert failed: ${mErr.message}`);
-  return { stored: true, groupId: group.id as string, isNew: (inserted || []).length > 0 };
+  return { stored: true, groupId: group.id as string, isNew: (inserted || []).length > 0, messageId: (inserted as Array<{ id: string }> | null)?.[0]?.id };
 }

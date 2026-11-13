@@ -115,7 +115,7 @@ export function StoreCell({ line, canEdit, storeOptions }: { line: StoreLine; ca
 }
 
 /** A select that saves one setting of one store ("same as the client" when empty). */
-function StoreSelect({ storeId, field: f, value, options, sameAs, disabled }: { storeId: string; field: 'wa_group_id' | 'advertiser_id' | 'admin_id'; value: string | null; options: Array<{ id: string; label: string }>; sameAs: string; disabled: boolean }) {
+function StoreSelect({ storeId, field: f, value, options, sameAs, emptyLabel, disabled }: { storeId: string; field: 'wa_group_id' | 'advertiser_id' | 'admin_id'; value: string | null; options: Array<{ id: string; label: string }>; sameAs: string; emptyLabel?: string; disabled: boolean }) {
   const router = useRouter();
   const [v, setV] = useState(value || '');
   const [error, setError] = useState('');
@@ -133,7 +133,7 @@ function StoreSelect({ storeId, field: f, value, options, sameAs, disabled }: { 
         }}
         className={`${field} min-w-0`}
       >
-        <option value="">{sameAs ? `Same as client (${sameAs})` : 'Same as client'}</option>
+        <option value="">{emptyLabel || (sameAs ? `Same as client (${sameAs})` : 'Same as client')}</option>
         {options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
       </select>
       {error && <div className="mt-0.5 text-[10px] text-red-400">{error}</div>}
@@ -187,7 +187,7 @@ function StoreSubRow({ line, store, canEdit, canAssign, advertisers, admins, waG
       <td />
       {assign && <td className="px-2.5 py-2.5"><StoreSelect storeId={store.id} field="advertiser_id" value={store.advertiserId || null} options={(advertisers || []).map((p) => ({ id: p.id, label: p.name }))} sameAs={nameOf(advertisers, r.advertiserId)} disabled={!canAssign || legacy} /></td>}
       {assign && <td className="px-2.5 py-2.5"><StoreSelect storeId={store.id} field="admin_id" value={store.adminId || null} options={(admins || []).map((p) => ({ id: p.id, label: p.name }))} sameAs={nameOf(admins, r.adminId)} disabled={!canAssign || legacy} /></td>}
-      {assign && waGroups && <td className="px-2.5 py-2.5"><StoreSelect storeId={store.id} field="wa_group_id" value={store.waGroupId || null} options={waGroups} sameAs={clientGroup} disabled={!canEdit || legacy} /></td>}
+      {assign && waGroups && <td className="px-2.5 py-2.5"><StoreSelect storeId={store.id} field="wa_group_id" value={store.waGroupId || waByClient?.[r.clientId] || null} options={waGroups} sameAs={clientGroup} emptyLabel="No group" disabled={!canEdit || legacy} /></td>}
       {reactivate && <td />}
     </tr>
   );
@@ -308,7 +308,7 @@ export function ClientStoreTable({ rows, canEditStart, canEditNames, canEditStat
                   <td className="px-2.5 py-3"><StatusCell row={r} canEdit={canEditStatus} /></td>
                   {assign && <td className="px-2.5 py-3"><HandlerSelect clientId={r.clientId} job="advertising" current={r.advertiserId} people={advertisers!} /></td>}
                   {assign && <td className="px-2.5 py-3"><HandlerSelect clientId={r.clientId} job="admin" current={r.adminId} people={admins!} /></td>}
-                  {assign && waGroups && <td className="px-2.5 py-3"><WaGroupSelect clientIds={[r.clientId]} value={waByClient?.[r.clientId] || null} groups={waGroups} /></td>}
+                  {assign && waGroups && <td className="px-2.5 py-3">{l.stores.length > 1 ? <span className="text-[11px] text-zinc-500">set on each store</span> : <WaGroupSelect clientIds={[r.clientId]} value={waByClient?.[r.clientId] || null} groups={waGroups} />}</td>}
                   {reactivate && <td className="px-2.5 py-3"><ReactivateButton invoiceId={r.invoiceId} /></td>}
                 </tr>
                 {l.stores.length > 1 && l.stores.map((st) => <StoreSubRow key={st.id} line={l} store={st} canEdit={canEditNames} canAssign={Boolean(assign && canEditSales)} advertisers={advertisers} admins={admins} waGroups={waGroups} waByClient={waByClient} canEditSales={canEditSales} reactivate={reactivate} assign={assign} />)}

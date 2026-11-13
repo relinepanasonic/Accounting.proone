@@ -1,6 +1,7 @@
 import React from 'react';
 import { InvoicePDFDocument } from '@/components/invoices/InvoicePDFDocument';
 import { HIDDEN_CLIENT } from '@/lib/auth/client-privacy';
+import { parseStoreText } from '@/lib/sales/client-stores';
 
 /**
  * The invoice / quotation / receipt page, built from the database. Used by the staff page (the user's own session,
@@ -92,6 +93,8 @@ export async function InvoiceDocumentView({
   const clientName = clientObj?.name || 'Client Payee';
   const clientLegalName = clientObj?.company_legal_name || '';
   const clientBrand = clientObj?.company_name || clientObj?.company || '';
+  // The store of the client ("ProOne - japarutomo" -> "japarutomo"): printed after the company name. The PIC is not printed.
+  const clientStore = parseStoreText(clientObj?.store_name)?.store || '';
   const clientContact = clientObj?.contact_name || clientObj?.name || '';
   const clientAddress = clientObj?.billing_address || clientObj?.address || '';
   const clientPhone = clientObj?.phone || '';
@@ -165,6 +168,7 @@ export async function InvoiceDocumentView({
       clientName={clientName}
       clientLegalName={clientLegalName}
       clientBrand={clientBrand}
+      clientStore={clientStore}
       clientContact={clientContact}
       clientAddress={clientAddress}
       clientPhone={clientPhone}

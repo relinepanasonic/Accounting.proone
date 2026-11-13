@@ -14,26 +14,26 @@ const base = {
 } as any;
 
 describe('Billed To block of the invoice and quotation', () => {
-  it('PIC - Brand on one line, company name smaller, then the address', async () => {
+  it('Company name - Store name on one line, then the address; the PIC is not printed', async () => {
     const { InvoicePDFDocument } = await import('./InvoicePDFDocument');
-    const html = renderToString(React.createElement(InvoicePDFDocument, { ...base, clientBrand: 'SARI SURABAYA', clientContact: 'Ibu Sari' }));
-    expect(html).toContain('Ibu Sari - SARI SURABAYA');
-    expect(html).toContain('CV SARI AGUNG - SARI SURABAYA');
-    expect(html.indexOf('Ibu Sari - SARI SURABAYA')).toBeLessThan(html.indexOf('JL PANGGUNG'));
+    const html = renderToString(React.createElement(InvoicePDFDocument, { ...base, clientStore: 'sarisby', clientBrand: 'SARI', clientContact: 'Ibu Sari' }));
+    expect(html).toContain('SARI SURABAYA - sarisby');
+    expect(html).not.toContain('Ibu Sari');
+    expect(html.indexOf('SARI SURABAYA - sarisby')).toBeLessThan(html.indexOf('JL PANGGUNG'));
   });
 
-  it('an address typed as the PIC is not printed as the headline, and the page cannot be widened by it', async () => {
+  it('a long address in the PIC box changes nothing, and the block cannot widen the page', async () => {
     const { InvoicePDFDocument } = await import('./InvoicePDFDocument');
     const addr = 'JL DEWI SARTIKA NO. 14 RT. 003 RW. 012, CAWANG, KRAMATJATI, KOTA ADM. JAKARTA TIMUR, DKI JAKARTA';
     const html = renderToString(React.createElement(InvoicePDFDocument, { ...base, documentType: 'QUOTATION', clientName: 'PT PANASONIC GOBEL INDONESIA', clientLegalName: '', clientBrand: 'PANASONIC', clientContact: addr, clientAddress: addr }));
-    expect(html).not.toContain(`${addr} - PANASONIC`);
-    expect(html).toContain('>PANASONIC<');
+    expect(html).toContain('>PT PANASONIC GOBEL INDONESIA<');
+    expect(html).not.toContain(`${addr} - `);
     expect(html).toContain('max-w-[340px]');
   });
 
-  it('with no PIC and no brand the company name is the headline', async () => {
+  it('with no store the company name alone is the headline', async () => {
     const { InvoicePDFDocument } = await import('./InvoicePDFDocument');
-    const html = renderToString(React.createElement(InvoicePDFDocument, { ...base, clientLegalName: '', clientBrand: '', clientContact: 'SARI SURABAYA' }));
+    const html = renderToString(React.createElement(InvoicePDFDocument, { ...base, clientLegalName: '', clientBrand: '', clientContact: 'Ibu Sari' }));
     expect(html).toContain('>SARI SURABAYA<');
   });
 });

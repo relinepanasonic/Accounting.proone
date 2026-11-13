@@ -45,6 +45,7 @@ export interface InvoiceDocumentProps {
   clientName: string;
   clientLegalName?: string;
   clientBrand?: string;
+  clientStore?: string;
   clientContact: string;
   clientAddress: string;
   clientPhone: string;
@@ -84,6 +85,7 @@ export function InvoicePDFDocument({
   clientName = '',
   clientLegalName,
   clientBrand = '',
+  clientStore = '',
   clientContact = '',
   clientAddress = '',
   clientPhone = '',
@@ -425,20 +427,10 @@ export function InvoicePDFDocument({
                 {isQuotation ? 'Prepared For / Pitch To:' : 'Billed To:'}
               </span>
               {(() => {
-                // Line 1: PIC name - Brand name, on ONE row (the font shrinks to fit). Line 2, smaller: the company name. Then the address.
-                const company = clientLegalName ? `${clientLegalName} - ${clientName}` : clientName;
-                // A PIC is a person's name: an address typed in that box (old data) or a very long text is not printed as the headline.
-                const looksLikeAddress = (v: string) => v.length > 40 || /\b(JL|JLN|JALAN|NO|RT|RW|KEL|KEC|KOTA|KAB|BLOK|LANTAI)\.?\s*\d|\b(JALAN|KOTA|KELURAHAN|KECAMATAN|KABUPATEN)\b/i.test(v) || /\d{5}/.test(v);
-                const pic = clientContact && clientContact !== clientName && !looksLikeAddress(clientContact) ? clientContact : '';
-                const headline = [pic, clientBrand].map((v) => String(v || '').trim()).filter(Boolean).join(' - ');
-                const first = headline || company;
+                // Company name - Store name on ONE row (the font shrinks to fit), then the address. The PIC name is not printed.
+                const first = [clientName, clientStore].map((v) => String(v || '').trim()).filter(Boolean).join(' - ');
                 const size = Math.max(9, Math.min(14, Math.floor(330 / (Math.max(first.length, 1) * 0.66))));
-                return (
-                  <>
-                    <h3 className="max-w-full overflow-hidden text-ellipsis font-bold text-[#1e2536] uppercase tracking-wide whitespace-nowrap leading-tight" style={{ fontSize: size }} title={first}>{first}</h3>
-                    {headline && <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-600 leading-snug">{company}</div>}
-                  </>
-                );
+                return <h3 className="max-w-full overflow-hidden text-ellipsis font-bold text-[#1e2536] uppercase tracking-wide whitespace-nowrap leading-tight" style={{ fontSize: size }} title={first}>{first}</h3>;
               })()}
               <div className="text-zinc-600 mt-1 leading-relaxed max-w-[300px]">
                 {clientAddress && <div>{clientAddress}</div>}

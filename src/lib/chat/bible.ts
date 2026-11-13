@@ -177,8 +177,8 @@ export async function askBible(ws: string, question: string): Promise<{ ok: true
 }
 
 // ---------------------------------------------------------------- the bot's settings (also edited here, so nobody has to open the ERP)
-export interface BotSettings { enabled: boolean; persona_name: string; company_name: string; hours_from: string; hours_to: string; max_replies: number; knowledge: string }
-const DEFAULTS: BotSettings = { enabled: false, persona_name: 'Fefe', company_name: 'Prof Toko Online', hours_from: '08:00', hours_to: '21:00', max_replies: 4, knowledge: '' };
+export interface BotSettings { enabled: boolean; media_enabled: boolean; persona_name: string; company_name: string; hours_from: string; hours_to: string; max_replies: number; knowledge: string }
+const DEFAULTS: BotSettings = { enabled: false, media_enabled: false, persona_name: 'Fefe', company_name: 'Prof Toko Online', hours_from: '08:00', hours_to: '21:00', max_replies: 4, knowledge: '' };
 
 export async function getSettings(ws: string): Promise<BotSettings> {
   const { data } = await createAdminClient().from('wa_bot_config').select('*').eq('workspace_id', ws).maybeSingle();
@@ -189,6 +189,7 @@ export async function saveSettings(ws: string, patch: Partial<BotSettings>, by: 
   const row: Record<string, unknown> = { workspace_id: ws, updated_at: new Date().toISOString() };
   const time = (v: string | undefined) => (v && /^([01]\d|2[0-3]):[0-5]\d$/.test(v) ? v : undefined);
   if (typeof patch.enabled === 'boolean') row.enabled = patch.enabled;
+  if (typeof patch.media_enabled === 'boolean') row.media_enabled = patch.media_enabled;
   if (typeof patch.persona_name === 'string') { const v = patch.persona_name.trim().slice(0, 30); if (!v) return fail(400, 'The bot needs a name.'); row.persona_name = v; }
   if (typeof patch.company_name === 'string') { const v = patch.company_name.trim().slice(0, 60); if (!v) return fail(400, 'The company name cannot be empty.'); row.company_name = v; }
   if (patch.hours_from !== undefined) { const v = time(patch.hours_from); if (!v) return fail(400, 'Opening time must look like 08:00.'); row.hours_from = v; }
@@ -197,9 +198,10 @@ export async function saveSettings(ws: string, patch: Partial<BotSettings>, by: 
   if (typeof patch.knowledge === 'string') row.knowledge = patch.knowledge.slice(0, 12000);
   const { error } = await createAdminClient().from('wa_bot_config').upsert(row, { onConflict: 'workspace_id' });
   if (error) return fail(500, error.message);
-  forget(`knowledge:${ws}`);
+  forget(`knowledge:${ws}`); forget(`media:${ws}`);
   const what: string[] = [];
   if (typeof patch.enabled === 'boolean') what.push(patch.enabled ? 'The bot was switched ON' : 'The bot was switched OFF');
+  if (typeof patch.media_enabled === 'boolean') what.push(patch.media_enabled ? 'Sending photos was switched ON' : 'Sending photos was switched OFF');
   if (typeof patch.knowledge === 'string') what.push('The script was saved');
   if (['persona_name', 'company_name', 'hours_from', 'hours_to', 'max_replies'].some((k) => (patch as any)[k] !== undefined)) what.push('The name, hours or message limit were saved');
   if (what.length) await writeLog(ws, { id: null, title: 'Bot script and settings' }, 'settings', by?.name ?? null, what.join('. ') + '.');

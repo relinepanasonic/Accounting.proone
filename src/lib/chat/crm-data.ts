@@ -210,6 +210,13 @@ export async function chatReminders(groupId: string) {
 }
 
 // ---------------------------------------------------------------- images
+/** Sending photos needs a Fonnte package with attachments on the sales number; an admin switches it on (AI Kamus > Bot script & settings). Kept 30 s. */
+export const mediaEnabled = (ws: string) => memo(`media:${ws}`, 30_000, async () => {
+  const { data } = await createAdminClient().from('wa_bot_config').select('media_enabled').eq('workspace_id', ws).maybeSingle();
+  return (data as any)?.media_enabled === true;
+});
+const MEDIA_OFF = "Sending photos is locked: the sales number's Fonnte package does not include attachments yet. An admin can switch it on in AI Kamus > Bot script & settings after upgrading.";
+
 /**
  * Keeps an incoming file in our storage (Fonnte's link may not last), and records where on the message. At most 10 MB. Never throws: the message is
  * already saved with Fonnte's link, so a failure here only means the dashboard shows that link instead.
@@ -242,6 +249,7 @@ export async function signMedia(paths: string[]): Promise<Map<string, string>> {
 /** A one-time link the browser uses to upload a picture for this chat straight to storage. */
 export async function createImageUploadUrl(ws: string, groupId: string, fileName: string, size: number, type: string): Promise<{ ok: true; path: string; token: string; bucket: string } | Fail> {
   if (!(await chatOf(ws, groupId))) return fail(404, 'Chat not found.');
+  if (!(await mediaEnabled(ws))) return fail(403, MEDIA_OFF);
   const c = checkImage(fileName, size, type);
   if (!c.ok) return fail(400, c.error);
   const path = `chat/${ws}/${groupId}/out-${crypto.randomUUID()}.${c.ext}`;
@@ -254,6 +262,7 @@ export async function createImageUploadUrl(ws: string, groupId: string, fileName
 export async function sendChatImage(ws: string, groupId: string, input: { path?: unknown; caption?: unknown }, by: Who): Promise<{ ok: true } | Fail> {
   const chat = await chatOf(ws, groupId);
   if (!chat) return fail(404, 'Chat not found.');
+  if (!(await mediaEnabled(ws))) return fail(403, MEDIA_OFF);
   const path = String(input.path ?? '');
   if (!path.startsWith(`chat/${ws}/${groupId}/out-`) || path.includes('..')) return fail(400, 'That picture does not belong to this chat.');
   if (!process.env.FONNTE_TOKEN_SALES) return fail(503, 'The sales number is not connected (FONNTE_TOKEN_SALES is missing on the server).');

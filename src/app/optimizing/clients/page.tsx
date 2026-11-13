@@ -37,7 +37,7 @@ export default async function OptimizingClientsPage({ searchParams }: { searchPa
 
   const tabs = [
     { key: 'assign', label: 'Assign & Projects', href: '/optimizing/clients' },
-    { key: 'churn', label: 'Churn', href: '/optimizing/clients?tab=churn' },
+    { key: 'churn', label: 'Churn', href: '/optimizing/churn' },
   ] as const;
   const TabBar = (
     <div className="flex w-fit gap-1 rounded-xl border border-zinc-800 bg-zinc-900/50 p-1">

@@ -204,8 +204,9 @@ async function loadInvoiceRows(db: Db, workspaceId: string, opts: LoadOpts): Pro
     let lifecycle: Lifecycle;
     let churnDate = p.churnDate;
     if (p.lifecycle === 'ended') {
-      if (alive.has(clientNameKey(client.name))) lifecycle = 'finished';
-      else { lifecycle = 'churn'; churnDate = p.projectEnd; }
+      // A project that ran out is only Finished: the client usually waits for the next payment and still gets the advertising and admin job.
+      // Churn is never automatic, only when someone sets it.
+      lifecycle = 'finished';
     } else lifecycle = p.lifecycle;
     // A churned client leaves the Client table at once and lives on the Churn page. When the client is active again (a newer project
     // is running, scheduled or frozen) the old churn is not listed there, so the client is never in both places.

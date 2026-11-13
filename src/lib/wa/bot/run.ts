@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/api/supabase-admin';
-import { askWorker } from '@/lib/ai/providers';
+import { askBotModel } from './model';
 import { sendWhatsApp } from '../send';
 import type { ParsedWaMessage } from '../parse-webhook';
 import { decideBot, inOpenHours, isBotEcho, needsHuman } from './decide';
@@ -13,7 +13,6 @@ import { buildBotPrompt, parseBotAnswer, type BotTurn } from './prompt';
 
 export interface BotDevice { id: string; workspace_id: string; phone: string; role?: string }
 
-const MODEL = { provider: 'gemini' as const, model: 'gemini-3.8-flash' };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function runSalesBot(device: BotDevice, m: ParsedWaMessage, groupId: string): Promise<{ done: string }> {
@@ -64,14 +63,14 @@ export async function runSalesBot(device: BotDevice, m: ParsedWaMessage, groupId
 
   let answer; let usage: { model: string; tokensIn: number; tokensOut: number };
   try {
-    const out = await askWorker({ ...MODEL, system, prompt });
+    const out = await askBotModel(system, prompt);
     usage = out;
     answer = parseBotAnswer(out.text, cfg.knowledge || '');
   } catch (e: any) {
     await handToPerson('The bot could not answer.', `Model error: ${String(e?.message || e).slice(0, 200)}`);
     return { done: 'model-error' };
   }
-  if (!answer) { await handToPerson('The bot could not answer.', 'The model answer could not be read.'); return { done: 'bad-answer' }; }
+  if (!answer) { await handToPerson('The bot could not answer.', `The model answer could not be read (${usage.model}).`); return { done: 'bad-answer' }; }
 
   // The words that always need a person decide, whatever the model said.
   const forced = needsHuman(m.body);
@@ -79,7 +78,7 @@ export async function runSalesBot(device: BotDevice, m: ParsedWaMessage, groupId
   const reason = forced || answer.reason || (handoff ? 'The bot asked for a person.' : '');
 
   // A short pause before answering, so it does not read as a machine.
-  await sleep(3000 + Math.floor(Math.random() * 5000));
+  await sleep(2000 + Math.floor(Math.random() * 3000));
 
   const sent = await sendWhatsApp([m.chatId], answer.reply, { token: process.env.FONNTE_TOKEN_SALES });
   await db.from('wa_bot_log').insert({ ...logBase, reply: answer.reply, handoff, ok: sent.ok, detail: sent.detail.slice(0, 300), model: usage.model, tokens_in: usage.tokensIn, tokens_out: usage.tokensOut });

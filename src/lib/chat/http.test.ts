@@ -45,6 +45,16 @@ describe('chatRoute', () => {
     expect(bad.status).toBe(400);
   });
 
+  it('a route limited to some roles answers 403 to everyone else, and runs for the allowed ones', async () => {
+    const h = vi.fn(async (_c: any) => ({ ok: true }));
+    const guarded = chatRoute(h, { roles: ['founder', 'admin'] });
+    const denied = await guarded(req());
+    expect(denied.status).toBe(403);
+    expect(h).not.toHaveBeenCalled();
+    chatUser.mockResolvedValue({ ...ME, role: 'admin' });
+    expect((await guarded(req())).status).toBe(200);
+  });
+
   it('a handler error object becomes that HTTP error; a crash becomes a clean 500', async () => {
     const r1 = await chatRoute(async () => ({ ok: false as const, status: 409, error: 'taken' }))(req());
     expect(r1.status).toBe(409);

@@ -54,3 +54,6 @@ async function lookupUser(token: string): Promise<ChatUser | null> {
   const name = String(user.user_metadata?.full_name || user.user_metadata?.name || (user.email || '').split('@')[0] || 'Team');
   return { userId: user.id, name, email: user.email || '', role, workspaceId };
 }
+
+/** Who may change the AI Bible (the Sales Deck, the bot's script and settings). Everyone with a chat role may read it and ask it questions. */
+export const BIBLE_EDITORS = ['founder', 'superadmin', 'admin'] as const;

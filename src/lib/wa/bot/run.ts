@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { askBotModel } from './model';
+import { loadKnowledge } from '@/lib/chat/bible';
 import { sendWhatsApp } from '../send';
 import type { ParsedWaMessage } from '../parse-webhook';
 import { decideBot, inOpenHours, isBotEcho, needsHuman } from './decide';
@@ -56,8 +57,9 @@ export async function runSalesBot(device: BotDevice, m: ParsedWaMessage, groupId
   const { data: msgs } = await db.from('wa_messages').select('body, media_type, is_from_me, sent_at').eq('group_id', groupId).order('sent_at', { ascending: false }).limit(12);
   const history: BotTurn[] = (msgs || []).reverse().map((x: any) => ({ from: x.is_from_me ? 'team' : 'lead', text: x.body || `(${x.media_type || 'pesan'})`, }));
 
+  const knowledge = await loadKnowledge(ws);          // the script plus the Sales Deck and other AI Bible documents
   const { system, prompt } = buildBotPrompt({
-    persona: cfg.persona_name, company: cfg.company_name, knowledge: cfg.knowledge || '', history, replyNo,
+    persona: cfg.persona_name, company: cfg.company_name, knowledge, history, replyNo,
     inHours: inOpenHours(new Date(), cfg.hours_from || '08:00', cfg.hours_to || '21:00'),
   });
 
@@ -65,12 +67,12 @@ export async function runSalesBot(device: BotDevice, m: ParsedWaMessage, groupId
   try {
     let out = await askBotModel(system, prompt);
     usage = out; rawText = out.text;
-    answer = parseBotAnswer(out.text, cfg.knowledge || '');
+    answer = parseBotAnswer(out.text, knowledge);
     if (!answer) {
       // The model did not return the JSON we asked for: ask once more, firmly, before giving up.
       out = await askBotModel(system, `${prompt}\n\nPENTING: balas HANYA dengan satu objek JSON yang valid, tanpa teks lain, tanpa tanda kutip di dalam teks balasan, dan tanpa baris baru di dalam nilai "reply".`);
       usage = out; rawText = out.text;
-      answer = parseBotAnswer(out.text, cfg.knowledge || '');
+      answer = parseBotAnswer(out.text, knowledge);
     }
   } catch (e: any) {
     await handToPerson('The bot could not answer.', `Model error: ${String(e?.message || e).slice(0, 200)}`);

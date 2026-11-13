@@ -1,11 +1,13 @@
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { askBotModel } from './model';
-import { loadKnowledge } from '@/lib/chat/bible';
+import { loadKnowledge, loadSocialScript } from '@/lib/chat/bible';
 import { recordBotMessage } from './store';
 import { humanPauseMs, sendToChat, showTyping } from '@/lib/chat/send-any';
 import type { ParsedWaMessage } from '../parse-webhook';
 import { decideBot, inOpenHours, isBotEcho, needsHuman } from './decide';
-import { buildBotPrompt, parseBotAnswer, type BotTurn } from './prompt';
+import { buildBotPrompt, parseBotAnswer, replyMax, type BotTurn } from './prompt';
+import { SOCIAL_MAX_REPLIES } from './social-script';
+import { isMetaChat } from '@/lib/chat/channel';
 
 /**
  * The sales bot, end to end. Called by the webhook AFTER the message is saved (and after the answer to Fonnte), for private chats on a
@@ -32,7 +34,7 @@ export async function runSalesBot(device: BotDevice, m: ParsedWaMessage, groupId
   const lastReplies = (recent || []).filter((r: any) => Date.now() - new Date(r.created_at).getTime() < 15 * 60000).map((r: any) => String(r.reply || ''));
   const decision = decideBot({
     enabled: true, deviceRole: 'sales', isGroup: m.isGroup, isFromMe: m.isFromMe, body: m.body, mediaType: m.mediaType,
-    state: { status: (chat?.status as any) ?? null, replies: chat?.replies ?? 0 }, maxReplies: cfg.max_replies ?? 4,
+    state: { status: (chat?.status as any) ?? null, replies: chat?.replies ?? 0 }, maxReplies: isMetaChat(m.chatId) ? Math.max(cfg.max_replies ?? 4, SOCIAL_MAX_REPLIES) : cfg.max_replies ?? 4,
     echoOfBot: m.isFromMe && isBotEcho(m.body, lastReplies),
   });
 
@@ -61,9 +63,12 @@ export async function runSalesBot(device: BotDevice, m: ParsedWaMessage, groupId
   const { data: msgs } = await db.from('wa_messages').select('body, media_type, is_from_me, sent_at').eq('group_id', groupId).order('sent_at', { ascending: false }).limit(12);
   const history: BotTurn[] = (msgs || []).reverse().map((x: any) => ({ from: x.is_from_me ? 'team' : 'lead', text: x.body || `(${x.media_type || 'pesan'})`, }));
 
-  const knowledge = await loadKnowledge(ws);          // the script plus the Sales Deck and other AI Kamus documents
+  // Instagram and Messenger: people ask how to sell more on the marketplaces, so the bot follows the DM script there (and the same knowledge for prices).
+  const channel = isMetaChat(m.chatId) ? 'social' : 'whatsapp';
+  const [knowledge, socialScript] = await Promise.all([loadKnowledge(ws), channel === 'social' ? loadSocialScript(ws) : Promise.resolve('')]);
+  const allowed = `${knowledge}\n${socialScript}`;   // links may come from either
   const { system, prompt } = buildBotPrompt({
-    persona: cfg.persona_name, company: cfg.company_name, knowledge, history, replyNo,
+    persona: cfg.persona_name, company: cfg.company_name, knowledge, history, replyNo, channel, socialScript,
     inHours: inOpenHours(new Date(), cfg.hours_from || '08:00', cfg.hours_to || '21:00'),
   });
 
@@ -71,12 +76,12 @@ export async function runSalesBot(device: BotDevice, m: ParsedWaMessage, groupId
   try {
     let out = await askBotModel(system, prompt);
     usage = out; rawText = out.text;
-    answer = parseBotAnswer(out.text, knowledge);
+    answer = parseBotAnswer(out.text, allowed, replyMax(channel));
     if (!answer) {
       // The model did not return the JSON we asked for: ask once more, firmly, before giving up.
       out = await askBotModel(system, `${prompt}\n\nPENTING: balas HANYA dengan satu objek JSON yang valid, tanpa teks lain, tanpa tanda kutip di dalam teks balasan, dan tanpa baris baru di dalam nilai "reply".`);
       usage = out; rawText = out.text;
-      answer = parseBotAnswer(out.text, knowledge);
+      answer = parseBotAnswer(out.text, allowed, replyMax(channel));
     }
   } catch (e: any) {
     await handToPerson('The bot could not answer.', `Model error: ${String(e?.message || e).slice(0, 200)}`);

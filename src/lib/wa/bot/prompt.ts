@@ -13,10 +13,53 @@ export interface BotPromptInput {
   history: BotTurn[];          // oldest first, including the new message last
   inHours: boolean;
   replyNo: number;             // 1 = the first reply in this chat
+  /** Instagram and Messenger DMs: people ask how to sell more on the marketplaces, so the bot helps first (social script), sales second. */
+  channel?: 'whatsapp' | 'social';
+  socialScript?: string;
+}
+
+/** The longest reply: a short sales answer on WhatsApp, a few practical tips on Instagram and Messenger. */
+export const replyMax = (channel: BotPromptInput['channel']) => (channel === 'social' ? 900 : 600);
+
+const JSON_FORMAT = [
+  'FORMAT JAWABAN: hanya satu objek JSON, tanpa teks lain:',
+  '{"reply": "teks balasan untuk kakak", "handoff": true atau false, "reason": "alasan singkat bila handoff", "lead": {"name": "", "store": "", "need": ""}}',
+  'Isi lead hanya dengan apa yang kakak sebutkan sendiri; kosongkan bila belum ada.',
+];
+
+function socialSystem(i: BotPromptInput): string {
+  return [
+    `Kamu ${i.persona}, dari tim ${i.company}, yang membalas DM Instagram dan Facebook.`,
+    'Orang yang DM biasanya belum mau beli paket: mereka ingin tahu cara mengoptimalkan toko di marketplace Indonesia (Shopee, TikTok Shop, Tokopedia, Lazada).',
+    '',
+    'GAYA BICARA',
+    '- Hangat, santai tapi sopan, bahasa Indonesia sehari-hari, seperti teman yang paham jualan online. Bukan robot.',
+    '- Panggil lawan bicara "kak". Sebut dirimu dengan namamu sendiri bila perlu.',
+    '- 2 sampai 5 kalimat. Boleh 2 sampai 3 tips singkat, masing-masing di baris baru, tanpa simbol, tanda bintang atau Markdown. Emoji paling banyak satu.',
+    '- Jangan mengulang kalimat yang sama dengan balasan sebelumnya. Jangan memulai dengan "Terima kasih telah menghubungi".',
+    '',
+    'ATURAN',
+    '- Jawab pertanyaan tentang jualan di marketplace dengan ilmu praktismu sebagai konsultan e-commerce Indonesia, mengikuti SCRIPT DM di bawah.',
+    '- Harga, paket, promo dan layanan kami HANYA dari bagian PENGETAHUAN. Jangan mengarang harga, paket, diskon atau janji.',
+    '- Jangan menjanjikan hasil. Kalau soal aturan atau biaya marketplace yang detail dan kamu tidak yakin, sarankan cek di Seller Centre.',
+    '- Bila cocok, akhiri dengan satu pertanyaan ringan tentang toko kakak (jual apa, di marketplace mana, sudah pakai iklan atau belum).',
+    '- Set handoff = true HANYA kalau kakak minta bicara dengan orang, ingin memakai jasa kami atau membayar, nego harga, komplain, atau bertanya hal di luar jualan online dan layanan kami yang tidak bisa kamu jawab. Saat handoff, bilang tim akan segera membalas.',
+    '- Jangan minta data sensitif (password, OTP, nomor kartu). Jangan kirim link yang tidak ada di SCRIPT DM atau PENGETAHUAN.',
+    '- Kalau ditanya apakah kamu bot / AI / manusia, jawab jujur: kamu asisten virtual tim, dan tim siap membantu.',
+    i.inHours ? '' : '- Sekarang di luar jam kerja tim. Tetap jawab pertanyaannya. Hanya kalau handoff, bilang tim akan membalas besok pagi.',
+    '',
+    ...JSON_FORMAT,
+    '',
+    'SCRIPT DM',
+    (i.socialScript || '').trim() || '(belum ada. Bantu dengan tips praktis jualan di marketplace Indonesia.)',
+    '',
+    'PENGETAHUAN (layanan, paket dan harga kami)',
+    i.knowledge.trim() || '(belum ada. Kalau ditanya harga atau paket, bilang tim akan menjelaskan, dan set handoff = true.)',
+  ].join('\n');
 }
 
 export function buildBotPrompt(i: BotPromptInput): { system: string; prompt: string } {
-  const system = [
+  const system = i.channel === 'social' ? socialSystem(i) : [
     `Kamu ${i.persona}, asisten tim sales ${i.company}, yang membalas chat WhatsApp calon pelanggan (biasanya dari iklan).`,
     '',
     'GAYA BICARA',
@@ -76,7 +119,7 @@ export function sanitizeReply(text: string, knowledge = '', max = 600): string {
 }
 
 /** Reads the model's JSON answer. Returns null when it cannot be trusted: the caller then hands the chat to a person. */
-export function parseBotAnswer(raw: string, knowledge = ''): BotAnswer | null {
+export function parseBotAnswer(raw: string, knowledge = '', max = 600): BotAnswer | null {
   const s = String(raw || '');
   const a = s.indexOf('{');
   const b = s.lastIndexOf('}');
@@ -90,7 +133,7 @@ export function parseBotAnswer(raw: string, knowledge = ''): BotAnswer | null {
     try { reply = JSON.parse(`"${m[1].replace(/\r?\n/g, '\\n')}"`); } catch { /* keep the raw text */ }
     j = { reply, handoff: /"handoff"\s*:\s*true/.test(s), reason: '', lead: {} };
   }
-  const reply = sanitizeReply(typeof j?.reply === 'string' ? j.reply : '', knowledge);
+  const reply = sanitizeReply(typeof j?.reply === 'string' ? j.reply : '', knowledge, max);
   if (!reply) return null;
   const lead = j?.lead && typeof j.lead === 'object' ? j.lead : {};
   const clean = (v: unknown) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, 120) : '');

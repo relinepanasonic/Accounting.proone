@@ -13,7 +13,7 @@ vi.mock('@/lib/api/supabase-admin', () => ({
     storage: { from: () => ({ download: async () => ({ data: null, error: { message: 'missing' } }), remove: async () => ({}), createSignedUploadUrl: async (p: string) => ({ data: { token: 't', path: p }, error: null }) }) },
     from: (table: string) => {
       const chain: any = {
-        select: () => chain, eq: () => chain, limit: () => chain, order: () => chain,
+        select: () => chain, eq: () => chain, neq: () => chain, limit: () => chain, order: () => chain,
         upsert: async (row: any) => { upserts.push({ table, row }); return { error: null }; },
         update: (row: any) => { updates.push({ table, row }); return chain; },
         insert: (row: any) => { inserts.push({ table, row }); return chain; },

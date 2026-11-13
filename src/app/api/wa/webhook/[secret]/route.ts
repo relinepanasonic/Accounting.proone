@@ -5,7 +5,8 @@ import { deviceBySecret, ingestMessage } from '@/lib/wa/ingest';
 import { runSalesBot } from '@/lib/wa/bot/run';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 30;
+// The sales bot runs after the answer to Fonnte, inside this same function: it needs room for the model call (at most ~35 s) and the send.
+export const maxDuration = 60;
 
 const NO_STORE = { 'Cache-Control': 'no-store' };
 const KEEP_DAYS = 7;

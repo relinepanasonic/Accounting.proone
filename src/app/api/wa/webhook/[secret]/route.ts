@@ -4,6 +4,7 @@ import { parseFonnteWebhook, readWebhookPayload } from '@/lib/wa/parse-webhook';
 import { deviceBySecret, ingestMessage } from '@/lib/wa/ingest';
 import { runSalesBot } from '@/lib/wa/bot/run';
 import { captureLeadSource } from '@/lib/chat/sources';
+import { runFlowsFor } from '@/lib/chat/flows';
 
 export const dynamic = 'force-dynamic';
 // The sales bot runs after the answer to Fonnte, inside this same function: it needs room for the model call (at most ~35 s) and the send.
@@ -51,8 +52,12 @@ export async function POST(request: Request, ctx: { params: Promise<{ secret: st
       if (res.stored && res.isNew && res.groupId && device.role === 'sales') {
         const groupId = res.groupId;
         // Where did this lead come from? The first message of the chat is compared with the ads' messages. Independent of the bot, and never in its way.
-        if (!parsed.isGroup && !parsed.isFromMe) after(() => captureLeadSource(device.workspace_id, groupId).catch((e) => console.error('lead source failed', e)));
-        after(() => runSalesBot(device, parsed, groupId).catch((e) => console.error('sales bot failed', e)));
+        // One sequence, in this order: 1) find the source, 2) a matching scenario flow, 3) the normal bot unless a flow already answered.
+        after(async () => {
+          if (!parsed.isGroup && !parsed.isFromMe) await captureLeadSource(device.workspace_id, groupId).catch((e) => console.error('lead source failed', e));
+          const flow = await runFlowsFor(device, parsed, groupId).catch((e) => { console.error('flows failed', e); return { handled: false }; });
+          if (!flow.handled) await runSalesBot(device, parsed, groupId).catch((e) => console.error('sales bot failed', e));
+        });
       }
       return NextResponse.json({ ok: true, ...res }, { headers: NO_STORE });
     } catch (err: any) {

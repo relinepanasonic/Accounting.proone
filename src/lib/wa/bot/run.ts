@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { askBotModel } from './model';
 import { loadKnowledge } from '@/lib/chat/bible';
+import { recordBotMessage } from './store';
 import { sendWhatsApp } from '../send';
 import type { ParsedWaMessage } from '../parse-webhook';
 import { decideBot, inOpenHours, isBotEcho, needsHuman } from './decide';
@@ -95,6 +96,7 @@ export async function runSalesBot(device: BotDevice, m: ParsedWaMessage, groupId
   const sent = await sendWhatsApp([m.chatId], answer.reply, { token: process.env.FONNTE_TOKEN_SALES });
   await db.from('wa_bot_log').insert({ ...logBase, reply: answer.reply, handoff, ok: sent.ok, detail: sent.detail.slice(0, 300), model: usage.model, tokens_in: usage.tokensIn, tokens_out: usage.tokensOut });
   if (!sent.ok) { await setState({ status: 'human', reason: 'The bot could not send.', replies: chat?.replies ?? 0, lead: chat?.lead ?? null }); return { done: 'send-failed' }; }
+  await recordBotMessage(ws, groupId, device.phone, answer.reply);          // keep it in the chat history, so the chat shows as answered
 
   const lead = { ...(chat?.lead as object | null ?? {}), ...Object.fromEntries(Object.entries(answer.lead).filter(([, v]) => v)) };
   await setState({ status: handoff ? 'human' : 'bot', reason: handoff ? reason : null, replies: replyNo, lead });

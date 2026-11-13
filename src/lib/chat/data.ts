@@ -42,6 +42,15 @@ const ownGroup = async (ws: string, groupId: string): Promise<ChatGroupRow | nul
   return (data as ChatGroupRow | null) ?? null;
 };
 
+/** The ERP client whose phone number is this WhatsApp number (compared on the last 9 digits), or null. */
+export async function findClientByPhone(ws: string, waId: string): Promise<{ id: string; name: string; sales_name: string | null } | null> {
+  const tail = (s: string) => digits(s).slice(-9);
+  const t = tail(waId);
+  if (t.length < 8) return null;
+  const hit = (await clientPhones(ws)).find((c: any) => tail(c.phone) === t);
+  return hit ? { id: hit.id, name: hit.name, sales_name: hit.sales_name ?? null } : null;
+}
+
 /** The phone numbers of the company's clients (to show the client next to a chat): kept for 5 minutes instead of reading thousands of rows on every poll. */
 const clientPhones = (ws: string) => memo(`clients:${ws}`, 300_000, async () => {
   const { data } = await createAdminClient().from('clients').select('id, name, phone, sales_name, service_end_date, lead_source, first_contact_message').eq('workspace_id', ws).not('phone', 'is', null).limit(3000);

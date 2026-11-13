@@ -119,3 +119,19 @@ describe('cleanShortcut', () => {
     expect(cleanShortcut('')).toBeNull();
   });
 });
+
+describe('messages saved by the bot or a flow', () => {
+  it('a saved automatic message (raw.bot) is shown as the bot\'s, and it makes the chat "served"', () => {
+    const groups = [g('a', 'Budi')];
+    const msgs = [m('1', 'a', '2026-11-13T04:00:00Z', false, 'Halo'), m('2', 'a', '2026-11-13T04:00:05Z', true, 'Hi kak, Fefe disini', { raw: { bot: true } })];
+    const t = threadOf(msgs, []);
+    expect(t.map((x) => x.sender)).toEqual(['lead', 'bot']);
+    expect(t[1].senderName).toBeNull();
+    const c = conversationsOf(groups, msgs, [])[0];
+    expect(c).toMatchObject({ unserved: false, lastFromMe: true, waitingSince: null });
+  });
+  it('a message with a named sender is still a person\'s, even if it matches a bot text', () => {
+    const t = threadOf([m('2', 'a', '2026-11-13T04:00:05Z', true, 'Hi kak', { raw: { sentBy: { name: 'Rani' } } })], ['Hi kak']);
+    expect(t[0]).toMatchObject({ sender: 'team', senderName: 'Rani' });
+  });
+});

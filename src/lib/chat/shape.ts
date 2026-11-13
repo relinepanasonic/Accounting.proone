@@ -115,7 +115,7 @@ export function threadOf(messages: ChatMessageRow[], botReplies: string[], notes
   const chat: ThreadMessage[] = messages.map((m) => {
     const text = (m.body || '').trim();
     const by = m.raw?.sentBy?.name ? String(m.raw.sentBy.name) : null;
-    const sender: Sender = !m.is_from_me ? 'lead' : bot.has(flat(text)) && !by ? 'bot' : 'team';
+    const sender: Sender = !m.is_from_me ? 'lead' : (m.raw?.bot === true || bot.has(flat(text))) && !by ? 'bot' : 'team';
     return { id: m.id, sender, senderName: sender === 'team' ? by : null, text, mediaType: m.media_type, at: m.sent_at };
   });
   const internal: ThreadMessage[] = notes.map((n) => ({ id: `note:${n.id}`, sender: 'note', senderName: n.author_name, text: n.body, mediaType: null, at: n.created_at }));

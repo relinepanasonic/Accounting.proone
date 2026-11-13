@@ -1,5 +1,7 @@
 import { createAdminClient } from '@/lib/api/supabase-admin';
+import { createHash } from 'crypto';
 import { isFounderEmail } from '@/lib/auth/founders';
+import { forget, memo } from './cache';
 
 /**
  * Who may use the chat dashboard API. The dashboard is a separate app: it signs people in with the same ERP login (shared cookie) and
@@ -10,18 +12,35 @@ export const CHAT_ROLES = ['founder', 'superadmin', 'admin', 'sales'] as const;
 
 export interface ChatUser { userId: string; name: string; email: string; role: string; workspaceId: string }
 
+const USER_TTL_MS = 60_000;
+
+/**
+ * The person behind the Bearer token, or null. The answer is kept for a minute per token (never the token itself: only its hash), so the
+ * inbox polling every few seconds does not ask Supabase who this is every time. A refused token is never kept.
+ */
 export async function chatUser(request: Request): Promise<ChatUser | null> {
   const token = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
   if (!token || token.split('.').length !== 3) return null;
+  const key = `user:${createHash('sha256').update(token).digest('hex')}`;
+  const user = await memo(key, USER_TTL_MS, () => lookupUser(token));
+  if (!user) forget(key);
+  return user;
+}
+
+/** The company that owns the sales number (kept for a minute). */
+export const salesWorkspaceId = () => memo('sales-ws', 60_000, async () => {
+  const { data: dev } = await createAdminClient().from('wa_devices').select('workspace_id').eq('role', 'sales').eq('active', true).limit(1).maybeSingle();
+  return (dev?.workspace_id as string | undefined) ?? null;
+});
+
+async function lookupUser(token: string): Promise<ChatUser | null> {
   const db = createAdminClient();
   const { data: auth, error } = await db.auth.getUser(token);
   const user = auth?.user;
   if (error || !user) return null;
 
-  // The company that owns the sales number.
-  const { data: dev } = await db.from('wa_devices').select('workspace_id').eq('role', 'sales').eq('active', true).limit(1).maybeSingle();
-  if (!dev) return null;
-  const workspaceId = dev.workspace_id as string;
+  const workspaceId = await salesWorkspaceId();
+  if (!workspaceId) return null;
 
   let role = '';
   if (isFounderEmail(user.email)) role = 'founder';

@@ -17,7 +17,7 @@ describe('chatRoute', () => {
   });
 
   it('a route with NO dynamic part (params resolve to nothing, as Next does for /agents) still works', async () => {
-    const h = vi.fn(async () => ({ agents: [] }));
+    const h = vi.fn(async (_c: any) => ({ agents: [] }));
     const res = await chatRoute(h)(req(), { params: Promise.resolve(undefined as any) });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ agents: [] });
@@ -30,7 +30,7 @@ describe('chatRoute', () => {
   });
 
   it('passes a valid chat id and refuses a malformed one with 404', async () => {
-    const h = vi.fn(async () => ({ ok: true }));
+    const h = vi.fn(async (_c: any) => ({ ok: true }));
     const id = '0cfec0a9-d7b6-49ea-9cfb-a7d7b3c30d17';
     expect((await chatRoute(h)(req(), { params: Promise.resolve({ id }) })).status).toBe(200);
     expect(h.mock.calls[0][0].id).toBe(id);

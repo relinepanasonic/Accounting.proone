@@ -206,7 +206,7 @@ export function ClientContactTable({ rows, canEdit, storeOptions, waGroups }: { 
         {canEdit && <div className="ml-auto">{!search && <AddClient />}</div>}
       </div>
 
-      <div className="max-h-[calc(100vh-238px)] min-h-[360px] overflow-auto rounded-2xl border border-[#d4af37]/20 bg-[#0e0f14] shadow-xl">
+      <div className="max-h-[calc(100vh-196px)] min-h-[360px] overflow-auto rounded-2xl border border-[#d4af37]/20 bg-[#0e0f14] shadow-xl">
         <table className="w-full table-fixed text-left">
           <thead className="sticky top-0 z-10 border-b border-[#d4af37]/10 bg-zinc-950 text-[11px] text-zinc-400">
             <tr><Th k="name" w={showWa ? '19%' : '22%'}>Company Name</Th><Th k="brand" w={showWa ? '13%' : '15%'}>Brand Name</Th><Th k="store" w={showWa ? '19%' : '21%'}>Store Name</Th><Th k="pic" w={showWa ? '13%' : '15%'}>PIC Name</Th><Th k="address" w={showWa ? '19%' : '27%'}>Address</Th>{showWa && <th className="px-3 py-3 font-bold uppercase tracking-wider" style={{ width: '17%' }}>WhatsApp Group</th>}</tr>

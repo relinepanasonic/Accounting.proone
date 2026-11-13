@@ -7,8 +7,8 @@
 
 export type NodeType =
   | 'trigger_new_lead' | 'trigger_keyword'
-  | 'cond_source' | 'cond_keyword' | 'cond_hours' | 'cond_client'
-  | 'act_send' | 'act_ai' | 'act_assign' | 'act_assign_client_sales' | 'act_handover' | 'act_note';
+  | 'cond_source' | 'cond_keyword' | 'cond_hours' | 'cond_client' | 'cond_answer'
+  | 'act_send' | 'act_ask' | 'act_wait' | 'act_ai' | 'act_assign' | 'act_assign_client_sales' | 'act_handover' | 'act_note';
 
 export interface FlowNode { id: string; type: NodeType; x: number; y: number; data: Record<string, any> }
 export type Port = 'out' | 'yes' | 'no';
@@ -25,19 +25,20 @@ export interface FlowContext {
   leadName: string;             // the WhatsApp profile name
   persona: string;              // the bot's name
   company: string;
+  answers?: Record<string, string>;   // what the lead answered to "Ask a question" boxes, by field name
 }
 
 export const TRIGGERS: NodeType[] = ['trigger_new_lead', 'trigger_keyword'];
-export const CONDITIONS: NodeType[] = ['cond_source', 'cond_keyword', 'cond_hours', 'cond_client'];
-export const ACTIONS: NodeType[] = ['act_send', 'act_ai', 'act_assign', 'act_assign_client_sales', 'act_handover', 'act_note'];
+export const CONDITIONS: NodeType[] = ['cond_source', 'cond_keyword', 'cond_hours', 'cond_client', 'cond_answer'];
+export const ACTIONS: NodeType[] = ['act_send', 'act_ask', 'act_wait', 'act_ai', 'act_assign', 'act_assign_client_sales', 'act_handover', 'act_note'];
 export const isCondition = (t: NodeType) => CONDITIONS.includes(t);
 export const isTrigger = (t: NodeType) => TRIGGERS.includes(t);
 export const portsOf = (t: NodeType): Port[] => (isCondition(t) ? ['yes', 'no'] : isTrigger(t) || ACTIONS.includes(t) ? ['out'] : []);
 
 export const NODE_LABEL: Record<NodeType, string> = {
   trigger_new_lead: 'New lead writes', trigger_keyword: 'Message has a keyword',
-  cond_source: 'Lead came from', cond_keyword: 'Message has a keyword', cond_hours: 'Team is open', cond_client: 'Is already a client',
-  act_send: 'Send a message', act_ai: 'AI answers', act_assign: 'Give to a salesperson', act_assign_client_sales: "Give to the client's salesperson", act_handover: 'Hand over to a person', act_note: 'Add a team note',
+  cond_source: 'Lead came from', cond_keyword: 'Message has a keyword', cond_hours: 'Team is open', cond_client: 'Is already a client', cond_answer: 'Answer has a keyword',
+  act_send: 'Send a message', act_ask: 'Ask a question', act_wait: 'Wait', act_ai: 'AI answers', act_assign: 'Give to a salesperson', act_assign_client_sales: "Give to the client's salesperson", act_handover: 'Hand over to a person', act_note: 'Add a team note',
 };
 
 // ---------------------------------------------------------------- text helpers
@@ -52,11 +53,29 @@ export function hasKeyword(message: string, keywords: string[]): boolean {
   return keywords.some((k) => m.includes(` ${k} `));
 }
 
-/** {nama} = the lead's first name (or "kak"), {bot} = the bot's name, {perusahaan} = the company. */
-export function fillVars(text: string, ctx: Pick<FlowContext, 'leadName' | 'persona' | 'company'>): string {
+/** Where an "Ask a question" box saves the answer: 1-24 of a-z, 0-9 and _, starting with a letter, and not one of the built-in names. */
+export const RESERVED_FIELDS = ['nama', 'bot', 'perusahaan'];
+export const cleanField = (raw: unknown): string => String(raw ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_').replace(/[^a-z0-9_]/g, '').slice(0, 24);
+export const isValidField = (f: string): boolean => /^[a-z][a-z0-9_]{0,23}$/.test(f) && !RESERVED_FIELDS.includes(f);
+
+/**
+ * {nama} = the lead's first name (or "kak"), {bot} = the bot's name, {perusahaan} = the company, {any_field} = what the lead answered to an
+ * "Ask a question" box. A field not answered (yet) is left out, so a message never shows "{toko}" to a lead.
+ */
+export function fillVars(text: string, ctx: Pick<FlowContext, 'leadName' | 'persona' | 'company' | 'answers'>): string {
   const first = String(ctx.leadName || '').replace(/[^\p{L}\p{N} ]/gu, '').trim().split(/\s+/)[0] || 'kak';
-  return String(text ?? '').replace(/\{nama\}/gi, first).replace(/\{bot\}/gi, ctx.persona).replace(/\{perusahaan\}/gi, ctx.company);
+  const answers = ctx.answers || {};
+  return String(text ?? '').replace(/\{([a-z][a-z0-9_]{0,23})\}/gi, (_all, raw: string) => {
+    const f = raw.toLowerCase();
+    if (f === 'nama') return first;
+    if (f === 'bot') return ctx.persona;
+    if (f === 'perusahaan') return ctx.company;
+    return Object.prototype.hasOwnProperty.call(answers, f) ? String(answers[f] ?? '') : '';
+  }).replace(/[ \t]{2,}/g, ' ');
 }
+
+/** The longest a Wait box may pause: 3 days. */
+export const MAX_WAIT_MINUTES = 3 * 1440;
 
 // ---------------------------------------------------------------- checking a drawing
 export interface Validation { errors: string[]; warnings: string[] }
@@ -80,12 +99,22 @@ export function validateGraph(g: Graph): Validation {
     if (!NODE_LABEL[n.type]) { errors.push(`Unknown box type "${n.type}".`); continue; }
     if ((n.type === 'trigger_keyword' || n.type === 'cond_keyword') && keywordList(d.keywords).length === 0) errors.push(`"${label}": type at least one keyword.`);
     if (n.type === 'cond_source' && !(Array.isArray(d.channels) && d.channels.length) && !d.sourceId) errors.push(`"${label}": pick at least one channel or ad.`);
-    if (n.type === 'act_send' || n.type === 'act_note') {
+    if (n.type === 'act_send' || n.type === 'act_note' || n.type === 'act_ask') {
       const t = String(d.text ?? '').trim();
       if (!t) errors.push(`"${label}": write the text.`);
       else if (t.length > MAX_TEXT) errors.push(`"${label}": the text is too long (max ${MAX_TEXT} characters).`);
     }
     if (n.type === 'act_assign' && !d.userId) errors.push(`"${label}": pick the salesperson.`);
+    if (n.type === 'act_ask' && !isValidField(cleanField(d.field))) errors.push(`"${label}": name where the answer is saved (letters, numbers and _, like toko or budget; not nama, bot or perusahaan).`);
+    if (n.type === 'act_wait') {
+      const m = Number(d.minutes);
+      if (!Number.isFinite(m) || m < 1 || m > MAX_WAIT_MINUTES) errors.push(`"${label}": the wait must be between 1 minute and 3 days.`);
+    }
+    if (n.type === 'cond_answer') {
+      if (!isValidField(cleanField(d.field))) errors.push(`"${label}": pick which answer to check.`);
+      else if (!nodes.some((x) => x.type === 'act_ask' && cleanField(x.data?.field) === cleanField(d.field))) errors.push(`"${label}": no "Ask a question" box saves an answer as "${cleanField(d.field)}".`);
+      if (keywordList(d.keywords).length === 0) errors.push(`"${label}": type at least one keyword.`);
+    }
   }
 
   const outPorts = new Set<string>();
@@ -117,18 +146,25 @@ export function validateGraph(g: Graph): Validation {
   const reached = new Set<string>(triggers.map((t) => t.id));
   const queue = [...reached];
   while (queue.length) { const id = queue.shift()!; for (const t of next.get(id) || []) if (!reached.has(t)) { reached.add(t); queue.push(t); } }
+  // after a Wait there is no new message for the AI to answer
+  const afterWait = new Set<string>();
+  const q2 = nodes.filter((n) => n.type === 'act_wait').map((n) => n.id);
+  while (q2.length) { const id = q2.shift()!; for (const t of next.get(id) || []) if (!afterWait.has(t)) { afterWait.add(t); q2.push(t); } }
+  if (nodes.some((n) => n.type === 'act_ai' && afterWait.has(n.id))) errors.push('"AI answers" cannot come after a Wait: there is no new message to answer by then. Use "Send a message" instead.');
+
   for (const n of nodes) if (!reached.has(n.id)) warnings.push(`"${NODE_LABEL[n.type] || n.type}" is not connected to the trigger, so it never runs.`);
   for (const n of nodes) if (isCondition(n.type)) {
     const ports = edges.filter((e) => e.from === n.id).map((e) => e.port);
     if (!ports.includes('yes') || !ports.includes('no')) warnings.push(`"${NODE_LABEL[n.type]}": only one answer (yes or no) leads anywhere. For the other, the flow stops and the normal bot continues.`);
   }
-  if (!nodes.some((n) => n.type === 'act_send' || n.type === 'act_ai' || n.type === 'act_handover')) warnings.push('Nothing in this flow answers the lead, so the normal bot will still reply.');
+  if (!nodes.some((n) => n.type === 'act_send' || n.type === 'act_ask' || n.type === 'act_ai' || n.type === 'act_handover')) warnings.push('Nothing in this flow answers the lead, so the normal bot will still reply.');
   return { errors, warnings };
 }
 
 // ---------------------------------------------------------------- what would happen
 export type PlannedAction =
   | { kind: 'send'; nodeId: string; text: string }
+  | { kind: 'ask'; nodeId: string; text: string; field: string }
   | { kind: 'ai'; nodeId: string }
   | { kind: 'assign'; nodeId: string; userId: string; userName: string }
   | { kind: 'assign_client_sales'; nodeId: string }
@@ -142,6 +178,8 @@ export interface Plan {
   actions: PlannedAction[];
   /** The flow answers the lead itself (a message, the AI, or a hand over): the normal bot must not also reply. */
   handled: boolean;
+  /** The flow stopped to wait: for the lead's answer (saved as `field`), or for a time. It goes on from `nodeId` later. */
+  pause?: { nodeId: string; kind: 'answer'; field: string } | { nodeId: string; kind: 'wait'; minutes: number; ifReply: 'stop' | 'continue' };
 }
 
 export function conditionAnswer(n: FlowNode, ctx: FlowContext): boolean {
@@ -151,6 +189,7 @@ export function conditionAnswer(n: FlowNode, ctx: FlowContext): boolean {
     case 'cond_keyword': return hasKeyword(ctx.message, keywordList(d.keywords));
     case 'cond_hours': return ctx.inHours;
     case 'cond_client': return ctx.isClient;
+    case 'cond_answer': return hasKeyword(String(ctx.answers?.[cleanField(d.field)] ?? ''), keywordList(d.keywords));
     default: return false;
   }
 }
@@ -165,14 +204,26 @@ const MAX_STEPS = 25;
 
 export function planFlow(g: Graph, ctx: FlowContext): Plan {
   const none: Plan = { matched: false, path: [], decisions: [], actions: [], handled: false };
-  const nodes = g?.nodes || []; const edges = g?.edges || [];
-  const trigger = nodes.find((n) => isTrigger(n.type));
+  const trigger = (g?.nodes || []).find((n) => isTrigger(n.type));
   if (!trigger || !triggerMatches(trigger, ctx)) return none;
+  return walk(g, ctx, trigger.id);
+}
 
+/**
+ * Goes on with a flow that stopped at `nodeId` (an "Ask a question" box once the answer is in ctx.answers, or a Wait box once the time is up):
+ * the same as planFlow, from the line that leaves that box. `matched` is false when the box is gone from the drawing.
+ */
+export function resumeFlow(g: Graph, ctx: FlowContext, nodeId: string): Plan {
+  if (!(g?.nodes || []).some((n) => n.id === nodeId)) return { matched: false, path: [], decisions: [], actions: [], handled: false };
+  return walk(g, ctx, nodeId);
+}
+
+function walk(g: Graph, ctx: FlowContext, fromId: string): Plan {
+  const nodes = g?.nodes || []; const edges = g?.edges || [];
   const byId = new Map(nodes.map((n) => [n.id, n]));
-  const plan: Plan = { matched: true, path: [trigger.id], decisions: [], actions: [], handled: false };
-  const seen = new Set<string>([trigger.id]);
-  let cur: FlowNode | undefined = trigger;
+  const plan: Plan = { matched: true, path: [fromId], decisions: [], actions: [], handled: false };
+  const seen = new Set<string>([fromId]);
+  let cur: FlowNode | undefined = byId.get(fromId);
   let port: Port = 'out';
 
   for (let i = 0; i < MAX_STEPS && cur; i++) {
@@ -189,6 +240,18 @@ export function planFlow(g: Graph, ctx: FlowContext): Plan {
       port = 'out';
       switch (nxt.type) {
         case 'act_send': plan.actions.push({ kind: 'send', nodeId: nxt.id, text: fillVars(String(d.text ?? ''), ctx).trim() }); plan.handled = true; break;
+        case 'act_ask': {
+          const field = cleanField(d.field);
+          plan.actions.push({ kind: 'ask', nodeId: nxt.id, text: fillVars(String(d.text ?? ''), ctx).trim(), field });
+          plan.handled = true;
+          plan.pause = { nodeId: nxt.id, kind: 'answer', field };
+          return plan;
+        }
+        case 'act_wait': {
+          plan.handled = true;   // the flow has this chat while it waits: the normal bot does not also answer
+          plan.pause = { nodeId: nxt.id, kind: 'wait', minutes: Math.min(MAX_WAIT_MINUTES, Math.max(1, Math.round(Number(d.minutes) || 1))), ifReply: d.ifReply === 'continue' ? 'continue' : 'stop' };
+          return plan;
+        }
         case 'act_ai': plan.actions.push({ kind: 'ai', nodeId: nxt.id }); plan.handled = true; break;
         case 'act_assign': plan.actions.push({ kind: 'assign', nodeId: nxt.id, userId: String(d.userId ?? ''), userName: String(d.userName ?? '') }); break;
         case 'act_assign_client_sales': plan.actions.push({ kind: 'assign_client_sales', nodeId: nxt.id }); break;
@@ -201,12 +264,28 @@ export function planFlow(g: Graph, ctx: FlowContext): Plan {
   return plan;
 }
 
+/**
+ * What a lead's new message does to a flow of theirs that is stopped. Waiting for an answer: this message IS the answer. A Wait box set to
+ * "stop if they reply" (a nudge for a quiet lead): the reply ends the flow. A Wait set to "carry on anyway": the flow keeps waiting.
+ */
+export type PausedMessage = 'answer' | 'stop_flow' | 'keep_waiting';
+export function onMessageWhilePaused(pause: { kind: 'answer' | 'wait'; ifReply?: string | null }): PausedMessage {
+  if (pause.kind === 'answer') return 'answer';
+  return pause.ifReply === 'continue' ? 'keep_waiting' : 'stop_flow';
+}
+
+/** An answer is kept short and on one line. */
+export const cleanAnswer = (s: unknown): string => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, 300);
+
+/** A stopped flow waiting for an answer gives up after a day: the lead has moved on, and the normal bot takes the next message. */
+export const ANSWER_EXPIRES_MINUTES = 1440;
+
 // ---------------------------------------------------------------- examples
 export interface ExampleFlow { name: string; description: string; graph: Graph }
 const node = (id: string, type: NodeType, x: number, y: number, data: Record<string, any> = {}): FlowNode => ({ id, type, x, y, data });
 const edge = (from: string, port: Port, to: string): FlowEdge => ({ id: `${from}-${port}-${to}`, from, port, to });
 
-/** The four flows suggested to start with. They are created switched off: the team reads them and switches them on. */
+/** The flows suggested to start with. They are created switched off: the team reads them and switches them on. */
 export function exampleFlows(): ExampleFlow[] {
   return [
     {
@@ -248,6 +327,33 @@ export function exampleFlows(): ExampleFlow[] {
           node('a', 'act_ai', 580, 220),
         ],
         edges: [edge('t', 'out', 'c'), edge('c', 'yes', 'g'), edge('g', 'out', 's'), edge('s', 'out', 'h'), edge('c', 'no', 'a')],
+      },
+    },
+    {
+      name: 'Ask what the shop sells',
+      description: 'A new lead is asked what their shop sells. The answer is saved as "toko" and used in the next message, which depends on whether it is a fashion shop.',
+      graph: {
+        nodes: [
+          node('t', 'trigger_new_lead', 40, 140),
+          node('q', 'act_ask', 300, 140, { text: 'Hi kak, {bot} disini dari {perusahaan}. Boleh tau toko kakak jualan apa?', field: 'toko' }),
+          node('c', 'cond_answer', 560, 140, { field: 'toko', keywords: 'fashion, baju, hijab, kaos, sepatu, gamis' }),
+          node('s1', 'act_send', 820, 60, { text: 'Wah, kategori fashion lagi ramai banget kak! Kami sudah bantu banyak toko fashion. Omzet per bulan sekarang kira-kira berapa kak?' }),
+          node('s2', 'act_send', 820, 220, { text: 'Siap kak, untuk toko {toko} kami punya paket yang cocok. Omzet per bulan sekarang kira-kira berapa kak?' }),
+        ],
+        edges: [edge('t', 'out', 'q'), edge('q', 'out', 'c'), edge('c', 'yes', 's1'), edge('c', 'no', 's2')],
+      },
+    },
+    {
+      name: 'Quiet lead: one nudge after an hour',
+      description: 'A new lead gets a greeting. If they have not replied an hour later, they get one friendly nudge. Any reply from them ends this flow.',
+      graph: {
+        nodes: [
+          node('t', 'trigger_new_lead', 40, 120),
+          node('s', 'act_send', 300, 120, { text: 'Hi kak, {bot} disini dari {perusahaan}. Apa ada yang bisa di bantu kak?' }),
+          node('w', 'act_wait', 560, 120, { minutes: 60, ifReply: 'stop' }),
+          node('n', 'act_send', 820, 120, { text: 'Kak {nama}, {bot} masih disini ya kalau ada yang mau ditanyakan. Mau {bot} kirimkan info paketnya kak?' }),
+        ],
+        edges: [edge('t', 'out', 's'), edge('s', 'out', 'w'), edge('w', 'out', 'n')],
       },
     },
     {

@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { exampleFlows, fillVars, hasKeyword, keywordList, planFlow, validateGraph, type FlowContext, type Graph } from './flow';
+import { cleanAnswer, cleanField, exampleFlows, fillVars, hasKeyword, keywordList, onMessageWhilePaused, planFlow, resumeFlow, validateGraph, type FlowContext, type Graph } from './flow';
 
 const ctx = (over: Partial<FlowContext> = {}): FlowContext => ({ message: 'Halo kak mau tanya paket', isFirst: true, sourceChannel: null, sourceId: null, inHours: true, isClient: false, leadName: 'Budi Santoso', persona: 'Fefe', company: 'Prof Toko Online', ...over });
-const [META, AFTER, CLIENT, PRICE] = exampleFlows().map((f) => f.graph);
+const [META, AFTER, CLIENT, ASK, NUDGE, PRICE] = exampleFlows().map((f) => f.graph);
 
 describe('keywords and variables', () => {
   it('keywords are split on commas, semicolons and lines, and cleaned', () => {
@@ -21,10 +21,10 @@ describe('keywords and variables', () => {
   });
 });
 
-describe('the four example flows', () => {
+describe('the example flows', () => {
   it('are all valid drawings', () => {
     for (const f of exampleFlows()) expect(validateGraph(f.graph).errors, f.name).toEqual([]);
-    expect(exampleFlows()).toHaveLength(4);
+    expect(exampleFlows()).toHaveLength(6);
   });
 });
 
@@ -117,5 +117,77 @@ describe('validateGraph', () => {
     expect(r.warnings.join(' | ')).toMatch(/only one answer/);
     expect(r.warnings.join(' | ')).toMatch(/normal bot will still reply/);
     expect(validateGraph({ nodes: [t, a], edges: [] }).warnings.join()).toMatch(/not connected/);
+  });
+});
+
+describe('answers as variables', () => {
+  it('{field} is what the lead answered; a field not answered yet is left out, never shown as {toko}', () => {
+    expect(fillVars('Toko {toko} ya, {nama}', ctx({ answers: { toko: 'hijab' } }))).toBe('Toko hijab ya, Budi');
+    expect(fillVars('Untuk toko {toko} kami ada paket', ctx())).toBe('Untuk toko kami ada paket');
+  });
+  it('field names are cleaned to a-z, 0-9 and _', () => {
+    expect(cleanField(' Budget Iklan ')).toBe('budget_iklan');
+    expect(cleanField('toko-online!')).toBe('toko_online');
+  });
+  it('an answer is kept to one short line', () => {
+    expect(cleanAnswer('  jual\n\nhijab   dan gamis ')).toBe('jual hijab dan gamis');
+    expect(cleanAnswer('x'.repeat(500))).toHaveLength(300);
+  });
+});
+
+describe('Ask a question', () => {
+  it('sends the question and stops, waiting for the answer to save as "toko"', () => {
+    const p = planFlow(ASK, ctx());
+    expect(p.actions).toEqual([{ kind: 'ask', nodeId: 'q', field: 'toko', text: expect.stringContaining('Boleh tau toko kakak jualan apa?') }]);
+    expect(p.pause).toEqual({ nodeId: 'q', kind: 'answer', field: 'toko' });
+    expect(p.handled).toBe(true);
+  });
+  it('with the answer in, it goes on from the question and can branch on the answer', () => {
+    const fashion = resumeFlow(ASK, ctx({ isFirst: false, answers: { toko: 'Baju anak dan hijab' } }), 'q');
+    expect(fashion.decisions).toEqual([{ nodeId: 'c', answer: 'yes' }]);
+    expect(fashion.actions).toEqual([{ kind: 'send', nodeId: 's1', text: expect.stringContaining('fashion') }]);
+    const other = resumeFlow(ASK, ctx({ isFirst: false, answers: { toko: 'elektronik' } }), 'q');
+    expect(other.actions).toEqual([{ kind: 'send', nodeId: 's2', text: expect.stringContaining('untuk toko elektronik') }]);
+    expect(other.pause).toBeUndefined();
+  });
+  it('a box removed from the drawing since then: nothing happens', () => {
+    expect(resumeFlow(ASK, ctx(), 'gone')).toMatchObject({ matched: false, actions: [] });
+  });
+  it('the question needs a text and a valid name for the answer', () => {
+    const g: Graph = { nodes: [{ id: 't', type: 'trigger_new_lead', x: 0, y: 0, data: {} }, { id: 'q', type: 'act_ask', x: 0, y: 0, data: { text: '', field: 'nama' } }], edges: [{ id: 'e', from: 't', port: 'out', to: 'q' }] };
+    const errs = validateGraph(g).errors.join(' | ');
+    expect(errs).toContain('write the text');
+    expect(errs).toContain('name where the answer is saved');
+  });
+  it('"Answer has a keyword" must check an answer some question saves', () => {
+    const g: Graph = { nodes: [{ id: 't', type: 'trigger_new_lead', x: 0, y: 0, data: {} }, { id: 'c', type: 'cond_answer', x: 0, y: 0, data: { field: 'budget', keywords: 'besar' } }], edges: [{ id: 'e', from: 't', port: 'out', to: 'c' }] };
+    expect(validateGraph(g).errors.join(' ')).toContain('no "Ask a question" box saves an answer as "budget"');
+  });
+});
+
+describe('Wait', () => {
+  it('stops for the time set; the greeting goes out first', () => {
+    const p = planFlow(NUDGE, ctx());
+    expect(p.actions.map((a) => a.kind)).toEqual(['send']);
+    expect(p.pause).toEqual({ nodeId: 'w', kind: 'wait', minutes: 60, ifReply: 'stop' });
+  });
+  it('when the time is up, the nudge is sent', () => {
+    const p = resumeFlow(NUDGE, ctx({ isFirst: false, message: '' }), 'w');
+    expect(p.actions).toEqual([{ kind: 'send', nodeId: 'n', text: expect.stringContaining('Kak Budi, Fefe masih disini') }]);
+  });
+  it('a reply while waiting: the answer to a question, the end of a "no reply" nudge, or nothing for "carry on anyway"', () => {
+    expect(onMessageWhilePaused({ kind: 'answer' })).toBe('answer');
+    expect(onMessageWhilePaused({ kind: 'wait', ifReply: 'stop' })).toBe('stop_flow');
+    expect(onMessageWhilePaused({ kind: 'wait', ifReply: 'continue' })).toBe('keep_waiting');
+  });
+  it('the wait is between 1 minute and 3 days, and the AI cannot answer after a wait (there is no new message)', () => {
+    const base = (minutes: number, after: 'act_ai' | 'act_send'): Graph => ({
+      nodes: [{ id: 't', type: 'trigger_new_lead', x: 0, y: 0, data: {} }, { id: 'w', type: 'act_wait', x: 0, y: 0, data: { minutes } }, { id: 'a', type: after, x: 0, y: 0, data: { text: 'hi' } }],
+      edges: [{ id: 'e1', from: 't', port: 'out', to: 'w' }, { id: 'e2', from: 'w', port: 'out', to: 'a' }],
+    });
+    expect(validateGraph(base(0, 'act_send')).errors.join(' ')).toContain('between 1 minute and 3 days');
+    expect(validateGraph(base(5000, 'act_send')).errors.join(' ')).toContain('between 1 minute and 3 days');
+    expect(validateGraph(base(30, 'act_send')).errors).toEqual([]);
+    expect(validateGraph(base(30, 'act_ai')).errors.join(' ')).toContain('cannot come after a Wait');
   });
 });

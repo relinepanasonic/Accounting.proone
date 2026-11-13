@@ -2,7 +2,8 @@
 type Db = any;
 
 export const STORE_COMPANIES = ['ProOne', 'Reline', 'Alpha', 'Lighting Solution'] as const;
-export interface ClientStoreRef { id: string; company: string; store: string }
+/** A store of a client. The last four are its own settings (null = the client's value). */
+export interface ClientStoreRef { id: string; company: string; store: string; waGroupId?: string | null; startDate?: string | null; advertiserId?: string | null; adminId?: string | null }
 export const storeText = (s: { company: string; store: string }) => `${s.company} - ${s.store}`;
 
 /** "ProOne - japarutomo" -> { company, store }; anything else (no store part) -> null. */
@@ -22,9 +23,13 @@ export async function loadClientStores(db: Db, clientIds?: string[]): Promise<Ma
   const chunks: string[][] = [];
   if (clientIds) for (let i = 0; i < clientIds.length; i += 200) chunks.push(clientIds.slice(i, i + 200)); else chunks.push([]);
   for (const ids of chunks) {
-    let q = db.from('client_stores').select('id, client_id, company, store').order('created_at', { ascending: true }).limit(20000);
-    if (clientIds) q = q.in('client_id', ids);
-    const { data, error } = await q;
+    const read = (cols: string) => {
+      let q = db.from('client_stores').select(cols).order('created_at', { ascending: true }).limit(20000);
+      if (clientIds) q = q.in('client_id', ids);
+      return q;
+    };
+    let { data, error } = await read('id, client_id, company, store, wa_group_id, start_date, advertiser_id, admin_id');
+    if (error) ({ data, error } = await read('id, client_id, company, store')); // before 20261116_store_level_settings.sql
     if (error) {
       // the table is not there yet: the store of the client itself
       let c = db.from('clients').select('id, store_name').not('store_name', 'is', null).limit(20000);
@@ -33,7 +38,7 @@ export async function loadClientStores(db: Db, clientIds?: string[]): Promise<Ma
       for (const r of legacy || []) { const p = parseStoreText(r.store_name); if (p) push(r.id, { id: `legacy-${r.id}`, ...p }); }
       continue;
     }
-    for (const r of data || []) push(r.client_id, { id: r.id, company: r.company, store: r.store });
+    for (const r of data || []) push(r.client_id, { id: r.id, company: r.company, store: r.store, waGroupId: r.wa_group_id ?? null, startDate: r.start_date ?? null, advertiserId: r.advertiser_id ?? null, adminId: r.admin_id ?? null });
   }
   return out;
 }

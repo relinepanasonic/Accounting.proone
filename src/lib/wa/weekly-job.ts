@@ -52,6 +52,11 @@ export async function prepareClientWeekly(workspaceId: string, opts: { today?: s
     db.from('clients').select('name, company_name, wa_group_id').eq('workspace_id', workspaceId).not('wa_group_id', 'is', null),
   ]);
   const storeGroup = new Map<string, string>((links || []).map((l: any) => [l.store_label as string, l.group_id as string]));
+  // the group set on a store of a client (Optimizing > Clients) wins
+  try {
+    const { data: own } = await db.from('client_stores').select('company, store, wa_group_id').not('wa_group_id', 'is', null);
+    for (const o of own || []) storeGroup.set(`${o.company} - ${o.store}`, o.wa_group_id as string);
+  } catch { /* column not there yet */ }
   const clientGroup = clientGroupMap((clients || []) as any[]);
   const existing = new Map<string, { id: string; status: string }>((existingRows || []).map((e: any) => [e.store_label as string, { id: e.id as string, status: e.status as string }]));
 

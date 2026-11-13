@@ -46,8 +46,15 @@ export async function POST(request: Request) {
     const { data: mine } = await db.from('client_assignments').select('client_id').eq('client_id', clientId).eq('user_id', ctx.userId).eq('job', 'advertising').limit(1);
     if (!mine || mine.length === 0) return json({ error: 'This client is not assigned to you.' }, 403);
   }
-  if (!client.wa_group_id) return json({ error: `No WhatsApp group is linked to ${client.name}. Link it in Client Contact (WhatsApp Group column).` }, 409);
-  const { data: group } = await db.from('wa_groups').select('wa_id, is_group').eq('id', client.wa_group_id).eq('workspace_id', ws).maybeSingle();
+  // the group of this store, when the store has its own; else the client's
+  let groupId: string | null = client.wa_group_id;
+  if (storeLabel) {
+    const { data: own } = await db.from('client_stores').select('company, store, wa_group_id').eq('client_id', clientId).not('wa_group_id', 'is', null);
+    const hit = (own || []).find((o: any) => `${o.company} - ${o.store}`.toLowerCase() === storeLabel.trim().toLowerCase());
+    if (hit) groupId = hit.wa_group_id;
+  }
+  if (!groupId) return json({ error: `No WhatsApp group is linked to ${client.name}. Link it in Client Contact (WhatsApp Group column).` }, 409);
+  const { data: group } = await db.from('wa_groups').select('wa_id, is_group').eq('id', groupId).eq('workspace_id', ws).maybeSingle();
   if (!group) return json({ error: 'The linked group no longer exists.' }, 409);
   const target = group.is_group ? `${group.wa_id}@g.us` : group.wa_id;
 

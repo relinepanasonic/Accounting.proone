@@ -730,10 +730,43 @@ export async function setClientHandler(clientId: string, job: 'advertising' | 'a
     const { error } = await db.from('client_assignments').insert({ workspace_id: ctx.activeWorkspaceId, client_id: clientId, user_id: userId, job, assigned_by: ctx.userId });
     if (error) return fail(error);
   }
+  // the people set on single stores of this client keep their access
+  const col = job === 'advertising' ? 'advertiser_id' : 'admin_id';
+  const { data: own } = await db.from('client_stores').select(col).eq('client_id', clientId).not(col, 'is', null);
+  for (const u of Array.from(new Set((own || []).map((x: any) => x[col] as string)))) {
+    if (u !== userId) await db.from('client_assignments').insert({ workspace_id: ctx.activeWorkspaceId, client_id: clientId, user_id: u, job, assigned_by: ctx.userId });
+  }
   revalidatePath('/sales/clients');
   revalidatePath('/productivity/advertiser/clients');
   revalidatePath('/productivity/admin/clients');
   revalidatePath('/productivity/assignments');
+  return { success: true };
+}
+
+/**
+ * One store of a client has its own WhatsApp group, start date, advertiser or admin (empty = the client's own value).
+ * Group and start date: Accounting, Admin and the owners. Advertiser and admin: superadmin / founder (the person also gets the client in their job).
+ */
+export async function setStoreSetting(storeId: string, field: 'wa_group_id' | 'start_date' | 'advertiser_id' | 'admin_id', value: string | null): Promise<Result> {
+  if (!['wa_group_id', 'start_date', 'advertiser_id', 'admin_id'].includes(field)) return { success: false, error: 'Unknown setting.' };
+  const a = await actor();
+  const handler = field === 'advertiser_id' || field === 'admin_id';
+  if (!a || !(handler ? OWNERS : FINANCE).includes(a.ctx.role)) return { success: false, error: handler ? 'Only a superadmin can assign.' : 'Only Accounting, Admin and the owners can change this.' };
+  const { ctx, db } = a;
+  const v = value ? String(value) : null;
+  if (field === 'start_date' && v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) return { success: false, error: 'Choose a valid date.' };
+  const { data: row, error: readErr } = await db.from('client_stores').select('id, client_id').eq('id', storeId).maybeSingle();
+  if (readErr) return /wa_group_id|start_date|advertiser_id|admin_id|42703/.test(readErr.message) ? { success: false, error: 'Run supabase/migrations/20261116_store_level_settings.sql in Supabase first.' } : storeFail(readErr);
+  if (!row) return { success: false, error: 'Store not found.' };
+  if (!(await clientInScope(db, ctx.activeWorkspaceId, row.client_id))) return { success: false, error: 'Client not found.' };
+  if (field === 'wa_group_id' && v) {
+    const { data: g } = await db.from('wa_groups').select('id').eq('id', v).eq('workspace_id', ctx.activeWorkspaceId).maybeSingle();
+    if (!g) return { success: false, error: 'That group is not in this company.' };
+  }
+  const { error } = await db.from('client_stores').update({ [field]: v }).eq('id', storeId);
+  if (error) return storeFail(error);
+  if (handler && v) await db.from('client_assignments').insert({ workspace_id: ctx.activeWorkspaceId, client_id: row.client_id, user_id: v, job: field === 'advertiser_id' ? 'advertising' : 'admin', assigned_by: ctx.userId }); // already assigned: ignored
+  for (const p of ['/optimizing/clients', '/contacts', '/sales/clients', '/productivity/advertiser/clients', '/productivity/admin/clients', '/productivity/assignments']) revalidatePath(p);
   return { success: true };
 }
 

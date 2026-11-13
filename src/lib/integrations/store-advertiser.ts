@@ -98,9 +98,15 @@ export async function loadStoreAdvertisers(db: Db): Promise<StoreAdvertiserMap> 
   const clientById = new Map<string, any>(clients.map((c) => [c.id, c]));
   const votes = new Map<string, { adv: Map<string, number>; adm: Map<string, number>; sales: Map<string, number>; client: Map<string, number> }>();
   const bump = (m: Map<string, number>, k: string | undefined) => { if (k) m.set(k, (m.get(k) || 0) + 1); };
+  // A person set on single stores of a client does not vote for the client's other stores (when the client has someone else on that job).
+  const storeLevel = new Set<string>();
+  for (const [cid, list] of storesOf) for (const st of list) { if (st.advertiserId) storeLevel.add(`${cid}|advertising|${st.advertiserId}`); if (st.adminId) storeLevel.add(`${cid}|admin|${st.adminId}`); }
+  const perJob = new Map<string, number>();
+  for (const a of assignments || []) perJob.set(`${a.client_id}|${a.job}`, (perJob.get(`${a.client_id}|${a.job}`) || 0) + 1);
   for (const a of assignments || []) {
     const c = clientById.get(a.client_id);
     if (!c) continue;
+    if (storeLevel.has(`${a.client_id}|${a.job}|${a.user_id}`) && (perJob.get(`${a.client_id}|${a.job}`) || 0) > 1) continue;
     // The linked store ("ProOne - Toko A", or just "Toko A" for an old entry) by its full text; the client brand and name as a last resort.
     // A "Workspace - Store" is never matched by the bare store name: the same store name can exist in two workspaces.
     const names = [...(storesOf.get(a.client_id) || []).map((x) => nameKey(storeText(x))), nameKey(c.store_name), nameKey(c.company_name), nameKey(c.name)].filter(Boolean);
@@ -116,5 +122,12 @@ export async function loadStoreAdvertisers(db: Db): Promise<StoreAdvertiserMap> 
   const byName = new Map<string, StoreTeam>();
   for (const [k, v] of votes) byName.set(k, { advertiserId: top(v.adv) || null, adminId: top(v.adm) || null, sales: top(v.sales), client: top(v.client) });
 
+  // A store with its own advertiser or admin (Optimizing > Clients) keeps it, whatever the client's other people are.
+  for (const [, list] of storesOf) for (const st of list) {
+    if (!st.advertiserId && !st.adminId) continue;
+    const k = nameKey(storeText(st));
+    const cur = byName.get(k) || { advertiserId: null, adminId: null, sales: '', client: '' };
+    byName.set(k, { ...cur, advertiserId: st.advertiserId || cur.advertiserId, adminId: st.adminId || cur.adminId });
+  }
   return { advertisers, people, byName, manual, manualReady: !manualErr };
 }

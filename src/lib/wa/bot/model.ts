@@ -11,11 +11,11 @@ export interface BotModelResult { text: string; model: string; tokensIn: number;
 const GEMINI_MODELS = ['gemini-3.8-flash'];
 const HAIKU_MODELS = ['claude-haiku-5-5', 'claude-haiku-4-5'];
 
-async function gemini(model: string, system: string, prompt: string, ms: number) {
+async function gemini(model: string, system: string, prompt: string, ms: number, json: boolean) {
   const res = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${process.env.GEMINI_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }], response_format: { type: 'json_object' }, max_tokens: 600 }),
+    body: JSON.stringify({ model, messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }], ...(json ? { response_format: { type: 'json_object' } } : {}), max_tokens: 900 }),
     signal: AbortSignal.timeout(ms),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text()).replace(/\s+/g, ' ').slice(0, 120)}`);
@@ -35,7 +35,8 @@ async function haiku(model: string, system: string, prompt: string, ms: number) 
 
 const why = (e: any) => (e?.name === 'TimeoutError' || /timed? ?out|abort/i.test(String(e?.message)) ? 'timed out' : String(e?.message || e).slice(0, 140));
 
-export async function askBotModel(system: string, prompt: string): Promise<BotModelResult> {
+export async function askBotModel(system: string, prompt: string, opts: { json?: boolean } = {}): Promise<BotModelResult> {
+  const json = opts.json !== false;
   const tried: string[] = [];
   if (process.env.ANTHROPIC_API_KEY) {
     for (const m of HAIKU_MODELS) {
@@ -43,7 +44,7 @@ export async function askBotModel(system: string, prompt: string): Promise<BotMo
     }
   } else tried.push('no ANTHROPIC_API_KEY');
   if (process.env.GEMINI_API_KEY) {
-    try { return { ...(await gemini(GEMINI_MODELS[0], system, prompt, 10000)), tried }; } catch (e) { tried.push(`${GEMINI_MODELS[0]}: ${why(e)}`); }
+    try { return { ...(await gemini(GEMINI_MODELS[0], system, prompt, 10000, json)), tried }; } catch (e) { tried.push(`${GEMINI_MODELS[0]}: ${why(e)}`); }
   } else tried.push('no GEMINI_API_KEY');
   throw new Error(`No model answered (${tried.join('; ')})`);
 }

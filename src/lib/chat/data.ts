@@ -2,7 +2,7 @@ import { createAdminClient } from '@/lib/api/supabase-admin';
 import { memo } from './cache';
 import { loadKnowledge } from './bible';
 import { syncClientSource } from './sources';
-import { chatReminders, inboxExtras, listLabels, signMedia } from './crm-data';
+import { chatReminders, inboxExtras, listLabels, mediaEnabled, signMedia } from './crm-data';
 import { sendWhatsApp } from '@/lib/wa/send';
 import { askBotModel } from '@/lib/wa/bot/model';
 import { CHAT_ROLES } from './auth';
@@ -61,7 +61,7 @@ const clientPhones = (ws: string) => memo(`clients:${ws}`, 300_000, async () => 
 export async function listConversations(ws: string, filter: ChatFilter, q: string, meId: string, labelId = '') {
   const db = createAdminClient();
   const { groups } = await salesGroups(ws);
-  const none = { conversations: [], counts: { all: 0, mine: 0, unserved: 0, bot: 0, human: 0, resolved: 0, followup: 0 }, labels: await listLabels(ws) };
+  const none = { conversations: [], counts: { all: 0, mine: 0, unserved: 0, bot: 0, human: 0, resolved: 0, followup: 0 }, labels: await listLabels(ws), features: { media: await mediaEnabled(ws) } };
   if (!groups.length) return none;
   const ids = groups.map((g) => g.id);
   const [{ data: msgs }, { data: bot }, { data: states }] = await Promise.all([
@@ -73,7 +73,7 @@ export async function listConversations(ws: string, filter: ChatFilter, q: strin
   const extra = await inboxExtras(ws, all.map((c) => c.id));
   for (const c of all) { c.labels = extra.labels.get(c.id) || []; c.nextReminder = extra.reminders.get(c.id) ?? null; }
   const shown = labelId ? all.filter((c) => (c.labels || []).some((l) => l.id === labelId)) : all;
-  return { conversations: filterConversations(shown, filter, q, meId), counts: countsOf(all, meId), labels: await listLabels(ws) };
+  return { conversations: filterConversations(shown, filter, q, meId), counts: countsOf(all, meId), labels: await listLabels(ws), features: { media: await mediaEnabled(ws) } };
 }
 
 /** One chat: its messages and internal notes, the bot state and log, who handles it, and what the ERP knows about this number (a client and its deals). */

@@ -131,8 +131,24 @@ describe('labels and images', () => {
   });
   it('only a picture uploaded for THIS chat can be sent from it', async () => {
     process.env.FONNTE_TOKEN_SALES = 'tok';
+    rows.wa_bot_config = { media_enabled: true };
     expect(await sendChatImage('w1', 'g1', { path: 'chat/w1/g2/out-x.jpg' }, SALES)).toMatchObject({ ok: false, status: 400 });
     expect(await sendChatImage('w1', 'g1', { path: 'chat/w1/g1/../g2/out-x.jpg' }, SALES)).toMatchObject({ ok: false, status: 400 });
     expect(await sendChatImage('w1', 'g1', { path: 'chat/w1/g1/out-x.jpg' }, SALES)).toMatchObject({ ok: false, error: expect.stringMatching(/not found/) });
+  });
+});
+
+describe('the photo lock', () => {
+  it('photos are refused while sending photos is switched off (the default), with a clear reason', async () => {
+    process.env.FONNTE_TOKEN_SALES = 'tok';
+    rows.wa_bot_config = { media_enabled: false };
+    const { createImageUploadUrl } = await import('./crm-data');
+    expect(await createImageUploadUrl('w1', 'g1', 'a.jpg', 1000, 'image/jpeg')).toMatchObject({ ok: false, status: 403, error: expect.stringMatching(/locked/) });
+    expect(await sendChatImage('w1', 'g1', { path: 'chat/w1/g1/out-x.jpg' }, SALES)).toMatchObject({ ok: false, status: 403 });
+  });
+  it('once switched on, a photo upload link is given', async () => {
+    rows.wa_bot_config = { media_enabled: true };
+    const { createImageUploadUrl } = await import('./crm-data');
+    expect(await createImageUploadUrl('w1', 'g1', 'a.jpg', 1000, 'image/jpeg')).toMatchObject({ ok: true, bucket: 'wa-files' });
   });
 });

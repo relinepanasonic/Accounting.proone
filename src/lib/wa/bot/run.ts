@@ -2,7 +2,7 @@ import { createAdminClient } from '@/lib/api/supabase-admin';
 import { askBotModel } from './model';
 import { loadKnowledge } from '@/lib/chat/bible';
 import { recordBotMessage } from './store';
-import { sendToChat } from '@/lib/chat/send-any';
+import { humanPauseMs, sendToChat, showTyping } from '@/lib/chat/send-any';
 import type { ParsedWaMessage } from '../parse-webhook';
 import { decideBot, inOpenHours, isBotEcho, needsHuman } from './decide';
 import { buildBotPrompt, parseBotAnswer, type BotTurn } from './prompt';
@@ -46,6 +46,9 @@ export async function runSalesBot(device: BotDevice, m: ParsedWaMessage, groupId
 
   // Two messages in a row must not get two answers.
   if (lastReplies.length && recent?.[0] && Date.now() - new Date(recent[0].created_at).getTime() < 10000) return { done: 'just-answered' };
+
+  // Instagram and Messenger: the customer sees "typing..." while the answer is written (not awaited: it must not slow the reply).
+  void showTyping(m.chatId);
 
   const replyNo = (chat?.replies ?? 0) + 1;
   const logBase = { workspace_id: ws, group_id: groupId, in_reply_to: (m.body || `(${m.mediaType})`).slice(0, 500) };
@@ -91,7 +94,8 @@ export async function runSalesBot(device: BotDevice, m: ParsedWaMessage, groupId
   const reason = forced || answer.reason || (handoff ? 'The bot asked for a person.' : '');
 
   // A short pause before answering, so it does not read as a machine.
-  await sleep(2000 + Math.floor(Math.random() * 3000));
+  const pause = humanPauseMs(m.chatId, 2000, 3000);
+  if (pause) await sleep(pause);
 
   const sent = await sendToChat(groupId, m.chatId, answer.reply);
   await db.from('wa_bot_log').insert({ ...logBase, reply: answer.reply, handoff, ok: sent.ok, detail: sent.detail.slice(0, 300), model: usage.model, tokens_in: usage.tokensIn, tokens_out: usage.tokensOut });

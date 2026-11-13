@@ -38,6 +38,16 @@ export async function sendMeta(channel: 'instagram' | 'messenger', userId: strin
   return { ok: true, parts: parts.length, detail: 'sent', mids };
 }
 
+/** Shows "typing..." to the customer while the bot writes (best effort: never fails the reply). Meta hides it after ~20 s or when our message arrives. */
+export async function sendTyping(userId: string, token: string, fetchImpl: typeof fetch = fetch): Promise<void> {
+  try {
+    await fetchImpl(`${GRAPH}/me/messages`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ recipient: { id: userId }, sender_action: 'typing_on' }), signal: AbortSignal.timeout(4000),
+    });
+  } catch { /* only a nicety */ }
+}
+
 /** The customer's name, for a new chat (best effort: null when Meta does not give it). */
 export async function metaProfileName(channel: 'instagram' | 'messenger', userId: string, token: string): Promise<string | null> {
   try {

@@ -53,15 +53,22 @@ export async function POST(request: Request) {
     for (const e of events) {
       const device = await deviceFor(e);
       if (!device) { console.warn('meta webhook: no connected account', e.channel, e.accountId); continue; }
-      // a new chat gets the person's name from Meta, once
-      let name: string | null = null;
+      // The reply comes first; the person's name (for a chat that has none yet) is asked from Meta after it, so it never slows the answer.
       const chatId = metaChatId(e.channel, e.userId);
       const { data: g } = await db.from('wa_groups').select('name').eq('workspace_id', device.workspace_id).eq('wa_id', chatId).maybeSingle();
-      if (!(g as any)?.name && process.env.META_PAGE_TOKEN) name = await metaProfileName(e.channel, e.userId, process.env.META_PAGE_TOKEN);
-      const parsed = toParsed(e, device.phone, name ?? ((g as any)?.name || null));
+      const known = ((g as any)?.name as string | null) || null;
+      const parsed = toParsed(e, device.phone, known);
       const res = await ingestMessage(device, parsed, body);
       if (res.stored) saved++;
-      if (res.stored && res.isNew) after(() => afterSalesMessage(device, parsed, res));
+      if (res.stored && res.isNew) {
+        after(async () => {
+          await afterSalesMessage(device, parsed, res);
+          if (!known && !e.isEcho && res.groupId && process.env.META_PAGE_TOKEN) {
+            const name = await metaProfileName(e.channel, e.userId, process.env.META_PAGE_TOKEN);
+            if (name) await db.from('wa_groups').update({ name }).eq('id', res.groupId).is('name', null);
+          }
+        });
+      }
     }
   } catch (err) {
     console.error('meta webhook failed', err);

@@ -1,12 +1,22 @@
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { sendWhatsApp, type SendResult } from '@/lib/wa/send';
-import { sendMeta } from '@/lib/meta/send';
+import { sendMeta, sendTyping } from '@/lib/meta/send';
 import { chatChannel, metaUserId, replyWindowOpen, windowClosedText } from './channel';
 
 /**
  * Sends text to a sales chat on whichever app it lives in: WhatsApp (Fonnte, the sales number), Instagram or Messenger (Meta, our Page).
  * Instagram and Messenger refuse a message more than 24 hours after the customer's last one, so that is checked first and said clearly.
  */
+/** Instagram and Messenger: show "typing..." while the bot works. WhatsApp through Fonnte has no such thing: nothing happens. */
+export async function showTyping(waId: string): Promise<void> {
+  const channel = chatChannel(waId);
+  if (channel === 'whatsapp' || !process.env.META_PAGE_TOKEN) return;
+  await sendTyping(metaUserId(waId), process.env.META_PAGE_TOKEN);
+}
+
+/** The short pause before an automatic reply, so it does not read as a machine: WhatsApp only. On Instagram and Messenger the customer sees "typing..." instead, and a pause only feels slow. */
+export const humanPauseMs = (waId: string, min: number, spread: number): number => (chatChannel(waId) === 'whatsapp' ? min + Math.floor(Math.random() * spread) : 0);
+
 export async function sendToChat(groupId: string, waId: string, text: string): Promise<SendResult> {
   const channel = chatChannel(waId);
   if (channel === 'whatsapp') {

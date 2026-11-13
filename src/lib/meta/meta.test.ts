@@ -2,7 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { createHmac } from 'node:crypto';
 import { chatChannel, chatLabel, clientPhoneOf, metaChatId, metaUserId, phoneTail, replyWindowOpen } from '@/lib/chat/channel';
 import { isOwnEcho, parseMetaWebhook, toParsed, validSignature } from './parse';
-import { metaErrorText, sendMeta } from './send';
+import { metaErrorText, sendMeta, sendTyping } from './send';
+import { humanPauseMs } from '@/lib/chat/send-any';
 
 describe('which app a chat lives in', () => {
   it('a phone number is WhatsApp; ig: and fb: are Instagram and Messenger', () => {
@@ -88,5 +89,21 @@ describe('sendMeta', () => {
     const f = vi.fn(async () => new Response(JSON.stringify({ error: { code: 10, error_subcode: 2018278, message: '...' } }), { status: 400 }));
     expect(await sendMeta('messenger', 'P9', 'hi', 'T', f as any)).toMatchObject({ ok: false, detail: expect.stringContaining('24-hour window') });
     expect(metaErrorText({ code: 190 })).toContain('expired');
+  });
+});
+
+describe('speed on Instagram and Messenger', () => {
+  it('"typing..." is shown to the customer, and a failure never breaks the reply', async () => {
+    const f = vi.fn(async () => new Response('{}', { status: 200 }));
+    await sendTyping('U1', 'T', f as any);
+    expect(JSON.parse((f.mock.calls as any)[0][1].body)).toEqual({ recipient: { id: 'U1' }, sender_action: 'typing_on' });
+    await expect(sendTyping('U1', 'T', (async () => { throw new Error('down'); }) as any)).resolves.toBeUndefined();
+  });
+  it('the human-like pause is for WhatsApp only', () => {
+    expect(humanPauseMs('ig:1', 2000, 3000)).toBe(0);
+    expect(humanPauseMs('fb:1', 2000, 3000)).toBe(0);
+    const wa = humanPauseMs('6281234', 2000, 3000);
+    expect(wa).toBeGreaterThanOrEqual(2000);
+    expect(wa).toBeLessThan(5000);
   });
 });

@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { sendWhatsApp } from '@/lib/wa/send';
 import { recordBotMessage } from '@/lib/wa/bot/store';
@@ -5,7 +6,7 @@ import { runSalesBot, type BotDevice } from '@/lib/wa/bot/run';
 import { inOpenHours } from '@/lib/wa/bot/decide';
 import type { ParsedWaMessage } from '@/lib/wa/parse-webhook';
 import { findClientByPhone, listAgents } from './data';
-import { exampleFlows, isTrigger, planFlow, validateGraph, type FlowContext, type Graph, type Plan, type PlannedAction } from './flow';
+import { ANSWER_EXPIRES_MINUTES, cleanAnswer, exampleFlows, isTrigger, onMessageWhilePaused, planFlow, resumeFlow, validateGraph, type FlowContext, type Graph, type Plan, type PlannedAction } from './flow';
 
 /**
  * Scenario flows (server side): storing the drawings, trying one without sending anything, and RUNNING them on a new lead message.
@@ -35,7 +36,7 @@ export async function listFlows(ws: string) {
   const db = createAdminClient();
   const since = new Date(Date.now() - 7 * 86400000).toISOString();
   const [{ data: flows }, { data: runs }] = await Promise.all([
-    db.from('bot_flows').select('id, name, description, active, graph, created_by, created_at, updated_at, updated_by').eq('workspace_id', ws).order('created_at', { ascending: true }),
+    db.from('bot_flows').select('id, name, description, active, graph, position, created_by, created_at, updated_at, updated_by').eq('workspace_id', ws).order('position', { ascending: true }).order('created_at', { ascending: true }),
     db.from('bot_flow_runs').select('flow_id').eq('workspace_id', ws).gte('created_at', since).limit(5000),
   ]);
   const count = new Map<string, number>();
@@ -69,9 +70,24 @@ export async function saveFlow(ws: string, input: { id?: string; name?: unknown;
     if (!data) return fail(404, 'Flow not found.');
     return { ok: true, id: input.id, warnings: v.errors.length ? [...v.errors.map((e) => `Not ready: ${e}`), ...v.warnings] : v.warnings };
   }
-  const { data, error } = await db.from('bot_flows').insert({ workspace_id: ws, ...row, created_by: by.name }).select('id').single();
+  const { data, error } = await db.from('bot_flows').insert({ workspace_id: ws, ...row, position: await nextPosition(ws), created_by: by.name }).select('id').single();
   if (error || !data) return fail(500, error?.message || 'Could not save the flow.');
   return { ok: true, id: (data as any).id, warnings: v.errors.length ? [...v.errors.map((e) => `Not ready: ${e}`), ...v.warnings] : v.warnings };
+}
+
+async function nextPosition(ws: string): Promise<number> {
+  const { data } = await createAdminClient().from('bot_flows').select('position').eq('workspace_id', ws).order('position', { ascending: false }).limit(1).maybeSingle();
+  return (Number((data as any)?.position) || 0) + 1;
+}
+
+/** Sets the order flows are checked in: `ids` first to last. Ids of other workspaces are ignored. */
+export async function setFlowOrder(ws: string, ids: unknown): Promise<{ ok: true } | Fail> {
+  const list = (Array.isArray(ids) ? ids : []).map(String).filter((x) => /^[0-9a-f-]{36}$/i.test(x));
+  if (!list.length || list.length > 200 || new Set(list).size !== list.length) return fail(400, 'Send the flows in their new order.');
+  const db = createAdminClient();
+  const results = await Promise.all(list.map((id, i) => db.from('bot_flows').update({ position: i + 1 }).eq('id', id).eq('workspace_id', ws)));
+  const bad = results.find((r) => r.error);
+  return bad?.error ? fail(500, bad.error.message) : { ok: true };
 }
 
 export async function setFlowActive(ws: string, id: string, active: boolean, by: Who): Promise<{ ok: true } | Fail> {
@@ -87,7 +103,7 @@ export async function deleteFlow(ws: string, id: string): Promise<{ ok: true } |
   return error ? fail(500, error.message) : { ok: true };
 }
 
-/** Creates the four suggested flows (switched OFF), skipping any whose name already exists. */
+/** Creates the suggested flows (switched OFF), skipping any whose name already exists. */
 export async function createExamples(ws: string, by: Who): Promise<{ ok: true; created: number }> {
   const db = createAdminClient();
   const { data: have } = await db.from('bot_flows').select('name').eq('workspace_id', ws);
@@ -95,7 +111,7 @@ export async function createExamples(ws: string, by: Who): Promise<{ ok: true; c
   let created = 0;
   for (const ex of exampleFlows()) {
     if (names.has(ex.name)) continue;
-    const { error } = await db.from('bot_flows').insert({ workspace_id: ws, name: ex.name, description: ex.description, active: false, graph: ex.graph, created_by: by.name, updated_by: by.name });
+    const { error } = await db.from('bot_flows').insert({ workspace_id: ws, name: ex.name, description: ex.description, active: false, graph: ex.graph, position: await nextPosition(ws), created_by: by.name, updated_by: by.name });
     if (!error) created++;
   }
   return { ok: true, created };
@@ -110,14 +126,21 @@ export async function listRuns(ws: string, limit = 50) {
   });
 }
 
-/** "Try it": what a flow WOULD do for a sample message. Nothing is sent or saved. */
-export function testFlow(graphIn: unknown, c: Partial<FlowContext>): { ok: true; validation: ReturnType<typeof validateGraph>; plan: Plan } {
+/**
+ * "Try it": what a flow WOULD do for a sample message. Nothing is sent or saved. With `resumeFrom` (a box the flow stopped at) and `answers`, it shows
+ * what happens next, the way a real chat goes on once the lead has answered or the wait is over.
+ */
+export function testFlow(graphIn: unknown, c: Partial<FlowContext> & { resumeFrom?: unknown }): { ok: true; validation: ReturnType<typeof validateGraph>; plan: Plan } {
   const graph = cleanGraph(graphIn);
+  const answers: Record<string, string> = {};
+  if (c.answers && typeof c.answers === 'object') for (const [k, v] of Object.entries(c.answers).slice(0, 30)) answers[String(k).slice(0, 24)] = cleanAnswer(v);
   const ctx: FlowContext = {
     message: String(c.message ?? '').slice(0, 500), isFirst: c.isFirst !== false, sourceChannel: c.sourceChannel ? String(c.sourceChannel) : null, sourceId: null,
     inHours: c.inHours !== false, isClient: c.isClient === true, leadName: String(c.leadName ?? 'Budi Santoso').slice(0, 60), persona: String(c.persona ?? 'Fefe').slice(0, 30), company: String(c.company ?? 'Prof Toko Online').slice(0, 60),
+    answers,
   };
-  return { ok: true, validation: validateGraph(graph), plan: planFlow(graph, ctx) };
+  const plan = c.resumeFrom ? resumeFlow(graph, ctx, String(c.resumeFrom)) : planFlow(graph, ctx);
+  return { ok: true, validation: validateGraph(graph), plan };
 }
 
 // ---------------------------------------------------------------- running on a real message
@@ -127,37 +150,95 @@ async function logRun(ws: string, flow: { id: string; name: string }, groupId: s
 
 const firstName = (s: string | null | undefined) => String(s || '').trim().toLowerCase().split(/\s+/)[0] || '';
 
+type Session = { group_id: string; flow_id: string; flow_name: string; node_id: string; kind: 'answer' | 'wait'; field: string | null; if_reply: string | null; resume_at: string | null; expires_at: string | null };
+
+/** Builds what a flow knows about a chat. `message` is empty when a Wait box ends (no new message). */
+async function contextFor(ws: string, groupId: string, waId: string, message: string, senderName: string | null, cfg: any) {
+  const db = createAdminClient();
+  const [{ count: inbound }, { data: st }, client, { data: grp }] = await Promise.all([
+    db.from('wa_messages').select('id', { count: 'exact', head: true }).eq('group_id', groupId).eq('is_from_me', false),
+    db.from('chat_state').select('source_channel, source_id, answers').eq('group_id', groupId).maybeSingle(),
+    findClientByPhone(ws, waId),
+    db.from('wa_groups').select('name').eq('id', groupId).maybeSingle(),
+  ]);
+  const ctx: FlowContext = {
+    message, isFirst: !!message && (inbound ?? 0) <= 1, sourceChannel: (st as any)?.source_channel ?? null, sourceId: (st as any)?.source_id ?? null,
+    inHours: inOpenHours(new Date(), cfg.hours_from || '08:00', cfg.hours_to || '21:00'), isClient: !!client,
+    leadName: String((grp as any)?.name || senderName || ''), persona: cfg.persona_name || 'Fefe', company: cfg.company_name || 'Prof Toko Online',
+    answers: { ...(((st as any)?.answers as Record<string, string>) || {}) },
+  };
+  return { ctx, client };
+}
+
+/** Remembers where a flow stopped (one per chat), or forgets it when the flow ran to its end. */
+async function savePause(ws: string, groupId: string, flow: { id: string; name: string }, plan: Plan, failed: boolean) {
+  const db = createAdminClient();
+  if (!plan.pause || failed) { await db.from('bot_flow_sessions').delete().eq('group_id', groupId); return; }
+  const now = Date.now();
+  const p = plan.pause;
+  await db.from('bot_flow_sessions').upsert({
+    group_id: groupId, workspace_id: ws, flow_id: flow.id, flow_name: flow.name, node_id: p.nodeId, kind: p.kind,
+    field: p.kind === 'answer' ? p.field : null, if_reply: p.kind === 'wait' ? p.ifReply : null,
+    resume_at: p.kind === 'wait' ? new Date(now + p.minutes * 60000).toISOString() : null,
+    expires_at: p.kind === 'answer' ? new Date(now + ANSWER_EXPIRES_MINUTES * 60000).toISOString() : null,
+    created_at: new Date(now).toISOString(),
+  }, { onConflict: 'group_id' });
+}
+
+const planNotes = (plan: Plan, detail: string) => [detail, plan.pause ? (plan.pause.kind === 'answer' ? `waiting for the answer (${plan.pause.field})` : `waiting ${plan.pause.minutes} min`) : ''].filter(Boolean).join('; ');
+
 /**
- * Runs the first matching active flow for a lead's message. Returns { handled: true } when the flow answered the lead itself (a message, the AI, or a
- * hand over), so the normal bot stays quiet; otherwise the normal bot goes on. Never throws.
+ * Runs flows for a lead's message. First, a flow of this chat that stopped: the message is the answer it waited for (saved, then the flow goes on),
+ * or it ends a "no reply" Wait. Otherwise the first matching active flow, in the team's order, starts. Returns { handled: true } when a flow answered
+ * the lead itself, so the normal bot stays quiet; otherwise the normal bot goes on. Never throws.
  */
 export async function runFlowsFor(device: BotDevice, m: ParsedWaMessage, groupId: string): Promise<{ handled: boolean; flow?: string }> {
   if (device.role !== 'sales' || m.isGroup || m.isFromMe) return { handled: false };
   const ws = device.workspace_id;
   const db = createAdminClient();
   try {
-    const [{ data: cfg }, { data: chat }, { data: flowRows }] = await Promise.all([
+    const [{ data: cfg }, { data: chat }, { data: flowRows }, { data: sess }] = await Promise.all([
       db.from('wa_bot_config').select('enabled, persona_name, company_name, hours_from, hours_to').eq('workspace_id', ws).maybeSingle(),
       db.from('wa_bot_chats').select('status').eq('group_id', groupId).maybeSingle(),
-      db.from('bot_flows').select('id, name, graph').eq('workspace_id', ws).eq('active', true).order('created_at', { ascending: true }),
+      db.from('bot_flows').select('id, name, graph').eq('workspace_id', ws).eq('active', true).order('position', { ascending: true }).order('created_at', { ascending: true }),
+      db.from('bot_flow_sessions').select('*').eq('group_id', groupId).maybeSingle(),
     ]);
     if (!cfg?.enabled) return { handled: false };                                   // the bot's master switch is OFF: nothing automatic
-    if (chat?.status === 'human' || chat?.status === 'off') return { handled: false };   // a person has this chat
+    if (chat?.status === 'human' || chat?.status === 'off') {                       // a person has this chat: a stopped flow ends here
+      if (sess) await db.from('bot_flow_sessions').delete().eq('group_id', groupId);
+      return { handled: false };
+    }
     const flows = (flowRows || []) as Array<{ id: string; name: string; graph: Graph }>;
+    const { ctx, client } = await contextFor(ws, groupId, m.chatId, m.body || '', m.senderName, cfg);
+
+    // 1) a flow of this chat that stopped
+    const session = sess as Session | null;
+    if (session) {
+      const expired = session.kind === 'answer' && session.expires_at && new Date(session.expires_at).getTime() < Date.now();
+      const flow = flows.find((f) => f.id === session.flow_id);                     // switched off or deleted since: it ends
+      const what = onMessageWhilePaused({ kind: session.kind, ifReply: session.if_reply });
+      if (expired || !flow) {
+        await db.from('bot_flow_sessions').delete().eq('group_id', groupId);
+      } else if (what === 'keep_waiting') {
+        return { handled: false };                                                  // the Wait goes on; the normal bot answers this message
+      } else if (what === 'stop_flow') {
+        await db.from('bot_flow_sessions').delete().eq('group_id', groupId);
+        await logRun(ws, flow, groupId, ctx.message, [], false, 'ok', 'stopped: the lead replied during the wait');
+      } else {
+        const field = String(session.field || '');
+        const answer = cleanAnswer(m.body || (m.mediaType ? `(${m.mediaType})` : ''));
+        const answers = { ...(ctx.answers || {}), [field]: answer };
+        await db.from('chat_state').upsert({ group_id: groupId, workspace_id: ws, answers, updated_at: new Date().toISOString() }, { onConflict: 'group_id' });
+        const plan = resumeFlow(cleanGraph(flow.graph), { ...ctx, answers }, session.node_id);
+        const result = await executePlan(plan, { ws, device, m, groupId, flowName: flow.name, client });
+        await savePause(ws, groupId, flow, plan, result.failed);
+        await logRun(ws, flow, groupId, ctx.message, ['answer', ...plan.actions.map((a) => a.kind)], result.handled, result.failed ? 'failed' : 'ok', planNotes(plan, `saved the answer as ${field}${result.detail ? `; ${result.detail}` : ''}`));
+        return { handled: result.handled, flow: flow.name };
+      }
+    }
+
+    // 2) start the first matching flow
     if (!flows.length) return { handled: false };
-
-    const [{ count: inbound }, { data: st }, client, { data: grp }] = await Promise.all([
-      db.from('wa_messages').select('id', { count: 'exact', head: true }).eq('group_id', groupId).eq('is_from_me', false),
-      db.from('chat_state').select('source_channel, source_id').eq('group_id', groupId).maybeSingle(),
-      findClientByPhone(ws, m.chatId),
-      db.from('wa_groups').select('name').eq('id', groupId).maybeSingle(),
-    ]);
-    const ctx: FlowContext = {
-      message: m.body || '', isFirst: (inbound ?? 0) <= 1, sourceChannel: (st as any)?.source_channel ?? null, sourceId: (st as any)?.source_id ?? null,
-      inHours: inOpenHours(new Date(), cfg.hours_from || '08:00', cfg.hours_to || '21:00'), isClient: !!client,
-      leadName: String((grp as any)?.name || m.senderName || ''), persona: cfg.persona_name || 'Fefe', company: cfg.company_name || 'Prof Toko Online',
-    };
-
     for (const f of flows) {
       const graph = cleanGraph(f.graph);
       if (validateGraph(graph).errors.length) continue;                               // a broken drawing never runs
@@ -170,7 +251,8 @@ export async function runFlowsFor(device: BotDevice, m: ParsedWaMessage, groupId
         if ((count ?? 0) > 0) continue;
       }
       const result = await executePlan(plan, { ws, device, m, groupId, flowName: f.name, client });
-      await logRun(ws, f, groupId, ctx.message, plan.actions.map((a) => a.kind), result.handled, result.failed ? 'failed' : 'ok', result.detail);
+      await savePause(ws, groupId, f, plan, result.failed);
+      await logRun(ws, f, groupId, ctx.message, plan.actions.map((a) => a.kind), result.handled, result.failed ? 'failed' : 'ok', planNotes(plan, result.detail));
       return { handled: result.handled, flow: f.name };                               // only the first matching flow runs
     }
     return { handled: false };
@@ -180,13 +262,60 @@ export async function runFlowsFor(device: BotDevice, m: ParsedWaMessage, groupId
   }
 }
 
+/**
+ * The clock for Wait boxes, called by the database once a minute while a Wait is due. Takes the due ones (deleting them first, so two calls never
+ * run one twice), checks the chat is still the bot's, and goes on with each flow. Also clears questions nobody answered for a day.
+ */
+export async function runDueWaits(key: string | null): Promise<{ ok: true; resumed: number } | Fail> {
+  const db = createAdminClient();
+  const { data: k } = await db.from('flow_tick_key').select('key').eq('id', 1).maybeSingle();
+  const want = String((k as any)?.key || '');
+  if (!want || !key || key.length !== want.length || !timingSafeEqual(Buffer.from(key), Buffer.from(want))) return fail(401, 'Not allowed.');
+
+  const nowIso = new Date().toISOString();
+  await db.from('bot_flow_sessions').delete().eq('kind', 'answer').lt('expires_at', nowIso);
+  const { data: due } = await db.from('bot_flow_sessions').delete().eq('kind', 'wait').lte('resume_at', nowIso).select('*');
+  let resumed = 0;
+  for (const s of ((due || []) as Array<Session & { workspace_id: string }>).slice(0, 50)) {
+    try {
+      const ws = s.workspace_id;
+      const [{ data: cfg }, { data: chat }, { data: flow }, { data: grp }] = await Promise.all([
+        db.from('wa_bot_config').select('enabled, persona_name, company_name, hours_from, hours_to').eq('workspace_id', ws).maybeSingle(),
+        db.from('wa_bot_chats').select('status').eq('group_id', s.group_id).maybeSingle(),
+        db.from('bot_flows').select('id, name, graph, active').eq('id', s.flow_id).maybeSingle(),
+        db.from('wa_groups').select('wa_id, device_id, wa_devices(id, workspace_id, phone, role)').eq('id', s.group_id).maybeSingle(),
+      ]);
+      const f = flow as any;
+      const dev = Array.isArray((grp as any)?.wa_devices) ? (grp as any).wa_devices[0] : (grp as any)?.wa_devices;
+      if (!cfg?.enabled || !f?.active || !dev || !(grp as any)?.wa_id) continue;
+      if ((chat as any)?.status === 'human' || (chat as any)?.status === 'off') {
+        await logRun(ws, f, s.group_id, '', [], false, 'ok', 'wait over, but a person has this chat now: stopped');
+        continue;
+      }
+      const waId = String((grp as any).wa_id);
+      const { ctx, client } = await contextFor(ws, s.group_id, waId, '', null, cfg);
+      const plan = resumeFlow(cleanGraph(f.graph), ctx, s.node_id);
+      if (!plan.matched) continue;
+      const m: ParsedWaMessage = { device: dev.phone, chatId: waId, isGroup: false, groupName: null, senderPhone: waId, senderName: null, body: '', mediaType: null, mediaUrl: null, mediaFilename: null, externalId: null, isFromMe: false, dedupeKey: `flow-wait:${s.group_id}:${s.node_id}`, sentAt: new Date() };
+      const result = await executePlan(plan, { ws, device: dev as BotDevice, m, groupId: s.group_id, flowName: f.name, client });
+      await savePause(ws, s.group_id, f, plan, result.failed);
+      await logRun(ws, f, s.group_id, '(wait over)', plan.actions.map((a) => a.kind), result.handled, result.failed ? 'failed' : 'ok', planNotes(plan, result.detail));
+      resumed++;
+    } catch (e) {
+      console.error('flow wait failed', e);
+    }
+  }
+  return { ok: true, resumed };
+}
+
 async function executePlan(plan: Plan, c: { ws: string; device: BotDevice; m: ParsedWaMessage; groupId: string; flowName: string; client: { sales_name: string | null } | null }): Promise<{ handled: boolean; failed: boolean; detail: string }> {
   const db = createAdminClient();
   const notes: string[] = [];
   let handled = false; let failed = false;
   const step = async (a: PlannedAction): Promise<boolean> => {
     switch (a.kind) {
-      case 'send': {
+      case 'send':
+      case 'ask': {
         if (!a.text) { notes.push('send: empty text'); return true; }
         await sleep(1500 + Math.floor(Math.random() * 2000));                       // a short pause, so it does not read as a machine
         const r = await sendWhatsApp([c.m.chatId], a.text, { token: process.env.FONNTE_TOKEN_SALES });
@@ -195,7 +324,7 @@ async function executePlan(plan: Plan, c: { ws: string; device: BotDevice; m: Pa
         await db.from('wa_bot_log').insert({ workspace_id: c.ws, group_id: c.groupId, in_reply_to: (c.m.body || '').slice(0, 500), reply: a.text, handoff: false, ok: true, detail: `Flow: ${c.flowName}` });
         const { data: cur } = await db.from('wa_bot_chats').select('replies, status').eq('group_id', c.groupId).maybeSingle();
         await db.from('wa_bot_chats').upsert({ group_id: c.groupId, workspace_id: c.ws, status: (cur as any)?.status ?? 'bot', replies: ((cur as any)?.replies ?? 0) + 1, updated_at: new Date().toISOString() }, { onConflict: 'group_id' });
-        handled = true; notes.push('sent a message'); return true;
+        handled = true; notes.push(a.kind === 'ask' ? `asked (${a.field})` : 'sent a message'); return true;
       }
       case 'ai': {
         const r = await runSalesBot(c.device, c.m, c.groupId);

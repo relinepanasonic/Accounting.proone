@@ -86,24 +86,27 @@ export async function loadThread(ws: string, groupId: string) {
     db.from('wa_bot_chats').select('group_id, status, replies, reason, lead').eq('group_id', groupId).maybeSingle(),
     db.from('wa_bot_log').select('reply, handoff, ok, detail, created_at').eq('group_id', groupId).order('created_at', { ascending: false }).limit(30),
     clientPhones(ws).then((data) => ({ data })),
-    db.from('chat_state').select('group_id, assigned_to, assigned_name, resolved_at, first_message, first_message_at, source_id, source_label, source_channel, source_by').eq('group_id', groupId).maybeSingle(),
+    db.from('chat_state').select('group_id, assigned_to, assigned_name, resolved_at, first_message, first_message_at, source_id, source_label, source_channel, source_by, answers').eq('group_id', groupId).maybeSingle(),
     db.from('chat_notes').select('id, group_id, author_name, body, created_at').eq('group_id', groupId).order('created_at', { ascending: false }).limit(100),
   ]);
   const tail = (s: string) => digits(s).slice(-9);
   const client = (clients || []).find((c: any) => tail(c.phone).length >= 8 && tail(c.phone) === tail(group.wa_id)) || null;
   let deals: any[] = [];
   if (client) ({ data: deals } = await db.from('crm_deals').select('id, title, stage, value, salesman_name, salesman_id').eq('client_id', (client as any).id).order('created_at', { ascending: false }).limit(5) as any);
-  const [links, labelDefs, reminders] = await Promise.all([
+  const [links, labelDefs, reminders, { data: sess }] = await Promise.all([
     db.from('chat_label_links').select('label_id').eq('group_id', groupId),
     listLabels(ws),
     chatReminders(groupId),
+    db.from('bot_flow_sessions').select('flow_name, kind, field, resume_at, expires_at').eq('group_id', groupId).maybeSingle(),
   ]);
   const onChat = new Set(((links.data || []) as Array<{ label_id: string }>).map((l) => l.label_id));
   const rawMsgs = (msgs || []) as Array<ChatMessageRow & { media_url?: string | null; media_path?: string | null }>;
   const signed = await signMedia(rawMsgs.map((x) => x.media_path || '').filter(Boolean));
   const mediaOf = new Map(rawMsgs.map((x) => [x.id, x.media_path ? signed.get(x.media_path) ?? null : x.media_url ?? null]));
   const botReplies = (log || []).filter((l: any) => l.reply).map((l: any) => String(l.reply));
-  const state = st as (ChatStateRow & { first_message_at?: string | null; source_id?: string | null }) | null;
+  const state = st as (ChatStateRow & { first_message_at?: string | null; source_id?: string | null; answers?: Record<string, string> | null }) | null;
+  const ses = sess as { flow_name: string; kind: 'answer' | 'wait'; field: string | null; resume_at: string | null; expires_at: string | null } | null;
+  const sessionLive = !!ses && !(ses.kind === 'answer' && ses.expires_at && ses.expires_at < new Date().toISOString());
   // a chat that belongs to an ERP client gives the client its source (once)
   if (client && state?.first_message && !(client as any).lead_source && !(client as any).first_contact_message) {
     void syncClientSource((client as any).id, { source_label: state.source_label ?? null, source_channel: state.source_channel ?? null, first_message: state.first_message, first_message_at: state.first_message_at ?? null });
@@ -116,6 +119,8 @@ export async function loadThread(ws: string, groupId: string) {
     bot: bot ? { status: (bot as any).status, replies: (bot as any).replies, reason: (bot as any).reason, lead: (bot as any).lead } : { status: 'new', replies: 0, reason: null, lead: null },
     botLog: (log || []).slice(0, 10),
     assignedTo: state?.assigned_to ? { id: state.assigned_to, name: state.assigned_name || 'Team' } : null,
+    answers: Object.entries(state?.answers || {}).filter(([k, v]) => k && typeof v === 'string' && v).map(([field, value]) => ({ field, value: String(value) })),
+    flowWaiting: sessionLive && ses ? { flow: ses.flow_name, kind: ses.kind, field: ses.field, until: ses.kind === 'wait' ? ses.resume_at : ses.expires_at } : null,
     source: sourceOf(state), sourceId: state?.source_id ?? null, firstMessage: state?.first_message ?? null,
     resolved: !!state?.resolved_at && !(lastLead && lastLead.sent_at > state.resolved_at),
     client: client ? { id: (client as any).id, name: (client as any).name, sales: (client as any).sales_name, serviceEnd: (client as any).service_end_date } : null,

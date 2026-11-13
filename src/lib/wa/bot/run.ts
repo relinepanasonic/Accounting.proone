@@ -61,16 +61,26 @@ export async function runSalesBot(device: BotDevice, m: ParsedWaMessage, groupId
     inHours: inOpenHours(new Date(), cfg.hours_from || '08:00', cfg.hours_to || '21:00'),
   });
 
-  let answer; let usage: { model: string; tokensIn: number; tokensOut: number };
+  let answer; let usage: { model: string; tokensIn: number; tokensOut: number }; let rawText = '';
   try {
-    const out = await askBotModel(system, prompt);
-    usage = out;
+    let out = await askBotModel(system, prompt);
+    usage = out; rawText = out.text;
     answer = parseBotAnswer(out.text, cfg.knowledge || '');
+    if (!answer) {
+      // The model did not return the JSON we asked for: ask once more, firmly, before giving up.
+      out = await askBotModel(system, `${prompt}\n\nPENTING: balas HANYA dengan satu objek JSON yang valid, tanpa teks lain, tanpa tanda kutip di dalam teks balasan, dan tanpa baris baru di dalam nilai "reply".`);
+      usage = out; rawText = out.text;
+      answer = parseBotAnswer(out.text, cfg.knowledge || '');
+    }
   } catch (e: any) {
     await handToPerson('The bot could not answer.', `Model error: ${String(e?.message || e).slice(0, 200)}`);
     return { done: 'model-error' };
   }
-  if (!answer) { await handToPerson('The bot could not answer.', `The model answer could not be read (${usage.model}).`); return { done: 'bad-answer' }; }
+  if (!answer) { await handToPerson('The bot could not answer.', `The model answer could not be read (${usage.model}): ${rawText.replace(/\s+/g, ' ').slice(0, 220)}`); return { done: 'bad-answer' }; }
+
+  // If the lead wrote again while we were thinking, the run for the newest message answers (with the whole conversation): one reply per burst.
+  const { data: newer } = await db.from('wa_messages').select('id').eq('group_id', groupId).eq('is_from_me', false).gt('sent_at', m.sentAt.toISOString()).limit(1);
+  if (newer && newer.length > 0) return { done: 'superseded' };
 
   // The words that always need a person decide, whatever the model said.
   const forced = needsHuman(m.body);

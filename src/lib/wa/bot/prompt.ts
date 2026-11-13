@@ -82,7 +82,14 @@ export function parseBotAnswer(raw: string, knowledge = ''): BotAnswer | null {
   const b = s.lastIndexOf('}');
   if (a < 0 || b <= a) return null;
   let j: any;
-  try { j = JSON.parse(s.slice(a, b + 1)); } catch { return null; }
+  try { j = JSON.parse(s.slice(a, b + 1)); } catch {
+    // Slightly broken JSON (a raw line break or a stray comma): the reply text is still recoverable from its field.
+    const m = /"reply"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(s.slice(a, b + 1));
+    if (!m) return null;
+    let reply = m[1];
+    try { reply = JSON.parse(`"${m[1].replace(/\r?\n/g, '\\n')}"`); } catch { /* keep the raw text */ }
+    j = { reply, handoff: /"handoff"\s*:\s*true/.test(s), reason: '', lead: {} };
+  }
   const reply = sanitizeReply(typeof j?.reply === 'string' ? j.reply : '', knowledge);
   if (!reply) return null;
   const lead = j?.lead && typeof j.lead === 'object' ? j.lead : {};

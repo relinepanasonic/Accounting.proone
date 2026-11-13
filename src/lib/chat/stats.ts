@@ -1,3 +1,4 @@
+import { phoneTail } from './channel';
 /**
  * The numbers page of the chat dashboard, the pure part: rows in, figures out. Tested.
  *
@@ -52,7 +53,7 @@ export function repliesOf(messages: StatsMessage[]): Reply[] {
 }
 
 const inRange = (iso: string | null | undefined, from: number, to: number) => !!iso && Date.parse(iso) >= from && Date.parse(iso) < to;
-const tail9 = (s: unknown) => String(s ?? '').replace(/\D/g, '').slice(-9);
+const tail9 = phoneTail;
 const jakartaDay = (iso: string) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date(iso));
 
 export interface StatsInput {

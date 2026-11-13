@@ -1,11 +1,12 @@
 import { timingSafeEqual } from 'node:crypto';
 import { createAdminClient } from '@/lib/api/supabase-admin';
-import { sendWhatsApp } from '@/lib/wa/send';
+import { sendToChat } from './send-any';
 import { recordBotMessage } from '@/lib/wa/bot/store';
 import { runSalesBot, type BotDevice } from '@/lib/wa/bot/run';
 import { inOpenHours } from '@/lib/wa/bot/decide';
 import type { ParsedWaMessage } from '@/lib/wa/parse-webhook';
 import { findClientByPhone, listAgents } from './data';
+import { chatLabel } from './channel';
 import { ANSWER_EXPIRES_MINUTES, cleanAnswer, exampleFlows, isTrigger, onMessageWhilePaused, planFlow, resumeFlow, validateGraph, type FlowContext, type Graph, type Plan, type PlannedAction } from './flow';
 
 /**
@@ -122,7 +123,7 @@ export async function listRuns(ws: string, limit = 50) {
   return ((data || []) as any[]).map((r) => {
     const g = Array.isArray(r.wa_groups) ? r.wa_groups[0] : r.wa_groups;
     const { wa_groups, ...rest } = r; void wa_groups;
-    return { ...rest, chat: String(g?.name || (g?.wa_id ? `+${g.wa_id}` : 'Chat')) };
+    return { ...rest, chat: String(g?.name || (g?.wa_id ? chatLabel(g.wa_id) : 'Chat')) };
   });
 }
 
@@ -318,7 +319,7 @@ async function executePlan(plan: Plan, c: { ws: string; device: BotDevice; m: Pa
       case 'ask': {
         if (!a.text) { notes.push('send: empty text'); return true; }
         await sleep(1500 + Math.floor(Math.random() * 2000));                       // a short pause, so it does not read as a machine
-        const r = await sendWhatsApp([c.m.chatId], a.text, { token: process.env.FONNTE_TOKEN_SALES });
+        const r = await sendToChat(c.groupId, c.m.chatId, a.text);
         if (!r.ok) { notes.push(`send failed: ${r.detail}`); failed = true; return false; }
         await recordBotMessage(c.ws, c.groupId, c.device.phone, a.text, 'flow');
         await db.from('wa_bot_log').insert({ workspace_id: c.ws, group_id: c.groupId, in_reply_to: (c.m.body || '').slice(0, 500), reply: a.text, handoff: false, ok: true, detail: `Flow: ${c.flowName}` });

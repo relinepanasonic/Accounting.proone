@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { memo } from './cache';
+import { loadKnowledge } from './bible';
 import { sendWhatsApp } from '@/lib/wa/send';
 import { askBotModel } from '@/lib/wa/bot/model';
 import { CHAT_ROLES } from './auth';
@@ -213,16 +214,17 @@ export async function deleteQuickReply(ws: string, id: string): Promise<{ ok: tr
 export async function suggestReply(ws: string, groupId: string, by: Who): Promise<{ ok: true; text: string; model: string } | Fail> {
   if (!(await ownGroup(ws, groupId))) return fail(404, 'Chat not found.');
   const db = createAdminClient();
-  const [{ data: cfg }, { data: msgs }] = await Promise.all([
-    db.from('wa_bot_config').select('persona_name, company_name, knowledge').eq('workspace_id', ws).maybeSingle(),
+  const [{ data: cfg }, { data: msgs }, knowledge] = await Promise.all([
+    db.from('wa_bot_config').select('persona_name, company_name').eq('workspace_id', ws).maybeSingle(),
     db.from('wa_messages').select('body, media_type, is_from_me, sent_at').eq('group_id', groupId).order('sent_at', { ascending: false }).limit(14),
+    loadKnowledge(ws),
   ]);
   const history = (msgs || []).reverse().map((m: any) => ({ from: (m.is_from_me ? 'team' : 'lead') as 'team' | 'lead', text: m.body || `(${m.media_type || 'pesan'})` }));
   if (!history.length) return fail(400, 'There is nothing to answer yet.');
-  const { system, prompt } = buildSuggestPrompt({ persona: cfg?.persona_name || 'Fefe', company: cfg?.company_name || 'Prof Toko Online', knowledge: cfg?.knowledge || '', agentName: by.name, history });
+  const { system, prompt } = buildSuggestPrompt({ persona: cfg?.persona_name || 'Fefe', company: cfg?.company_name || 'Prof Toko Online', knowledge, agentName: by.name, history });
   try {
     const out = await askBotModel(system, prompt);
-    const text = cleanSuggestion(out.text, cfg?.knowledge || '');
+    const text = cleanSuggestion(out.text, knowledge);
     return text ? { ok: true, text, model: out.model } : fail(502, 'The AI did not write anything. Try again.');
   } catch (e: any) {
     return fail(502, `The AI could not answer: ${String(e?.message || e).slice(0, 160)}`);

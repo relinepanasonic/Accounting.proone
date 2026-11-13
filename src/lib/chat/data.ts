@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/api/supabase-admin';
+import { memo } from './cache';
 import { sendWhatsApp } from '@/lib/wa/send';
 import { askBotModel } from '@/lib/wa/bot/model';
 import { CHAT_ROLES } from './auth';
@@ -15,17 +16,35 @@ type Who = { userId: string; name: string };
 type Fail = { ok: false; status: number; error: string };
 const fail = (status: number, error: string): Fail => ({ ok: false, status, error });
 
+/** The company's sales device(s): they change almost never, so they are kept for 30 seconds. */
+const salesDevices = (ws: string) => memo(`devices:${ws}`, 30_000, async () => {
+  const { data } = await createAdminClient().from('wa_devices').select('id, phone').eq('workspace_id', ws).eq('role', 'sales').eq('active', true);
+  return (data || []) as Array<{ id: string; phone: string }>;
+});
+
 /** The sales device's private chats of a company. */
 async function salesGroups(ws: string): Promise<{ groups: ChatGroupRow[]; phone: string | null }> {
   const db = createAdminClient();
-  const { data: devs } = await db.from('wa_devices').select('id, phone').eq('workspace_id', ws).eq('role', 'sales').eq('active', true);
-  const ids = (devs || []).map((d: any) => d.id as string);
+  const devs = await salesDevices(ws);
+  const ids = devs.map((d) => d.id);
   if (!ids.length) return { groups: [], phone: null };
   const { data: groups } = await db.from('wa_groups').select('id, wa_id, name, last_message_at').eq('workspace_id', ws).eq('is_group', false).in('device_id', ids).order('last_message_at', { ascending: false, nullsFirst: false }).limit(300);
-  return { groups: (groups || []) as ChatGroupRow[], phone: (devs as any[])[0].phone as string };
+  return { groups: (groups || []) as ChatGroupRow[], phone: devs[0].phone };
 }
 
-const ownGroup = async (ws: string, groupId: string) => (await salesGroups(ws)).groups.find((g) => g.id === groupId) || null;
+/** One chat of the sales number, checked with a single small query (not by loading every chat). */
+const ownGroup = async (ws: string, groupId: string): Promise<ChatGroupRow | null> => {
+  const ids = (await salesDevices(ws)).map((d) => d.id);
+  if (!ids.length) return null;
+  const { data } = await createAdminClient().from('wa_groups').select('id, wa_id, name, last_message_at').eq('id', groupId).eq('workspace_id', ws).eq('is_group', false).in('device_id', ids).maybeSingle();
+  return (data as ChatGroupRow | null) ?? null;
+};
+
+/** The phone numbers of the company's clients (to show the client next to a chat): kept for 5 minutes instead of reading thousands of rows on every poll. */
+const clientPhones = (ws: string) => memo(`clients:${ws}`, 300_000, async () => {
+  const { data } = await createAdminClient().from('clients').select('id, name, phone, sales_name, service_end_date').eq('workspace_id', ws).not('phone', 'is', null).limit(3000);
+  return (data || []) as any[];
+});
 
 export async function listConversations(ws: string, filter: ChatFilter, q: string, meId: string) {
   const db = createAdminClient();
@@ -51,7 +70,7 @@ export async function loadThread(ws: string, groupId: string) {
     db.from('wa_messages').select('id, group_id, body, media_type, is_from_me, sent_at, raw').eq('group_id', groupId).order('sent_at', { ascending: false }).limit(200),
     db.from('wa_bot_chats').select('group_id, status, replies, reason, lead').eq('group_id', groupId).maybeSingle(),
     db.from('wa_bot_log').select('reply, handoff, ok, detail, created_at').eq('group_id', groupId).order('created_at', { ascending: false }).limit(30),
-    db.from('clients').select('id, name, phone, sales_name, service_end_date').eq('workspace_id', ws).not('phone', 'is', null).limit(3000),
+    clientPhones(ws).then((data) => ({ data })),
     db.from('chat_state').select('group_id, assigned_to, assigned_name, resolved_at').eq('group_id', groupId).maybeSingle(),
     db.from('chat_notes').select('id, group_id, author_name, body, created_at').eq('group_id', groupId).order('created_at', { ascending: false }).limit(100),
   ]);
@@ -95,8 +114,8 @@ export async function sendReply(ws: string, groupId: string, text: string, by: W
   if (!clean) return fail(400, 'Type a message first.');
   if (clean.length > MAX_REPLY_CHARS) return fail(400, `The message is too long (max ${MAX_REPLY_CHARS} characters).`);
   const db = createAdminClient();
-  const { groups, phone: devicePhone } = await salesGroups(ws);
-  const group = groups.find((g) => g.id === groupId);
+  const group = await ownGroup(ws, groupId);
+  const devicePhone = (await salesDevices(ws))[0]?.phone;
   if (!group || !devicePhone) return fail(404, 'Chat not found.');
   if (!process.env.FONNTE_TOKEN_SALES) return fail(503, 'The sales number is not connected (FONNTE_TOKEN_SALES is missing on the server).');
 
@@ -123,7 +142,9 @@ export async function setChatStatus(ws: string, groupId: string, status: 'bot' |
 }
 
 /** The people a chat can be given to: members of the company with a role that may use the dashboard. */
-export async function listAgents(ws: string): Promise<Array<{ id: string; name: string; role: string }>> {
+export const listAgents = (ws: string) => memo(`agents:${ws}`, 300_000, () => loadAgents(ws));
+
+async function loadAgents(ws: string): Promise<Array<{ id: string; name: string; role: string }>> {
   const db = createAdminClient();
   const { data: members } = await db.from('workspace_members').select('user_id, role, email').eq('workspace_id', ws).in('role', [...CHAT_ROLES]).not('user_id', 'is', null);
   const ids = Array.from(new Set((members || []).map((m: any) => m.user_id as string)));

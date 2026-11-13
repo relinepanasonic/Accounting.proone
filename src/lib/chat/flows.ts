@@ -1,6 +1,6 @@
 import { timingSafeEqual } from 'node:crypto';
 import { createAdminClient } from '@/lib/api/supabase-admin';
-import { sendToChat } from './send-any';
+import { humanPauseMs, sendToChat, showTyping } from './send-any';
 import { recordBotMessage } from '@/lib/wa/bot/store';
 import { runSalesBot, type BotDevice } from '@/lib/wa/bot/run';
 import { inOpenHours } from '@/lib/wa/bot/decide';
@@ -318,7 +318,8 @@ async function executePlan(plan: Plan, c: { ws: string; device: BotDevice; m: Pa
       case 'send':
       case 'ask': {
         if (!a.text) { notes.push('send: empty text'); return true; }
-        await sleep(1500 + Math.floor(Math.random() * 2000));                       // a short pause, so it does not read as a machine
+        const pause = humanPauseMs(c.m.chatId, 1500, 2000);                         // a short pause on WhatsApp, so it does not read as a machine
+        if (pause) await sleep(pause); else await showTyping(c.m.chatId);
         const r = await sendToChat(c.groupId, c.m.chatId, a.text);
         if (!r.ok) { notes.push(`send failed: ${r.detail}`); failed = true; return false; }
         await recordBotMessage(c.ws, c.groupId, c.device.phone, a.text, 'flow');

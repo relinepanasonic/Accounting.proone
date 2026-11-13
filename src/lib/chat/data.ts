@@ -1,12 +1,13 @@
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { memo } from './cache';
 import { loadKnowledge } from './bible';
+import { syncClientSource } from './sources';
 import { sendWhatsApp } from '@/lib/wa/send';
 import { askBotModel } from '@/lib/wa/bot/model';
 import { CHAT_ROLES } from './auth';
 import { buildSuggestPrompt, cleanSuggestion } from './suggest';
 import {
-  cleanShortcut, conversationsOf, countsOf, filterConversations, threadOf,
+  cleanShortcut, conversationsOf, countsOf, filterConversations, sourceOf, threadOf,
   type BotChatRow, type ChatFilter, type ChatGroupRow, type ChatMessageRow, type ChatNoteRow, type ChatStateRow,
 } from './shape';
 
@@ -43,7 +44,7 @@ const ownGroup = async (ws: string, groupId: string): Promise<ChatGroupRow | nul
 
 /** The phone numbers of the company's clients (to show the client next to a chat): kept for 5 minutes instead of reading thousands of rows on every poll. */
 const clientPhones = (ws: string) => memo(`clients:${ws}`, 300_000, async () => {
-  const { data } = await createAdminClient().from('clients').select('id, name, phone, sales_name, service_end_date').eq('workspace_id', ws).not('phone', 'is', null).limit(3000);
+  const { data } = await createAdminClient().from('clients').select('id, name, phone, sales_name, service_end_date, lead_source, first_contact_message').eq('workspace_id', ws).not('phone', 'is', null).limit(3000);
   return (data || []) as any[];
 });
 
@@ -56,7 +57,7 @@ export async function listConversations(ws: string, filter: ChatFilter, q: strin
   const [{ data: msgs }, { data: bot }, { data: states }] = await Promise.all([
     db.from('wa_messages').select('id, group_id, body, media_type, is_from_me, sent_at').eq('workspace_id', ws).in('group_id', ids).order('sent_at', { ascending: false }).limit(1500),
     db.from('wa_bot_chats').select('group_id, status, replies, reason, lead').eq('workspace_id', ws).in('group_id', ids),
-    db.from('chat_state').select('group_id, assigned_to, assigned_name, resolved_at').eq('workspace_id', ws).in('group_id', ids),
+    db.from('chat_state').select('group_id, assigned_to, assigned_name, resolved_at, first_message, source_label, source_channel, source_by').eq('workspace_id', ws).in('group_id', ids),
   ]);
   const all = conversationsOf(groups, (msgs || []) as ChatMessageRow[], (bot || []) as BotChatRow[], (states || []) as ChatStateRow[]).filter((c) => c.lastAt);
   return { conversations: filterConversations(all, filter, q, meId), counts: countsOf(all, meId) };
@@ -72,7 +73,7 @@ export async function loadThread(ws: string, groupId: string) {
     db.from('wa_bot_chats').select('group_id, status, replies, reason, lead').eq('group_id', groupId).maybeSingle(),
     db.from('wa_bot_log').select('reply, handoff, ok, detail, created_at').eq('group_id', groupId).order('created_at', { ascending: false }).limit(30),
     clientPhones(ws).then((data) => ({ data })),
-    db.from('chat_state').select('group_id, assigned_to, assigned_name, resolved_at').eq('group_id', groupId).maybeSingle(),
+    db.from('chat_state').select('group_id, assigned_to, assigned_name, resolved_at, first_message, first_message_at, source_id, source_label, source_channel, source_by').eq('group_id', groupId).maybeSingle(),
     db.from('chat_notes').select('id, group_id, author_name, body, created_at').eq('group_id', groupId).order('created_at', { ascending: false }).limit(100),
   ]);
   const tail = (s: string) => digits(s).slice(-9);
@@ -80,7 +81,11 @@ export async function loadThread(ws: string, groupId: string) {
   let deals: any[] = [];
   if (client) ({ data: deals } = await db.from('crm_deals').select('id, title, stage, value, salesman_name').eq('client_id', (client as any).id).order('created_at', { ascending: false }).limit(5) as any);
   const botReplies = (log || []).filter((l: any) => l.reply).map((l: any) => String(l.reply));
-  const state = st as ChatStateRow | null;
+  const state = st as (ChatStateRow & { first_message_at?: string | null; source_id?: string | null }) | null;
+  // a chat that belongs to an ERP client gives the client its source (once)
+  if (client && state?.first_message && !(client as any).lead_source && !(client as any).first_contact_message) {
+    void syncClientSource((client as any).id, { source_label: state.source_label ?? null, source_channel: state.source_channel ?? null, first_message: state.first_message, first_message_at: state.first_message_at ?? null });
+  }
   const lastLead = ((msgs || []) as ChatMessageRow[]).find((m) => !m.is_from_me);
   return {
     id: group.id, phone: group.wa_id, name: (group.name || '').trim() || `+${group.wa_id}`,
@@ -88,6 +93,7 @@ export async function loadThread(ws: string, groupId: string) {
     bot: bot ? { status: (bot as any).status, replies: (bot as any).replies, reason: (bot as any).reason, lead: (bot as any).lead } : { status: 'new', replies: 0, reason: null, lead: null },
     botLog: (log || []).slice(0, 10),
     assignedTo: state?.assigned_to ? { id: state.assigned_to, name: state.assigned_name || 'Team' } : null,
+    source: sourceOf(state), sourceId: state?.source_id ?? null, firstMessage: state?.first_message ?? null,
     resolved: !!state?.resolved_at && !(lastLead && lastLead.sent_at > state.resolved_at),
     client: client ? { id: (client as any).id, name: (client as any).name, sales: (client as any).sales_name, serviceEnd: (client as any).service_end_date } : null,
     deals: (deals || []).map((d: any) => ({ id: d.id, title: d.title, stage: d.stage, value: Number(d.value || 0), sales: d.salesman_name })),

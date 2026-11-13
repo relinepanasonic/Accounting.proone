@@ -7,7 +7,8 @@
 export interface ChatGroupRow { id: string; wa_id: string; name: string | null; last_message_at: string | null }
 export interface ChatMessageRow { id: string; group_id: string; body: string | null; media_type: string | null; is_from_me: boolean; sent_at: string; source?: string | null; raw?: any }
 export interface BotChatRow { group_id: string; status: 'bot' | 'human' | 'off'; replies: number; reason: string | null; lead: { name?: string; store?: string; need?: string } | null }
-export interface ChatStateRow { group_id: string; assigned_to: string | null; assigned_name: string | null; resolved_at: string | null }
+export interface ChatStateRow { group_id: string; assigned_to: string | null; assigned_name: string | null; resolved_at: string | null; first_message?: string | null; source_label?: string | null; source_channel?: string | null; source_by?: string | null }
+export interface ChatSource { label: string | null; channel: string; by: string | null }
 export interface ChatNoteRow { id: string; group_id: string; author_name: string; body: string; created_at: string }
 
 export type ChatStatus = 'bot' | 'human' | 'off' | 'new';
@@ -19,6 +20,7 @@ export interface ConversationSummary {
   unserved: boolean; waitingSince: string | null;
   status: ChatStatus; lead: BotChatRow['lead']; botReplies: number;
   assignedTo: { id: string; name: string } | null; resolved: boolean;
+  source: ChatSource | null;
 }
 
 export const previewOf = (m: Pick<ChatMessageRow, 'body' | 'media_type'>): string => {
@@ -34,6 +36,12 @@ export const initialsOf = (name: string): string => {
 };
 
 export const phoneLabel = (waId: string) => `+${waId}`;
+
+/** Where the lead came from, as the inbox shows it; null until a first message was recorded. */
+export function sourceOf(st?: Pick<ChatStateRow, 'first_message' | 'source_label' | 'source_channel' | 'source_by'> | null): ChatSource | null {
+  if (!st || (!st.first_message && !st.source_channel)) return null;
+  return { label: st.source_label ?? null, channel: st.source_channel || 'unknown', by: st.source_by && st.source_by !== 'auto' ? st.source_by : null };
+}
 
 export function conversationsOf(groups: ChatGroupRow[], messages: ChatMessageRow[], botChats: BotChatRow[], states: ChatStateRow[] = []): ConversationSummary[] {
   const byGroup = new Map<string, ChatMessageRow[]>();
@@ -60,6 +68,7 @@ export function conversationsOf(groups: ChatGroupRow[], messages: ChatMessageRow
       unserved: !!last && !last.is_from_me, waitingSince: last && !last.is_from_me ? waitingSince : null,
       status: b?.status ?? 'new', lead: b?.lead ?? null, botReplies: b?.replies ?? 0,
       assignedTo: st?.assigned_to ? { id: st.assigned_to, name: st.assigned_name || 'Team' } : null, resolved,
+      source: sourceOf(st),
     };
   });
   return out.sort((a, b) => String(b.lastAt || '').localeCompare(String(a.lastAt || '')));

@@ -15,7 +15,8 @@ export function chatRoute(handler: Handler, opts: { needsBody?: boolean } = {}) 
   return async (request: Request, ctx?: { params: Promise<{ id?: string }> }) => {
     const me = await chatUser(request);
     if (!me) return new NextResponse(null, { status: 401, headers: NO_STORE });
-    const id = ctx ? (await ctx.params).id ?? '' : '';
+    // For a route without a dynamic part (/agents, /conversations) Next gives params that resolve to nothing: never read .id of undefined.
+    const id = ctx ? ((await ctx.params) as { id?: string } | undefined)?.id ?? '' : '';
     if (ctx && id && !UUID.test(id)) return NextResponse.json({ error: 'Not found.' }, { status: 404, headers: NO_STORE });
     let body: any = null;
     if (opts.needsBody) {

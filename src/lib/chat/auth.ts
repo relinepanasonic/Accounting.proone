@@ -1,0 +1,37 @@
+import { createAdminClient } from '@/lib/api/supabase-admin';
+import { isFounderEmail } from '@/lib/auth/founders';
+
+/**
+ * Who may use the chat dashboard API. The dashboard is a separate app: it signs people in with the same ERP login (shared cookie) and
+ * forwards the person's own access token here as "Authorization: Bearer <token>". We check the token with Supabase and the person's role in
+ * the company that owns the sales number. No shared master key: every call is a named person, and a sent message records who sent it.
+ */
+export const CHAT_ROLES = ['founder', 'superadmin', 'admin', 'sales'] as const;
+
+export interface ChatUser { userId: string; name: string; email: string; role: string; workspaceId: string }
+
+export async function chatUser(request: Request): Promise<ChatUser | null> {
+  const token = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
+  if (!token || token.split('.').length !== 3) return null;
+  const db = createAdminClient();
+  const { data: auth, error } = await db.auth.getUser(token);
+  const user = auth?.user;
+  if (error || !user) return null;
+
+  // The company that owns the sales number.
+  const { data: dev } = await db.from('wa_devices').select('workspace_id').eq('role', 'sales').eq('active', true).limit(1).maybeSingle();
+  if (!dev) return null;
+  const workspaceId = dev.workspace_id as string;
+
+  let role = '';
+  if (isFounderEmail(user.email)) role = 'founder';
+  else {
+    const { data: byUser } = await db.from('workspace_members').select('role').eq('workspace_id', workspaceId).eq('user_id', user.id).maybeSingle();
+    let row = byUser;
+    if (!row && user.email) ({ data: row } = await db.from('workspace_members').select('role').eq('workspace_id', workspaceId).ilike('email', user.email.trim()).maybeSingle());
+    role = String(row?.role || '');
+  }
+  if (!(CHAT_ROLES as readonly string[]).includes(role)) return null;
+  const name = String(user.user_metadata?.full_name || user.user_metadata?.name || (user.email || '').split('@')[0] || 'Team');
+  return { userId: user.id, name, email: user.email || '', role, workspaceId };
+}

@@ -755,11 +755,19 @@ export async function setClientStatus(invoiceId: string, status: 'auto' | 'freez
   const a = await actor();
   if (!a || !FINANCE.includes(a.ctx.role)) return { success: false, error: 'Only Accounting, Admin and the owners can change the status.' };
   const today = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
-  const { error } = await a.db
-    .from('invoices')
-    .update({ client_status: status === 'auto' ? null : status, client_status_at: status === 'auto' ? null : today })
-    .eq('id', invoiceId)
-    .or(invoiceScope(a.ctx.activeWorkspaceId));
+  const patch = { client_status: status === 'auto' ? null : status, client_status_at: status === 'auto' ? null : today };
+  // Churn is about the client, not one project: marking one project Churn moves the whole client to the Churn page (all its invoices),
+  // and bringing it back from churn brings all its churned invoices back. Any other status only changes this project.
+  const { data: cur } = await a.db.from('invoices').select('client_id, client_status').eq('id', invoiceId).or(invoiceScope(a.ctx.activeWorkspaceId)).maybeSingle();
+  let error: any;
+  if (cur?.client_id && (status === 'churn' || cur.client_status === 'churn')) {
+    let q = a.db.from('invoices').update(patch).eq('client_id', cur.client_id).eq('is_quotation', false).or(invoiceScope(a.ctx.activeWorkspaceId));
+    if (status !== 'churn') q = q.eq('client_status', 'churn');
+    ({ error } = await q);
+    if (!error && status !== 'churn') ({ error } = await a.db.from('invoices').update(patch).eq('id', invoiceId).or(invoiceScope(a.ctx.activeWorkspaceId)));
+  } else {
+    ({ error } = await a.db.from('invoices').update(patch).eq('id', invoiceId).or(invoiceScope(a.ctx.activeWorkspaceId)));
+  }
   if (error) return { success: false, error: error.code === '23514' ? 'Run supabase/migrations/20261115_client_status_active.sql in Supabase first.' : error.code === '42703' || /client_status/.test(error.message) ? 'Run supabase/migrations/20261010_client_status.sql in Supabase first.' : error.message };
   revalidatePath('/sales/clients');
   revalidatePath('/sales/churn');

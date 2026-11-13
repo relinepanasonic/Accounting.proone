@@ -140,3 +140,28 @@ describe('Instagram and Messenger script', () => {
     expect(parseBotAnswer(JSON.stringify({ reply: long, handoff: false }))!.reply.length).toBeLessThanOrEqual(600);
   });
 });
+
+describe('the free consultation', () => {
+  const base = { persona: 'Fefe', company: 'Prof Toko Online', knowledge: '', history: [{ from: 'lead' as const, text: 'boleh konsultasi?' }], inHours: true, replyNo: 3 };
+  const offer = [{ code: '2026-11-16T10:00+07:00', label: 'Senin 16 Nov, jam 10.00 WIB' }, { code: '2026-11-16T14:00+07:00', label: 'Senin 16 Nov, jam 14.00 WIB' }];
+  it('every chat aims at a free consultation, with the real free times and their codes, on WhatsApp and in DMs', () => {
+    for (const channel of ['whatsapp', 'social'] as const) {
+      const { system } = buildBotPrompt({ ...base, channel, meeting: { minutes: 30, offer, booked: null } });
+      expect(system).toContain('konsultasi GRATIS 30 menit');
+      expect(system).toContain('- 2026-11-16T10:00+07:00 = Senin 16 Nov, jam 10.00 WIB');
+      expect(system).toContain('JANGAN menulis atau mengarang link');
+    }
+  });
+  it('a lead who already booked is not offered times again', () => {
+    const { system } = buildBotPrompt({ ...base, meeting: { minutes: 30, offer: [], booked: { label: 'Senin 16 Nov, jam 10.00 WIB', meetUrl: 'https://meet.google.com/x' } } });
+    expect(system).toContain('SUDAH punya jadwal');
+    expect(system).not.toContain('JADWAL KOSONG (kode = waktu)');
+  });
+  it('meetings switched off: nothing about them', () => {
+    expect(buildBotPrompt(base).system).not.toContain('TUJUAN UTAMA');
+  });
+  it('the time the lead picked is read from the answer', () => {
+    expect(parseBotAnswer('{"reply":"Siap kak","handoff":false,"booking":{"slot":"2026-11-16T10:00+07:00"}}')?.booking).toBe('2026-11-16T10:00+07:00');
+    expect(parseBotAnswer('{"reply":"Siap kak","handoff":false,"booking":{"slot":""}}')?.booking).toBeNull();
+  });
+});

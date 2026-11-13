@@ -8,6 +8,7 @@ import { chatLabel, phoneTail } from './channel';
 import { askBotModel } from '@/lib/wa/bot/model';
 import { CHAT_ROLES } from './auth';
 import { buildSuggestPrompt, cleanSuggestion } from './suggest';
+import { upcomingFor } from './meetings';
 import {
   cleanShortcut, conversationsOf, countsOf, filterConversations, sourceOf, threadOf,
   type BotChatRow, type ChatFilter, type ChatGroupRow, type ChatMessageRow, type ChatNoteRow, type ChatStateRow,
@@ -91,11 +92,12 @@ export async function loadThread(ws: string, groupId: string) {
   const client = (clients || []).find((c: any) => phoneTail(c.phone).length >= 8 && phoneTail(c.phone) === phoneTail(group.wa_id)) || null;
   let deals: any[] = [];
   if (client) ({ data: deals } = await db.from('crm_deals').select('id, title, stage, value, salesman_name, salesman_id').eq('client_id', (client as any).id).order('created_at', { ascending: false }).limit(5) as any);
-  const [links, labelDefs, reminders, { data: sess }] = await Promise.all([
+  const [links, labelDefs, reminders, { data: sess }, meeting] = await Promise.all([
     db.from('chat_label_links').select('label_id').eq('group_id', groupId),
     listLabels(ws),
     chatReminders(groupId),
     db.from('bot_flow_sessions').select('flow_name, kind, field, resume_at, expires_at').eq('group_id', groupId).maybeSingle(),
+    upcomingFor(groupId).catch(() => null),
   ]);
   const onChat = new Set(((links.data || []) as Array<{ label_id: string }>).map((l) => l.label_id));
   const rawMsgs = (msgs || []) as Array<ChatMessageRow & { media_url?: string | null; media_path?: string | null }>;
@@ -118,6 +120,7 @@ export async function loadThread(ws: string, groupId: string) {
     botLog: (log || []).slice(0, 10),
     assignedTo: state?.assigned_to ? { id: state.assigned_to, name: state.assigned_name || 'Team' } : null,
     answers: Object.entries(state?.answers || {}).filter(([k, v]) => k && typeof v === 'string' && v).map(([field, value]) => ({ field, value: String(value) })),
+    meeting: meeting ? { id: meeting.id, startsAt: meeting.starts_at, endsAt: meeting.ends_at, meetUrl: meeting.meet_url, bookedBy: meeting.booked_by } : null,
     flowWaiting: sessionLive && ses ? { flow: ses.flow_name, kind: ses.kind, field: ses.field, until: ses.kind === 'wait' ? ses.resume_at : ses.expires_at } : null,
     source: sourceOf(state), sourceId: state?.source_id ?? null, firstMessage: state?.first_message ?? null,
     resolved: !!state?.resolved_at && !(lastLead && lastLead.sent_at > state.resolved_at),

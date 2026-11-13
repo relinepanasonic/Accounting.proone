@@ -16,6 +16,31 @@ export interface BotPromptInput {
   /** Instagram and Messenger DMs: people ask how to sell more on the marketplaces, so the bot helps first (social script), sales second. */
   channel?: 'whatsapp' | 'social';
   socialScript?: string;
+  /** The goal of every chat: a free consultation with the expert team. The free times to offer (with the code the bot sends back), or the lead's booking. */
+  meeting?: { minutes: number; offer: Array<{ code: string; label: string }>; booked: { label: string; meetUrl: string | null } | null } | null;
+}
+
+/** The part of the instructions about the free consultation (empty when meetings are switched off). */
+export function meetingSection(i: BotPromptInput): string[] {
+  const m = i.meeting;
+  if (!m) return [];
+  const head = [
+    'TUJUAN UTAMA',
+    `- Tujuan setiap chat: mengajak kakak konsultasi GRATIS ${m.minutes} menit dengan tim ahli ${i.company} lewat Google Meet, di waktu yang kakak pilih. Manfaatnya: toko kakak dicek langsung dan dapat saran yang pas.`,
+    '- Ajak dengan halus setelah paham kebutuhannya, bukan di sapaan pertama, kecuali kakak sendiri yang minta.',
+    '- Booking konsultasi bukan alasan handoff.',
+  ];
+  if (m.booked) return [...head, `- Kakak SUDAH punya jadwal konsultasi: ${m.booked.label}${m.booked.meetUrl ? ` (link: ${m.booked.meetUrl})` : ''}. Jangan tawarkan jadwal lagi; bantu jawab pertanyaannya. Kalau kakak mau ganti jadwal, bilang tim akan bantu dan set handoff = true.`, ''];
+  if (!m.offer.length) return [...head, '- Belum ada jadwal kosong dalam beberapa hari ke depan. Kalau kakak mau konsultasi, bilang tim akan menghubungi untuk atur waktu, dan set handoff = true.', ''];
+  return [
+    ...head,
+    '- Saat mengajak, tawarkan 2 atau 3 waktu dari JADWAL KOSONG, ditulis persis seperti di daftar.',
+    '- Kalau kakak memilih salah satu waktu di daftar (atau menyebut hari dan jam yang sama), isi "booking": {"slot": "<kode waktu itu>"} dan tulis balasan singkat yang mengiyakan. Jam dan link Meet ditambahkan otomatis: JANGAN menulis atau mengarang link.',
+    '- Kalau kakak minta waktu yang tidak ada di daftar, tawarkan waktu terdekat dari daftar. Jangan pernah booking waktu di luar daftar.',
+    'JADWAL KOSONG (kode = waktu)',
+    ...m.offer.map((o) => `- ${o.code} = ${o.label}`),
+    '',
+  ];
 }
 
 /** The longest reply: a short sales answer on WhatsApp, a few practical tips on Instagram and Messenger. */
@@ -23,8 +48,8 @@ export const replyMax = (channel: BotPromptInput['channel']) => (channel === 'so
 
 const JSON_FORMAT = [
   'FORMAT JAWABAN: hanya satu objek JSON, tanpa teks lain:',
-  '{"reply": "teks balasan untuk kakak", "handoff": true atau false, "reason": "alasan singkat bila handoff", "lead": {"name": "", "store": "", "need": ""}}',
-  'Isi lead hanya dengan apa yang kakak sebutkan sendiri; kosongkan bila belum ada.',
+  '{"reply": "teks balasan untuk kakak", "handoff": true atau false, "reason": "alasan singkat bila handoff", "lead": {"name": "", "store": "", "need": ""}, "booking": {"slot": ""}}',
+  'Isi lead hanya dengan apa yang kakak sebutkan sendiri; kosongkan bila belum ada. Isi booking.slot hanya saat kakak memilih waktu dari JADWAL KOSONG; selain itu kosongkan.',
 ];
 
 function socialSystem(i: BotPromptInput): string {
@@ -48,6 +73,7 @@ function socialSystem(i: BotPromptInput): string {
     '- Kalau ditanya apakah kamu bot / AI / manusia, jawab jujur: kamu asisten virtual tim, dan tim siap membantu.',
     i.inHours ? '' : '- Sekarang di luar jam kerja tim. Tetap jawab pertanyaannya. Hanya kalau handoff, bilang tim akan membalas besok pagi.',
     '',
+    ...meetingSection(i),
     ...JSON_FORMAT,
     '',
     'SCRIPT DM',
@@ -78,9 +104,8 @@ export function buildBotPrompt(i: BotPromptInput): { system: string; prompt: str
     '- Kalau kakak minta bicara dengan orang, komplain, nego harga, atau mau bayar: ucapkan tim akan segera menghubungi, dan set handoff = true.',
     i.inHours ? '' : '- Sekarang di luar jam kerja tim: bilang dengan ramah bahwa tim akan membalas besok pagi.',
     '',
-    'FORMAT JAWABAN: hanya satu objek JSON, tanpa teks lain:',
-    '{"reply": "teks balasan untuk kakak", "handoff": true atau false, "reason": "alasan singkat bila handoff", "lead": {"name": "", "store": "", "need": ""}}',
-    'Isi lead hanya dengan apa yang kakak sebutkan sendiri; kosongkan bila belum ada.',
+    ...meetingSection(i),
+    ...JSON_FORMAT,
     '',
     'PENGETAHUAN',
     i.knowledge.trim() || '(belum ada. Sapa saja dengan ramah, tanyakan kebutuhannya, dan set handoff = true.)',
@@ -96,6 +121,8 @@ export interface BotAnswer {
   handoff: boolean;
   reason: string;
   lead: { name?: string; store?: string; need?: string };
+  /** The time the lead picked (the slot code), when the bot should book the consultation. */
+  booking?: string | null;
 }
 
 const URL_RE = /\bhttps?:\/\/[^\s)]+|\bwww\.[^\s)]+/gi;
@@ -142,5 +169,6 @@ export function parseBotAnswer(raw: string, knowledge = '', max = 600): BotAnswe
     handoff: j?.handoff === true,
     reason: clean(j?.reason),
     lead: { name: clean(lead.name), store: clean(lead.store), need: clean(lead.need) },
+    booking: typeof j?.booking?.slot === 'string' && j.booking.slot.trim() ? j.booking.slot.trim().slice(0, 40) : null,
   };
 }

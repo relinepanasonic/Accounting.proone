@@ -268,11 +268,20 @@ export async function runFlowsFor(device: BotDevice, m: ParsedWaMessage, groupId
  * run one twice), checks the chat is still the bot's, and goes on with each flow. Also clears questions nobody answered for a day.
  */
 export async function runDueWaits(key: string | null): Promise<{ ok: true; resumed: number } | Fail> {
-  const db = createAdminClient();
-  const { data: k } = await db.from('flow_tick_key').select('key').eq('id', 1).maybeSingle();
-  const want = String((k as any)?.key || '');
-  if (!want || !key || key.length !== want.length || !timingSafeEqual(Buffer.from(key), Buffer.from(want))) return fail(401, 'Not allowed.');
+  if (!(await tickKeyOk(key))) return fail(401, 'Not allowed.');
+  return { ok: true, resumed: await resumeDueWaits() };
+}
 
+/** The clock's key: only the database's scheduled call has it (see the flow_v2 migration). */
+export async function tickKeyOk(key: string | null): Promise<boolean> {
+  const { data: k } = await createAdminClient().from('flow_tick_key').select('key').eq('id', 1).maybeSingle();
+  const want = String((k as any)?.key || '');
+  return !!want && !!key && key.length === want.length && timingSafeEqual(Buffer.from(key), Buffer.from(want));
+}
+
+/** Goes on with every flow whose Wait is over. Returns how many went on. */
+export async function resumeDueWaits(): Promise<number> {
+  const db = createAdminClient();
   const nowIso = new Date().toISOString();
   await db.from('bot_flow_sessions').delete().eq('kind', 'answer').lt('expires_at', nowIso);
   const { data: due } = await db.from('bot_flow_sessions').delete().eq('kind', 'wait').lte('resume_at', nowIso).select('*');
@@ -306,7 +315,7 @@ export async function runDueWaits(key: string | null): Promise<{ ok: true; resum
       console.error('flow wait failed', e);
     }
   }
-  return { ok: true, resumed };
+  return resumed;
 }
 
 async function executePlan(plan: Plan, c: { ws: string; device: BotDevice; m: ParsedWaMessage; groupId: string; flowName: string; client: { sales_name: string | null } | null }): Promise<{ handled: boolean; failed: boolean; detail: string }> {

@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/api/supabase-admin';
 import { memo } from './cache';
 import { loadKnowledge } from './bible';
 import { syncClientSource } from './sources';
+import { chatReminders, inboxExtras, listLabels, signMedia } from './crm-data';
 import { sendWhatsApp } from '@/lib/wa/send';
 import { askBotModel } from '@/lib/wa/bot/model';
 import { CHAT_ROLES } from './auth';
@@ -57,10 +58,10 @@ const clientPhones = (ws: string) => memo(`clients:${ws}`, 300_000, async () => 
   return (data || []) as any[];
 });
 
-export async function listConversations(ws: string, filter: ChatFilter, q: string, meId: string) {
+export async function listConversations(ws: string, filter: ChatFilter, q: string, meId: string, labelId = '') {
   const db = createAdminClient();
   const { groups } = await salesGroups(ws);
-  const none = { conversations: [], counts: { all: 0, mine: 0, unserved: 0, bot: 0, human: 0, resolved: 0 } };
+  const none = { conversations: [], counts: { all: 0, mine: 0, unserved: 0, bot: 0, human: 0, resolved: 0, followup: 0 }, labels: await listLabels(ws) };
   if (!groups.length) return none;
   const ids = groups.map((g) => g.id);
   const [{ data: msgs }, { data: bot }, { data: states }] = await Promise.all([
@@ -69,7 +70,10 @@ export async function listConversations(ws: string, filter: ChatFilter, q: strin
     db.from('chat_state').select('group_id, assigned_to, assigned_name, resolved_at, first_message, source_label, source_channel, source_by').eq('workspace_id', ws).in('group_id', ids),
   ]);
   const all = conversationsOf(groups, (msgs || []) as ChatMessageRow[], (bot || []) as BotChatRow[], (states || []) as ChatStateRow[]).filter((c) => c.lastAt);
-  return { conversations: filterConversations(all, filter, q, meId), counts: countsOf(all, meId) };
+  const extra = await inboxExtras(ws, all.map((c) => c.id));
+  for (const c of all) { c.labels = extra.labels.get(c.id) || []; c.nextReminder = extra.reminders.get(c.id) ?? null; }
+  const shown = labelId ? all.filter((c) => (c.labels || []).some((l) => l.id === labelId)) : all;
+  return { conversations: filterConversations(shown, filter, q, meId), counts: countsOf(all, meId), labels: await listLabels(ws) };
 }
 
 /** One chat: its messages and internal notes, the bot state and log, who handles it, and what the ERP knows about this number (a client and its deals). */
@@ -78,7 +82,7 @@ export async function loadThread(ws: string, groupId: string) {
   const group = await ownGroup(ws, groupId);
   if (!group) return null;
   const [{ data: msgs }, { data: bot }, { data: log }, { data: clients }, { data: st }, { data: notes }] = await Promise.all([
-    db.from('wa_messages').select('id, group_id, body, media_type, is_from_me, sent_at, raw').eq('group_id', groupId).order('sent_at', { ascending: false }).limit(200),
+    db.from('wa_messages').select('id, group_id, body, media_type, media_url, media_path, is_from_me, sent_at, raw').eq('group_id', groupId).order('sent_at', { ascending: false }).limit(200),
     db.from('wa_bot_chats').select('group_id, status, replies, reason, lead').eq('group_id', groupId).maybeSingle(),
     db.from('wa_bot_log').select('reply, handoff, ok, detail, created_at').eq('group_id', groupId).order('created_at', { ascending: false }).limit(30),
     clientPhones(ws).then((data) => ({ data })),
@@ -88,7 +92,16 @@ export async function loadThread(ws: string, groupId: string) {
   const tail = (s: string) => digits(s).slice(-9);
   const client = (clients || []).find((c: any) => tail(c.phone).length >= 8 && tail(c.phone) === tail(group.wa_id)) || null;
   let deals: any[] = [];
-  if (client) ({ data: deals } = await db.from('crm_deals').select('id, title, stage, value, salesman_name').eq('client_id', (client as any).id).order('created_at', { ascending: false }).limit(5) as any);
+  if (client) ({ data: deals } = await db.from('crm_deals').select('id, title, stage, value, salesman_name, salesman_id').eq('client_id', (client as any).id).order('created_at', { ascending: false }).limit(5) as any);
+  const [links, labelDefs, reminders] = await Promise.all([
+    db.from('chat_label_links').select('label_id').eq('group_id', groupId),
+    listLabels(ws),
+    chatReminders(groupId),
+  ]);
+  const onChat = new Set(((links.data || []) as Array<{ label_id: string }>).map((l) => l.label_id));
+  const rawMsgs = (msgs || []) as Array<ChatMessageRow & { media_url?: string | null; media_path?: string | null }>;
+  const signed = await signMedia(rawMsgs.map((x) => x.media_path || '').filter(Boolean));
+  const mediaOf = new Map(rawMsgs.map((x) => [x.id, x.media_path ? signed.get(x.media_path) ?? null : x.media_url ?? null]));
   const botReplies = (log || []).filter((l: any) => l.reply).map((l: any) => String(l.reply));
   const state = st as (ChatStateRow & { first_message_at?: string | null; source_id?: string | null }) | null;
   // a chat that belongs to an ERP client gives the client its source (once)
@@ -98,14 +111,15 @@ export async function loadThread(ws: string, groupId: string) {
   const lastLead = ((msgs || []) as ChatMessageRow[]).find((m) => !m.is_from_me);
   return {
     id: group.id, phone: group.wa_id, name: (group.name || '').trim() || `+${group.wa_id}`,
-    messages: threadOf((msgs || []) as ChatMessageRow[], botReplies, (notes || []) as ChatNoteRow[]),
+    messages: threadOf((msgs || []) as ChatMessageRow[], botReplies, (notes || []) as ChatNoteRow[]).map((x) => (x.mediaType ? { ...x, mediaUrl: mediaOf.get(x.id) ?? null } : x)),
+    labels: labelDefs.filter((l) => onChat.has(l.id)), reminders,
     bot: bot ? { status: (bot as any).status, replies: (bot as any).replies, reason: (bot as any).reason, lead: (bot as any).lead } : { status: 'new', replies: 0, reason: null, lead: null },
     botLog: (log || []).slice(0, 10),
     assignedTo: state?.assigned_to ? { id: state.assigned_to, name: state.assigned_name || 'Team' } : null,
     source: sourceOf(state), sourceId: state?.source_id ?? null, firstMessage: state?.first_message ?? null,
     resolved: !!state?.resolved_at && !(lastLead && lastLead.sent_at > state.resolved_at),
     client: client ? { id: (client as any).id, name: (client as any).name, sales: (client as any).sales_name, serviceEnd: (client as any).service_end_date } : null,
-    deals: (deals || []).map((d: any) => ({ id: d.id, title: d.title, stage: d.stage, value: Number(d.value || 0), sales: d.salesman_name })),
+    deals: (deals || []).map((d: any) => ({ id: d.id, title: d.title, stage: d.stage, value: Number(d.value || 0), sales: d.salesman_name, salesId: d.salesman_id ?? null })),
   };
 }
 

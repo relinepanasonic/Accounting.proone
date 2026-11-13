@@ -12,7 +12,9 @@ export interface ChatSource { label: string | null; channel: string; by: string 
 export interface ChatNoteRow { id: string; group_id: string; author_name: string; body: string; created_at: string }
 
 export type ChatStatus = 'bot' | 'human' | 'off' | 'new';
-export type ChatFilter = 'all' | 'mine' | 'unserved' | 'bot' | 'human' | 'resolved';
+export type ChatFilter = 'all' | 'mine' | 'unserved' | 'bot' | 'human' | 'resolved' | 'followup';
+export interface ChatLabel { id: string; name: string; color: string }
+export interface NextReminder { id: string; dueAt: string; note: string | null; state: 'overdue' | 'today' | 'later' }
 
 export interface ConversationSummary {
   id: string; phone: string; name: string; initials: string;
@@ -21,6 +23,9 @@ export interface ConversationSummary {
   status: ChatStatus; lead: BotChatRow['lead']; botReplies: number;
   assignedTo: { id: string; name: string } | null; resolved: boolean;
   source: ChatSource | null;
+  /** Filled by the server after the fact (labels on the chat, its next open reminder). */
+  labels?: ChatLabel[];
+  nextReminder?: NextReminder | null;
 }
 
 export const previewOf = (m: Pick<ChatMessageRow, 'body' | 'media_type'>): string => {
@@ -84,9 +89,10 @@ export function filterConversations(list: ConversationSummary[], filter: ChatFil
       if (filter === 'unserved' && !c.unserved) return false;
       if (filter === 'bot' && c.status !== 'bot') return false;
       if (filter === 'human' && c.status !== 'human') return false;
+      if (filter === 'followup' && !(c.nextReminder && c.nextReminder.state !== 'later')) return false;
     }
     if (!needle) return true;
-    return [c.name, c.phone, c.lastText, c.lead?.name, c.lead?.store, c.lead?.need, c.assignedTo?.name].some((v) => String(v || '').toLowerCase().includes(needle));
+    return [c.name, c.phone, c.lastText, c.lead?.name, c.lead?.store, c.lead?.need, c.assignedTo?.name, ...(c.labels || []).map((l) => l.name)].some((v) => String(v || '').toLowerCase().includes(needle));
   });
 }
 
@@ -99,11 +105,12 @@ export const countsOf = (list: ConversationSummary[], meId = '') => {
     bot: open.filter((c) => c.status === 'bot').length,
     human: open.filter((c) => c.status === 'human').length,
     resolved: list.length - open.length,
+    followup: open.filter((c) => c.nextReminder && c.nextReminder.state !== 'later').length,
   };
 };
 
 export type Sender = 'lead' | 'bot' | 'team' | 'note';
-export interface ThreadMessage { id: string; sender: Sender; senderName: string | null; text: string; mediaType: string | null; at: string }
+export interface ThreadMessage { id: string; sender: Sender; senderName: string | null; text: string; mediaType: string | null; at: string; mediaUrl?: string | null }
 
 /**
  * Who wrote each message: the lead, the bot (our own message that matches something the bot logged), a person (the dashboard user,

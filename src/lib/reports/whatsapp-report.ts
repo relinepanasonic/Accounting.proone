@@ -85,7 +85,7 @@ export async function adminSection(db: Db, plan: ReportPlan, today: string) {
   const adminIds = Array.from(new Set((adminMembers || []).map((m: any) => m.user_id)));
   const { data: adminProfiles } = adminIds.length ? await db.from('profiles').select('id, full_name').in('id', adminIds) : { data: [] as any[] };
   const admins = Array.from(new Set((adminProfiles || []).map((p: any) => String(p.full_name || '').trim()).filter(Boolean))).sort();
-  const sameAdmin = (name: string, other: string) => { const a = name.toLowerCase().split(/s+/)[0]; const b = String(other || '').toLowerCase(); return !!a && (b === a || b.startsWith(a + ' ')); };
+  const sameAdmin = (name: string, other: string) => { const a = name.toLowerCase().split(/\s+/)[0]; const b = String(other || '').toLowerCase(); return !!a && (b === a || b.startsWith(a + ' ')); };
 
   const { data: fo } = await db.from('fake_order_projects').select('client_name, start_date');
   const foInPeriod = (fo || []).filter((f: any) => inRange(String(f.start_date || '').slice(0, 10), plan.from, plan.to));
@@ -96,7 +96,7 @@ export async function adminSection(db: Db, plan: ReportPlan, today: string) {
     const stores = assigned.filter((a: AssignedStore) => sameAdmin(name, a.pic)).map((a: AssignedStore) => a.store.toLowerCase());
     const uploadedStores = new Set(mine.map((r: LogRow) => r.store.toLowerCase()).filter((s: string) => stores.includes(s)));
     const mp = perf.filter((p) => sameAdmin(name, p.pic));
-    return { name, files, total: stores.length, uploaded: uploadedStores.size, onSchedule: mp.filter((p) => p.status === 'on_schedule').length, late: mp.filter((p) => p.status === 'late').map((p) => p.store) };
+    return { name, files, total: stores.length, uploaded: uploadedStores.size, uploadedNames: Array.from(uploadedStores).sort(), pendingNames: stores.filter((x: string) => !uploadedStores.has(x)).sort(), onSchedule: mp.filter((p) => p.status === 'on_schedule').length, late: mp.filter((p) => p.status === 'late').map((p) => p.store) };
   });
   return { lines, errors, fo: { count: foInPeriod.length, clients: new Set(foInPeriod.map((f: any) => f.client_name)).size } };
 }

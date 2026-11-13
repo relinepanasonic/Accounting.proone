@@ -3,6 +3,9 @@ import { buildWhatsAppReport } from '@/lib/reports/whatsapp-report';
 import { signedReportUrl, SHARE_TTL_SECONDS } from '@/lib/reports/signed-url';
 import { sendWhatsApp } from './send';
 import { sendReportPdfs, type ReportPdf } from './report-files';
+import { loadBodDaily } from './bod-daily';
+import { renderBodDailyPdf } from './bod-daily-pdf';
+import { dmy } from '@/lib/reports/whatsapp-report';
 
 /**
  * The team performance report (Sales, Admin, Advertiser, To Do, Accounting) for Nico, Herlan and Lucy.
@@ -55,16 +58,36 @@ export async function sendPerformance(workspaceId: string, opts: { trigger: 'cro
     if (already && already.length) return { sent: false, reason: 'Already sent today.', kind: report.kind, date: report.date };
   }
 
-  const { data: rec } = await db.from('wa_recipients').select('phone').eq('workspace_id', workspaceId).eq('active', true);
-  let phones = (rec || []).map((r: any) => r.phone as string);
+  const { data: rec } = await db.from('wa_recipients').select('phone, receives_daily').eq('workspace_id', workspaceId).eq('active', true);
+  // The daily report goes only to the people with the daily switch on (Nico and Herlan); weekly and monthly go to everyone.
+  let phones = (rec || []).filter((r: any) => report.kind !== 'daily' || r.receives_daily !== false).map((r: any) => r.phone as string);
   if (opts.trigger === 'test') phones = phones.filter((p) => (opts.onlyPhones || []).includes(p));
   if (phones.length === 0) return { sent: false, reason: opts.trigger === 'test' ? 'That number is not an active recipient.' : 'No active recipient.', kind: report.kind, date: report.date };
 
   // Weekly / monthly with "send PDFs as files" ON: each PDF is a real file (a refused one falls back to its link). Everything else is text.
   const { data: settings } = await db.from('wa_settings').select('send_files').eq('workspace_id', workspaceId).maybeSingle();
-  const r = report.kind !== 'daily' && settings?.send_files && report.files && report.files.length
-    ? await sendReportPdfs(phones, report.headline || '', report.files)
-    : await sendWhatsApp(phones, report.message);
-  await db.from('wa_sends').insert({ workspace_id: workspaceId, kind: report.kind, report_date: report.date, trigger: opts.trigger, recipients: phones, ok: r.ok, detail: r.detail, text: report.message });
+  let r: { ok: boolean; detail: string };
+  let sentText = report.message;
+  if (report.kind === 'daily' && settings?.send_files) {
+    // The daily BOD report is a 3-page PDF (Advertising, Admin, Sales). If it cannot be made or sent, the text report goes instead, so it is never lost.
+    r = await sendDailyPdf(phones, report.date).catch((e: any) => ({ ok: false, detail: `PDF failed: ${String(e?.message || e).slice(0, 160)}` }));
+    if (r.ok) sentText = `Daily BOD report (PDF) ${report.date}`;
+    else { const t = await sendWhatsApp(phones, report.message); r = { ok: t.ok, detail: `${r.detail} Sent the text report instead: ${t.detail}` }; }
+  } else {
+    r = report.kind !== 'daily' && settings?.send_files && report.files && report.files.length
+      ? await sendReportPdfs(phones, report.headline || '', report.files)
+      : await sendWhatsApp(phones, report.message);
+  }
+  await db.from('wa_sends').insert({ workspace_id: workspaceId, kind: report.kind, report_date: report.date, trigger: opts.trigger, recipients: phones, ok: r.ok, detail: r.detail, text: sentText });
   return { sent: r.ok, reason: r.ok ? undefined : r.detail, kind: report.kind, date: report.date, recipients: phones.length, detail: r.detail };
+}
+
+/** Builds the 3-page daily BOD PDF for `today` and sends it as a file. The caption is just the title (no greeting). */
+export async function sendDailyPdf(phones: string[], today: string): Promise<{ ok: boolean; detail: string }> {
+  const data = await loadBodDaily(today);
+  if (!data) return { ok: false, detail: 'There is no daily report for this day.' };
+  const pdf = await renderBodDailyPdf(data);
+  const name = `Daily-BOD-Report-${data.reportDay}.pdf`;
+  const r = await sendWhatsApp(phones, `Daily Report ${dmy(data.reportDay)}`, { file: { data: new Uint8Array(pdf), filename: name, contentType: 'application/pdf' } });
+  return { ok: r.ok, detail: r.ok ? `PDF sent: ${name}.` : `PDF refused: ${r.detail}` };
 }

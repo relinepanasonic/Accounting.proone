@@ -1,3 +1,4 @@
+import { phoneTail } from './channel';
 /**
  * Lead sources, the pure parts (no database, no network): matching a new lead's first message with the message an ad pre-fills in WhatsApp,
  * and counting leads, clients, deals and sales per source. Tested.
@@ -75,7 +76,7 @@ export interface ReportDeal { client_id: string; stage: string | null; value: nu
 export interface SourceRow { key: string; label: string; channel: Channel | 'unknown'; leads: number; clients: number; deals: number; won: number; wonValue: number }
 export interface ChannelRow { channel: Channel | 'unknown'; leads: number; clients: number; deals: number; won: number; wonValue: number }
 
-const tail9 = (s: string | null | undefined) => String(s ?? '').replace(/\D/g, '').slice(-9);
+const tail9 = (s: string | null | undefined) => phoneTail(s);
 
 /** Leads (new chats), how many are already clients in the ERP (same phone number), how many deals they have, and how many were won (stage "Deal") and for how much. */
 export function sourceReport(chats: ReportChat[], clients: ReportClient[], deals: ReportDeal[]): { rows: SourceRow[]; channels: ChannelRow[]; total: Omit<SourceRow, 'key' | 'label' | 'channel'> } {

@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { forget, memo } from './cache';
 import { cleanSource, matchSource, sourceReport, type SourceDef } from './lead-source';
+import { chatLabel } from './channel';
 
 /**
  * Lead sources (server side): the catalog of ads and their first messages, finding the source of each new WhatsApp lead, setting it by hand,
@@ -135,6 +136,6 @@ export async function reportData(ws: string, days: number) {
   const rows = ((chats || []) as any[]).map((c) => ({ ...c, wa_id: String(Array.isArray(c.wa_groups) ? c.wa_groups[0]?.wa_id : c.wa_groups?.wa_id || ''), name: String(Array.isArray(c.wa_groups) ? c.wa_groups[0]?.name : c.wa_groups?.name || '') }));
   const report = sourceReport(rows, (clients || []) as any[], (deals || []) as any[]);
   const unmatched = rows.filter((r) => !r.source_id && r.first_message).sort((a, b) => String(b.first_message_at).localeCompare(String(a.first_message_at))).slice(0, 25)
-    .map((r) => ({ group_id: r.group_id as string, name: (r.name || `+${r.wa_id}`) as string, first_message: r.first_message as string, at: r.first_message_at as string }));
+    .map((r) => ({ group_id: r.group_id as string, name: (r.name || chatLabel(r.wa_id)) as string, first_message: r.first_message as string, at: r.first_message_at as string }));
   return { days, ...report, unmatched, sources: sources.length };
 }

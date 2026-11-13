@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/api/supabase-admin';
+import { chatLabel, clientPhoneOf, isMetaChat, phoneTail } from './channel';
 import { sendMedia, asDelivery } from '@/lib/wa/send-media';
 import { adminMediaStorage } from '@/lib/wa/media-storage';
 import { normalizeJpeg } from '@/lib/wa/report-image';
@@ -84,7 +85,7 @@ export async function inboxExtras(ws: string, groupIds: string[], now = new Date
 }
 
 // ---------------------------------------------------------------- the chat becomes an ERP lead
-const tail9 = (s: unknown) => String(s ?? '').replace(/\D/g, '').slice(-9);
+const tail9 = phoneTail;
 
 /**
  * Creates the lead in the ERP from this chat: when the number is not a client yet, a prospect client (with the chat's phone and lead source) is made,
@@ -93,7 +94,7 @@ const tail9 = (s: unknown) => String(s ?? '').replace(/\D/g, '').slice(-9);
 export async function createLeadFromChat(ws: string, groupId: string, input: LeadInput, by: Who): Promise<{ ok: true; dealId: string; clientId: string; newClient: boolean } | Fail> {
   const chat = await chatOf(ws, groupId);
   if (!chat) return fail(404, 'Chat not found.');
-  const c = cleanLeadInput(input, chat.name || `+${chat.wa_id}`);
+  const c = cleanLeadInput(input, chat.name || chatLabel(chat.wa_id));
   if (!c.ok) return fail(400, c.error);
   const db = createAdminClient();
 
@@ -112,7 +113,7 @@ export async function createLeadFromChat(ws: string, groupId: string, input: Lea
     const { data: st } = await db.from('chat_state').select('source_label, source_channel, first_message, first_message_at').eq('group_id', groupId).maybeSingle();
     const s = st as any;
     const { data: made, error } = await db.from('clients').insert({
-      workspace_id: ws, name: c.value.name, phone: `+${chat.wa_id}`, store_name: c.value.store, contact_type: 'client', is_prospect: true, created_by: by.userId,
+      workspace_id: ws, name: c.value.name, phone: clientPhoneOf(chat.wa_id), store_name: c.value.store, contact_type: 'client', is_prospect: true, created_by: by.userId,
       sales_name: salesmanName,
       lead_source: s?.source_label ?? null, lead_channel: s?.source_channel && s.source_channel !== 'unknown' ? s.source_channel : null,
       first_contact_message: s?.first_message ?? null, first_contact_at: s?.first_message_at ?? null,
@@ -165,7 +166,7 @@ export async function addReminder(ws: string, groupId: string, input: { dueAt?: 
     const { data: p } = await db.from('profiles').select('full_name, email').eq('id', want).maybeSingle();
     assignTo = want; assignName = (p as any)?.full_name || String((p as any)?.email || '').split('@')[0] || 'Team';
   }
-  const who = chat.name || `+${chat.wa_id}`;
+  const who = chat.name || chatLabel(chat.wa_id);
   const { data: task } = await db.from('staff_tasks').insert({
     workspace_id: ws, title: `Follow up WhatsApp: ${who}`.slice(0, 200), note: [note, `Set in the chat inbox by ${by.name}.`].filter(Boolean).join('\n'),
     assigned_to: assignTo, assigned_by: by.userId, due_date: jakartaDay(due.iso), priority: 'medium', status: 'open',
@@ -197,7 +198,7 @@ export async function listReminders(ws: string, me: Who, scope: 'mine' | 'all') 
   const now = new Date();
   return ((data || []) as any[]).map((r) => {
     const g = Array.isArray(r.wa_groups) ? r.wa_groups[0] : r.wa_groups;
-    return { id: r.id, groupId: r.group_id, chat: String(g?.name || (g?.wa_id ? `+${g.wa_id}` : 'Chat')), dueAt: r.due_at, note: r.note, assignedName: r.assigned_name, createdBy: r.created_by_name, state: reminderState(r.due_at, now) };
+    return { id: r.id, groupId: r.group_id, chat: String(g?.name || (g?.wa_id ? chatLabel(g.wa_id) : 'Chat')), dueAt: r.due_at, note: r.note, assignedName: r.assigned_name, createdBy: r.created_by_name, state: reminderState(r.due_at, now) };
   });
 }
 
@@ -263,6 +264,7 @@ export async function sendChatImage(ws: string, groupId: string, input: { path?:
   const chat = await chatOf(ws, groupId);
   if (!chat) return fail(404, 'Chat not found.');
   if (!(await mediaEnabled(ws))) return fail(403, MEDIA_OFF);
+  if (isMetaChat(chat.wa_id)) return fail(400, 'Sending pictures to Instagram and Messenger is not ready yet. Send text, or share a link.');
   const path = String(input.path ?? '');
   if (!path.startsWith(`chat/${ws}/${groupId}/out-`) || path.includes('..')) return fail(400, 'That picture does not belong to this chat.');
   if (!process.env.FONNTE_TOKEN_SALES) return fail(503, 'The sales number is not connected (FONNTE_TOKEN_SALES is missing on the server).');

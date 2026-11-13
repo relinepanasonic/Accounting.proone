@@ -3,7 +3,8 @@ import { memo } from './cache';
 import { loadKnowledge } from './bible';
 import { syncClientSource } from './sources';
 import { chatReminders, inboxExtras, listLabels, mediaEnabled, signMedia } from './crm-data';
-import { sendWhatsApp } from '@/lib/wa/send';
+import { sendToChat } from './send-any';
+import { chatLabel, phoneTail } from './channel';
 import { askBotModel } from '@/lib/wa/bot/model';
 import { CHAT_ROLES } from './auth';
 import { buildSuggestPrompt, cleanSuggestion } from './suggest';
@@ -14,7 +15,6 @@ import {
 
 /** Database reads and writes of the chat dashboard API (server only). The sales number's private chats only: never groups, never the admin number. */
 
-const digits = (s: unknown) => String(s ?? '').replace(/\D/g, '');
 type Who = { userId: string; name: string };
 type Fail = { ok: false; status: number; error: string };
 const fail = (status: number, error: string): Fail => ({ ok: false, status, error });
@@ -45,10 +45,9 @@ const ownGroup = async (ws: string, groupId: string): Promise<ChatGroupRow | nul
 
 /** The ERP client whose phone number is this WhatsApp number (compared on the last 9 digits), or null. */
 export async function findClientByPhone(ws: string, waId: string): Promise<{ id: string; name: string; sales_name: string | null } | null> {
-  const tail = (s: string) => digits(s).slice(-9);
-  const t = tail(waId);
+  const t = phoneTail(waId);
   if (t.length < 8) return null;
-  const hit = (await clientPhones(ws)).find((c: any) => tail(c.phone) === t);
+  const hit = (await clientPhones(ws)).find((c: any) => phoneTail(c.phone) === t);
   return hit ? { id: hit.id, name: hit.name, sales_name: hit.sales_name ?? null } : null;
 }
 
@@ -89,8 +88,7 @@ export async function loadThread(ws: string, groupId: string) {
     db.from('chat_state').select('group_id, assigned_to, assigned_name, resolved_at, first_message, first_message_at, source_id, source_label, source_channel, source_by, answers').eq('group_id', groupId).maybeSingle(),
     db.from('chat_notes').select('id, group_id, author_name, body, created_at').eq('group_id', groupId).order('created_at', { ascending: false }).limit(100),
   ]);
-  const tail = (s: string) => digits(s).slice(-9);
-  const client = (clients || []).find((c: any) => tail(c.phone).length >= 8 && tail(c.phone) === tail(group.wa_id)) || null;
+  const client = (clients || []).find((c: any) => phoneTail(c.phone).length >= 8 && phoneTail(c.phone) === phoneTail(group.wa_id)) || null;
   let deals: any[] = [];
   if (client) ({ data: deals } = await db.from('crm_deals').select('id, title, stage, value, salesman_name, salesman_id').eq('client_id', (client as any).id).order('created_at', { ascending: false }).limit(5) as any);
   const [links, labelDefs, reminders, { data: sess }] = await Promise.all([
@@ -113,7 +111,7 @@ export async function loadThread(ws: string, groupId: string) {
   }
   const lastLead = ((msgs || []) as ChatMessageRow[]).find((m) => !m.is_from_me);
   return {
-    id: group.id, phone: group.wa_id, name: (group.name || '').trim() || `+${group.wa_id}`,
+    id: group.id, phone: group.wa_id, name: (group.name || '').trim() || chatLabel(group.wa_id),
     messages: threadOf((msgs || []) as ChatMessageRow[], botReplies, (notes || []) as ChatNoteRow[]).map((x) => (x.mediaType ? { ...x, mediaUrl: mediaOf.get(x.id) ?? null } : x)),
     labels: labelDefs.filter((l) => onChat.has(l.id)), reminders,
     bot: bot ? { status: (bot as any).status, replies: (bot as any).replies, reason: (bot as any).reason, lead: (bot as any).lead } : { status: 'new', replies: 0, reason: null, lead: null },
@@ -150,12 +148,12 @@ export async function sendReply(ws: string, groupId: string, text: string, by: W
   if (clean.length > MAX_REPLY_CHARS) return fail(400, `The message is too long (max ${MAX_REPLY_CHARS} characters).`);
   const db = createAdminClient();
   const group = await ownGroup(ws, groupId);
-  const devicePhone = (await salesDevices(ws))[0]?.phone;
-  if (!group || !devicePhone) return fail(404, 'Chat not found.');
-  if (!process.env.FONNTE_TOKEN_SALES) return fail(503, 'The sales number is not connected (FONNTE_TOKEN_SALES is missing on the server).');
+  if (!group) return fail(404, 'Chat not found.');
+  const { data: gd } = await db.from('wa_groups').select('device_id').eq('id', groupId).maybeSingle();
+  const devicePhone = (await salesDevices(ws)).find((d) => d.id === (gd as any)?.device_id)?.phone ?? null;
 
-  const sent = await sendWhatsApp([group.wa_id], clean, { token: process.env.FONNTE_TOKEN_SALES });
-  if (!sent.ok) return fail(502, sent.detail);
+  const sent = await sendToChat(groupId, group.wa_id, clean);
+  if (!sent.ok) return fail(/24 hours|not connected/.test(sent.detail) ? 409 : 502, sent.detail);
 
   const at = new Date().toISOString();
   const { data: row } = await db.from('wa_messages').insert({

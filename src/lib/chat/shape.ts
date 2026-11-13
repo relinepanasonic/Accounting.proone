@@ -1,3 +1,4 @@
+import { chatLabel } from './channel';
 /**
  * The chat dashboard's view of the sales number's private chats. Pure functions (rows in, shapes out), so the rules are tested.
  * A chat is "unserved" when the lead wrote last and nobody (person or bot) has answered since; "waiting since" is when that run of lead messages began.
@@ -40,7 +41,7 @@ export const initialsOf = (name: string): string => {
   return (parts.length === 1 ? parts[0].slice(0, 2) : parts[0][0] + parts[1][0]).toUpperCase();
 };
 
-export const phoneLabel = (waId: string) => `+${waId}`;
+export const phoneLabel = (waId: string) => chatLabel(waId);
 
 /** Where the lead came from, as the inbox shows it; null until a first message was recorded. */
 export function sourceOf(st?: Pick<ChatStateRow, 'first_message' | 'source_label' | 'source_channel' | 'source_by'> | null): ChatSource | null {

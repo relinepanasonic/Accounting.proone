@@ -120,7 +120,7 @@ export async function loadThread(ws: string, groupId: string) {
     botLog: (log || []).slice(0, 10),
     assignedTo: state?.assigned_to ? { id: state.assigned_to, name: state.assigned_name || 'Team' } : null,
     answers: Object.entries(state?.answers || {}).filter(([k, v]) => k && typeof v === 'string' && v).map(([field, value]) => ({ field, value: String(value) })),
-    meeting: meeting ? { id: meeting.id, startsAt: meeting.starts_at, endsAt: meeting.ends_at, meetUrl: meeting.meet_url, bookedBy: meeting.booked_by } : null,
+    meeting: meeting ? { id: meeting.id, startsAt: meeting.starts_at, endsAt: meeting.ends_at, meetUrl: meeting.meet_url, bookedBy: meeting.booked_by, confirmed: !!meeting.confirmed_at, confirmAsked: !!meeting.confirm_sent_at, wantsOtherTime: !!meeting.reschedule_asked_at, owner: meeting.owner_name ?? null } : null,
     flowWaiting: sessionLive && ses ? { flow: ses.flow_name, kind: ses.kind, field: ses.field, until: ses.kind === 'wait' ? ses.resume_at : ses.expires_at } : null,
     source: sourceOf(state), sourceId: state?.source_id ?? null, firstMessage: state?.first_message ?? null,
     resolved: !!state?.resolved_at && !(lastLead && lastLead.sent_at > state.resolved_at),

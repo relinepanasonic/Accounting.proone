@@ -95,6 +95,16 @@ export async function createMeetEvent(token: string, calendarId: string, e: { ti
   return { id: String(j.id), meetUrl: meet ? String(meet) : null };
 }
 
+/** Moves an event to a new time (the Meet link stays the same). */
+export async function patchEventTime(token: string, calendarId: string, eventId: string, start: Date, end: Date): Promise<void> {
+  const res = await fetch(`${CAL}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ start: { dateTime: start.toISOString(), timeZone: 'Asia/Jakarta' }, end: { dateTime: end.toISOString(), timeZone: 'Asia/Jakarta' } }),
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!res.ok) { const j: any = await res.json().catch(() => null); throw new Error(`Google Calendar: ${j?.error?.message || res.status}`); }
+}
+
 export async function deleteEvent(token: string, calendarId: string, eventId: string): Promise<void> {
   await fetch(`${CAL}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10000) }).catch(() => undefined);
 }

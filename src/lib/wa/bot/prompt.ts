@@ -30,7 +30,14 @@ export function meetingSection(i: BotPromptInput): string[] {
     '- Ajak dengan halus setelah paham kebutuhannya, bukan di sapaan pertama, kecuali kakak sendiri yang minta.',
     '- Booking konsultasi bukan alasan handoff.',
   ];
-  if (m.booked) return [...head, `- Kakak SUDAH punya jadwal konsultasi: ${m.booked.label}${m.booked.meetUrl ? ` (link: ${m.booked.meetUrl})` : ''}. Jangan tawarkan jadwal lagi; bantu jawab pertanyaannya. Kalau kakak mau ganti jadwal, bilang tim akan bantu dan set handoff = true.`, ''];
+  if (m.booked) return [
+    ...head,
+    `- Kakak SUDAH punya jadwal konsultasi: ${m.booked.label}${m.booked.meetUrl ? ` (link: ${m.booked.meetUrl})` : ''}. Jangan tawarkan jadwal baru kecuali kakak minta ganti; bantu jawab pertanyaannya.`,
+    m.offer.length ? '- Kalau kakak minta ganti jadwal, tawarkan 2 atau 3 waktu dari JADWAL KOSONG; kalau kakak memilih, isi booking.slot dengan kode waktu baru (jadwal lama otomatis dipindah, link Meet tetap).' : '- Kalau kakak minta ganti jadwal, bilang tim akan bantu atur dan set handoff = true.',
+    '- Kalau kakak mau membatalkan konsultasi, isi "cancel_meeting": true dan jawab dengan ramah.',
+    ...(m.offer.length ? ['JADWAL KOSONG (kode = waktu)', ...m.offer.map((o) => `- ${o.code} = ${o.label}`)] : []),
+    '',
+  ];
   if (!m.offer.length) return [...head, '- Belum ada jadwal kosong dalam beberapa hari ke depan. Kalau kakak mau konsultasi, bilang tim akan menghubungi untuk atur waktu, dan set handoff = true.', ''];
   return [
     ...head,
@@ -48,7 +55,7 @@ export const replyMax = (channel: BotPromptInput['channel']) => (channel === 'so
 
 const JSON_FORMAT = [
   'FORMAT JAWABAN: hanya satu objek JSON, tanpa teks lain:',
-  '{"reply": "teks balasan untuk kakak", "handoff": true atau false, "reason": "alasan singkat bila handoff", "lead": {"name": "", "store": "", "need": ""}, "booking": {"slot": ""}}',
+  '{"reply": "teks balasan untuk kakak", "handoff": true atau false, "reason": "alasan singkat bila handoff", "lead": {"name": "", "store": "", "need": ""}, "booking": {"slot": ""}, "cancel_meeting": false}',
   'Isi lead hanya dengan apa yang kakak sebutkan sendiri; kosongkan bila belum ada. Isi booking.slot hanya saat kakak memilih waktu dari JADWAL KOSONG; selain itu kosongkan.',
 ];
 
@@ -121,8 +128,10 @@ export interface BotAnswer {
   handoff: boolean;
   reason: string;
   lead: { name?: string; store?: string; need?: string };
-  /** The time the lead picked (the slot code), when the bot should book the consultation. */
+  /** The time the lead picked (the slot code), when the bot should book the consultation (or move it, when one is booked). */
   booking?: string | null;
+  /** The lead wants to cancel their booked consultation. */
+  cancelMeeting?: boolean;
 }
 
 const URL_RE = /\bhttps?:\/\/[^\s)]+|\bwww\.[^\s)]+/gi;
@@ -170,5 +179,6 @@ export function parseBotAnswer(raw: string, knowledge = '', max = 600): BotAnswe
     reason: clean(j?.reason),
     lead: { name: clean(lead.name), store: clean(lead.store), need: clean(lead.need) },
     booking: typeof j?.booking?.slot === 'string' && j.booking.slot.trim() ? j.booking.slot.trim().slice(0, 40) : null,
+    cancelMeeting: j?.cancel_meeting === true,
   };
 }

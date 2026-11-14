@@ -8,4 +8,4 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 /** POST /api/v1/chat/conversations/<id>/meeting { start }: the team books a free consultation for this chat; the lead gets the time and Meet link. */
-export const POST = chatRoute(({ me, id, body }) => meetings.bookFromInbox(me.workspaceId, id, body?.start, me), { needsBody: true });
+export const POST = chatRoute(({ me, id, body }) => meetings.bookFromInbox(me.workspaceId, id, body?.start, { name: me.name, userId: me.userId }), { needsBody: true });

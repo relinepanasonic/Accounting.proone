@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { askBotModel } from './model';
 import { loadKnowledge, loadSocialScript } from '@/lib/chat/bible';
-import { availableSlots, bookMeeting, meetingContext } from '@/lib/chat/meetings';
+import { availableSlots, bookMeeting, meetingContext, moveMeeting, setMeetingStatus } from '@/lib/chat/meetings';
 import { offerSlots, slotLabel } from '@/lib/chat/meet-rules';
 import { recordBotMessage } from './store';
 import { humanPauseMs, sendToChat, showTyping } from '@/lib/chat/send-any';
@@ -108,6 +108,14 @@ export async function runSalesBot(device: BotDevice, m: ParsedWaMessage, groupId
       const other = offerSlots(await availableSlots(ws, true).catch(() => [])).slice(0, 3).map(slotLabel);
       answer = { ...answer, reply: other.length ? `Maaf kak, jam itu barusan sudah terisi. Yang masih kosong: ${other.join('; ')}. Kakak pilih yang mana?` : 'Maaf kak, jadwalnya barusan penuh. Tim kami akan menghubungi kakak untuk atur waktu ya.', handoff: !other.length };
     }
+  }
+
+  // A lead with a booking moved it to another free time, or cancelled it, in a longer message.
+  if (meet?.enabled && meet.booked && answer.booking) {
+    const mv = await moveMeeting(ws, meet.booked.id, answer.booking, 'bot').catch((e) => ({ ok: false as const, status: 500, error: String(e?.message || e) }));
+    answer = { ...answer, reply: mv.ok ? `${answer.reply}\n\n${mv.text}` : `${answer.reply}\n\nMaaf kak, jam itu barusan sudah terisi. Boleh pilih waktu lain?` };
+  } else if (meet?.enabled && meet.booked && answer.cancelMeeting) {
+    await setMeetingStatus(ws, meet.booked.id, 'cancelled').catch((e) => console.error('cancel meeting failed', e));
   }
 
   // The words that always need a person decide, whatever the model said.

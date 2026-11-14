@@ -35,6 +35,7 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
   const [storeCompany, setStoreCompany] = useState<string>(splitStore(clients[0]?.stores?.[0] || clients[0]?.store_name).company || 'ProOne');
   const [storeName, setStoreName] = useState<string>(splitStore(clients[0]?.stores?.[0] || clients[0]?.store_name).store);
   const [storeError, setStoreError] = useState('');
+  const [otherStore, setOtherStore] = useState(false); // typing a store that is not in the client's list
   const storeLabel = storeName.trim() ? `${storeCompany} - ${storeName.trim()}` : '';
   const [reportDate, setReportDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [session, setSession] = useState<number>(1);
@@ -76,19 +77,23 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
   // Choosing a client suggests its linked store; the stores already logged for it are offered too.
   const pickClient = (id: string) => {
     setSelectedClient(id);
-    const known = logs.find((l) => l.client_id === id && l.store_label);
     const c = clients.find((x) => x.id === id);
-    const linked = splitStore(c?.stores?.[0] || c?.store_name);
-    const from = known ? splitStore(known.store_label) : linked;
+    const known = logs.find((l) => l.client_id === id && l.store_label);
+    // the client's own stores come first; an old label from the logs only when the client has no store yet
+    const from = c?.stores?.length ? splitStore(c.stores[0]) : known ? splitStore(known.store_label) : splitStore(c?.store_name);
     setStoreCompany(from.company || 'ProOne');
     setStoreName(from.store);
+    setOtherStore(false);
     setStoreError('');
   };
   const chosen = clients.find((c) => c.id === selectedClient);
-  const storesOfClient = Array.from(new Set([
-    ...(chosen?.stores || (chosen?.store_name ? [chosen.store_name] : [])),
+  // the stores of the client (Optimizing > Clients); without any, the stores already logged for it
+  const ownStores = (chosen?.stores || []).filter((x) => splitStore(x).store);
+  const storesOfClient = Array.from(new Set(ownStores.length ? ownStores : [
+    ...(chosen?.store_name ? [chosen.store_name] : []),
     ...logs.filter((l) => l.client_id === selectedClient && l.store_label).map((l) => l.store_label as string),
   ].filter((x) => splitStore(x).store)));
+  const pickedValue = storesOfClient.find((x) => splitStore(x).company === storeCompany && splitStore(x).store.toLowerCase() === storeName.trim().toLowerCase()) || '';
 
   const handleStartRecord = () => {
     if (!storeName.trim()) { setStoreError('Type the store of this log.'); return; }
@@ -163,13 +168,29 @@ export function AdvertiserManager({ clients }: AdvertiserManagerProps) {
 
               <div>
                 <label className="block text-xs font-bold text-zinc-400 uppercase mb-2">Store</label>
-                <div className="flex gap-2">
-                  <select value={storeCompany} onChange={(e) => setStoreCompany(e.target.value)} className="w-[42%] bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:border-[#d4af37]">
-                    {COMPANIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                {storesOfClient.length > 0 && !otherStore ? (
+                  <select
+                    value={pickedValue}
+                    onChange={(e) => {
+                      if (e.target.value === '__other') { setOtherStore(true); setStoreName(''); return; }
+                      const sp = splitStore(e.target.value);
+                      setStoreCompany(sp.company || 'ProOne'); setStoreName(sp.store); setStoreError('');
+                    }}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#d4af37]"
+                  >
+                    {!pickedValue && <option value="">Choose the store</option>}
+                    {storesOfClient.map((st) => <option key={st} value={st}>{splitStore(st).store} · {splitStore(st).company}</option>)}
+                    <option value="__other">Other store (type it)...</option>
                   </select>
-                  <input list="log-stores" value={storeName} onChange={(e) => { setStoreName(e.target.value); setStoreError(''); }} placeholder="Store name" className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#d4af37]" />
-                  <datalist id="log-stores">{storesOfClient.map((st) => <option key={st} value={splitStore(st).store} />)}</datalist>
-                </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <select value={storeCompany} onChange={(e) => setStoreCompany(e.target.value)} className="w-[42%] bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:border-[#d4af37]">
+                      {COMPANIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <input value={storeName} onChange={(e) => { setStoreName(e.target.value); setStoreError(''); }} placeholder="Store name" className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#d4af37]" />
+                  </div>
+                )}
+                {otherStore && storesOfClient.length > 0 && <button type="button" onClick={() => { setOtherStore(false); const sp = splitStore(storesOfClient[0]); setStoreCompany(sp.company || 'ProOne'); setStoreName(sp.store); }} className="mt-1 text-[11px] text-[#d4af37] hover:underline">Back to the client's stores</button>}
                 <p className="mt-1 text-[10px] text-zinc-500">A client can have several stores: each store has its own log.</p>
                 {storeError && <p className="mt-1 text-[11px] text-red-400">{storeError}</p>}
               </div>

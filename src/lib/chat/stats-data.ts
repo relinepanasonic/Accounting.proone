@@ -17,7 +17,7 @@ async function build(ws: string, days: number): Promise<Stats> {
 
   const { data: devs } = await db.from('wa_devices').select('id').eq('workspace_id', ws).eq('role', 'sales').eq('active', true);
   const devIds = ((devs || []) as Array<{ id: string }>).map((d) => d.id);
-  const empty = computeStats({ messages: [], chats: [], botChats: [], deals: [], clients: [], reminders: [], unserved: [] }, { days, now });
+  const empty = computeStats({ messages: [], chats: [], botChats: [], deals: [], clients: [], reminders: [], unserved: [], meetings: [], nudgeBookings: [] }, { days, now });
   if (!devIds.length) return empty;
   const { data: groups } = await db.from('wa_groups').select('id, wa_id').eq('workspace_id', ws).eq('is_group', false).in('device_id', devIds).limit(2000);
   const gs = (groups || []) as Array<{ id: string; wa_id: string }>;
@@ -25,13 +25,15 @@ async function build(ws: string, days: number): Promise<Stats> {
   const ids = gs.map((g) => g.id);
   const waOf = new Map(gs.map((g) => [g.id, g.wa_id]));
 
-  const [{ data: msgs }, { data: states }, { data: botChats }, { data: deals }, { data: clients }, { data: reminders }] = await Promise.all([
+  const [{ data: msgs }, { data: states }, { data: botChats }, { data: deals }, { data: clients }, { data: reminders }, { data: meetingRows }, { data: nudgeRows }] = await Promise.all([
     db.from('wa_messages').select('group_id, is_from_me, sent_at, source, bot:raw->bot, sentBy:raw->sentBy').eq('workspace_id', ws).in('group_id', ids).gte('sent_at', since).order('sent_at', { ascending: true }).limit(20000),
     db.from('chat_state').select('group_id, first_message_at, assigned_name, source_channel, resolved_at').eq('workspace_id', ws).in('group_id', ids),
     db.from('wa_bot_chats').select('group_id, status, replies, reason').eq('workspace_id', ws).in('group_id', ids),
     db.from('crm_deals').select('client_id, salesman_name, stage, value, created_at, stage_changed_at').eq('workspace_id', ws).limit(5000),
     db.from('clients').select('id, phone').eq('workspace_id', ws).not('phone', 'is', null).limit(5000),
     db.from('chat_reminders').select('due_at, done_at').eq('workspace_id', ws).or(`done_at.is.null,due_at.gte.${since}`).limit(5000),
+    db.from('chat_meetings').select('group_id, status, created_at, starts_at, booked_by, confirmed_at, owner_name').eq('workspace_id', ws).limit(5000).then((r) => r, () => ({ data: [] as any[] })),
+    db.from('chat_nudges').select('booked_at').eq('workspace_id', ws).not('booked_at', 'is', null).gte('booked_at', since).limit(5000).then((r) => r, () => ({ data: [] as any[] })),
   ]);
 
   const messages: StatsMessage[] = ((msgs || []) as any[]).map((m) => ({ group_id: m.group_id, is_from_me: m.is_from_me, sent_at: m.sent_at, source: m.source, raw: { bot: m.bot === true, sentBy: m.sentBy ?? undefined } }));
@@ -56,5 +58,6 @@ async function build(ws: string, days: number): Promise<Stats> {
     messages,
     chats: ids.map((g) => { const s = stateOf.get(g); return { group_id: g, first_message_at: s?.first_message_at ?? null, assigned_name: s?.assigned_name ?? null, source_channel: s?.source_channel ?? null, wa_id: waOf.get(g) || '' }; }),
     botChats: (botChats || []) as any[], deals: (deals || []) as any[], clients: (clients || []) as any[], reminders: (reminders || []) as any[], unserved,
+    meetings: (meetingRows || []) as any[], nudgeBookings: ((nudgeRows || []) as any[]).map((n) => n.booked_at as string),
   }, { days, now });
 }

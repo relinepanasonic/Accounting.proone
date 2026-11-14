@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeStats, median, reasonGroup, repliesOf, responderOf, type StatsInput, type StatsMessage } from './stats';
+import { computeStats, median, reasonGroup, repliesOf, responderOf, type StatsInput, type StatsMeeting, type StatsMessage } from './stats';
 
 const NOW = new Date('2026-11-13T05:00:00Z');
 const t = (minAgo: number) => new Date(NOW.getTime() - minAgo * 60000).toISOString();
@@ -93,14 +93,14 @@ describe('computeStats', () => {
   });
   it('per person: one row per first name, with chats, replies, reply time, leads and won', () => {
     const rani = s.people.find((p) => p.name.toLowerCase().startsWith('rani'))!;
-    expect(rani).toMatchObject({ chats: 1, replies: 1, medianMinutes: 10, leads: 1, won: 1, wonValue: 4000000 });
+    expect(rani).toMatchObject({ chats: 1, replies: 1, medianMinutes: 10, leads: 1, won: 1, wonValue: 4000000, meetingsHeld: 0 });
     expect(s.people.filter((p) => p.name.toLowerCase().startsWith('rani'))).toHaveLength(1);
     expect(s.people.find((p) => p.name === 'Lucy')).toMatchObject({ chats: 1, replies: 1, medianMinutes: 5, leads: 1, won: 0 });
   });
   it('the funnel per channel: new chats, how many became a lead, how many were won', () => {
     expect(s.funnel).toEqual([
-      { channel: 'meta_ads', chats: 2, leads: 1, won: 1, wonValue: 4000000 },
-      { channel: 'google_ads', chats: 1, leads: 1, won: 0, wonValue: 0 },
+      { channel: 'meta_ads', chats: 2, booked: 0, attended: 0, leads: 1, won: 1, wonValue: 4000000 },
+      { channel: 'google_ads', chats: 1, booked: 0, attended: 0, leads: 1, won: 0, wonValue: 0 },
     ]);
   });
   it('right now: chats waiting, the longest wait, overdue follow-ups', () => {
@@ -116,5 +116,44 @@ describe('computeStats', () => {
     expect(e.overview).toMatchObject({ newChats: 0, replies: 0, medianReply: null, within5: null, won: 0 });
     expect(e.people).toEqual([]);
     expect(e.now).toEqual({ waiting: 0, longestWaitMinutes: null, overdueFollowups: 0 });
+  });
+});
+
+describe('the booking funnel (the free consultation)', () => {
+  const chats = [
+    { group_id: 'a', first_message_at: t(60), assigned_name: 'Rani', source_channel: 'meta_ads', wa_id: '628111000001' },
+    { group_id: 'b', first_message_at: t(120), assigned_name: null, source_channel: 'meta_ads', wa_id: '628111000002' },
+    { group_id: 'c', first_message_at: t(50), assigned_name: 'Lucy', source_channel: 'google_ads', wa_id: '628111000003' },
+    { group_id: 'd', first_message_at: t(40), assigned_name: null, source_channel: 'google_ads', wa_id: '628111000004' },
+  ];
+  const mt = (g: string | null, o: Partial<StatsMeeting>): StatsMeeting => ({ group_id: g, status: 'booked', created_at: t(30), starts_at: t(-60 * 24), booked_by: 'bot', confirmed_at: null, owner_name: 'Rani Putri', ...o });
+  const meetings: StatsMeeting[] = [
+    mt('a', { status: 'done', starts_at: t(10), confirmed_at: t(100) }),                       // came
+    mt('b', { status: 'no_show', starts_at: t(20), booked_by: 'Lucy' }),                       // did not come, booked by a person
+    mt('c', { status: 'booked', confirmed_at: t(5) }),                                         // upcoming, confirmed
+    mt('d', { status: 'cancelled' }),                                                          // cancelled: not counted as booked for the chat
+    mt('old', { status: 'done', created_at: t(60 * 24 * 40), starts_at: t(60 * 24 * 39) }),    // outside the period
+  ];
+  const s = computeStats({ messages: [], chats, botChats: [], deals: [], clients: [], reminders: [], unserved: [], meetings, nudgeBookings: [t(15), t(60 * 24 * 40)] }, { days: 30, now: NOW });
+
+  it('counts booked, by whom, held, no-shows, the show rate, and what is coming', () => {
+    expect(s.booking).toMatchObject({ booked: 4, byBot: 3, byTeam: 1, byNudge: 1, held: 1, noShow: 1, showRate: 0.5, cancelled: 1, upcoming: 1, confirmedUpcoming: 1 });
+  });
+  it('of the new chats, the share that booked (cancelled ones do not count)', () => {
+    expect(s.booking.chatToBooked).toBe(0.75);
+  });
+  it('the funnel per channel gets booked and attended', () => {
+    expect(s.funnel).toEqual([
+      { channel: 'meta_ads', chats: 2, booked: 2, attended: 1, leads: 0, won: 0, wonValue: 0 },
+      { channel: 'google_ads', chats: 2, booked: 1, attended: 0, leads: 0, won: 0, wonValue: 0 },
+    ]);
+  });
+  it('a salesperson gets the consultations they held', () => {
+    expect(s.people.find((p) => p.name.startsWith('Rani'))?.meetingsHeld).toBe(1);
+  });
+  it('no meetings at all gives zeros and no rate', () => {
+    const e = computeStats({ messages: [], chats, botChats: [], deals: [], clients: [], reminders: [], unserved: [] }, { days: 30, now: NOW });
+    expect(e.booking).toMatchObject({ booked: 0, held: 0, showRate: null, upcoming: 0 });
+    expect(e.booking.chatToBooked).toBe(0);
   });
 });

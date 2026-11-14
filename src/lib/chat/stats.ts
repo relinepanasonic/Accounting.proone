@@ -13,6 +13,7 @@ export interface StatsBotChat { group_id: string; status: string; replies: numbe
 export interface StatsDeal { client_id: string; salesman_name: string | null; stage: string; value: number | string | null; created_at: string | null; stage_changed_at: string | null }
 export interface StatsClient { id: string; phone: string | null }
 export interface StatsReminder { due_at: string; done_at: string | null }
+export interface StatsMeeting { group_id: string | null; status: string; created_at: string; starts_at: string; booked_by: string | null; confirmed_at: string | null; owner_name: string | null }
 
 const BOT = 'Bot';
 const DAY = 86400000;
@@ -64,13 +65,26 @@ export interface StatsInput {
   clients: StatsClient[];
   reminders: StatsReminder[];        // open and done
   unserved: Array<{ waitingSince: string }>;   // chats waiting right now
+  meetings?: StatsMeeting[];         // the free consultations (chat_meetings)
+  nudgeBookings?: string[];          // when a lead booked by answering a follow-up nudge with a number
 }
 
-export interface PersonRow { name: string; chats: number; replies: number; medianMinutes: number | null; leads: number; won: number; wonValue: number }
-export interface ChannelFunnel { channel: string; chats: number; leads: number; won: number; wonValue: number }
+export interface PersonRow { name: string; chats: number; replies: number; medianMinutes: number | null; leads: number; won: number; wonValue: number; meetingsHeld: number }
+export interface ChannelFunnel { channel: string; chats: number; booked: number; attended: number; leads: number; won: number; wonValue: number }
+
+/** The free consultation, the goal of every chat: how many were booked, how many came, and where the bookings came from. */
+export interface BookingStats {
+  booked: number;              // booked in the period (any status, cancelled included)
+  byBot: number; byTeam: number; byNudge: number;   // who got the lead to book: the bot, a person, a follow-up nudge (a nudge booking is also counted in byBot)
+  held: number; noShow: number; showRate: number | null;   // meetings whose time fell in the period and were marked Done / Did not come
+  cancelled: number;
+  upcoming: number; confirmedUpcoming: number;             // booked, still ahead, and how many of those the lead confirmed
+  chatToBooked: number | null; // of the new chats of the period, the share that booked a consultation
+}
 
 export interface Stats {
   from: string; to: string; days: number;
+  booking: BookingStats;
   overview: { newChats: number; leadMessages: number; replies: number; medianReply: number | null; medianBot: number | null; medianPeople: number | null; within5: number | null; leads: number; won: number; wonValue: number };
   daily: Array<{ day: string; newChats: number; leadMessages: number; replies: number }>;
   bot: { chatsAnswered: number; replies: number; handedOver: number; stillWithBot: number; reasons: Array<{ reason: string; count: number }> };
@@ -138,6 +152,26 @@ export function computeStats(input: StatsInput, opts: { days: number; now?: Date
   const reasons = new Map<string, number>();
   for (const b of handed) { const g = reasonGroup(b.reason); reasons.set(g, (reasons.get(g) || 0) + 1); }
 
+  // the free consultations
+  const meetings = input.meetings ?? [];
+  const bookedNow = meetings.filter((m) => inRange(m.created_at, from, to));
+  const dueNow = meetings.filter((m) => inRange(m.starts_at, from, to));
+  const heldMeetings = dueNow.filter((m) => m.status === 'done');
+  const noShow = dueNow.filter((m) => m.status === 'no_show').length;
+  const upcoming = meetings.filter((m) => m.status === 'booked' && Date.parse(m.starts_at) > to);
+  const meetingsByChat = new Map<string, StatsMeeting[]>();
+  for (const m of meetings) if (m.group_id) meetingsByChat.set(m.group_id, [...(meetingsByChat.get(m.group_id) || []), m]);
+  const nudgeBooked = (input.nudgeBookings ?? []).filter((t) => inRange(t, from, to)).length;
+  const byBot = bookedNow.filter((m) => m.booked_by === 'bot').length;
+  const chatsThatBooked = newChats.filter((c) => (meetingsByChat.get(c.group_id) || []).some((m) => m.status !== 'cancelled')).length;
+  const booking: BookingStats = {
+    booked: bookedNow.length, byBot, byTeam: bookedNow.length - byBot, byNudge: nudgeBooked,
+    held: heldMeetings.length, noShow, showRate: heldMeetings.length + noShow > 0 ? heldMeetings.length / (heldMeetings.length + noShow) : null,
+    cancelled: bookedNow.filter((m) => m.status === 'cancelled').length,
+    upcoming: upcoming.length, confirmedUpcoming: upcoming.filter((m) => !!m.confirmed_at).length,
+    chatToBooked: newChats.length ? chatsThatBooked / newChats.length : null,
+  };
+
   // per person: replies from the dashboard, chats assigned, deals they own
   const names = new Set<string>();
   for (const r of replies) if (r.by !== BOT && r.by !== 'Team') names.add(r.by);
@@ -151,6 +185,7 @@ export function computeStats(input: StatsInput, opts: { days: number; now?: Date
     return {
       name, chats: input.chats.filter((c) => same(c.assigned_name, name)).length, replies: mine.length, medianMinutes: median(mine.map((r) => r.minutes)),
       leads: leadsMade.filter((d) => same(d.salesman_name, name)).length, won: won.length, wonValue: won.reduce((s, d) => s + Number(d.value || 0), 0),
+      meetingsHeld: heldMeetings.filter((m) => same(m.owner_name, name)).length,
     };
   });
   // the same person can appear under a long and a short name: keep one row per first name, the one with the most activity
@@ -165,8 +200,11 @@ export function computeStats(input: StatsInput, opts: { days: number; now?: Date
   const funnelMap = new Map<string, ChannelFunnel>();
   for (const c of newChats) {
     const ch = c.source_channel && c.source_channel !== 'unknown' ? c.source_channel : 'unknown';
-    const f = funnelMap.get(ch) || { channel: ch, chats: 0, leads: 0, won: 0, wonValue: 0 };
+    const f = funnelMap.get(ch) || { channel: ch, chats: 0, booked: 0, attended: 0, leads: 0, won: 0, wonValue: 0 };
     f.chats++;
+    const ms = (meetingsByChat.get(c.group_id) || []).filter((m) => m.status !== 'cancelled');
+    if (ms.length) f.booked++;
+    if (ms.some((m) => m.status === 'done')) f.attended++;
     const ds = chatDeals(c);
     if (ds.length) f.leads++;
     const w = ds.filter((d) => d.stage === 'Deal');
@@ -184,6 +222,7 @@ export function computeStats(input: StatsInput, opts: { days: number; now?: Date
       leads: leadsMade.length, won: wonDeals.length, wonValue: wonDeals.reduce((s, d) => s + Number(d.value || 0), 0),
     },
     daily,
+    booking,
     bot: { chatsAnswered: botChats.size, replies: bot.length, handedOver: handed.length, stillWithBot: touched.filter((b) => b.status === 'bot').length, reasons: [...reasons.entries()].map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count) },
     people: peopleOut,
     funnel: [...funnelMap.values()].sort((a, b) => b.chats - a.chats),

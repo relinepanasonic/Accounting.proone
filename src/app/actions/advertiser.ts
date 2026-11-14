@@ -96,6 +96,39 @@ export async function fetchAdvertiserLogs() {
   return { data: Object.values(grouped).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) };
 }
 
+/** "ProOne - Sari Surabaya" and "ProOne - sarisurabaya" are the same store. */
+const labelKey = (v: string) => String(v || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+const storeOnlyKey = (v: string) => labelKey(String(v || '').replace(/^\s*(ProOne|Reline|Alpha|Lighting Solution)\s*-\s*/i, ''));
+
+/**
+ * The id of the latest log of this store before a day and session (or the latest at all, with no day). The store is matched loosely: the same label,
+ * then the same store name in any spelling, then, for a client whose logs all have one label (or none), that label. The ads of the session before
+ * are what a new session starts from, so a renamed store must not start empty.
+ */
+async function previousLogId(supabase: any, workspaceId: string, clientId: string, storeLabel: string, reportDate: string | null, session: number | null): Promise<string | null> {
+  let q = supabase.from('advertiser_reports').select('id, store_label, report_date, session').eq('workspace_id', workspaceId).eq('client_id', clientId);
+  if (reportDate && session !== null) q = q.or(`report_date.lt.${reportDate},and(report_date.eq.${reportDate},session.lt.${session})`);
+  let { data, error } = await q.order('report_date', { ascending: false }).order('session', { ascending: false }).limit(300);
+  if (error && /store_label/.test(error.message)) {
+    // before the store column existed: per client
+    let q2 = supabase.from('advertiser_reports').select('id, report_date, session').eq('workspace_id', workspaceId).eq('client_id', clientId);
+    if (reportDate && session !== null) q2 = q2.or(`report_date.lt.${reportDate},and(report_date.eq.${reportDate},session.lt.${session})`);
+    ({ data } = await q2.order('report_date', { ascending: false }).order('session', { ascending: false }).limit(1));
+    return data?.[0]?.id || null;
+  }
+  const rows: Array<{ id: string; store_label: string | null }> = data || [];
+  if (!rows.length) return null;
+  const want = labelKey(storeLabel);
+  const wantStore = storeOnlyKey(storeLabel);
+  const hit = rows.find((r) => (r.store_label || '') === storeLabel)
+    || (want ? rows.find((r) => labelKey(r.store_label || '') === want) : undefined)
+    || (wantStore ? rows.find((r) => storeOnlyKey(r.store_label || '') === wantStore) : undefined);
+  if (hit) return hit.id;
+  const labels = new Set(rows.map((r) => labelKey(r.store_label || '')).filter(Boolean));
+  if (labels.size <= 1) return rows[0].id; // one store only (or old logs without a store): its last log
+  return null;
+}
+
 /** The log of one STORE of a client (storeLabel "Company - Store"). Before 20261105_advertiser_report_store.sql the store is ignored. */
 export async function fetchAdvertiserReport(clientId: string, reportDate: string, session: number, storeLabel = '') {
   const supabase = await createClient();
@@ -111,17 +144,12 @@ export async function fetchAdvertiserReport(clientId: string, reportDate: string
   }
 
   // No log for this session yet: it starts from the session right before it (the earlier session of the same day, else the last one of an earlier day),
-  // and only when there is none, from the latest log of the store.
-  const before = () => base().or(`report_date.lt.${reportDate},and(report_date.eq.${reportDate},session.lt.${session})`).order('report_date', { ascending: false }).order('session', { ascending: false }).limit(1);
-  let { data: prevReport, error: prevError } = await before().eq('store_label', storeLabel).maybeSingle();
-  if (prevError && /store_label/.test(prevError.message)) ({ data: prevReport } = await before().maybeSingle());
-  if (prevReport) return { data: prevReport, isHistorical: true, from: { date: prevReport.report_date as string, session: prevReport.session as number } };
-
-  let { data: lastReport, error: lastError } = await base().eq('store_label', storeLabel).order('report_date', { ascending: false }).order('session', { ascending: false }).limit(1).maybeSingle();
-  if (lastError && /store_label/.test(lastError.message)) ({ data: lastReport } = await base().order('report_date', { ascending: false }).order('session', { ascending: false }).limit(1).maybeSingle());
-
-  if (lastReport) {
-    return { data: lastReport, isHistorical: true, from: { date: lastReport.report_date as string, session: lastReport.session as number } };
+  // and only when there is none, from the latest log of the store. The store is matched loosely ("ProOne - Sari Surabaya" = "ProOne - sarisurabaya").
+  const prevId = await previousLogId(supabase, activeWorkspaceId, clientId, storeLabel, reportDate, session);
+  const lastId = prevId || (await previousLogId(supabase, activeWorkspaceId, clientId, storeLabel, null, null));
+  if (lastId) {
+    const { data: prev } = await supabase.from('advertiser_reports').select('*').eq('id', lastId).maybeSingle();
+    if (prev) return { data: prev, isHistorical: true, from: { date: prev.report_date as string, session: prev.session as number } };
   }
 
   return { data: null, isHistorical: false, from: null as { date: string; session: number } | null };
@@ -223,10 +251,9 @@ export async function fetchPreviousSession(clientId: string, reportDate: string,
   const supabase = await createClient();
   const { activeWorkspaceId } = await getAuthenticatedWorkspaceContext(supabase);
 
-  const q = () => supabase.from('advertiser_reports').select('session, report_date, data_inkubasi, data_group, data_mandiri').eq('workspace_id', activeWorkspaceId).eq('client_id', clientId)
-    .or(`report_date.lt.${reportDate},and(report_date.eq.${reportDate},session.lt.${session})`).order('report_date', { ascending: false }).order('session', { ascending: false }).limit(1);
-  let { data, error } = await q().eq('store_label', storeLabel).maybeSingle();
-  if (error && /store_label/.test(error.message)) ({ data, error } = await q().maybeSingle());
+  const id = await previousLogId(supabase, activeWorkspaceId, clientId, storeLabel, reportDate, session);
+  if (!id) return { data: null };
+  const { data, error } = await supabase.from('advertiser_reports').select('session, report_date, data_inkubasi, data_group, data_mandiri').eq('id', id).maybeSingle();
 
   if (error) {
     console.error('Error fetching previous session:', error);

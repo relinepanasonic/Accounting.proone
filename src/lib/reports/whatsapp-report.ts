@@ -7,13 +7,19 @@ import { normalizeLogs, buildPerformance, type LogRow, type AssignedStore } from
 
 /**
  * The WhatsApp report for Nico, Herlan and Lucy. By division (Sales, Admin, Advertiser, Accounting), no AI names.
- *  Tuesday to Saturday: Daily report of yesterday (Monday to Friday). Sunday: nothing. Monday: Weekly report, which is the
- *  ongoing month from the 1st to yesterday (Sunday); on the first Monday of a new month it is the Monthly report of the last month.
+ *  Two times a week-day: the EVENING report (19:00, Monday to Friday) is the Daily report of that same day. The MORNING report (Monday 08:00)
+ *  is the Weekly report, which is the ongoing month from the 1st to yesterday (Sunday); on the first Monday of a new month it is the Monthly
+ *  report of the last month. Saturday and Sunday evenings, and every other morning: nothing.
  * Every number is counted from the data; only "Saran Prof" is written by the model, from those numbers.
  */
 
 export type ReportKind = 'daily' | 'weekly' | 'monthly' | 'none';
 export interface ReportPlan { kind: ReportKind; from: string; to: string; prevFrom: string; prevTo: string }
+/** Which of the two sends: the evening daily (19:00) or the Monday-morning weekly / monthly (08:00). */
+export type ReportSlot = 'evening' | 'morning';
+/** The slot to use when none is named: before 14:00 Jakarta time it is the morning one, after it the evening one. */
+export const currentSlot = (now = new Date()): ReportSlot => (new Date(now.getTime() + 7 * 3600000).getUTCHours() < 14 ? 'morning' : 'evening');
+export const isReportSlot = (v: unknown): v is ReportSlot => v === 'evening' || v === 'morning';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 export const addDays = (day: string, n: number) => jakartaDay(new Date(new Date(`${day}T12:00:00+07:00`).getTime() + n * 86400000));
@@ -25,11 +31,17 @@ export const inRange = (day: string, from: string, to: string) => !!day && day >
 const daysBetween = (from: string, to: string) => Math.round((new Date(`${to}T12:00:00+07:00`).getTime() - new Date(`${from}T12:00:00+07:00`).getTime()) / 86400000) + 1;
 const lastDayOfMonth = (year: number, month1: number) => new Date(Date.UTC(year, month1, 0)).getUTCDate();
 
-export function planReport(today: string): ReportPlan {
+export function planReport(today: string, slot: ReportSlot = 'evening'): ReportPlan {
   const dow = weekday(today);
   const yesterday = addDays(today, -1);
-  if (dow === 0) return { kind: 'none', from: today, to: today, prevFrom: today, prevTo: today };
-  if (dow !== 1) return { kind: 'daily', from: yesterday, to: yesterday, prevFrom: addDays(yesterday, -1), prevTo: addDays(yesterday, -1) };
+  const none: ReportPlan = { kind: 'none', from: today, to: today, prevFrom: today, prevTo: today };
+  if (slot === 'evening') {
+    // the day itself, compared with the work day before it (Monday is compared with Friday)
+    if (dow === 0 || dow === 6) return none;
+    const prev = addDays(today, dow === 1 ? -3 : -1);
+    return { kind: 'daily', from: today, to: today, prevFrom: prev, prevTo: prev };
+  }
+  if (dow !== 1) return none;
 
   const dayOfMonth = Number(today.slice(8, 10));
   if (dayOfMonth <= 7) {
@@ -169,9 +181,9 @@ export async function profAdvice(kind: ReportKind, facts: unknown): Promise<stri
 export const resolveToday = (override?: string) => (override && /^\d{4}-\d{2}-\d{2}$/.test(override) ? override : jakartaDay(new Date()));
 
 /** Everything the report says, counted once: the WhatsApp text and the PDF both read it. */
-export async function gatherReportData(todayOverride?: string) {
+export async function gatherReportData(todayOverride?: string, slot: ReportSlot = currentSlot()) {
   const today = resolveToday(todayOverride);
-  const plan = planReport(today);
+  const plan = planReport(today, slot);
   if (plan.kind === 'none') return null;
   const db = createAdminClient();
   const [sales, admin, advertisers, todo, acc] = await Promise.all([
@@ -186,14 +198,14 @@ export async function gatherReportData(todayOverride?: string) {
 }
 export type ReportData = NonNullable<Awaited<ReturnType<typeof gatherReportData>>>;
 
-export async function buildWhatsAppReport(todayOverride?: string) {
-  const data = await gatherReportData(todayOverride);
+export async function buildWhatsAppReport(todayOverride?: string, slot: ReportSlot = currentSlot()) {
+  const data = await gatherReportData(todayOverride, slot);
   if (!data) return { send: false, kind: 'none' as ReportKind, date: resolveToday(todayOverride), text: '' };
   const { today, plan, sales, admin, advertisers, todo, acc, advice } = data;
 
   const daily = plan.kind === 'daily';
   const title = daily
-    ? `*Daily Yesterday (${dmy(plan.from)}) Report*`
+    ? `*Daily Report (${dmy(plan.from)})*`
     : `*${plan.kind === 'monthly' ? 'Monthly' : 'Weekly'} (${dmy(plan.from)} - ${dmy(plan.to)}) Report*`;
   const out: string[] = [title, ''];
 

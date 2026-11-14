@@ -21,6 +21,7 @@ const KIND: Record<string, string> = { daily: 'Daily', weekly: 'Weekly', monthly
 export function FounderPanel({ recipients, autoSend, sends, tokenSet, sendFiles }: { recipients: Recipient[]; autoSend: boolean; sends: SendRow[]; tokenSet: boolean; sendFiles: boolean }) {
   const [pending, start] = useTransition();
   const [date, setDate] = useState('');
+  const [slot, setSlot] = useState<'evening' | 'morning'>(() => (new Date(Date.now() + 7 * 3600000).getUTCDay() === 1 && new Date(Date.now() + 7 * 3600000).getUTCHours() < 14 ? 'morning' : 'evening'));
   const [preview, setPreview] = useState<{ kind: string; date: string; text: string; message: string; send: boolean } | null>(null);
   const [msg, setMsg] = useState('');
   const [newPhone, setNewPhone] = useState('');
@@ -40,13 +41,17 @@ export function FounderPanel({ recipients, autoSend, sends, tokenSet, sendFiles 
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h2 className={h2}>Team performance report</h2>
           <div className="flex flex-wrap items-center gap-2">
+            <select value={slot} onChange={(e) => { setSlot(e.target.value as 'evening' | 'morning'); setPreview(null); }} className={input} title="Which report">
+              <option value="evening">Daily (19:00, Mon-Fri)</option>
+              <option value="morning">Weekly (Monday 08:00)</option>
+            </select>
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={input} title="Build the report as if today were this date (empty = today)" />
-            <button disabled={pending} className={btn} onClick={() => start(async () => { setMsg('Building the report... (up to 30 seconds)'); const r: any = await previewPerformanceReport(date || undefined); if (r?.error) { setMsg(`Problem: ${r.error}`); } else { setPreview(r.report); setMsg(r.report.send ? '' : 'Sunday: there is no report.'); } })}>
+            <button disabled={pending} className={btn} onClick={() => start(async () => { setMsg('Building the report... (up to 30 seconds)'); const r: any = await previewPerformanceReport(date || undefined, slot); if (r?.error) { setMsg(`Problem: ${r.error}`); } else { setPreview(r.report); setMsg(r.report.send ? '' : slot === 'morning' ? 'The weekly report is only made on a Monday: pick a Monday.' : 'There is no daily report on Saturday and Sunday.'); } })}>
               {pending ? 'Working...' : 'Build preview'}
             </button>
           </div>
         </div>
-        <p className="text-[11px] text-zinc-500">Daily Tuesday to Saturday (yesterday), weekly on Monday (the month so far), monthly on the first Monday of a month, nothing on Sunday. Counted from the ERP data; the advice at the end is written by Prof (AI).</p>
+        <p className="text-[11px] text-zinc-500">Daily at 19:00 Monday to Friday (that day, as a PDF to Nico and Herlan); weekly on Monday at 08:00 (the month so far), monthly on the first Monday of a month. Counted from the ERP data; the advice at the end is written by Prof (AI).</p>
         {msg && <p className="mt-2 text-xs text-zinc-300">{msg}</p>}
         {preview?.send && (
           <div className="mt-4 grid gap-4 xl:grid-cols-2">
@@ -103,7 +108,7 @@ export function FounderPanel({ recipients, autoSend, sends, tokenSet, sendFiles 
             <div className="border-t border-zinc-800/70 pt-3">
               <div className="font-bold text-zinc-100">Send now to everyone</div>
               <p className="mt-1 text-[11px] text-zinc-500">Builds today&apos;s report and sends it to every active number above. Use the Test button next to one name first.</p>
-              <button disabled={pending || !tokenSet} className={`${btn} mt-2`} onClick={() => { if (!confirm(`Send the ${preview ? KIND[preview.kind] : 'team performance'} report to ${recipients.filter((x) => x.active).length} people now?`)) return; start(async () => { setMsg('Sending... (up to 40 seconds)'); const r: any = await sendPerformanceReportNow(); say(r, ''); }); }}>
+              <button disabled={pending || !tokenSet} className={`${btn} mt-2`} onClick={() => { if (!confirm(`Send the ${preview ? KIND[preview.kind] : 'team performance'} report to ${recipients.filter((x) => x.active).length} people now?`)) return; start(async () => { setMsg('Sending... (up to 40 seconds)'); const r: any = await sendPerformanceReportNow(undefined, slot); say(r, ''); }); }}>
                 {pending ? 'Working...' : 'Send now to all'}
               </button>
             </div>

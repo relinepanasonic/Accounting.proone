@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/api/supabase-admin';
-import { buildWhatsAppReport } from '@/lib/reports/whatsapp-report';
+import { buildWhatsAppReport, currentSlot, type ReportSlot } from '@/lib/reports/whatsapp-report';
 import { signedReportUrl, SHARE_TTL_SECONDS } from '@/lib/reports/signed-url';
 import { sendWhatsApp } from './send';
 import { sendReportPdfs, type ReportPdf } from './report-files';
@@ -9,8 +9,8 @@ import { dmy } from '@/lib/reports/whatsapp-report';
 
 /**
  * The team performance report (Sales, Admin, Advertiser, To Do, Accounting) for Nico, Herlan and Lucy.
- * The report itself is built by src/lib/reports/whatsapp-report.ts (daily Tue-Sat, weekly on Monday, monthly on the first
- * Monday of a month, nothing on Sunday). This file only decides what is sent, to whom, and keeps the history.
+ * The report itself is built by src/lib/reports/whatsapp-report.ts: the daily one at 19:00 Monday to Friday (about that day), the weekly one
+ * on Monday at 08:00 (monthly on the first Monday of a month). This file only decides what is sent, to whom, and keeps the history.
  * It replaces the Make.com scenario "Daily / Weekly Report WhatsApp": Make only fetched the text and called Fonnte.
  */
 
@@ -29,8 +29,8 @@ export interface PerformanceReport {
 }
 
 /** Builds the report for a day (default: today) without sending anything. */
-export async function previewPerformance(dateOverride?: string): Promise<PerformanceReport> {
-  const res: any = await buildWhatsAppReport(dateOverride);
+export async function previewPerformance(dateOverride?: string, slot: ReportSlot = currentSlot()): Promise<PerformanceReport> {
+  const res: any = await buildWhatsAppReport(dateOverride, slot);
   if (!res.send) return { send: false, kind: 'none', date: res.date, text: '', message: '' };
   let message: string = res.text;
   let files: ReportPdf[] | undefined;
@@ -48,10 +48,11 @@ export interface SendOutcome { sent: boolean; reason?: string; kind?: string; da
  * Builds and sends the report. trigger "cron" refuses to send the same report twice in a day;
  * "manual" sends to everyone active; "test" sends only to `onlyPhones`.
  */
-export async function sendPerformance(workspaceId: string, opts: { trigger: 'cron' | 'manual' | 'test'; onlyPhones?: string[]; dateOverride?: string }): Promise<SendOutcome> {
+export async function sendPerformance(workspaceId: string, opts: { trigger: 'cron' | 'manual' | 'test'; onlyPhones?: string[]; dateOverride?: string; slot?: ReportSlot }): Promise<SendOutcome> {
   const db = createAdminClient();
-  const report = await previewPerformance(opts.dateOverride);
-  if (!report.send) return { sent: false, reason: 'Sunday: there is no report today.', kind: 'none', date: report.date };
+  const slot = opts.slot ?? currentSlot();
+  const report = await previewPerformance(opts.dateOverride, slot);
+  if (!report.send) return { sent: false, reason: slot === 'morning' ? 'The weekly report is only on Monday morning.' : 'There is no daily report on Saturday and Sunday.', kind: 'none', date: report.date };
 
   if (opts.trigger === 'cron') {
     const { data: already } = await db.from('wa_sends').select('id').eq('workspace_id', workspaceId).eq('kind', report.kind).eq('report_date', report.date).eq('ok', true).in('trigger', ['cron', 'manual']).limit(1);

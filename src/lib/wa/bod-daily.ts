@@ -11,7 +11,7 @@ import { inputByDay, type InputReport } from '@/lib/advertiser/input-series';
  * Pure functions first (tested), then the loader that reads the database.
  *
  * Which day the advertising numbers are about: the advertisers' Session 1 holds the Sales and Ads Cost of the day BEFORE it (Shopee's closed day),
- * so the Session 1 inputted yesterday carries the numbers of the day before yesterday. That is the latest day whose numbers are complete when the report goes out.
+ * so the Session 1 inputted today carries yesterday's numbers. That is the latest day whose numbers are complete when the report goes out (19:00).
  */
 
 export const STAGES = ['Lead', 'Contacted', 'Negotiation', 'Invoice', 'Deal', 'Cold Case'] as const;
@@ -138,7 +138,7 @@ export function endingsOf(clients: Array<{ name?: string | null; sales_name?: st
 // ---------------------------------------------------------------- the whole report
 
 export interface BodDaily {
-  reportDay: string;          // "yesterday": the day the sessions and uploads are about
+  reportDay: string;          // the day the sessions and uploads are about (the day the report is sent)
   dataDay: string;            // the day the Sales / Ads Cost numbers are about
   sessions: SessionStatus;
   advertisers: Array<{ name: string } & SessionStatus>;
@@ -149,9 +149,9 @@ export interface BodDaily {
   endings: Endings;
 }
 
-/** Reads everything the daily BOD PDF shows. `today` is the Jakarta day the report is made on (it reports on yesterday). */
+/** Reads everything the daily BOD PDF shows. `today` is the Jakarta day the report is made on, at 19:00, and is about. */
 export async function loadBodDaily(today: string): Promise<BodDaily | null> {
-  const plan = planReport(today);
+  const plan = planReport(today, 'evening');
   if (plan.kind !== 'daily') return null;
   const reportDay = plan.from;
   const dataDay = addDays(reportDay, -1);

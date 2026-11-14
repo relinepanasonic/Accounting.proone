@@ -45,3 +45,51 @@ describe('what the lead sees', () => {
     expect(t).toContain('https://meet.google.com/abc-defg-hij');
   });
 });
+
+import { confirmText, readMeetingReply, remindText, rescheduleText, shouldAskConfirm } from './meet-rules';
+
+describe('before the meeting', () => {
+  const start = new Date('2026-11-16T02:00:00Z');   // Mon 09:00 WIB
+  it('an hour before, the lead is asked to confirm, or to reply GANTI', () => {
+    const t = confirmText(start, 'Nico Japar');
+    expect(t).toContain('Hi kak Nico, 1 jam lagi konsultasi gratis');
+    expect(t).toContain('Senin 16 Nov, jam 09.00 WIB');
+    expect(t).toContain('Balas YA untuk konfirmasi, atau GANTI');
+  });
+  it('15 minutes before, the link', () => {
+    expect(remindText(start, 'https://meet.google.com/x', '')).toBe('Hi kak, 15 menit lagi kita mulai ya (jam 09.00 WIB).\nLink Google Meet: https://meet.google.com/x');
+  });
+  it('a meeting booked less than 70 minutes ahead skips the confirmation', () => {
+    expect(shouldAskConfirm(new Date('2026-11-15T10:00:00Z'), start)).toBe(true);
+    expect(shouldAskConfirm(new Date('2026-11-16T01:10:00Z'), start)).toBe(false);
+  });
+  it('other times are offered numbered', () => {
+    const t = rescheduleText([new Date('2026-11-17T03:00:00Z'), new Date('2026-11-17T07:00:00Z'), new Date('2026-11-18T03:00:00Z')]);
+    expect(t).toContain('1. Selasa 17 Nov, jam 10.00 WIB');
+    expect(t).toContain('Balas angkanya ya kak (1, 2 atau 3).');
+  });
+});
+
+describe('reading the short reply of a lead', () => {
+  const asked = { askedConfirm: true, offered: 0 };
+  it('YA and its friends confirm, but only when we asked', () => {
+    for (const t of ['YA', 'iya kak', 'Siap', 'ok bisa', 'insyaallah hadir', 'Bisa kak 🙏', 'oke, makasih']) expect(readMeetingReply(t, asked), t).toEqual({ kind: 'confirm' });
+    expect(readMeetingReply('ya', { askedConfirm: false, offered: 0 })).toBeNull();
+  });
+  it('GANTI, "ga bisa", "berhalangan" ask for another time; "ga bisa" is never a yes', () => {
+    for (const t of ['GANTI', 'ganti jadwal kak', 'maaf ga bisa', 'tidak bisa hadir', 'berhalangan kak', 'reschedule', 'gabisa']) expect(readMeetingReply(t, asked), t).toEqual({ kind: 'reschedule' });
+  });
+  it('BATAL cancels', () => {
+    for (const t of ['batal', 'batalkan saja', 'cancel kak', 'ga jadi']) expect(readMeetingReply(t, asked), t).toEqual({ kind: 'cancel' });
+  });
+  it('a number picks one of the offered times', () => {
+    const offered = { askedConfirm: false, offered: 3 };
+    expect(readMeetingReply('2', offered)).toEqual({ kind: 'pick', n: 2 });
+    expect(readMeetingReply('nomor 3 aja', offered)).toEqual({ kind: 'pick', n: 3 });
+    expect(readMeetingReply('5', offered)).toBeNull();
+  });
+  it('a long or unrelated message is left to the bot and the team', () => {
+    expect(readMeetingReply('ya kak tapi saya mau tanya dulu soal harga paket juragan', asked)).toBeNull();
+    expect(readMeetingReply('harga berapa?', asked)).toBeNull();
+  });
+});

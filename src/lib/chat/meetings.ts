@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/api/supabase-admin';
-import { accessToken, authUrl, busyTimes, createMeetEvent, deleteEvent, exchangeCode, googleConfigured, makeState } from '@/lib/google/calendar';
+import { accessToken, authUrl, busyTimes, createMeetEvent, deleteEvent, exchangeCode, googleConfigured, makeState, patchEventTime } from '@/lib/google/calendar';
 import { memo, forget } from './cache';
-import { bookedText, freeSlots, matchSlot, MEET_DEFAULTS, offerSlots, parseDays, reminderText, slotCode, slotLabel, validTime, type Busy, type MeetSettings } from './meet-rules';
+import { bookedText, cancelledText, confirmedText, confirmText, freeSlots, matchSlot, MEET_DEFAULTS, movedText, noTimeText, offerSlots, parseDays, readMeetingReply, remindText, rescheduleText, shouldAskConfirm, slotCode, slotLabel, validTime, type Busy, type MeetSettings } from './meet-rules';
 import { sendToChat } from './send-any';
 import { chatLabel } from './channel';
 
@@ -16,6 +16,8 @@ const fail = (status: number, error: string): Fail => ({ ok: false, status, erro
 export interface Meeting {
   id: string; group_id: string | null; lead_name: string | null; store: string | null; starts_at: string; ends_at: string;
   status: 'booked' | 'done' | 'no_show' | 'cancelled'; meet_url: string | null; booked_by: string; note: string | null; created_at: string; chat?: string;
+  google_event_id?: string | null; confirm_sent_at?: string | null; confirmed_at?: string | null; reschedule_offer?: string[] | null; reschedule_asked_at?: string | null;
+  owner_id?: string | null; owner_name?: string | null; lead_visit_id?: string | null;
 }
 
 // ---------------------------------------------------------------- settings
@@ -27,6 +29,7 @@ export async function meetSettings(ws: string): Promise<MeetSettings> {
     from: validTime(r.meet_from) ? r.meet_from : MEET_DEFAULTS.from, to: validTime(r.meet_to) ? r.meet_to : MEET_DEFAULTS.to,
     minutes: Number(r.meet_minutes) || MEET_DEFAULTS.minutes, noticeHours: r.meet_notice_hours != null ? Number(r.meet_notice_hours) : MEET_DEFAULTS.noticeHours,
     daysAhead: Number(r.meet_days_ahead) || MEET_DEFAULTS.daysAhead,
+    ownerId: r.meet_owner_id ?? null, ownerName: r.meet_owner_name ?? null,
   };
 }
 
@@ -39,6 +42,10 @@ export async function saveMeetSettings(ws: string, p: Partial<MeetSettings>): Pr
   if (p.minutes !== undefined) { const n = Math.round(Number(p.minutes)); if (!(n >= 15 && n <= 120)) return fail(400, 'A meeting lasts 15 to 120 minutes.'); row.meet_minutes = n; }
   if (p.noticeHours !== undefined) { const n = Math.round(Number(p.noticeHours)); if (!(n >= 0 && n <= 72)) return fail(400, 'The notice is 0 to 72 hours.'); row.meet_notice_hours = n; }
   if (p.daysAhead !== undefined) { const n = Math.round(Number(p.daysAhead)); if (!(n >= 1 && n <= 30)) return fail(400, 'Offer 1 to 30 days ahead.'); row.meet_days_ahead = n; }
+  if (p.ownerId !== undefined) {
+    if (p.ownerId !== null && !isUuid(p.ownerId)) return fail(400, 'Pick a salesperson from the list.');
+    row.meet_owner_id = p.ownerId; row.meet_owner_name = p.ownerId ? String(p.ownerName || '').trim().slice(0, 80) || null : null;
+  }
   if (row.meet_from && row.meet_to && String(row.meet_from) >= String(row.meet_to)) return fail(400, 'The end time must be after the start time.');
   const { error } = await createAdminClient().from('wa_bot_config').upsert(row, { onConflict: 'workspace_id' });
   if (error) return fail(500, /column/.test(error.message) ? 'The meeting tables are not in the database yet: run the meetings SQL first.' : error.message);
@@ -99,12 +106,14 @@ export async function availableSlots(ws: string, fresh = false): Promise<Date[]>
 }
 
 /** For the bot: the short list to offer (with the code it must send back), and the lead's own upcoming meeting if there is one. */
-export async function meetingContext(ws: string, groupId: string): Promise<{ enabled: boolean; minutes: number; offer: Array<{ code: string; label: string }>; booked: { label: string; meetUrl: string | null } | null }> {
+export async function meetingContext(ws: string, groupId: string): Promise<{ enabled: boolean; minutes: number; offer: Array<{ code: string; label: string }>; booked: { id: string; label: string; meetUrl: string | null } | null }> {
   const s = await meetSettings(ws).catch(() => ({ ...MEET_DEFAULTS }));
   if (!s.enabled) return { enabled: false, minutes: s.minutes, offer: [], booked: null };
   const mine = await upcomingFor(groupId).catch(() => null);
-  const offer = mine ? [] : offerSlots(await availableSlots(ws).catch(() => [])).map((d) => ({ code: slotCode(d), label: slotLabel(d) }));
-  return { enabled: true, minutes: s.minutes, offer, booked: mine ? { label: slotLabel(new Date(mine.starts_at)), meetUrl: mine.meet_url } : null };
+  // free times to offer: to book, or (when already booked) to move the meeting to
+  const free = (await availableSlots(ws).catch(() => [])).filter((d) => !mine || d.getTime() !== new Date(mine.starts_at).getTime());
+  const offer = offerSlots(free).map((d) => ({ code: slotCode(d), label: slotLabel(d) }));
+  return { enabled: true, minutes: s.minutes, offer, booked: mine ? { id: mine.id, label: slotLabel(new Date(mine.starts_at)), meetUrl: mine.meet_url } : null };
 }
 
 export async function upcomingFor(groupId: string): Promise<Meeting | null> {
@@ -117,7 +126,7 @@ export async function upcomingFor(groupId: string): Promise<Meeting | null> {
  * Books a free time for a chat: checks it is still free, saves it (the database refuses two bookings at the same time), puts it on Google Calendar
  * with a Meet link, and adds a note in the chat for the team. Returns the text for the lead (time and link).
  */
-export async function bookMeeting(ws: string, input: { groupId: string | null; start: unknown; leadName?: string | null; store?: string | null; by: string }): Promise<{ ok: true; meeting: Meeting; text: string } | Fail> {
+export async function bookMeeting(ws: string, input: { groupId: string | null; start: unknown; leadName?: string | null; store?: string | null; by: string; byUser?: { id: string; name: string } | null }): Promise<{ ok: true; meeting: Meeting; text: string } | Fail> {
   const s = await meetSettings(ws);
   const slot = matchSlot(input.start, await availableSlots(ws, true));
   if (!slot) return fail(409, 'That time is not free any more. Pick another one.');
@@ -157,6 +166,15 @@ export async function bookMeeting(ws: string, input: { groupId: string | null; s
     }
   } else note = 'Google Calendar is not connected: send the lead a meeting link yourself.';
 
+  // in the ERP: a meeting in Meetings (and the Today calendar) for the salesperson who takes it
+  const owner = await ownerFor(ws, input.groupId, s, input.byUser ?? null);
+  if (owner) {
+    const visitId = await saveVisit(ws, meeting, owner, null).catch((e) => { console.error('lead visit failed', e); return null; });
+    const { data: upd } = await db.from('chat_meetings').update({ owner_id: owner.id, owner_name: owner.name, lead_visit_id: visitId }).eq('id', meeting.id).select('*').single();
+    if (upd) meeting = upd as Meeting;
+    if (input.groupId && owner.fromSettings) await db.from('chat_state').upsert({ group_id: input.groupId, workspace_id: ws, assigned_to: owner.id, assigned_name: owner.name, updated_at: new Date().toISOString() }, { onConflict: 'group_id' });
+  } else note = [note, 'No salesperson takes it in the ERP yet: pick one in Jadwal.'].filter(Boolean).join(' ');
+
   if (input.groupId) {
     await db.from('chat_notes').insert({ workspace_id: ws, group_id: input.groupId, author_id: null, author_name: input.by === 'bot' ? 'Bot' : input.by,
       body: `Konsultasi gratis dibooking: ${slotLabel(slot)}${meeting.meet_url ? `. Meet: ${meeting.meet_url}` : ''}${note ? `. ${note}` : ''}` });
@@ -165,13 +183,13 @@ export async function bookMeeting(ws: string, input: { groupId: string | null; s
 }
 
 /** The team books from the inbox: books, then sends the lead the time and link. */
-export async function bookFromInbox(ws: string, groupId: string, start: unknown, by: { name: string }): Promise<{ ok: true; meeting: Meeting; sent: boolean; detail: string } | Fail> {
+export async function bookFromInbox(ws: string, groupId: string, start: unknown, by: { name: string; userId?: string }): Promise<{ ok: true; meeting: Meeting; sent: boolean; detail: string } | Fail> {
   const db = createAdminClient();
   const { data: g } = await db.from('wa_groups').select('wa_id').eq('id', groupId).eq('workspace_id', ws).maybeSingle();
   if (!g) return fail(404, 'Chat not found.');
   const { data: bot } = await db.from('wa_bot_chats').select('lead').eq('group_id', groupId).maybeSingle();
   const lead = ((bot as any)?.lead || {}) as { name?: string; store?: string };
-  const r = await bookMeeting(ws, { groupId, start, leadName: lead.name, store: lead.store, by: by.name });
+  const r = await bookMeeting(ws, { groupId, start, leadName: lead.name, store: lead.store, by: by.name, byUser: by.userId ? { id: by.userId, name: by.name } : null });
   if (!r.ok) return r;
   const sent = await sendToChat(groupId, String((g as any).wa_id), `Siap kak, ${r.text.charAt(0).toLowerCase()}${r.text.slice(1)}`);
   if (sent.ok) {
@@ -194,7 +212,7 @@ export async function listMeetings(ws: string, days = 30) {
 export async function setMeetingStatus(ws: string, id: string, status: unknown): Promise<{ ok: true } | Fail> {
   if (!['booked', 'done', 'no_show', 'cancelled'].includes(String(status))) return fail(400, 'Unknown status.');
   const db = createAdminClient();
-  const { data: m } = await db.from('chat_meetings').select('id, google_event_id, status').eq('id', id).eq('workspace_id', ws).maybeSingle();
+  const { data: m } = await db.from('chat_meetings').select('id, google_event_id, status, lead_visit_id').eq('id', id).eq('workspace_id', ws).maybeSingle();
   if (!m) return fail(404, 'Meeting not found.');
   const { error } = await db.from('chat_meetings').update({ status }).eq('id', id);
   if (error) return fail(/duplicate|unique/i.test(error.message) ? 409 : 500, /duplicate|unique/i.test(error.message) ? 'That time is taken by another booking now.' : error.message);
@@ -202,31 +220,148 @@ export async function setMeetingStatus(ws: string, id: string, status: unknown):
     const link = await googleLink(ws).catch(() => null);
     if (link) { try { await deleteEvent(await accessToken(link.refresh_token), link.calendar_id, (m as any).google_event_id); } catch { /* the booking is cancelled anyway */ } }
   }
+  if (status === 'cancelled' && (m as any).lead_visit_id) await db.from('lead_visits').delete().eq('id', (m as any).lead_visit_id).then(() => undefined, () => undefined);
   forget(`slots:${ws}`);
   return { ok: true };
 }
 
-/** The clock: an hour before a meeting, the lead gets a reminder with the link (once). */
-export async function sendMeetingReminders(): Promise<number> {
+// ---------------------------------------------------------------- the salesperson, and the meeting in the ERP
+const isUuid = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f-]{36}$/i.test(v);
+
+/** Who takes the meeting: the person the chat is assigned to; else the default salesperson set in Jadwal; else the person who booked it. */
+async function ownerFor(ws: string, groupId: string | null, s: MeetSettings, byUser: { id: string; name: string } | null): Promise<{ id: string; name: string; fromSettings: boolean } | null> {
+  if (groupId) {
+    const { data: st } = await createAdminClient().from('chat_state').select('assigned_to, assigned_name').eq('group_id', groupId).maybeSingle();
+    if (isUuid((st as any)?.assigned_to)) return { id: (st as any).assigned_to, name: String((st as any).assigned_name || 'Sales'), fromSettings: false };
+  }
+  if (isUuid(s.ownerId)) return { id: s.ownerId, name: String(s.ownerName || 'Sales'), fromSettings: true };
+  if (byUser && isUuid(byUser.id)) return { id: byUser.id, name: byUser.name, fromSettings: false };
+  return null;
+}
+
+/** The meeting in the ERP's Meetings (lead_visits), so the salesperson sees it in Meetings and on the Today calendar. Updates it when it moves. */
+async function saveVisit(ws: string, m: Meeting, owner: { id: string; name: string }, visitId: string | null): Promise<string | null> {
+  const db = createAdminClient();
+  const row = {
+    client_name: String(m.lead_name || m.chat || 'Lead').slice(0, 120), salesman_id: owner.id, salesman_name: owner.name,
+    agenda: [`Konsultasi gratis (Google Meet, dari chat)`, m.store ? `Toko: ${m.store}` : '', m.meet_url ? `Link: ${m.meet_url}` : ''].filter(Boolean).join('. '),
+    visit_at: m.starts_at,
+  };
+  if (visitId) { await db.from('lead_visits').update(row).eq('id', visitId); return visitId; }
+  const { data } = await db.from('lead_visits').insert({ workspace_id: ws, ...row }).select('id').single();
+  return (data as any)?.id ?? null;
+}
+
+async function teamNote(ws: string, groupId: string, body: string) {
+  await createAdminClient().from('chat_notes').insert({ workspace_id: ws, group_id: groupId, author_id: null, author_name: 'Jadwal', body }).then(() => undefined, () => undefined);
+}
+
+/** Sends a message to the lead and keeps it in the chat history. */
+async function sayInChat(ws: string, groupId: string, waId: string, text: string, key: string): Promise<boolean> {
+  const r = await sendToChat(groupId, waId, text);
+  if (r.ok) await createAdminClient().from('wa_messages').insert({ workspace_id: ws, group_id: groupId, body: text, is_from_me: true, dedupe_key: `${key}:${Date.now()}`, sent_at: new Date().toISOString(), source: 'bot', raw: { bot: true } }).then(() => undefined, () => undefined);
+  return r.ok;
+}
+
+// ---------------------------------------------------------------- moving a meeting
+/** Moves a booked meeting to another free time: Google Calendar (same Meet link), the ERP's Meetings, and the confirmation/reminder start over. */
+export async function moveMeeting(ws: string, id: string, start: unknown, by: string): Promise<{ ok: true; meeting: Meeting; text: string } | Fail> {
+  const db = createAdminClient();
+  const { data: cur } = await db.from('chat_meetings').select('*').eq('id', id).eq('workspace_id', ws).maybeSingle();
+  if (!cur || (cur as any).status !== 'booked') return fail(404, 'Meeting not found.');
+  const m = cur as Meeting;
+  const s = await meetSettings(ws);
+  const slot = matchSlot(start, await availableSlots(ws, true));
+  if (!slot) return fail(409, 'That time is not free any more. Pick another one.');
+  const end = new Date(slot.getTime() + s.minutes * 60000);
+  const { data: upd, error } = await db.from('chat_meetings').update({
+    starts_at: slot.toISOString(), ends_at: end.toISOString(), confirm_sent_at: null, confirmed_at: null, reminded_at: null, reschedule_offer: null, reschedule_asked_at: null,
+  }).eq('id', id).select('*').single();
+  if (error || !upd) return fail(/duplicate|unique/i.test(error?.message || '') ? 409 : 500, /duplicate|unique/i.test(error?.message || '') ? 'Someone just took that time. Pick another one.' : error?.message || 'Could not move the meeting.');
+  const moved = upd as Meeting;
+  forget(`slots:${ws}`);
+  const link = await googleLink(ws).catch(() => null);
+  if (link && m.google_event_id) { try { await patchEventTime(await accessToken(link.refresh_token), link.calendar_id, m.google_event_id, slot, end); } catch (e) { console.error('google move failed', e); } }
+  if (m.owner_id && m.lead_visit_id) await saveVisit(ws, moved, { id: m.owner_id, name: m.owner_name || 'Sales' }, m.lead_visit_id).catch(() => null);
+  if (m.group_id) await teamNote(ws, m.group_id, `Jadwal konsultasi dipindah oleh ${by === 'bot' ? 'bot' : by}: ${slotLabel(new Date(m.starts_at))} menjadi ${slotLabel(slot)}.`);
+  return { ok: true, meeting: moved, text: movedText(slot, s.minutes, moved.meet_url) };
+}
+
+// ---------------------------------------------------------------- before the meeting
+/**
+ * The clock: an hour before a meeting, the lead is asked to confirm (YA) or to move it (GANTI); 15 minutes before, the link is sent.
+ * Each goes once (claimed first, so two clock calls never send twice). A meeting booked less than 70 minutes ahead only gets the reminder.
+ */
+export async function runMeetingMessages(): Promise<number> {
   const db = createAdminClient();
   const now = Date.now();
-  const { data } = await db.from('chat_meetings').select('id, workspace_id, group_id, lead_name, starts_at, meet_url, wa_groups(wa_id)').eq('status', 'booked').is('reminded_at', null)
-    .gt('starts_at', new Date(now).toISOString()).lte('starts_at', new Date(now + 60 * 60000).toISOString()).limit(30);
+  const cols = 'id, workspace_id, group_id, lead_name, starts_at, created_at, meet_url, wa_groups(wa_id)';
   let sent = 0;
-  for (const m of (data || []) as any[]) {
-    // claim it first, so two clock calls never send twice
+  const target = (m: any) => { const g = Array.isArray(m.wa_groups) ? m.wa_groups[0] : m.wa_groups; return m.group_id && g?.wa_id ? String(g.wa_id) : null; };
+
+  const { data: confirm } = await db.from('chat_meetings').select(cols).eq('status', 'booked').is('confirm_sent_at', null)
+    .gt('starts_at', new Date(now).toISOString()).lte('starts_at', new Date(now + 60 * 60000).toISOString()).limit(30);
+  for (const m of (confirm || []) as any[]) {
+    const { data: claimed } = await db.from('chat_meetings').update({ confirm_sent_at: new Date().toISOString() }).eq('id', m.id).is('confirm_sent_at', null).select('id');
+    if (!claimed?.length || !shouldAskConfirm(new Date(m.created_at), new Date(m.starts_at))) continue;
+    const to = target(m);
+    if (to && (await sayInChat(m.workspace_id, m.group_id, to, confirmText(new Date(m.starts_at), m.lead_name || ''), `confirm:${m.id}`))) sent++;
+  }
+
+  const { data: remind } = await db.from('chat_meetings').select(cols).eq('status', 'booked').is('reminded_at', null)
+    .gt('starts_at', new Date(now).toISOString()).lte('starts_at', new Date(now + 15 * 60000).toISOString()).limit(30);
+  for (const m of (remind || []) as any[]) {
     const { data: claimed } = await db.from('chat_meetings').update({ reminded_at: new Date().toISOString() }).eq('id', m.id).is('reminded_at', null).select('id');
     if (!claimed?.length) continue;
-    const g = Array.isArray(m.wa_groups) ? m.wa_groups[0] : m.wa_groups;
-    if (!m.group_id || !g?.wa_id) continue;
-    const text = reminderText(new Date(m.starts_at), m.meet_url, m.lead_name || '');
-    const r = await sendToChat(m.group_id, String(g.wa_id), text);
-    if (r.ok) {
-      await db.from('wa_messages').insert({ workspace_id: m.workspace_id, group_id: m.group_id, body: text, is_from_me: true, dedupe_key: `reminder:${m.id}`, sent_at: new Date().toISOString(), source: 'bot', raw: { bot: true } }).then(() => undefined, () => undefined);
-      sent++;
-    }
+    const to = target(m);
+    if (to && (await sayInChat(m.workspace_id, m.group_id, to, remindText(new Date(m.starts_at), m.meet_url, m.lead_name || ''), `remind:${m.id}`))) sent++;
   }
   return sent;
+}
+
+/**
+ * A lead's short reply about their upcoming meeting: YA confirms (when we asked), GANTI offers 3 other free times numbered, a number moves the
+ * meeting there, BATAL cancels it. Returns true when the reply was about the meeting (then the bot does not also answer). Rules in meet-rules.ts.
+ */
+export async function handleMeetingReply(ws: string, groupId: string, waId: string, body: string): Promise<boolean> {
+  const m = await upcomingFor(groupId);
+  if (!m) return false;
+  const asked = m.reschedule_asked_at ? new Date(m.reschedule_asked_at).getTime() : 0;
+  const offer = Array.isArray(m.reschedule_offer) && Date.now() - asked < 24 * 3600000 ? m.reschedule_offer : [];
+  const r = readMeetingReply(body, { askedConfirm: !!m.confirm_sent_at && !m.confirmed_at, offered: offer.length });
+  if (!r) return false;
+  const db = createAdminClient();
+  const start = new Date(m.starts_at);
+  const offerNew = async (lead: string) => {
+    const free = (await availableSlots(ws, true)).filter((d) => d.getTime() !== start.getTime());
+    const three = offerSlots(free, 3);
+    if (!three.length) {
+      await sayInChat(ws, groupId, waId, noTimeText, `resched:${m.id}`);
+      await db.from('wa_bot_chats').upsert({ group_id: groupId, workspace_id: ws, status: 'human', reason: 'The lead wants another meeting time and none is free.', updated_at: new Date().toISOString() }, { onConflict: 'group_id' });
+      await teamNote(ws, groupId, 'Lead minta ganti jadwal, tapi tidak ada waktu kosong: tolong hubungi lead.');
+      return;
+    }
+    await db.from('chat_meetings').update({ reschedule_offer: three.map((d) => d.toISOString()), reschedule_asked_at: new Date().toISOString() }).eq('id', m.id);
+    await sayInChat(ws, groupId, waId, `${lead}${rescheduleText(three)}`, `resched:${m.id}`);
+  };
+
+  if (r.kind === 'confirm') {
+    await db.from('chat_meetings').update({ confirmed_at: new Date().toISOString() }).eq('id', m.id);
+    await sayInChat(ws, groupId, waId, confirmedText(start), `confirmed:${m.id}`);
+    await teamNote(ws, groupId, `Lead mengonfirmasi hadir: ${slotLabel(start)}.`);
+  } else if (r.kind === 'reschedule') {
+    await teamNote(ws, groupId, 'Lead minta ganti jadwal konsultasi.');
+    await offerNew('');
+  } else if (r.kind === 'pick') {
+    const mv = await moveMeeting(ws, m.id, offer[r.n - 1], 'Lead (lewat chat)');
+    if (mv.ok) await sayInChat(ws, groupId, waId, mv.text, `moved:${m.id}`);
+    else await offerNew('Maaf kak, waktu itu barusan terisi. ');
+  } else {
+    await setMeetingStatus(ws, m.id, 'cancelled');
+    await sayInChat(ws, groupId, waId, cancelledText, `cancelled:${m.id}`);
+    await teamNote(ws, groupId, `Lead membatalkan konsultasi ${slotLabel(start)}.`);
+  }
+  return true;
 }
 
 export { slotLabel };

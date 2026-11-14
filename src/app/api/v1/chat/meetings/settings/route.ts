@@ -9,4 +9,5 @@ export const dynamic = 'force-dynamic';
 export const POST = chatRoute(({ me, body }) => meetings.saveMeetSettings(me.workspaceId, {
   enabled: typeof body?.enabled === 'boolean' ? body.enabled : undefined, days: Array.isArray(body?.days) ? body.days : undefined,
   from: body?.from, to: body?.to, minutes: body?.minutes, noticeHours: body?.noticeHours, daysAhead: body?.daysAhead,
+  ownerId: body?.ownerId === null ? null : typeof body?.ownerId === 'string' ? body.ownerId : undefined, ownerName: typeof body?.ownerName === 'string' ? body.ownerName : undefined,
 }), { needsBody: true, roles: BIBLE_EDITORS });

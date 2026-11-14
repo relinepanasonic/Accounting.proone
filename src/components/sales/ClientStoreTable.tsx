@@ -107,7 +107,7 @@ export function StoreCell({ line, canEdit, storeOptions }: { line: StoreLine; ca
           </div>
         </div>
       )}
-      {current && stores.length > 1 && <div className="text-[11px] font-bold text-[#f5d77f]">{stores.length} stores <span className="font-normal text-zinc-500">· one row each below</span></div>}
+      {current && stores.length > 1 && <div className="text-[11px] font-semibold text-zinc-400">{stores.length} stores <span className="font-normal text-zinc-500">· one row each below</span></div>}
       {error && <div className="text-[10px] text-red-400">{error}</div>}
       {canEdit && <AddStore line={line} storeOptions={storeOptions} />}
     </div>

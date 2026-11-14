@@ -57,7 +57,7 @@ export default async function OptimizingClientsPage({ searchParams }: { searchPa
 
   const mask = clientMask({ userEmail: ctx.userEmail, availableWorkspaces: ctx.availableWorkspaces });
   const db = createAdminClient();
-  const rows = await loadClientRows(db, ctx.activeWorkspaceId, { archived: tab === 'churn' ? 'only' : 'hide', includeAll: true, maskName: (name, ws) => mask.name(name, ws, 'Client') });
+  const rows = await loadClientRows(db, ctx.activeWorkspaceId, { archived: tab === 'churn' ? 'only' : 'hide', includeAll: false, maskName: (name, ws) => mask.name(name, ws, 'Client') });
   const pics = await loadClientPics(db, Array.from(new Set(rows.map((r) => r.clientId))));
   for (const r of rows) r.pic = pics.get(r.clientId) || '';
   const handlers = owner ? await loadHandlers(db, ctx.activeWorkspaceId) : null;

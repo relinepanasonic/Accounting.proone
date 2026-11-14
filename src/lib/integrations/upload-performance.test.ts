@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildPerformance, buildMonthTable, weekOfFile, normalizeLogs, weekStart, type LogRow } from './upload-performance';
+import { buildPerformance, buildMonthTable, normalizeLogs, weekStart, mondaysOf, monthFromText, dataWeekOf, type LogRow } from './upload-performance';
 
 const row = (id: string, day: string, store: string, project: LogRow['project'] = 'reline'): LogRow => ({ id, at: `${day}T05:00:00.000Z`, day, project, admin: 'Vani', store, type: 'SPOS', month: 'Oktober', files: [], tags: [], owner: '' });
 
@@ -41,26 +41,44 @@ describe('upload performance', () => {
 });
 
 describe('month table', () => {
-  it('takes the week from the file name, else from the day of the upload', () => {
-    expect(weekOfFile('aks ads grup okt week 2.csv', '2026-10-19')).toBe(2);
-    expect(weekOfFile('studio ads sep Week 3.csv', '2026-10-02')).toBe(3);
-    expect(weekOfFile('performa.csv', '2026-10-16')).toBe(3);
-    expect(weekOfFile('performa.csv', '2026-10-30')).toBe(5);
+  it('weeks run Monday to Sunday and belong to the month of their Monday', () => {
+    expect(mondaysOf(2026, 11)).toEqual(['2026-11-02', '2026-11-09', '2026-11-16', '2026-11-23', '2026-11-30']);
+    expect(mondaysOf(2026, 10)).toEqual(['2026-10-05', '2026-10-12', '2026-10-19', '2026-10-26']);
   });
-  it('lists the files of each week, keeps weeks to come empty, and sets the status', () => {
-    const now = new Date('2026-10-21T03:00:00Z'); // Wednesday 21 Oct
-    const r1: LogRow = { ...row('1', '2026-10-19', 'A'), files: ['a spos week 1.csv', 'a spos week 2.csv'] };
-    const r2: LogRow = { ...row('2', '2026-10-20', 'A'), files: ['a perf.csv'] }; // no week in the name: the 15-21 block = week 3
-    const [a, b] = buildMonthTable([r1, r2, row('3', '2026-10-02', 'B')], [], 2026, 10, (st) => (st === 'A' ? 'Acme' : ''), now);
-    expect(a.client).toBe('Acme');
-    expect(a.weekFiles.map((w) => (w === null ? null : w.length))).toEqual([1, 1, 1, null, null]);
-    expect(a.weekFiles[2]![0].name).toBe('a perf.csv');
-    expect(a.status).toBe('on_schedule'); // a file this week
-    expect(b.status).toBe('late'); // last upload 2 Oct, nothing in the last 7 days
+  it('reads the month and the week from the file name', () => {
+    expect(monthFromText('essen ads gmv max nov week 1.csv')).toEqual({ month: 11, year: null });
+    expect(monthFromText('essen ps sep 26.xlsx')).toEqual({ month: 9, year: 2026 });
+    expect(monthFromText('aks ads grup okt week 2.csv')).toEqual({ month: 10, year: null });
+    expect(dataWeekOf('essen ads nov week 1.csv', '', '2026-11-11')).toBe('2026-11-02');
+    expect(dataWeekOf('aks ads grup okt week 4.csv', '', '2026-11-03')).toBe('2026-10-26'); // October week 4, uploaded in November
+    expect(dataWeekOf('essen ps sep 26.xlsx', '', '2026-11-03')).toBeNull(); // a whole month (September): not a week of November
+    expect(dataWeekOf('performa.csv', '', '2026-11-11')).toBe('2026-11-02'); // no week: the week before the upload
+    expect(dataWeekOf('ads week 4.csv', '', '2026-11-03')).toBe('2026-10-26'); // no month: the month of the week before the upload
+    expect(dataWeekOf('performa.csv', 'Oktober', '2026-11-03')).toBe('2026-10-26');
+  });
+  it('14 November: only week 1 (2-8 Nov) is due; October files uploaded in November stay out; weeks not ended are -', () => {
+    const now = new Date('2026-11-14T03:00:00Z');
+    const r1: LogRow = { ...row('1', '2026-11-11', 'A', 'profesor'), files: ['a ads nov week 1.csv', 'a spos nov week 1.xlsx'] };
+    const r2: LogRow = { ...row('2', '2026-11-03', 'A', 'profesor'), files: ['a ads okt week 4.csv', 'a ps sep 26.xlsx'] };
+    const r3: LogRow = { ...row('3', '2026-11-03', 'B', 'profesor'), files: ['b ads okt week 4.csv'] };
+    const t = buildMonthTable([r1, r2, r3], [{ project: 'profesor', store: 'C', pic: 'Vani' }], 2026, 11, (st) => (st === 'A' ? 'Acme' : ''), now);
+    const by = Object.fromEntries(t.map((x) => [x.store, x]));
+    expect(by.A.client).toBe('Acme');
+    expect(by.A.weekFiles.map((w) => (w === null ? null : w.length))).toEqual([2, null, null, null, null]);
+    expect(by.A.status).toBe('on_schedule');
+    expect(by.B).toBeUndefined(); // only October files: not a November store
+    expect(by.C.weekFiles[0]).toEqual([]); // week 1 ended and nothing came
+    expect(by.C.status).toBe('late');
+  });
+  it('the last ended week may be up to 3 days late', () => {
+    const t = (iso: string) => buildMonthTable([], [{ project: 'profesor', store: 'C', pic: '' }], 2026, 11, () => '', new Date(iso))[0].status;
+    expect(t('2026-11-10T03:00:00Z')).toBe('on_schedule'); // week 1 ended 8 Nov, 2 days ago
+    expect(t('2026-11-13T03:00:00Z')).toBe('late');        // 5 days ago
+    expect(t('2026-11-01T03:00:00Z')).toBeNull();          // nothing due yet
   });
   it('a past month is On Schedule only when every week has a file', () => {
-    const now = new Date('2026-11-10T03:00:00Z');
-    const full: LogRow[] = [1, 8, 15, 22, 29].map((d) => row(String(d), `2026-10-${String(d).padStart(2, '0')}`, 'A'));
+    const now = new Date('2026-11-20T03:00:00Z');
+    const full: LogRow[] = [1, 2, 3, 4].map((n) => ({ ...row(String(n), '2026-11-02', 'A'), files: [`a okt week ${n}.csv`] }));
     expect(buildMonthTable(full, [], 2026, 10, () => '', now)[0].status).toBe('on_schedule');
     expect(buildMonthTable(full.slice(0, 3), [], 2026, 10, () => '', now)[0].status).toBe('late');
   });

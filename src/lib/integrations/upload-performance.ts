@@ -113,69 +113,143 @@ export interface MonthStoreRow {
   /** Reline workspace of the store (empty for Profesor Dashboard). */
   workspace: string;
   client: string;
-  /** The files uploaded for each week (1-5) of the month. null = that week does not exist yet or has not started. */
+  /** The files of each week (Monday to Sunday) of the month, up to 5. null = the month has no such week, or it has not ended and nothing was uploaded. */
   weekFiles: Array<FileEntry[] | null>;
   /** On Schedule / Late Upload. null for a month that has not started. */
   status: 'on_schedule' | 'late' | null;
 }
 
-/** The week of a file: the Reline and Dashboard uploads are named "... week 2.csv". Without it: the 7-day block of the upload day. */
-export function weekOfFile(name: string, day: string): number {
-  const m = /week\s*0?([1-5])\b/i.exec(name);
-  if (m) return Number(m[1]);
-  return Math.min(5, Math.floor((Number(day.slice(8, 10)) - 1) / 7) + 1);
+const pad2 = (n: number) => String(n).padStart(2, '0');
+const addDaysIso = (day: string, n: number) => new Date(new Date(`${day}T12:00:00Z`).getTime() + n * 86400000).toISOString().slice(0, 10);
+
+/** The Mondays of a month: its weeks (Monday to Sunday). A week belongs to the month of its Monday, so a month has 4 or 5 weeks. */
+export function mondaysOf(year: number, month: number): string[] {
+  const out: string[] = [];
+  const days = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  for (let d = 1; d <= days; d++) if (new Date(Date.UTC(year, month - 1, d)).getUTCDay() === 1) out.push(`${year}-${pad2(month)}-${pad2(d)}`);
+  return out;
+}
+
+/** The weeks of a month for the table header: Monday and Sunday of each. */
+export const monthWeeks = (year: number, month: number) => mondaysOf(year, month).map((monday) => ({ monday, sunday: addDaysIso(monday, 6) }));
+
+/** The days to read from the upload log for a month: the week files of a month are uploaded up to about 10 days after its last Sunday. */
+export function monthFetchRange(year: number, month: number, today: string): { from: string; to: string } {
+  const weeks = monthWeeks(year, month);
+  const from = `${year}-${pad2(month)}-01`;
+  const end = addDaysIso(weeks[weeks.length - 1].sunday, 10);
+  return { from, to: end < today ? end : today < from ? from : today };
+}
+
+const MONTH_WORDS: Record<string, number> = {
+  jan: 1, januari: 1, january: 1, feb: 2, februari: 2, february: 2, mar: 3, maret: 3, march: 3, apr: 4, april: 4, mei: 5, may: 5,
+  jun: 6, juni: 6, june: 6, jul: 7, juli: 7, july: 7, agu: 8, agt: 8, ags: 8, agustus: 8, aug: 8, august: 8, sep: 9, sept: 9, september: 9,
+  okt: 10, oct: 10, oktober: 10, october: 10, nov: 11, november: 11, des: 12, dec: 12, desember: 12, december: 12,
+};
+const MONTH_RE = new RegExp(`(?:^|[^a-z])(${Object.keys(MONTH_WORDS).sort((x, y) => y.length - x.length).join('|')})(?![a-z])(?:[\\s_-]*'?(\\d{4}|\\d{2})(?!\\d))?`, 'i');
+
+/** "essen ads nov week 1.csv" -> November; "essen ps sep 26.xlsx" -> September 2026; "2026-10" -> October 2026. */
+export function monthFromText(text: string): { month: number; year: number | null } | null {
+  const t = String(text || '');
+  const iso = /(20\d{2})-(0[1-9]|1[0-2])/.exec(t);
+  if (iso) return { month: Number(iso[2]), year: Number(iso[1]) };
+  const m = MONTH_RE.exec(t.toLowerCase());
+  if (!m) return null;
+  const y = m[2] ? Number(m[2]) : null;
+  return { month: MONTH_WORDS[m[1].toLowerCase()], year: y === null ? null : y < 100 ? (y >= 24 && y <= 35 ? 2000 + y : null) : y };
 }
 
 /**
- * The Performance table of one month: per store the files uploaded in each week (1-5), and a status.
- * Status: this month, On Schedule when the store has a file in this week or in the last 7 days; a past month, when every week has a file.
+ * The week a file is about (its Monday), or null for a file of a whole month ("essen ps sep 26.xlsx").
+ * The month comes from the file name, else from the month the app logged; the week from "week N" (the N-th Monday of that month).
+ * A file without a week is the week before the upload day (the team uploads a week after it ends).
+ */
+export function dataWeekOf(name: string, loggedMonth: string, uploadDay: string): string | null {
+  const wk = /week\s*0?([1-5])(?!\d)/i.exec(name);
+  const fromName = monthFromText(name.replace(/week\s*0?[1-5]/ig, ' '));
+  const mon = fromName || monthFromText(loggedMonth);
+  const lastWeek = addDaysIso(weekStart(uploadDay), -7);
+  if (!mon) {
+    if (!wk) return lastWeek;
+    // "ads week 4.csv": week 4 of the month of the week before the upload
+    const y = Number(lastWeek.slice(0, 4)); const m = Number(lastWeek.slice(5, 7));
+    const ms = mondaysOf(y, m);
+    return ms[Math.min(Number(wk[1]), ms.length) - 1];
+  }
+  const upY = Number(uploadDay.slice(0, 4)); const upM = Number(uploadDay.slice(5, 7));
+  const year = mon.year ?? (mon.month > upM ? upY - 1 : upY);
+  if (!wk) {
+    // a month file: only a week of the same month when that month is the one of the upload
+    return lastWeek.slice(0, 7) === `${year}-${pad2(mon.month)}` ? lastWeek : null;
+  }
+  const ms = mondaysOf(year, mon.month);
+  return ms[Math.min(Number(wk[1]), ms.length) - 1];
+}
+
+/** @deprecated kept for older callers: the week number (1-5) of a file inside its own month. */
+export function weekOfFile(name: string, day: string): number {
+  const monday = dataWeekOf(name, '', day);
+  if (!monday) return 1;
+  return mondaysOf(Number(monday.slice(0, 4)), Number(monday.slice(5, 7))).indexOf(monday) + 1;
+}
+
+const GRACE_DAYS = 3; // a week's files are expected within 3 days after its Sunday
+
+/**
+ * The Performance table of one month: per store the files of each week (Monday to Sunday, the week belongs to the month of its Monday), and a status.
+ * A file is put in the week it is ABOUT (month and "week N" from its name), not the day it was uploaded: October files uploaded in November stay in October.
+ * A week that has not ended yet is "-" (nothing is due). Status: every ended week has files; the last one may still be within 3 days.
  * clientOf: the ERP client of a store (by its store or brand name); the owner named in the feed is the fallback.
  */
 export function buildMonthTable(rows: LogRow[], assigned: AssignedStore[], year: number, month: number, clientOf: (store: string) => string, now = new Date()): MonthStoreRow[] {
-  const prefix = `${year}-${String(month).padStart(2, '0')}-`;
   const today = jakartaDay(now);
-  const curPrefix = today.slice(0, 8);
-  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const weeks = monthWeeks(year, month);
+  const index = new Map(weeks.map((w, i) => [w.monday, i] as [string, number]));
   const key = (p: ProjectKey, s: string) => `${p}|${normName(s)}`;
+
+  // every file of the log, placed in the week it is about; only the ones of this month are kept
+  const placed: Array<{ r: LogRow; name: string; week: number }> = [];
+  for (const r of rows) {
+    const names = r.files.length ? r.files : ['(no file name)'];
+    for (const name of names) {
+      const monday = dataWeekOf(name === '(no file name)' ? '' : name, r.month, r.day);
+      const w = monday ? index.get(monday) : undefined;
+      if (w !== undefined) placed.push({ r, name, week: w });
+    }
+  }
+
   const stores = new Map<string, { project: ProjectKey; store: string; owner: string; workspace: string }>();
   for (const a of assigned) stores.set(key(a.project, a.store), { project: a.project, store: a.store, owner: '', workspace: '' });
-  const inMonth = rows.filter((r) => r.day.startsWith(prefix));
-  for (const r of inMonth) if (r.store && r.store !== '-') {
+  for (const { r } of placed) if (r.store && r.store !== '-') {
     const k = key(r.project, r.store);
     const cur = stores.get(k);
     if (!cur) stores.set(k, { project: r.project, store: r.store, owner: r.owner, workspace: r.workspace || '' });
     else { if (!cur.owner && r.owner) cur.owner = r.owner; if (!cur.workspace && r.workspace) cur.workspace = r.workspace; }
   }
+  // stores of a Reline workspace that only uploaded files of other months still need their workspace
+  for (const r of rows) { const cur = stores.get(key(r.project, r.store)); if (cur && !cur.workspace && r.workspace) cur.workspace = r.workspace; }
 
-  const isCurrent = prefix === curPrefix;
-  const isFuture = prefix > curPrefix;
-  const sevenDaysAgo = jakartaDay(new Date(now.getTime() - 7 * 86400000));
-  const todayBlock = Math.min(4, Math.floor((Number(today.slice(8, 10)) - 1) / 7));
+  const due = weeks.map((w) => w.sunday < today);
+  const lastDue = due.lastIndexOf(true);
+  const inGrace = lastDue >= 0 && (Date.parse(`${today}T00:00:00Z`) - Date.parse(`${weeks[lastDue].sunday}T00:00:00Z`)) / 86400000 <= GRACE_DAYS;
 
   const out: MonthStoreRow[] = [];
-  for (const [k, s] of stores) {
-    const list = inMonth.filter((r) => key(r.project, r.store) === k);
-    const weekFiles: Array<FileEntry[] | null> = [0, 1, 2, 3, 4].map((b) => {
-      const firstDay = b * 7 + 1;
-      if (firstDay > daysInMonth || isFuture || (isCurrent && b > todayBlock)) return null;
-      return [];
-    });
-    for (const r of list) {
-      const names = r.files.length ? r.files : ['(no file name)'];
-      for (const name of names) {
-        const w = weekOfFile(name, r.day) - 1;
-        if (weekFiles[w] === null) weekFiles[w] = []; // a file named for a week that has not started: it still counts
-        weekFiles[w]!.push({ type: r.type, name, admin: r.admin, at: r.at });
-      }
+  for (const [k, st] of stores) {
+    const mine = placed.filter((p) => key(p.r.project, p.r.store) === k);
+    const weekFiles: Array<FileEntry[] | null> = [0, 1, 2, 3, 4].map((i) => (i < weeks.length && due[i] ? [] : null));
+    for (const p of mine) {
+      if (weekFiles[p.week] === null) weekFiles[p.week] = []; // files of a week that has not ended yet still show
+      weekFiles[p.week]!.push({ type: p.r.type, name: p.name, admin: p.r.admin, at: p.r.at });
     }
     let status: MonthStoreRow['status'] = null;
-    if (!isFuture) {
-      if (isCurrent) status = (weekFiles[todayBlock]?.length || 0) > 0 || list.some((r) => r.day >= sevenDaysAgo) ? 'on_schedule' : 'late';
-      else status = weekFiles.every((w) => w === null || w.length > 0) ? 'on_schedule' : 'late';
+    if (lastDue >= 0) {
+      const missing = weeks.map((_, i) => i).filter((i) => due[i] && !(weekFiles[i]?.length));
+      const late = missing.some((i) => i !== lastDue || !inGrace);
+      status = late ? 'late' : 'on_schedule';
     }
-    out.push({ project: s.project, store: s.store, workspace: s.workspace, client: clientOf(s.store) || s.owner || '-', weekFiles, status });
+    out.push({ project: st.project, store: st.store, workspace: st.workspace, client: clientOf(st.store) || st.owner || '-', weekFiles, status });
   }
-  return out.sort((a, b) => a.project.localeCompare(b.project) || a.store.localeCompare(b.store));
+  return out.sort((x, y) => x.project.localeCompare(y.project) || x.store.localeCompare(y.store));
 }
 
 /** Normalized key for matching a feed store to an ERP client by store or brand name. */

@@ -1,5 +1,5 @@
 // Pure helpers (client-safe): the 5 files an admin must upload for a store each week. When all 5 are there the weekly report can go to the client's WhatsApp group.
-import type { FileEntry } from './upload-performance';
+import { mondaysOf, type FileEntry } from './upload-performance';
 
 export type ChecklistKey = 'store' | 'product' | 'ads_total' | 'ads_gmv' | 'ads_group';
 
@@ -46,13 +46,7 @@ export function buildChecklist(files: FileEntry[] | null | undefined): Checklist
   return { done, count, complete: count === CHECKLIST.length };
 }
 
-/** The Monday of the week report for a 7-day block (1-7, 8-14, ...) of a month: the one Monday inside the block. */
+/** The Monday of week N (0-based) of a month: weeks run Monday to Sunday and belong to the month of their Monday. */
 export function reportMondayOfBlock(year: number, month: number, block: number): string | null {
-  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  const first = block * 7 + 1;
-  const last = Math.min(daysInMonth, first + 6);
-  for (let d = first; d <= last; d++) {
-    if (new Date(Date.UTC(year, month - 1, d)).getUTCDay() === 1) return `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-  }
-  return null;
+  return mondaysOf(year, month)[block] || null;
 }

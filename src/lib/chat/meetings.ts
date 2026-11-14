@@ -92,7 +92,8 @@ async function busyFor(ws: string, s: MeetSettings, now: Date): Promise<Busy[]> 
 
 /** Free start times right now. `fresh` skips the 60-second memory (used when booking). */
 export async function availableSlots(ws: string, fresh = false): Promise<Date[]> {
-  const run = async () => { const s = await meetSettings(ws); const now = new Date(); return s.enabled ? freeSlots(s, now, await busyFor(ws, s, now)) : []; };
+  // The switch in Jadwal is only about the BOT inviting leads (see meetingContext); the free times exist, and the team can book from the inbox, whether it is on or off.
+  const run = async () => { const s = await meetSettings(ws); const now = new Date(); return freeSlots(s, now, await busyFor(ws, s, now)); };
   if (fresh) return run();
   return (await memo(`slots:${ws}`, 60_000, async () => (await run()).map((d) => d.toISOString()))).map((x: string) => new Date(x));
 }
@@ -118,7 +119,6 @@ export async function upcomingFor(groupId: string): Promise<Meeting | null> {
  */
 export async function bookMeeting(ws: string, input: { groupId: string | null; start: unknown; leadName?: string | null; store?: string | null; by: string }): Promise<{ ok: true; meeting: Meeting; text: string } | Fail> {
   const s = await meetSettings(ws);
-  if (!s.enabled) return fail(400, 'Meetings are switched off. Switch them on in Jadwal first.');
   const slot = matchSlot(input.start, await availableSlots(ws, true));
   if (!slot) return fail(409, 'That time is not free any more. Pick another one.');
   const db = createAdminClient();

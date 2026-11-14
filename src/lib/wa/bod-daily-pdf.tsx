@@ -108,7 +108,7 @@ export function BodDailyDocument({ d }: { d: BodDaily }) {
       <Page size="A4" style={st.page}>
         <Header kicker="PROFESSOR ONLINE · DAILY BOD REPORT" title="1. Advertising" day={d.reportDay} right={`Sales & Ads Cost: ${dmy(d.dataDay)}`} />
 
-        <Text style={st.h2}>Sesi yang sudah diinput kemarin ({dmy(d.reportDay)})</Text>
+        <Text style={st.h2}>Sesi yang sudah diinput hari ini ({dmy(d.reportDay)})</Text>
         <View style={st.kpiRow}>
           <Kpi label="SESI 1" value={`${s.s1} / ${s.clients}`} note="client" />
           <Kpi label="SESI 2" value={`${s.s2} / ${s.clients}`} note="client" />
@@ -122,7 +122,7 @@ export function BodDailyDocument({ d }: { d: BodDaily }) {
         </View>
 
         <Text style={st.h2}>Sales, Biaya Iklan dan ROAS ({dmy(d.dataDay)})</Text>
-        <Text style={st.hint}>Angka hari {dmy(d.dataDay)} dari Sesi 1 yang diinput kemarin. Garis kecil = 7 hari terakhir. Persen = dibanding hari sebelumnya.</Text>
+        <Text style={st.hint}>Angka hari {dmy(d.dataDay)} dari Sesi 1 yang diinput hari ini. Garis kecil = 7 hari terakhir. Persen = dibanding hari sebelumnya.</Text>
         <View style={st.kpiRow}>
           <Kpi label="TOTAL SALES" value={rp(d.totals.sales)} />
           <Kpi label="TOTAL BIAYA IKLAN" value={rp(d.totals.cost)} />
@@ -168,7 +168,7 @@ export function BodDailyDocument({ d }: { d: BodDaily }) {
       {/* ---------------------------------------------------------------- 2. Admin */}
       <Page size="A4" style={st.page}>
         <Header kicker="PROFESSOR ONLINE · DAILY BOD REPORT" title="2. Admin" day={d.reportDay} right="Upload client dan Friends Order" />
-        <Text style={st.h2}>Upload client kemarin ({dmy(d.reportDay)})</Text>
+        <Text style={st.h2}>Upload client hari ini ({dmy(d.reportDay)})</Text>
         {d.admin.errors.length > 0 && <Text style={{ fontSize: 7.5, color: AMBER, marginBottom: 4 }}>{d.admin.errors.map(pdfText).join('; ')}</Text>}
         {d.admin.lines.length === 0 && <Text style={{ fontSize: 8.5, color: MUTED }}>Data upload belum bisa dibaca.</Text>}
         {d.admin.lines.map((a) => (
@@ -185,7 +185,7 @@ export function BodDailyDocument({ d }: { d: BodDaily }) {
         ))}
         <Text style={st.h2}>Friends Order (FO)</Text>
         <View style={st.kpiRow}>
-          <Kpi label="FO DIMULAI KEMARIN" value={String(d.admin.fo.startedOnDay.length)} note={d.admin.fo.startedOnDay.length ? Array.from(new Set(d.admin.fo.startedOnDay)).map(pdfText).join(', ') : undefined} />
+          <Kpi label="FO DIMULAI HARI INI" value={String(d.admin.fo.startedOnDay.length)} note={d.admin.fo.startedOnDay.length ? Array.from(new Set(d.admin.fo.startedOnDay)).map(pdfText).join(', ') : undefined} />
           <View style={[st.kpi, { marginRight: 0 }]}><Text style={st.kpiLabel}>FO SEDANG BERJALAN</Text><Text style={st.kpiValue}>{d.admin.fo.ongoing}</Text></View>
         </View>
         <View style={st.footer} fixed><Text>Professor Online · Daily BOD Report {dmy(d.reportDay)}</Text></View>
@@ -196,8 +196,8 @@ export function BodDailyDocument({ d }: { d: BodDaily }) {
         <Header kicker="PROFESSOR ONLINE · DAILY BOD REPORT" title="3. Sales" day={d.reportDay} right="Pipeline per tahap" />
         <View style={st.kpiRow}>
           <Kpi label="TOTAL DEAL DI PIPELINE" value={String(d.pipeline.total)} />
-          <Kpi label="LEAD BARU KEMARIN" value={String(d.pipeline.newOnDay)} />
-          <Kpi label="PINDAH TAHAP KEMARIN" value={String(d.pipeline.movedOnDay)} />
+          <Kpi label="LEAD BARU HARI INI" value={String(d.pipeline.newOnDay)} />
+          <Kpi label="PINDAH TAHAP HARI INI" value={String(d.pipeline.movedOnDay)} />
         </View>
 
         <Text style={st.h2}>Jumlah deal per tahap</Text>
@@ -230,7 +230,7 @@ export function BodDailyDocument({ d }: { d: BodDaily }) {
         ))}
         <EndingTable title={`Project sudah berakhir (${ENDING_WINDOW_DAYS} hari terakhir)`} rows={d.endings.ended} ago empty="Tidak ada project yang berakhir dalam 2 minggu terakhir." />
         <EndingTable title={`Project berakhir dalam ${ENDING_WINDOW_DAYS} hari ke depan`} rows={d.endings.soon} empty="Tidak ada project yang berakhir dalam 2 minggu ke depan." />
-        <Text style={[st.hint, { marginTop: 6 }]}>BARU = deal yang dimasukkan kemarin. PINDAH = deal yang berpindah tahap kemarin. Cold Case = deal yang sudah ditinggalkan.</Text>
+        <Text style={[st.hint, { marginTop: 6 }]}>BARU = deal yang dimasukkan hari ini. PINDAH = deal yang berpindah tahap hari ini. Cold Case = deal yang sudah ditinggalkan.</Text>
         <View style={st.footer} fixed><Text>Professor Online · Daily BOD Report {dmy(d.reportDay)}</Text></View>
       </Page>
     </Document>

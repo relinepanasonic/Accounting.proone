@@ -26,7 +26,7 @@ export async function GET(request: Request) {
 
     // The plan and the file name only need the date: open a stored copy without counting the numbers again.
     const today = resolveToday(url.searchParams.get('date') || undefined);
-    const plan = planReport(today);
+    const plan = planReport(today, 'morning');
     if (plan.kind !== 'weekly' && plan.kind !== 'monthly') return new NextResponse(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });
 
     const file = reportFiles(plan, today).find((f) => f.company === company)!;
@@ -41,7 +41,7 @@ export async function GET(request: Request) {
       const { data: stored } = await db.storage.from('reports').download(path);
       if (stored) return new NextResponse(new Uint8Array(await stored.arrayBuffer()), { headers });
     }
-    const data = await gatherReportData(today);
+    const data = await gatherReportData(today, 'morning');
     if (!data) return new NextResponse(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });
     const pdf = await renderReportPdf(data, company);
     const up = await db.storage.from('reports').upload(path, pdf, { contentType: 'application/pdf', upsert: true });

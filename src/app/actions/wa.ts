@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getAuthenticatedWorkspaceContext, FINANCE_ROLES } from '@/lib/auth/workspace-context';
 import { waAccess, waFounderAccess, loadPeople } from '@/lib/wa/queries';
 import { previewPerformance, sendPerformance } from '@/lib/wa/performance';
+import { isReportSlot, type ReportSlot } from '@/lib/reports/whatsapp-report';
 import { prepareClientWeekly, sendOutboxItem } from '@/lib/wa/weekly-job';
 import { syncGroupsFor } from '@/lib/wa/group-sync';
 import { loadWeekDetail } from '@/lib/wa/board-data';
@@ -114,11 +115,11 @@ export async function setWaGroupTracked(groupId: string, tracked: boolean) {
 
 // ---- Founder page: the team performance report -------------------------------------------------------------
 
-/** Builds the report (daily, weekly or monthly by the date) and returns it without sending. Takes up to ~30 seconds. */
-export async function previewPerformanceReport(date?: string) {
+/** Builds the report (the evening daily, or the Monday-morning weekly / monthly) and returns it without sending. Takes up to ~30 seconds. */
+export async function previewPerformanceReport(date?: string, slot?: ReportSlot) {
   if (!(await waFounderAccess())) return { error: 'Not allowed' };
   try {
-    const r = await previewPerformance(date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined);
+    const r = await previewPerformance(date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined, isReportSlot(slot) ? slot : undefined);
     return { ok: true, report: r };
   } catch (e: any) {
     return { error: e?.message || 'Could not build the report' };
@@ -126,11 +127,12 @@ export async function previewPerformanceReport(date?: string) {
 }
 
 /** Sends the report now: to one recipient (a test) or to everyone active. */
-export async function sendPerformanceReportNow(phone?: string) {
+export async function sendPerformanceReportNow(phone?: string, slot?: ReportSlot) {
   const ctx = await waFounderAccess();
   if (!ctx) return { error: 'Not allowed' };
   try {
-    const out = await sendPerformance(ctx.activeWorkspaceId, phone ? { trigger: 'test', onlyPhones: [normalizeIdPhone(phone)] } : { trigger: 'manual' });
+    const s = isReportSlot(slot) ? slot : undefined;
+    const out = await sendPerformance(ctx.activeWorkspaceId, phone ? { trigger: 'test', onlyPhones: [normalizeIdPhone(phone)], slot: s } : { trigger: 'manual', slot: s });
     revalidatePath('/hrd/wa', 'layout');
     return { ok: true, out };
   } catch (e: any) {
@@ -138,7 +140,7 @@ export async function sendPerformanceReportNow(phone?: string) {
   }
 }
 
-/** The 09:00 cron sends only while this is on. Turn it on when the Make.com scenario is off, so nobody gets it twice. */
+/** The 19:00 (daily) and Monday 08:00 (weekly) crons send only while this is on. Turn it on when the Make.com scenario is off, so nobody gets it twice. */
 export async function setPerformanceAutoSend(on: boolean) {
   const ctx = await waFounderAccess();
   if (!ctx) return { error: 'Not allowed' };

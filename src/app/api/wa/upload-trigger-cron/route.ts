@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
 /**
- * Sends the weekly report of every store whose 5 weekly files are all uploaded (Admin > Performance checklist). Vercel Cron runs it daily;
+ * Sends the weekly report of every store whose 5 weekly files are all uploaded (Admin > Performance checklist). Vercel Cron runs it daily at 18:00 Jakarta time (11:00 UTC), after the day's uploads are done, so the client reports do not land together with the BOD reports;
  * it can also be called more often from outside (Make.com) with the same header. "Authorization: Bearer <CRON_SECRET>"; anything else is refused.
  * Add ?dry=1 to only list what it would send.
  */

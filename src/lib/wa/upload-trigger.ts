@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { getDashboardUploadLogRange, getRelineUploadLogRange, jakartaDay } from '@/lib/integrations/dashboard-uploads';
-import { buildMonthTable, normalizeLogs, storeKey, type MonthStoreRow } from '@/lib/integrations/upload-performance';
+import { buildMonthTable, normalizeLogs, storeKey, monthFetchRange, type MonthStoreRow } from '@/lib/integrations/upload-performance';
 import { loadClientRows } from '@/lib/sales/client-table';
 import { buildChecklist, reportMondayOfBlock } from '@/lib/integrations/upload-checklist';
 import { storeKeyOf, storeLabel } from '@/lib/integrations/performance';
@@ -76,7 +76,8 @@ export async function sendReadyWeeklyReports(workspaceId: string, opts: { today?
     const last = new Date(Date.UTC(y, mo, 0)).getUTCDate();
     const from = `${m}-01`;
     const to = `${m}-${String(last).padStart(2, '0')}`;
-    const [prof, reline] = await Promise.all([getDashboardUploadLogRange(from, to), getRelineUploadLogRange(from, to)]);
+    const fr = monthFetchRange(y, mo, today);
+    const [prof, reline] = await Promise.all([getDashboardUploadLogRange(fr.from, fr.to), getRelineUploadLogRange(fr.from, fr.to)]);
     const { rows, assigned, errors } = normalizeLogs(prof, reline);
     res.errors.push(...errors);
     Object.assign(statuses, await loadReportStatuses(workspaceId, from, to));

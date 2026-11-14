@@ -209,7 +209,7 @@ export async function listMeetings(ws: string, days = 30) {
   });
 }
 
-export async function setMeetingStatus(ws: string, id: string, status: unknown): Promise<{ ok: true } | Fail> {
+export async function setMeetingStatus(ws: string, id: string, status: unknown): Promise<{ ok: true; prev: string } | Fail> {
   if (!['booked', 'done', 'no_show', 'cancelled'].includes(String(status))) return fail(400, 'Unknown status.');
   const db = createAdminClient();
   const { data: m } = await db.from('chat_meetings').select('id, google_event_id, status, lead_visit_id').eq('id', id).eq('workspace_id', ws).maybeSingle();
@@ -222,7 +222,7 @@ export async function setMeetingStatus(ws: string, id: string, status: unknown):
   }
   if (status === 'cancelled' && (m as any).lead_visit_id) await db.from('lead_visits').delete().eq('id', (m as any).lead_visit_id).then(() => undefined, () => undefined);
   forget(`slots:${ws}`);
-  return { ok: true };
+  return { ok: true, prev: String((m as any).status) };
 }
 
 // ---------------------------------------------------------------- the salesperson, and the meeting in the ERP

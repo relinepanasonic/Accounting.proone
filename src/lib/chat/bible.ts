@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/api/supabase-admin';
 import { askBotModel } from '@/lib/wa/bot/model';
 import { forget, memo } from './cache';
 import { DEFAULT_SOCIAL_SCRIPT, SOCIAL_KIND, SOCIAL_TITLE } from '@/lib/wa/bot/social-script';
+import { validDeckUrl } from '@/lib/wa/bot/deck';
 import { ASK_SYSTEM, BIBLE_BUCKET, buildKnowledge, checkUpload, DECK_SYSTEM, DECK_USER, storagePath, type BibleDocText } from './bible-text';
 
 /**
@@ -198,8 +199,8 @@ export async function askBible(ws: string, question: string): Promise<{ ok: true
 }
 
 // ---------------------------------------------------------------- the bot's settings (also edited here, so nobody has to open the ERP)
-export interface BotSettings { enabled: boolean; media_enabled: boolean; persona_name: string; company_name: string; hours_from: string; hours_to: string; max_replies: number; knowledge: string; social_script: string }
-const DEFAULTS: BotSettings = { enabled: false, media_enabled: false, persona_name: 'Fefe', company_name: 'Prof Toko Online', hours_from: '08:00', hours_to: '21:00', max_replies: 4, knowledge: '', social_script: '' };
+export interface BotSettings { enabled: boolean; media_enabled: boolean; persona_name: string; company_name: string; hours_from: string; hours_to: string; max_replies: number; knowledge: string; social_script: string; deck_url: string }
+const DEFAULTS: BotSettings = { enabled: false, media_enabled: false, persona_name: 'Fefe', company_name: 'Prof Toko Online', hours_from: '08:00', hours_to: '21:00', max_replies: 4, knowledge: '', social_script: '', deck_url: '' };
 
 export async function getSettings(ws: string): Promise<BotSettings> {
   const { data } = await createAdminClient().from('wa_bot_config').select('*').eq('workspace_id', ws).maybeSingle();
@@ -218,6 +219,11 @@ export async function saveSettings(ws: string, patch: Partial<BotSettings>, by: 
   if (patch.hours_to !== undefined) { const v = time(patch.hours_to); if (!v) return fail(400, 'Closing time must look like 21:00.'); row.hours_to = v; }
   if (patch.max_replies !== undefined) { const n = Math.round(Number(patch.max_replies)); if (!(n >= 1 && n <= 10)) return fail(400, 'Messages per chat must be 1 to 10.'); row.max_replies = n; }
   if (typeof patch.knowledge === 'string') row.knowledge = patch.knowledge.slice(0, 12000);
+  if (typeof patch.deck_url === 'string') {
+    const v = patch.deck_url.trim();
+    if (v && !validDeckUrl(v)) return fail(400, 'The deck link must be a full https link, like https://drive.google.com/...');
+    row.deck_url = v ? validDeckUrl(v) : null;
+  }
   if (typeof patch.social_script === 'string') {
     const s = await saveSocialScript(ws, patch.social_script.slice(0, 12000), by?.name ?? null);
     if (!s.ok) return s;
@@ -229,6 +235,7 @@ export async function saveSettings(ws: string, patch: Partial<BotSettings>, by: 
   if (typeof patch.enabled === 'boolean') what.push(patch.enabled ? 'The bot was switched ON' : 'The bot was switched OFF');
   if (typeof patch.media_enabled === 'boolean') what.push(patch.media_enabled ? 'Sending photos was switched ON' : 'Sending photos was switched OFF');
   if (typeof patch.knowledge === 'string') what.push('The script was saved');
+  if (typeof patch.deck_url === 'string') what.push(patch.deck_url.trim() ? 'The sales deck link was saved' : 'The sales deck link was removed');
   if (typeof patch.social_script === 'string') what.push('The Instagram & Messenger script was saved');
   if (['persona_name', 'company_name', 'hours_from', 'hours_to', 'max_replies'].some((k) => (patch as any)[k] !== undefined)) what.push('The name, hours or message limit were saved');
   if (what.length) await writeLog(ws, { id: null, title: 'Bot script and settings' }, 'settings', by?.name ?? null, what.join('. ') + '.');

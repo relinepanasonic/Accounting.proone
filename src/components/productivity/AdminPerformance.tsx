@@ -21,7 +21,7 @@ const stamp = (iso: string) => {
 type SortKey = 'project' | 'client' | 'store' | 'status';
 
 /** Admin > Performance: per store the files uploaded in each week of the month. Click a week to see those files. */
-export function AdminPerformance({ rows, errors, year, month, years, todayBlock, daysInMonth, reports }: { rows: MonthStoreRow[]; errors: string[]; year: number; month: number; years: number[]; todayBlock: number; daysInMonth: number; reports: Record<string, { status: string; sentAt: string | null; hasGroup: boolean }> }) {
+export function AdminPerformance({ rows, errors, year, month, years, todayBlock, weeks, reports }: { rows: MonthStoreRow[]; errors: string[]; year: number; month: number; years: number[]; todayBlock: number; weeks: Array<{ monday: string; sunday: string }>; reports: Record<string, { status: string; sentAt: string | null; hasGroup: boolean }> }) {
   const router = useRouter();
   const pathname = usePathname();
   const search = useSearchParams();
@@ -54,7 +54,8 @@ export function AdminPerformance({ rows, errors, year, month, years, todayBlock,
       <button onClick={() => toggle(k)} className={`inline-flex items-center gap-1.5 uppercase tracking-wider hover:text-zinc-200 ${sort.key === k ? 'text-[#f5d77f]' : ''}`}>{children}<SortArrows dir={sort.key === k ? (sort.asc ? 'asc' : 'desc') : null} /></button>
     </th>
   );
-  const range = (b: number) => `${b * 7 + 1}-${b === 4 ? daysInMonth : (b + 1) * 7}`;
+  const dm = (d: string) => `${Number(d.slice(8, 10))}${d.slice(5, 7) !== String(month).padStart(2, '0') ? ` ${MON[Number(d.slice(5, 7)) - 1]}` : ''}`;
+  const range = (b: number) => (weeks[b] ? `${dm(weeks[b].monday)}-${dm(weeks[b].sunday)}` : '');
   const openFiles = open?.row.weekFiles[open.week] || [];
   const openList = buildChecklist(openFiles);
   const doSend = async (resend: boolean) => {
@@ -96,7 +97,7 @@ export function AdminPerformance({ rows, errors, year, month, years, todayBlock,
                 <Th k="project">Project</Th>
                 <Th k="client">Client</Th>
                 <Th k="store">Store Name</Th>
-                {[0, 1, 2, 3, 4].map((b) => (
+                {weeks.map((_, b) => (
                   <th key={b} className={`px-2 py-3 text-center align-bottom font-bold uppercase tracking-wider ${b === todayBlock ? 'text-[#f5d77f]' : ''}`}>
                     <div>Week {b + 1}</div><div className={`text-[9px] font-normal normal-case ${b === todayBlock ? 'text-[#d4af37]' : 'text-zinc-600'}`}>{range(b)}</div>
                   </th>
@@ -111,7 +112,7 @@ export function AdminPerformance({ rows, errors, year, month, years, todayBlock,
                   <td className="whitespace-nowrap px-3 py-2.5 text-zinc-400">{projectLabel(r.project)}</td>
                   <td className="px-3 py-2.5 text-zinc-300">{r.client}</td>
                   <td className="px-3 py-2.5 font-semibold text-zinc-100">{r.store}</td>
-                  {r.weekFiles.map((w, b) => (
+                  {r.weekFiles.slice(0, weeks.length).map((w, b) => (
                     <td key={b} className={`px-2 py-2.5 text-center ${b === todayBlock ? 'bg-[#d4af37]/[0.06]' : ''}`}>
                       {w === null ? <span className="text-zinc-700">-</span> : w.length > 0 ? (
                         <button onClick={() => { setSendMsg(null); setOpen({ row: r, week: b }); }} className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono hover:bg-emerald-500/10 ${buildChecklist(w).complete ? 'text-emerald-400' : 'text-amber-400'}`} title="Show the checklist">
@@ -131,7 +132,7 @@ export function AdminPerformance({ rows, errors, year, month, years, todayBlock,
           </table>
         </div>
       </div>
-      <p className="text-[11px] text-zinc-600">Each week needs 5 files: Store Performance, Product Performance, Ads Total, Ads Inkubasi / GMV Max Auto and Ads Group. When all 5 are in, the weekly report is sent to the client&apos;s WhatsApp group (daily check, or press Send in the week). The week comes from the file name (&quot;... week 2.csv&quot;); a file without it counts in the week of its upload day. On Schedule: a file this week or in the last 7 days (a past month: every week has a file).</p>
+      <p className="text-[11px] text-zinc-600">Each week needs 5 files: Store Performance, Product Performance, Ads Total, Ads Inkubasi / GMV Max Auto and Ads Group. When all 5 are in, the weekly report is sent to the client&apos;s WhatsApp group (daily check, or press Send in the week). Weeks run Monday to Sunday and belong to the month of their Monday. A file counts in the week it is about: the month and &quot;week N&quot; in its name (&quot;essen ads nov week 1.csv&quot;); a file without a week is the week before its upload. Files of another month (&quot;sep 26&quot;) are not counted here. A week that has not ended is -. On Schedule: every ended week has files (the last one may still be 3 days late).</p>
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setOpen(null)}>

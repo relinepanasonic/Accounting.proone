@@ -8,6 +8,7 @@ import { humanPauseMs, sendToChat, showTyping } from '@/lib/chat/send-any';
 import type { ParsedWaMessage } from '../parse-webhook';
 import { decideBot, inOpenHours, isBotEcho, needsHuman } from './decide';
 import { buildBotPrompt, parseBotAnswer, replyMax, type BotTurn } from './prompt';
+import { deckLine, validDeckUrl } from './deck';
 import { SOCIAL_MAX_REPLIES } from './social-script';
 import { isMetaChat } from '@/lib/chat/channel';
 
@@ -75,6 +76,7 @@ export async function runSalesBot(device: BotDevice, m: ParsedWaMessage, groupId
   const { system, prompt } = buildBotPrompt({
     persona: cfg.persona_name, company: cfg.company_name, knowledge, history, replyNo, channel, socialScript,
     meeting: meet?.enabled ? { minutes: meet.minutes, offer: meet.offer, booked: meet.booked } : null,
+    deck: !!validDeckUrl(cfg.deck_url),
     inHours: inOpenHours(new Date(), cfg.hours_from || '08:00', cfg.hours_to || '21:00'),
   });
 
@@ -117,6 +119,10 @@ export async function runSalesBot(device: BotDevice, m: ParsedWaMessage, groupId
   } else if (meet?.enabled && meet.booked && answer.cancelMeeting) {
     await setMeetingStatus(ws, meet.booked.id, 'cancelled').catch((e) => console.error('cancel meeting failed', e));
   }
+
+  // The lead asked for the sales deck: the link goes under the reply (files cannot be sent on the regular Fonnte package), once per chat.
+  const deckUrl = validDeckUrl(cfg.deck_url);
+  if (answer.sendDeck && deckUrl && !history.some((t) => t.from === 'team' && t.text.includes(deckUrl))) answer = { ...answer, reply: deckLine(answer.reply, deckUrl) };
 
   // The words that always need a person decide, whatever the model said.
   const forced = needsHuman(m.body);

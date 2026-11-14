@@ -18,6 +18,21 @@ export interface BotPromptInput {
   socialScript?: string;
   /** The goal of every chat: a free consultation with the expert team. The free times to offer (with the code the bot sends back), or the lead's booking. */
   meeting?: { minutes: number; offer: Array<{ code: string; label: string }>; booked: { label: string; meetUrl: string | null } | null } | null;
+  /** A link to the sales deck is set (Google Drive): the bot may send it; the link itself is added by the code, never written by the model. */
+  deck?: boolean;
+}
+
+/** When and how the bot shares the sales deck (empty when no deck link is set). */
+export function deckSection(i: BotPromptInput): string[] {
+  if (!i.deck) return [];
+  return [
+    'SALES DECK',
+    '- Kalau kakak minta deck, company profile, proposal, portofolio, daftar paket, atau info lengkap tertulis, isi "send_deck": true dan tulis kalimat singkat seperti "Ini deck kami ya kak, bisa dibuka di link berikut".',
+    '- Link deck ditambahkan otomatis di bawah balasanmu: JANGAN menulis atau mengarang link.',
+    '- Setelah kirim deck, ajak kakak konsultasi gratis dengan tim ahli supaya dijelaskan langsung untuk tokonya.',
+    '- Jangan kirim deck kalau kakak tidak memintanya, dan jangan kirim dua kali kalau sudah dikirim di percakapan ini.',
+    '',
+  ];
 }
 
 /** The part of the instructions about the free consultation (empty when meetings are switched off). */
@@ -55,7 +70,7 @@ export const replyMax = (channel: BotPromptInput['channel']) => (channel === 'so
 
 const JSON_FORMAT = [
   'FORMAT JAWABAN: hanya satu objek JSON, tanpa teks lain:',
-  '{"reply": "teks balasan untuk kakak", "handoff": true atau false, "reason": "alasan singkat bila handoff", "lead": {"name": "", "store": "", "need": ""}, "booking": {"slot": ""}, "cancel_meeting": false}',
+  '{"reply": "teks balasan untuk kakak", "handoff": true atau false, "reason": "alasan singkat bila handoff", "lead": {"name": "", "store": "", "need": ""}, "booking": {"slot": ""}, "cancel_meeting": false, "send_deck": false}',
   'Isi lead hanya dengan apa yang kakak sebutkan sendiri; kosongkan bila belum ada. Isi booking.slot hanya saat kakak memilih waktu dari JADWAL KOSONG; selain itu kosongkan.',
 ];
 
@@ -81,6 +96,7 @@ function socialSystem(i: BotPromptInput): string {
     i.inHours ? '' : '- Sekarang di luar jam kerja tim. Tetap jawab pertanyaannya. Hanya kalau handoff, bilang tim akan membalas besok pagi.',
     '',
     ...meetingSection(i),
+    ...deckSection(i),
     ...JSON_FORMAT,
     '',
     'SCRIPT DM',
@@ -112,6 +128,7 @@ export function buildBotPrompt(i: BotPromptInput): { system: string; prompt: str
     i.inHours ? '' : '- Sekarang di luar jam kerja tim: bilang dengan ramah bahwa tim akan membalas besok pagi.',
     '',
     ...meetingSection(i),
+    ...deckSection(i),
     ...JSON_FORMAT,
     '',
     'PENGETAHUAN',
@@ -132,6 +149,8 @@ export interface BotAnswer {
   booking?: string | null;
   /** The lead wants to cancel their booked consultation. */
   cancelMeeting?: boolean;
+  /** The lead asked for the sales deck: the code adds the link under the reply. */
+  sendDeck?: boolean;
 }
 
 const URL_RE = /\bhttps?:\/\/[^\s)]+|\bwww\.[^\s)]+/gi;
@@ -180,5 +199,6 @@ export function parseBotAnswer(raw: string, knowledge = '', max = 600): BotAnswe
     lead: { name: clean(lead.name), store: clean(lead.store), need: clean(lead.need) },
     booking: typeof j?.booking?.slot === 'string' && j.booking.slot.trim() ? j.booking.slot.trim().slice(0, 40) : null,
     cancelMeeting: j?.cancel_meeting === true,
+    sendDeck: j?.send_deck === true,
   };
 }

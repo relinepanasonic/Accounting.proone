@@ -2,7 +2,7 @@ import React from 'react';
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { AdminPerformance } from '@/components/productivity/AdminPerformance';
 import { getDashboardUploadLogRange, getRelineUploadLogRange, jakartaDay } from '@/lib/integrations/dashboard-uploads';
-import { buildMonthTable, normalizeLogs, storeKey } from '@/lib/integrations/upload-performance';
+import { buildMonthTable, normalizeLogs, storeKey, monthWeeks, monthFetchRange } from '@/lib/integrations/upload-performance';
 import { DivisionTabs } from '@/components/productivity/DivisionTabs';
 import { Shield } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
@@ -27,9 +27,11 @@ export default async function AdminPerformancePage({ searchParams }: { searchPar
   const from = `${year}-${String(month).padStart(2, '0')}-01`;
   const to = `${year}-${String(month).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`;
 
+  // the files of this month's weeks are uploaded up to ~10 days after its last Sunday
+  const fetchRange = monthFetchRange(year, month, today);
   const [prof, reline, clientsRes] = await Promise.all([
-    getDashboardUploadLogRange(from, to),
-    getRelineUploadLogRange(from, to),
+    getDashboardUploadLogRange(fetchRange.from, fetchRange.to),
+    getRelineUploadLogRange(fetchRange.from, fetchRange.to),
     createAdminClient().from('clients').select('name, company_name, store_name').limit(5000),
   ]);
   const { rows, assigned, errors } = normalizeLogs(prof, reline);
@@ -58,7 +60,8 @@ export default async function AdminPerformancePage({ searchParams }: { searchPar
   } catch { /* no churn list: show everything */ }
 
   const table = buildMonthTable(rows, assigned, year, month, clientOf).filter((r) => !churned.has(r.client));
-  const todayBlock = year === curYear && month === curMonth ? Math.min(4, Math.floor((Number(today.slice(8, 10)) - 1) / 7)) : -1;
+  const weeks = monthWeeks(year, month);
+  const todayBlock = weeks.findIndex((w) => w.monday <= today && today <= w.sunday);
   const years = Array.from({ length: curYear - 2024 + 1 }, (_, i) => curYear - i);
 
   return (
@@ -71,7 +74,7 @@ export default async function AdminPerformancePage({ searchParams }: { searchPar
           <p className="text-sm text-zinc-400 mt-1">What each store uploaded, week by week</p>
         </div>
       </div>
-      <AdminPerformance rows={table} errors={errors} year={year} month={month} years={years} todayBlock={todayBlock} daysInMonth={daysInMonth} reports={reports} />
+      <AdminPerformance rows={table} errors={errors} year={year} month={month} years={years} todayBlock={todayBlock} weeks={weeks} reports={reports} />
     </div>
   );
 }

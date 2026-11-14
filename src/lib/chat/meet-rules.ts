@@ -125,6 +125,18 @@ export function rescheduleText(slots: Date[]): string {
 export const movedText = (start: Date, minutes: number, meetUrl: string | null) =>
   [`Sudah kami pindahkan kak. Jadwal baru: ${slotLabel(start)} (${minutes} menit).`, meetUrl ? `Link Google Meet tetap sama: ${meetUrl}` : ''].filter(Boolean).join('\n');
 
+// ---------------------------------------------------------------- after the meeting
+/** The team marked the consultation Done: thank the lead and say who sends the next step. */
+export const thanksText = (name: string, owner: string | null) =>
+  `${hi(name)}, terima kasih sudah meluangkan waktu konsultasi dengan tim ahli kami hari ini. ${firstName(owner || '') ? `Rangkuman dan rekomendasi untuk toko kakak akan dikirim oleh kak ${firstName(owner || '')} dari tim kami ya.` : 'Rangkuman dan rekomendasi untuk toko kakak akan kami kirim ya.'} Kalau ada pertanyaan, chat di sini saja kak.`;
+
+/** The lead did not come: no blame, three other free times, numbered. */
+export function noShowText(start: Date, name: string, slots: Date[]): string {
+  const nums = slots.map((_, i) => String(i + 1));
+  const choice = nums.length > 1 ? `${nums.slice(0, -1).join(', ')} atau ${nums[nums.length - 1]}` : nums[0];
+  return [`${hi(name)}, tadi kita belum sempat ketemu di konsultasi jam ${hhmm(start)} WIB ya. Tidak apa-apa kak, mungkin lagi sibuk.`, '', 'Ini waktu lain yang masih kosong:', ...slots.map((d, i) => `${i + 1}. ${slotLabel(d)}`), '', `Balas angkanya ya kak (${choice}).`].join('\n');
+}
+
 /** The confirmation is only asked when the meeting was booked well before it (more than 70 minutes): otherwise only the 15-minute reminder goes. */
 export const shouldAskConfirm = (createdAt: Date, startsAt: Date) => startsAt.getTime() - createdAt.getTime() > 70 * 60000;
 

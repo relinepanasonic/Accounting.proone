@@ -10,6 +10,7 @@ import { CHAT_ROLES } from './auth';
 import { buildSuggestPrompt, cleanSuggestion } from './suggest';
 import { upcomingFor } from './meetings';
 import { paymentOf } from './payment-status';
+import { PIPELINE_STAGES } from '@/lib/sales/flow';
 import {
   cleanShortcut, conversationsOf, countsOf, filterConversations, sourceOf, threadOf,
   type BotChatRow, type ChatFilter, type ChatGroupRow, type ChatMessageRow, type ChatNoteRow, type ChatStateRow,
@@ -90,6 +91,59 @@ async function dealsOfChats(ws: string, groups: ChatGroupRow[], linked: Map<stri
     if (d) out.set(g.id, { id: d.id, stage: d.stage, payment: d.invoice_id ? paymentOf(invOf.get(d.invoice_id), today) : null });
   }
   return out;
+}
+
+export interface BoardDeal {
+  id: string; title: string; client: string; stage: string; value: number;
+  sales: string | null; salesId: string | null; groupId: string | null;
+  daysInStage: number; payment: ReturnType<typeof paymentOf>; nextMeetingAt: string | null;
+}
+
+/**
+ * The pipeline board of the chat dashboard: every open deal, plus the Active Clients and the Lost ones of the last 30 days, each with the chat it
+ * belongs to (so a card opens its chat), how long it has been in its stage, its payment status and its next consultation. The same deals as the ERP board.
+ */
+export async function loadPipeline(ws: string): Promise<{ deals: BoardDeal[]; stages: string[] }> {
+  const db = createAdminClient();
+  const since = new Date(Date.now() - 30 * 86400000).toISOString();
+  const cols = 'id, title, client_id, lead_name, stage, value, salesman_id, salesman_name, created_at, stage_changed_at, invoice_id';
+  const [{ data: open }, { data: recent }] = await Promise.all([
+    db.from('crm_deals').select(cols).eq('workspace_id', ws).not('stage', 'in', '("Deal","Cold Case")').order('created_at', { ascending: false }).limit(1500),
+    db.from('crm_deals').select(cols).eq('workspace_id', ws).in('stage', ['Deal', 'Cold Case']).gte('stage_changed_at', since).order('stage_changed_at', { ascending: false }).limit(300),
+  ]);
+  const rows = [...((open || []) as any[]), ...((recent || []) as any[])];
+  if (!rows.length) return { deals: [], stages: [] };
+  const ids = rows.map((d) => d.id as string);
+  const clientIds = [...new Set(rows.map((d) => d.client_id).filter(Boolean))] as string[];
+  const [{ groups }, clients, { data: links }, { data: invs }, { data: ms }, { data: cn }] = await Promise.all([
+    salesGroups(ws),
+    clientPhones(ws),
+    db.from('chat_state').select('group_id, deal_id').eq('workspace_id', ws).in('deal_id', ids),
+    db.from('invoices').select('id, status, total_amount, amount_paid, due_date').in('id', rows.map((d) => d.invoice_id).filter(Boolean)),
+    db.from('chat_meetings').select('group_id, starts_at').eq('workspace_id', ws).eq('status', 'booked').gte('starts_at', new Date().toISOString()).order('starts_at', { ascending: true }).limit(500),
+    clientIds.length ? db.from('clients').select('id, name').in('id', clientIds) : Promise.resolve({ data: [] as any[] }),
+  ]);
+  const nameOf = new Map<string, string>(((cn || []) as any[]).map((c) => [c.id, String(c.name || '')]));
+  const groupOfDeal = new Map<string, string>(((links || []) as any[]).map((l) => [l.deal_id as string, l.group_id as string]));
+  const groupOfTail = new Map<string, string>();
+  for (const g of groups) { const t = phoneTail(g.wa_id); if (t.length >= 8 && !groupOfTail.has(t)) groupOfTail.set(t, g.id); }
+  const phoneOfClient = new Map<string, string>(clients.map((c: any) => [c.id as string, phoneTail(c.phone)]));
+  const invOf = new Map<string, any>(((invs || []) as any[]).map((i) => [i.id, i]));
+  const nextMeet = new Map<string, string>();
+  for (const m of (ms || []) as any[]) if (m.group_id && !nextMeet.has(m.group_id)) nextMeet.set(m.group_id, m.starts_at);
+  const today = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
+  const day = (iso: string) => new Date(new Date(iso).getTime() + 7 * 3600000).toISOString().slice(0, 10);
+  const deals: BoardDeal[] = rows.map((d) => {
+    const groupId = groupOfDeal.get(d.id) || groupOfTail.get(phoneOfClient.get(d.client_id) || '') || null;
+    const since = day(d.stage_changed_at || d.created_at);
+    return {
+      id: d.id, title: String(d.title || 'Deal'), client: nameOf.get(d.client_id) || d.lead_name || 'Client', stage: d.stage, value: Number(d.value || 0),
+      sales: d.salesman_name ?? null, salesId: d.salesman_id ?? null, groupId,
+      daysInStage: Math.max(0, Math.round((Date.parse(`${today}T12:00:00Z`) - Date.parse(`${since}T12:00:00Z`)) / 86400000)),
+      payment: d.invoice_id ? paymentOf(invOf.get(d.invoice_id), today) : null, nextMeetingAt: groupId ? nextMeet.get(groupId) ?? null : null,
+    };
+  });
+  return { deals, stages: [...PIPELINE_STAGES] };
 }
 
 export async function listConversations(ws: string, filter: ChatFilter, q: string, meId: string, labelId = '', stage = '') {

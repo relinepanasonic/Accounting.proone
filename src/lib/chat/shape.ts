@@ -27,6 +27,9 @@ export interface ConversationSummary {
   /** Filled by the server after the fact (labels on the chat, its next open reminder). */
   labels?: ChatLabel[];
   nextReminder?: NextReminder | null;
+  /** The ERP pipeline stage of the chat's deal (the stored name, e.g. 'Warm', 'Cold Case'), null when the chat has no deal; and where its invoice stands. */
+  stage?: string | null;
+  payment?: 'unpaid' | 'partial' | 'paid' | 'overdue' | null;
 }
 
 export const previewOf = (m: Pick<ChatMessageRow, 'body' | 'media_type'>): string => {

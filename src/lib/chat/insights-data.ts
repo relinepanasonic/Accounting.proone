@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { memo } from './cache';
 import { askBotModel } from '@/lib/wa/bot/model';
-import { analyze, needsOf, summaryInput, SUMMARY_SYSTEM, exampleOf, type Insights, type NeedCount } from './insights';
+import { analyze, dailyOf, fallbackSummary, needsOf, parseSummary, summaryInput, SUMMARY_SYSTEM, exampleOf, type BodSummary, type DayCount, type Insights, type NeedCount } from './insights';
 import { reasonGroup } from './stats';
 
 /**
@@ -13,6 +13,7 @@ export const INSIGHT_DAYS = [7, 30, 90] as const;
 export interface InsightsResult extends Insights {
   days: number; from: string; to: string;
   needs: NeedCount[];                                  // what leads told the bot they need
+  daily: DayCount[];                                   // chats and messages per day (Jakarta days)
   handedOver: Array<{ text: string }>;                // the last messages of chats the bot could not answer, to see what is missing from the script
 }
 
@@ -23,7 +24,7 @@ async function build(ws: string, days: number): Promise<InsightsResult> {
   const now = new Date();
   const since = new Date(now.getTime() - days * 86400000).toISOString();
   const base = { days, from: since, to: now.toISOString() };
-  const empty: InsightsResult = { ...base, ...analyze([]), needs: [], handedOver: [] };
+  const empty: InsightsResult = { ...base, ...analyze([]), needs: [], daily: dailyOf([], days, now), handedOver: [] };
   const { data: devs } = await db.from('wa_devices').select('id').eq('workspace_id', ws).eq('role', 'sales').eq('active', true);
   const devIds = ((devs || []) as Array<{ id: string }>).map((d) => d.id);
   if (!devIds.length) return empty;
@@ -43,13 +44,24 @@ async function build(ws: string, days: number): Promise<InsightsResult> {
   const lastOf = new Map<string, string>();
   for (const m of messages) if (stuck.has(m.group_id) && m.body) lastOf.set(m.group_id, m.body);
   const handedOver = [...lastOf.values()].map(exampleOf).filter((t) => t.length >= 6).slice(-8).map((text) => ({ text }));
-  return { ...base, ...analyze(messages), needs, handedOver };
+  return { ...base, ...analyze(messages), needs, daily: dailyOf(messages, days, now), handedOver };
 }
 
-/** The AI's short summary for the BOD, written from the counts. Kept for 6 hours per period, so it costs almost nothing. */
-export const loadSummary = (ws: string, days: number, fresh = false) => memo(`insights-sum:${ws}:${days}${fresh ? `:${Date.now()}` : ''}`, 6 * 3600_000, async () => {
+export interface SummaryResult extends BodSummary { model: string | null; ai: boolean }
+
+/**
+ * The summary for the BOD, written by the AI from the counts (JSON: executive paragraph, points, actions with a PIC). Kept for 6 hours per period.
+ * When the AI is not available, or its answer cannot be read, the summary is written from the numbers alone (ai = false), so the report always has it.
+ */
+export const loadSummary = (ws: string, days: number, fresh = false) => memo(`insights-sum:${ws}:${days}${fresh ? `:${Date.now()}` : ''}`, 6 * 3600_000, async (): Promise<SummaryResult> => {
   const i = await loadInsights(ws, days);
-  if (!i.messages) return { text: 'There are no chats in this period yet, so there is nothing to summarise.', model: null as string | null };
-  const out = await askBotModel(SUMMARY_SYSTEM, summaryInput(i, i.needs, days), { json: false });
-  return { text: out.text.trim(), model: out.model as string | null };
+  if (!i.messages) return { ...fallbackSummary(i, i.needs, days, i.daily), model: null, ai: false };
+  try {
+    const input = summaryInput(i, i.needs, days, i.daily);
+    let out = await askBotModel(SUMMARY_SYSTEM, input);
+    let parsed = parseSummary(out.text);
+    if (!parsed) { out = await askBotModel(SUMMARY_SYSTEM, `${input}\n\nPENTING: balas HANYA dengan satu objek JSON yang valid.`); parsed = parseSummary(out.text); }
+    if (parsed) return { ...parsed, model: out.model, ai: true };
+  } catch (e) { console.error('insight summary failed', e); }
+  return { ...fallbackSummary(i, i.needs, days, i.daily), model: null, ai: false };
 });

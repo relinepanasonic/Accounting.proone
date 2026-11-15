@@ -90,24 +90,86 @@ export function needsOf(leads: Array<{ need?: string | null }>, max = 8): NeedCo
   return [...by.values()].sort((a, b) => b.chats - a.chats || a.need.localeCompare(b.need)).slice(0, max);
 }
 
-/** The text the AI reads to write the summary for the BOD: the counts, the examples and the needs. Short, so it is cheap and fast. */
-export function summaryInput(i: Insights, needs: NeedCount[], days: number): string {
+export interface DayCount { day: string; chats: number; messages: number }
+/** Per Jakarta day, the last `days` days up to today: how many leads wrote, and how many messages. */
+export function dailyOf(messages: InMessage[], days: number, now: Date): DayCount[] {
+  const key = (d: Date) => new Date(d.getTime() + 7 * 3600000).toISOString().slice(0, 10);
+  const out: DayCount[] = [];
+  for (let i = days - 1; i >= 0; i--) out.push({ day: key(new Date(now.getTime() - i * 86400000)), chats: 0, messages: 0 });
+  const at = new Map(out.map((d, i) => [d.day, i]));
+  const seen = new Map<string, Set<string>>();
+  for (const m of messages) {
+    if (clean(m.body || '').length < 2) continue;
+    const day = key(new Date(m.sent_at)); const i = at.get(day);
+    if (i === undefined) continue;
+    out[i].messages++;
+    if (!seen.has(day)) seen.set(day, new Set());
+    seen.get(day)!.add(m.group_id);
+  }
+  for (const [day, set] of seen) out[at.get(day)!].chats = set.size;
+  return out;
+}
+
+/** The text the AI reads to write the summary for the BOD: the counts, the examples, the needs and the days. Short, so it is cheap and fast. */
+export function summaryInput(i: Insights, needs: NeedCount[], days: number, daily: DayCount[] = []): string {
   const top = (rows: TopicCount[]) => rows.slice(0, 6).map((r) => `- ${r.label}: ${r.chats} chat, ${r.mentions} pesan. Contoh: ${r.examples.map((e) => `"${e}"`).join(' | ') || '-'}`).join('\n') || '- (belum ada)';
   return [
-    `Periode: ${days} hari terakhir. ${i.chats} chat, ${i.messages} pesan dari calon client.`,
+    `Periode: ${days} hari terakhir. ${i.chats} chat, ${i.messages} pesan dari calon client. ${i.unmatched} pesan tidak cocok dengan tema kekhawatiran mana pun.`,
     'PAKET YANG DITANYAKAN:', top(i.packages),
     'KEKHAWATIRAN CLIENT:', top(i.concerns),
     'KEBUTUHAN YANG DISEBUT KE BOT:', needs.map((n) => `- ${n.need} (${n.chats} chat)`).join('\n') || '- (belum ada)',
-  ].join('\n');
+    daily.length ? `CHAT PER HARI (tanggal: chat/pesan):\n${daily.map((d) => `- ${d.day}: ${d.chats}/${d.messages}`).join('\n')}` : '',
+  ].filter(Boolean).join('\n');
 }
 
+export const PICS = ['Sales', 'Admin', 'Advertiser', 'Tim Konten', 'Founder / BOD'] as const;
+export interface InsightAction { action: string; pic: string; why: string }
+/** What the BOD reads: a short executive paragraph, the points behind it, and the actions with who does them (the shape of the Product & Inquiry Intelligence report). */
+export interface BodSummary { executive: string; insights: string[]; actions: InsightAction[] }
+
 export const SUMMARY_SYSTEM = [
-  'Kamu analis yang membantu direksi (BOD) Prof Toko Online, agensi yang mengelola toko online di Shopee, TikTok dan Meta Ads.',
-  'Dari data chat calon client di bawah, tulis ringkasan dalam bahasa Indonesia yang singkat dan konkret untuk direksi:',
-  '1. Paket apa yang paling banyak ditanya dan apa artinya.',
-  '2. Apa kekhawatiran utama client dan bagaimana tim sebaiknya menjawabnya.',
-  '3. Apa yang sebenarnya dibutuhkan client.',
-  '4. Satu sampai tiga tindakan yang disarankan minggu ini.',
-  'ATURAN: pakai HANYA data yang diberikan. Jangan mengarang angka atau kejadian. Kalau data masih sedikit (kurang dari 10 chat), katakan itu di kalimat pertama dan jangan menarik kesimpulan besar.',
-  'Format: teks biasa, 4 bagian bernomor, masing-masing 1 sampai 3 kalimat. Tanpa Markdown tebal, tanpa tabel.',
+  'Kamu analis yang menyusun "Laporan Insight Chat" untuk direksi (BOD) Prof Toko Online, agensi yang mengelola toko online di Shopee, TikTok dan Meta Ads.',
+  'Dari data chat calon client di bawah, tulis dalam bahasa Indonesia yang formal tapi mudah dipahami. Jawab HANYA dengan satu objek JSON:',
+  '{"executive": "...", "insights": ["...", "..."], "actions": [{"action": "...", "pic": "...", "why": "..."}]}',
+  '- executive: satu paragraf 4 sampai 6 kalimat. Sebut jumlah chat dan pesan, paket yang paling banyak ditanya, kekhawatiran utama, kebutuhan client, dan hari tersibuk. Pakai angka dari data.',
+  '- insights: 2 sampai 4 poin pendek tentang apa artinya data ini bagi bisnis (misalnya: banyak yang tanya harga tapi belum tahu paket yang cocok).',
+  `- actions: 2 sampai 4 tindakan yang konkret untuk minggu ini. pic harus salah satu dari: ${PICS.join(', ')}. why: satu kalimat alasan dari data.`,
+  'ATURAN: pakai HANYA data yang diberikan. Jangan mengarang angka, nama client, atau kejadian. Kalau data kurang dari 10 chat, katakan itu di kalimat pertama executive dan jangan menarik kesimpulan besar. Tanpa Markdown.',
 ].join('\n');
+
+/** Reads the model's JSON. Returns null when it cannot be trusted (the caller then uses fallbackSummary). Texts are cut to a sane length. */
+export function parseSummary(raw: string): BodSummary | null {
+  const s = String(raw || '');
+  const a = s.indexOf('{'); const b = s.lastIndexOf('}');
+  if (a < 0 || b <= a) return null;
+  let j: any;
+  try { j = JSON.parse(s.slice(a, b + 1)); } catch { return null; }
+  const executive = clean(typeof j?.executive === 'string' ? j.executive : '').slice(0, 1200);
+  if (executive.length < 20) return null;
+  const insights = (Array.isArray(j?.insights) ? j.insights : []).map((x: unknown) => clean(typeof x === 'string' ? x : '').slice(0, 260)).filter(Boolean).slice(0, 4);
+  const actions = (Array.isArray(j?.actions) ? j.actions : []).map((x: any) => ({
+    action: clean(typeof x?.action === 'string' ? x.action : '').slice(0, 220),
+    pic: (PICS as readonly string[]).includes(String(x?.pic)) ? String(x.pic) : 'Sales',
+    why: clean(typeof x?.why === 'string' ? x.why : '').slice(0, 220),
+  })).filter((x: InsightAction) => x.action).slice(0, 4);
+  return { executive, insights, actions };
+}
+
+const num = (n: number) => n.toLocaleString('id-ID');
+/** The summary written from the numbers alone, when the AI is not available: the report is never left without it. */
+export function fallbackSummary(i: Insights, needs: NeedCount[], days: number, daily: DayCount[] = []): BodSummary {
+  if (!i.messages) return { executive: `Belum ada chat dari calon client dalam ${days} hari terakhir, jadi belum ada yang bisa dianalisa.`, insights: [], actions: [] };
+  const topPk = i.packages[0]; const topCn = i.concerns[0];
+  const busy = [...daily].sort((a, b) => b.messages - a.messages)[0];
+  const small = i.chats < 10 ? `Datanya masih sedikit (${num(i.chats)} chat), jadi baca angka ini sebagai gambaran awal. ` : '';
+  const executive = `${small}Selama ${days} hari terakhir ada ${num(i.chats)} calon client yang menulis dengan ${num(i.messages)} pesan.`
+    + (topPk ? ` Paket yang paling banyak ditanya adalah ${topPk.label} (${num(topPk.chats)} chat).` : ' Belum ada paket yang disebut secara jelas.')
+    + (topCn ? ` Kekhawatiran terbesar adalah ${topCn.label.toLowerCase()} (${num(topCn.chats)} chat).` : '')
+    + (needs[0] ? ` Kebutuhan yang paling sering disebut ke bot: ${needs[0].need} (${num(needs[0].chats)} chat).` : '')
+    + (busy && busy.messages > 0 ? ` Hari tersibuk ${busy.day} dengan ${num(busy.chats)} chat.` : '');
+  const actions: InsightAction[] = [];
+  if (topCn?.key === 'harga') actions.push({ action: 'Siapkan jawaban harga dan perbandingan paket yang jelas untuk dikirim di balasan pertama.', pic: 'Sales', why: `Harga dan biaya ditanyakan di ${num(topCn.chats)} chat.` });
+  if (topCn?.key === 'hasil' || i.concerns.some((c) => c.key === 'percaya')) actions.push({ action: 'Kumpulkan contoh hasil client dan testimoni untuk dikirim bersama deck.', pic: 'Tim Konten', why: 'Client ingin bukti hasil sebelum memutuskan.' });
+  if (topPk) actions.push({ action: `Pastikan skrip bot menjelaskan ${topPk.label} dengan lengkap dan ajak konsultasi gratis.`, pic: 'Sales', why: `${topPk.label} paling banyak ditanya.` });
+  return { executive, insights: [], actions: actions.slice(0, 4) };
+}

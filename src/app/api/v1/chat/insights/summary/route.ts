@@ -9,6 +9,5 @@ export const maxDuration = 60;
 export const POST = chatRoute(async ({ me, body }) => {
   const d = Number(body?.days);
   const days = (INSIGHT_DAYS as readonly number[]).includes(d) ? d : 30;
-  try { return { ...(await loadSummary(me.workspaceId, days, body?.fresh === true)), days }; }
-  catch (e: any) { return { ok: false as const, status: 502, error: `The AI could not write the summary: ${String(e?.message || e).slice(0, 140)}` }; }
+  return { ...(await loadSummary(me.workspaceId, days, body?.fresh === true)), days };
 }, { needsBody: true });

@@ -51,7 +51,7 @@ async function note(ws: string, groupId: string, body: string) {
  */
 async function moveLead(ws: string, m: Meeting, chatName: string | null, waId: string): Promise<string | null> {
   const db = createAdminClient();
-  let deal = await findChatDeal(ws, waId);
+  let deal = await findChatDeal(ws, waId, m.group_id);
   if (!deal) {
     if (!m.owner_id || !m.group_id) return null;
     const made = await createLeadFromChat(ws, m.group_id, { name: m.lead_name || chatName || undefined, title: 'Konsultasi gratis (dari chat)', store: m.store || undefined, salesmanId: m.owner_id }, { userId: m.owner_id, name: m.owner_name || 'Sales', role: 'founder' });

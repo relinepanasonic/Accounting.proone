@@ -8,6 +8,7 @@ import { isStopWord } from './broadcast-rules';
 import { optOut } from './broadcasts';
 import { handleMeetingReply } from './meetings';
 import { handleNudgeReply } from './nudges';
+import { autoStage } from './pipeline';
 
 /**
  * What happens after a sales chat message is saved, the same for WhatsApp, Instagram and Messenger. One sequence, in this order:
@@ -25,6 +26,8 @@ export async function afterSalesMessage(device: BotDevice, parsed: ParsedWaMessa
   // the number of a time from a follow-up nudge books it
   if (!parsed.isGroup && !parsed.isFromMe && parsed.body && (await handleNudgeReply(device.workspace_id, groupId, parsed.chatId, parsed.body).catch((e) => { console.error('nudge reply failed', e); return false; }))) return;
   if (!parsed.isGroup && !parsed.isFromMe) await captureLeadSource(device.workspace_id, groupId).catch((e) => console.error('lead source failed', e));
+  // the lead's message can move its deal in the ERP pipeline (name, replies, price questions, "mau daftar", "tidak jadi")
+  if (!parsed.isGroup && !parsed.isFromMe) await autoStage(device.workspace_id, groupId, parsed.chatId, { text: parsed.body || '' });
   const flow = await runFlowsFor(device, parsed, groupId).catch((e) => { console.error('flows failed', e); return { handled: false }; });
   if (!flow.handled) await runSalesBot(device, parsed, groupId).catch((e) => console.error('sales bot failed', e));
 }

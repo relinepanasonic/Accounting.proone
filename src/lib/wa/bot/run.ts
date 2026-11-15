@@ -9,6 +9,7 @@ import type { ParsedWaMessage } from '../parse-webhook';
 import { decideBot, inOpenHours, isBotEcho, needsHuman } from './decide';
 import { buildBotPrompt, parseBotAnswer, replyMax, type BotTurn } from './prompt';
 import { deckLine, validDeckUrl } from './deck';
+import { autoStage } from '@/lib/chat/pipeline';
 import { SOCIAL_MAX_REPLIES } from './social-script';
 import { isMetaChat } from '@/lib/chat/channel';
 
@@ -140,5 +141,7 @@ export async function runSalesBot(device: BotDevice, m: ParsedWaMessage, groupId
 
   const lead = { ...(chat?.lead as object | null ?? {}), ...Object.fromEntries(Object.entries(answer.lead).filter(([, v]) => v)) };
   await setState({ status: handoff ? 'human' : 'bot', reason: handoff ? reason : null, replies: replyNo, lead });
+  // what the bot just learned (name, store) or did (offered times, sent the deck) can move the deal in the ERP pipeline
+  await autoStage(ws, groupId, m.chatId, { text: m.body || '', lead: lead as any, reply: answer.reply, offerLabels: (meet?.offer || []).map((o) => o.label), deckSent: !!(answer.sendDeck && deckUrl) });
   return { done: handoff ? 'replied-and-handed-over' : 'replied' };
 }

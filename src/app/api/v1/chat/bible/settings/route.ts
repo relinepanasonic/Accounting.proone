@@ -9,5 +9,5 @@ export const dynamic = 'force-dynamic';
 export const POST = chatRoute(({ me, body }) => bible.saveSettings(me.workspaceId, {
   enabled: typeof body?.enabled === 'boolean' ? body.enabled : undefined, media_enabled: typeof body?.media_enabled === 'boolean' ? body.media_enabled : undefined, persona_name: body?.persona_name, company_name: body?.company_name,
   hours_from: body?.hours_from, hours_to: body?.hours_to, max_replies: body?.max_replies, knowledge: typeof body?.knowledge === 'string' ? body.knowledge : undefined,
-  social_script: typeof body?.social_script === 'string' ? body.social_script : undefined, deck_url: typeof body?.deck_url === 'string' ? body.deck_url : undefined,
+  social_script: typeof body?.social_script === 'string' ? body.social_script : undefined, deck_url: typeof body?.deck_url === 'string' ? body.deck_url : undefined, stage_auto: typeof body?.stage_auto === 'boolean' ? body.stage_auto : undefined, stage_words: body?.stage_words && typeof body.stage_words === 'object' ? body.stage_words : undefined,
 }, me), { needsBody: true, roles: BIBLE_EDITORS });

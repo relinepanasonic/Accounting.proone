@@ -57,3 +57,5 @@ async function lookupUser(token: string): Promise<ChatUser | null> {
 
 /** Who may change the AI Kamus (the Sales Deck, the bot's script and settings). Everyone with a chat role may read it and ask it questions. */
 export const BIBLE_EDITORS = ['founder', 'superadmin', 'admin'] as const;
+/** The BOD (founder and superadmin): the only ones who see and change the Skenario flows. */
+export const BOD_ROLES = ['founder', 'superadmin'] as const;

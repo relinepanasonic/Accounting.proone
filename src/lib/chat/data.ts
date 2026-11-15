@@ -9,6 +9,7 @@ import { askBotModel } from '@/lib/wa/bot/model';
 import { CHAT_ROLES } from './auth';
 import { buildSuggestPrompt, cleanSuggestion } from './suggest';
 import { upcomingFor } from './meetings';
+import { paymentOf } from './payment-status';
 import {
   cleanShortcut, conversationsOf, countsOf, filterConversations, sourceOf, threadOf,
   type BotChatRow, type ChatFilter, type ChatGroupRow, type ChatMessageRow, type ChatNoteRow, type ChatStateRow,
@@ -58,7 +59,40 @@ const clientPhones = (ws: string) => memo(`clients:${ws}`, 300_000, async () => 
   return (data || []) as any[];
 });
 
-export async function listConversations(ws: string, filter: ChatFilter, q: string, meId: string, labelId = '') {
+/**
+ * The ERP deal of each chat, for the stage on the inbox list: the deal the chat is linked to (made from the chat, works for Instagram and Messenger too),
+ * else the newest deal of the client with the chat's phone number. With where its invoice stands.
+ */
+async function dealsOfChats(ws: string, groups: ChatGroupRow[], linked: Map<string, string | null>): Promise<Map<string, { id: string; stage: string; payment: ReturnType<typeof paymentOf> }>> {
+  const db = createAdminClient();
+  const out = new Map<string, { id: string; stage: string; payment: ReturnType<typeof paymentOf> }>();
+  const clients = await clientPhones(ws);
+  const clientOfTail = new Map<string, string>();
+  for (const c of clients) { const t = phoneTail(c.phone); if (t.length >= 8 && !clientOfTail.has(t)) clientOfTail.set(t, c.id); }
+  const clientOfGroup = new Map<string, string>();
+  for (const g of groups) { const id = clientOfTail.get(phoneTail(g.wa_id)); if (id) clientOfGroup.set(g.id, id); }
+  const dealIds = [...new Set([...linked.values()].filter(Boolean) as string[])];
+  const clientIds = [...new Set(clientOfGroup.values())];
+  if (!dealIds.length && !clientIds.length) return out;
+  const [byId, byClient] = await Promise.all([
+    dealIds.length ? db.from('crm_deals').select('id, client_id, stage, invoice_id, created_at').in('id', dealIds) : Promise.resolve({ data: [] as any[] }),
+    clientIds.length ? db.from('crm_deals').select('id, client_id, stage, invoice_id, created_at').in('client_id', clientIds).order('created_at', { ascending: false }).limit(3000) : Promise.resolve({ data: [] as any[] }),
+  ]);
+  const idMap = new Map<string, any>(((byId.data || []) as any[]).map((d) => [d.id, d]));
+  const newest = new Map<string, any>();
+  for (const d of (byClient.data || []) as any[]) if (!newest.has(d.client_id)) newest.set(d.client_id, d);
+  const invoiceIds = [...new Set([...idMap.values(), ...newest.values()].map((d) => d.invoice_id).filter(Boolean))];
+  const { data: invs } = invoiceIds.length ? await db.from('invoices').select('id, status, total_amount, amount_paid, due_date').in('id', invoiceIds) : { data: [] as any[] };
+  const invOf = new Map<string, any>(((invs || []) as any[]).map((i) => [i.id, i]));
+  const today = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
+  for (const g of groups) {
+    const d = (linked.get(g.id) && idMap.get(linked.get(g.id)!)) || newest.get(clientOfGroup.get(g.id) || '');
+    if (d) out.set(g.id, { id: d.id, stage: d.stage, payment: d.invoice_id ? paymentOf(invOf.get(d.invoice_id), today) : null });
+  }
+  return out;
+}
+
+export async function listConversations(ws: string, filter: ChatFilter, q: string, meId: string, labelId = '', stage = '') {
   const db = createAdminClient();
   const { groups } = await salesGroups(ws);
   const none = { conversations: [], counts: { all: 0, mine: 0, unserved: 0, bot: 0, human: 0, resolved: 0, followup: 0 }, labels: await listLabels(ws), features: { media: await mediaEnabled(ws) } };
@@ -67,12 +101,15 @@ export async function listConversations(ws: string, filter: ChatFilter, q: strin
   const [{ data: msgs }, { data: bot }, { data: states }] = await Promise.all([
     db.from('wa_messages').select('id, group_id, body, media_type, is_from_me, sent_at').eq('workspace_id', ws).in('group_id', ids).order('sent_at', { ascending: false }).limit(1500),
     db.from('wa_bot_chats').select('group_id, status, replies, reason, lead').eq('workspace_id', ws).in('group_id', ids),
-    db.from('chat_state').select('group_id, assigned_to, assigned_name, resolved_at, first_message, source_label, source_channel, source_by').eq('workspace_id', ws).in('group_id', ids),
+    db.from('chat_state').select('group_id, assigned_to, assigned_name, resolved_at, first_message, source_label, source_channel, source_by, deal_id').eq('workspace_id', ws).in('group_id', ids),
   ]);
   const all = conversationsOf(groups, (msgs || []) as ChatMessageRow[], (bot || []) as BotChatRow[], (states || []) as ChatStateRow[]).filter((c) => c.lastAt);
   const extra = await inboxExtras(ws, all.map((c) => c.id));
-  for (const c of all) { c.labels = extra.labels.get(c.id) || []; c.nextReminder = extra.reminders.get(c.id) ?? null; }
-  const shown = labelId ? all.filter((c) => (c.labels || []).some((l) => l.id === labelId)) : all;
+  const deals = await dealsOfChats(ws, groups, new Map(((states || []) as any[]).map((s) => [s.group_id as string, (s.deal_id as string | null) ?? null]))).catch(() => new Map());
+  for (const c of all) { c.labels = extra.labels.get(c.id) || []; c.nextReminder = extra.reminders.get(c.id) ?? null; const d = deals.get(c.id); c.stage = d?.stage ?? null; c.payment = d?.payment ?? null; }
+  const byLabel = labelId ? all.filter((c) => (c.labels || []).some((l) => l.id === labelId)) : all;
+  // a stage (the stored name), or "none" for chats without a deal
+  const shown = stage ? byLabel.filter((c) => (stage === 'none' ? !c.stage : c.stage === stage)) : byLabel;
   return { conversations: filterConversations(shown, filter, q, meId), counts: countsOf(all, meId), labels: await listLabels(ws), features: { media: await mediaEnabled(ws) } };
 }
 
@@ -86,12 +123,23 @@ export async function loadThread(ws: string, groupId: string) {
     db.from('wa_bot_chats').select('group_id, status, replies, reason, lead').eq('group_id', groupId).maybeSingle(),
     db.from('wa_bot_log').select('reply, handoff, ok, detail, created_at').eq('group_id', groupId).order('created_at', { ascending: false }).limit(30),
     clientPhones(ws).then((data) => ({ data })),
-    db.from('chat_state').select('group_id, assigned_to, assigned_name, resolved_at, first_message, first_message_at, source_id, source_label, source_channel, source_by, answers').eq('group_id', groupId).maybeSingle(),
+    db.from('chat_state').select('group_id, assigned_to, assigned_name, resolved_at, first_message, first_message_at, source_id, source_label, source_channel, source_by, answers, deal_id').eq('group_id', groupId).maybeSingle(),
     db.from('chat_notes').select('id, group_id, author_name, body, created_at').eq('group_id', groupId).order('created_at', { ascending: false }).limit(100),
   ]);
   const client = (clients || []).find((c: any) => phoneTail(c.phone).length >= 8 && phoneTail(c.phone) === phoneTail(group.wa_id)) || null;
   let deals: any[] = [];
-  if (client) ({ data: deals } = await db.from('crm_deals').select('id, title, stage, value, salesman_name, salesman_id').eq('client_id', (client as any).id).order('created_at', { ascending: false }).limit(5) as any);
+  const linkedDeal = (st as any)?.deal_id as string | null;
+  const dealCols = 'id, title, stage, value, salesman_name, salesman_id, invoice_id, client_id';
+  const [mine, linked] = await Promise.all([
+    client ? db.from('crm_deals').select(dealCols).eq('client_id', (client as any).id).order('created_at', { ascending: false }).limit(5) : Promise.resolve({ data: [] as any[] }),
+    linkedDeal ? db.from('crm_deals').select(dealCols).eq('id', linkedDeal).maybeSingle() : Promise.resolve({ data: null as any }),
+  ]);
+  deals = [...((mine.data || []) as any[])];
+  if (linked.data && !deals.some((d) => d.id === (linked.data as any).id)) deals.unshift(linked.data);
+  const invIds = deals.map((d) => d.invoice_id).filter(Boolean);
+  const { data: invRows } = invIds.length ? await db.from('invoices').select('id, invoice_number, status, total_amount, amount_paid, due_date').in('id', invIds) : { data: [] as any[] };
+  const invById = new Map<string, any>(((invRows || []) as any[]).map((i) => [i.id, i]));
+  const todayJkt = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
   const [links, labelDefs, reminders, { data: sess }, meeting] = await Promise.all([
     db.from('chat_label_links').select('label_id').eq('group_id', groupId),
     listLabels(ws),
@@ -125,7 +173,7 @@ export async function loadThread(ws: string, groupId: string) {
     source: sourceOf(state), sourceId: state?.source_id ?? null, firstMessage: state?.first_message ?? null,
     resolved: !!state?.resolved_at && !(lastLead && lastLead.sent_at > state.resolved_at),
     client: client ? { id: (client as any).id, name: (client as any).name, sales: (client as any).sales_name, serviceEnd: (client as any).service_end_date } : null,
-    deals: (deals || []).map((d: any) => ({ id: d.id, title: d.title, stage: d.stage, value: Number(d.value || 0), sales: d.salesman_name, salesId: d.salesman_id ?? null })),
+    deals: (deals || []).map((d: any) => { const inv = d.invoice_id ? invById.get(d.invoice_id) : null; return { id: d.id, title: d.title, stage: d.stage, value: Number(d.value || 0), sales: d.salesman_name, salesId: d.salesman_id ?? null, payment: paymentOf(inv, todayJkt), invoice: inv ? { number: inv.invoice_number ?? null, total: Number(inv.total_amount || 0), paid: Number(inv.amount_paid || 0), due: inv.due_date ?? null } : null }; }),
   };
 }
 

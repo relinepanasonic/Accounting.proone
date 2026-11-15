@@ -41,14 +41,14 @@ beforeEach(() => {
 });
 
 describe('Done', () => {
-  it('thanks the lead (naming who sends the next step) and moves the open ERP deal to Negotiation', async () => {
+  it('thanks the lead (naming who sends the next step) and moves the open ERP deal forward to Meeting Done', async () => {
     rows.clients = [{ id: 'c1', phone: '081234567890' }];
     rows.crm_deals = [{ id: 'd1', stage: 'Contacted', client_id: 'c1' }];
     const r = await afterMeeting('w1', 'm1', 'done');
-    expect(r).toMatchObject({ message: 'sent', stage: 'Negotiation' });
+    expect(r).toMatchObject({ message: 'sent', stage: 'Meeting Done' });
     expect(send.mock.calls[0][2]).toContain('Hi kak Nico, terima kasih');
     expect(send.mock.calls[0][2]).toContain('dikirim oleh kak Rani');
-    expect(written('crm_deals', 'update')[0]).toMatchObject({ stage: 'Negotiation' });
+    expect(written('crm_deals', 'update')[0]).toMatchObject({ stage: 'Meeting Done' });
     expect(written('lead_visits', 'update')[0]).toEqual({ deal_id: 'd1', client_id: 'c1' });
     expect(createLead).not.toHaveBeenCalled();
   });
@@ -56,12 +56,17 @@ describe('Done', () => {
   it('without a deal, a lead is made for the salesperson of the meeting; an invoiced deal is never moved back', async () => {
     await afterMeeting('w1', 'm1', 'done');
     expect(createLead.mock.calls[0][2]).toMatchObject({ salesmanId: 'u1', title: 'Konsultasi gratis (dari chat)' });
-    expect(written('crm_deals', 'update')[0]).toMatchObject({ stage: 'Negotiation' });
+    expect(written('crm_deals', 'update')[0]).toMatchObject({ stage: 'Meeting Done' });
 
     writes.length = 0; createLead.mockReset();
     rows.clients = [{ id: 'c1', phone: '6281234567890' }];
     rows.crm_deals = [{ id: 'd1', stage: 'Invoice', client_id: 'c1' }];
     expect(await afterMeeting('w1', 'm1', 'done')).toMatchObject({ stage: 'Invoice' });
+    expect(written('crm_deals', 'update')).toHaveLength(0);
+
+    // a deal already in Negotiation is further along than Meeting Done: it stays
+    rows.crm_deals = [{ id: 'd1', stage: 'Negotiation', client_id: 'c1' }];
+    expect(await afterMeeting('w1', 'm1', 'done')).toMatchObject({ stage: 'Negotiation' });
     expect(written('crm_deals', 'update')).toHaveLength(0);
   });
 

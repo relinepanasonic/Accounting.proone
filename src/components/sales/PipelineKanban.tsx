@@ -8,15 +8,21 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { ArrowLeft, ArrowRight, Calendar, CheckCircle2, Clock, Download, FileText, Loader2, MessageCircle, Play, Send, ShieldCheck, Snowflake, User, X } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils/currency';
-import { PIPELINE_STAGES, MANUAL_STAGES, PROPOSAL_STAGES, computeProjectTerms, followUpDueDay, stageLabel, type NegotiationNote, type RequestItem } from '@/lib/sales/flow';
+import { PIPELINE_STAGES, MANUAL_STAGES, PROPOSAL_STAGES, STAGE_HINT, computeProjectTerms, followUpDueDay, stageLabel, type NegotiationNote, type RequestItem } from '@/lib/sales/flow';
 import { addNegotiationNote, approveWithoutPayment, askAcc, cancelInvoiceRequest, createInvoiceShare, decideAcc, markFollowedUp, markProposalSent, moveDeal, startProject } from '@/app/actions/sales-flow';
 import { NewLeadModal } from '@/components/sales/NewLeadModal';
 import { RequestInvoiceModal, type CatalogProduct } from '@/components/sales/RequestInvoiceModal';
 
 const STAGE_COLORS: Record<string, string> = {
   Lead: 'bg-zinc-400',
-  Contacted: 'bg-blue-400',
+  Contacted: 'bg-blue-300',
+  Qualified: 'bg-blue-400',
+  Warm: 'bg-orange-400',
+  'Meeting Offered': 'bg-violet-300',
+  'Meeting Booked': 'bg-violet-400',
+  'Meeting Done': 'bg-violet-500',
   Negotiation: 'bg-amber-400',
+  'Invoice Requested': 'bg-sky-300',
   Invoice: 'bg-sky-400',
   Deal: 'bg-emerald-400',
   'Cold Case': 'bg-slate-500',
@@ -80,13 +86,14 @@ function DroppableColumn({ id, total, count, children }: { id: string; total: nu
     <div
       ref={setNodeRef}
       style={{ backgroundColor: isOver ? 'rgba(212,175,55,0.05)' : undefined, borderColor: isOver ? 'rgba(212,175,55,0.5)' : undefined }}
-      className="flex flex-col w-[320px] shrink-0 bg-[#0e0f14] rounded-2xl border border-zinc-800/60 max-h-full transition-colors duration-200"
+      className="flex flex-col w-[300px] shrink-0 bg-[#0e0f14] rounded-2xl border border-zinc-800/60 max-h-full transition-colors duration-200"
     >
       <div className="p-4 flex items-center gap-3 shrink-0">
         <div className={`w-2.5 h-2.5 rounded-full ${STAGE_COLORS[id] || 'bg-zinc-500'} opacity-80`} />
         <h3 className="font-bold text-[15px] text-zinc-100 tracking-wide">{stageLabel(id)}</h3>
         <span className="text-xs font-medium text-zinc-400 bg-zinc-800/50 px-2 py-0.5 rounded-full">{count}</span>
       </div>
+      {STAGE_HINT[id] && <p className="-mt-2 px-4 pb-2 text-[11px] leading-snug text-zinc-500">{STAGE_HINT[id]}</p>}
       <div className="px-4 pb-3 text-xs font-semibold text-[#d4af37]/80 border-b border-zinc-800/50 flex justify-between">
         <span>Value</span>
         <span>{formatCurrency(total)}</span>
@@ -270,7 +277,7 @@ function DealCard({
           </div>
         )}
         {deal.stage === 'Cold Case' && (
-          <div className="mb-3 flex items-center gap-1.5 rounded-lg border border-slate-600/40 bg-slate-500/10 p-2.5 text-[11px] text-slate-300"><Snowflake className="w-3.5 h-3.5" /> Cold case: no more follow-up tasks. Drag it back to Lead to wake it up.</div>
+          <div className="mb-3 flex items-center gap-1.5 rounded-lg border border-slate-600/40 bg-slate-500/10 p-2.5 text-[11px] text-slate-300"><Snowflake className="w-3.5 h-3.5" /> Lost: no more follow-up tasks. Drag it back to New Lead to wake it up.</div>
         )}
 
         {/* ---- negotiation: notes and the ACC of a superadmin / the founder ---- */}
@@ -452,7 +459,7 @@ export function PipelineKanban({
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4 px-4 lg:px-8 shrink-0 mt-4">
           <div>
             <h1 className="text-2xl font-extrabold text-zinc-100 font-serif">Sales Pipeline</h1>
-            <p className="text-sm text-zinc-400 mt-1">Follow up each lead, negotiate, get the ACC, then request the invoice. Paid cards become the Deals of their month; unanswered leads go to Cold Case.</p>
+            <p className="text-sm text-zinc-400 mt-1">Every lead moves toward the free consultation, then negotiation, the invoice and payment. Paid cards become the Active Clients of their month; unanswered leads go to Lost.</p>
           </div>
           <div className="flex items-center gap-3">
             <label className="text-sm font-semibold text-zinc-400">Deal month:</label>

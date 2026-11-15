@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo, useRef, useState, useTransition } from 'react';
+import { PIPELINE_STAGES, stageLabel } from '@/lib/sales/flow';
 import { useRouter } from 'next/navigation';
 import { Camera, CheckCircle2, Clock, ImagePlus, Search, X } from 'lucide-react';
 import { createVisit } from '@/app/actions/planner';
@@ -13,7 +14,7 @@ export interface LeadChoice {
   stage: string;
 }
 
-const STAGES = ['All', 'Lead', 'Contacted', 'Negotiation', 'Invoice', 'Deal', 'Cold Case'];
+const STAGES = ['All', ...PIPELINE_STAGES];
 const field = 'w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:border-[#d4af37]/60 focus:outline-none';
 const label = 'mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-zinc-400';
 

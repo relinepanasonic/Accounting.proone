@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { clientMask } from '@/lib/auth/client-privacy';
-import { MANUAL_STAGES, PIPELINE_STAGES, PROPOSAL_STAGES, computeProjectTerms, requestTotal, type NegotiationNote, type RequestItem } from '@/lib/sales/flow';
+import { MANUAL_STAGES, PIPELINE_STAGES, PROPOSAL_STAGES, computeProjectTerms, requestTotal, type NegotiationNote, type RequestItem, LOCKED_STAGES } from '@/lib/sales/flow';
 import { dealItems, notify, resolveNotifications } from '@/lib/sales/server';
 import { invoiceScope } from '@/lib/sales/client-table';
 import { catalogError, unknownProducts } from '@/lib/invoices/catalog-workspace';
@@ -121,13 +121,13 @@ export async function moveDeal(dealId: string, stage: string): Promise<Result> {
   if (!a || !SALES_ROLES.includes(a.ctx.role)) return { success: false, error: 'Not allowed.' };
   if (!(PIPELINE_STAGES as readonly string[]).includes(stage)) return { success: false, error: 'Unknown stage.' };
   if (!MANUAL_STAGES.includes(stage)) {
-    return { success: false, error: stage === 'Invoice' ? 'A card moves to Waiting Payment when Accounting makes its invoice. Use "Request invoice" in Negotiation.' : 'A card becomes a Deal when its invoice is paid (or Accounting approves it).' };
+    return { success: false, error: stage === 'Deal' ? 'A card becomes an Active Client when its invoice is paid (or Accounting approves it).' : 'A card moves to Invoice Requested with "Request invoice" in Negotiation, and to Invoice Sent when Accounting makes the invoice.' };
   }
   const { ctx, db } = a;
   const { data: deal } = await db.from('crm_deals').select('id, stage, salesman_id, workspace_id').eq('id', dealId).eq('workspace_id', ctx.activeWorkspaceId).maybeSingle();
   if (!deal) return { success: false, error: 'Deal not found.' };
   if (!mayTouch(ctx, deal)) return { success: false, error: 'This deal belongs to another salesman.' };
-  if (deal.stage === 'Invoice' || deal.stage === 'Deal') return { success: false, error: 'An invoiced deal cannot move back.' };
+  if (LOCKED_STAGES.includes(deal.stage)) return { success: false, error: deal.stage === 'Invoice Requested' ? 'The invoice is requested. Cancel the request first to move this card.' : 'An invoiced deal cannot move back.' };
 
   const now = new Date().toISOString();
   const { error } = await db.from('crm_deals').update({ stage, stage_changed_at: now, updated_at: now }).eq('id', dealId);
@@ -201,8 +201,8 @@ export async function requestInvoice(dealId: string, items: RequestItem[], note:
   if (error || !req) return fail(error);
 
   const total = requestTotal(clean);
-  // The card stays in Negotiation ("waiting for Accounting") until the invoice exists; then it moves to Waiting Payment.
-  await db.from('crm_deals').update({ invoice_requested_at: now, value: total, updated_at: now }).eq('id', dealId);
+  // The card waits in Invoice Requested until Accounting makes the invoice; then it moves to Invoice Sent.
+  await db.from('crm_deals').update({ stage: 'Invoice Requested', stage_changed_at: now, invoice_requested_at: now, value: total, updated_at: now }).eq('id', dealId);
   // Accounting can see the client from now on, and it is listed as a client (not a vendor) in Contacts.
   await db.from('clients').update({ is_prospect: false, contact_type: 'client' }).eq('id', deal.client_id);
 
@@ -232,7 +232,7 @@ export async function cancelInvoiceRequest(requestId: string): Promise<Result> {
   if (!FINANCE.includes(ctx.role) && req.requested_by !== ctx.userId) return { success: false, error: 'Only the requester can cancel.' };
 
   await db.from('invoice_requests').update({ status: 'cancelled' }).eq('id', requestId);
-  await db.from('crm_deals').update({ stage: 'Negotiation', invoice_requested_at: null, updated_at: new Date().toISOString() }).eq('id', req.deal_id);
+  await db.from('crm_deals').update({ stage: 'Negotiation', stage_changed_at: new Date().toISOString(), invoice_requested_at: null, updated_at: new Date().toISOString() }).eq('id', req.deal_id);
   await resolveNotifications(db, ctx.activeWorkspaceId, 'invoice_request', requestId);
   revalidatePath('/sales/pipeline');
   revalidatePath('/invoices/requests');

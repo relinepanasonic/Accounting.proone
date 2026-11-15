@@ -146,7 +146,7 @@ async function salesDigest(today: string, days: number) {
     newLeads: all.filter((d: any) => String(d.created_at) >= since).length,
     dealsWon: won.length, dealsWonValue: rupiah(won.reduce((s: number, d: any) => s + Number(d.value || 0), 0)),
     invoicesRequested: all.filter((d: any) => String(d.invoice_requested_at || '') >= since).length,
-    followUpsOverdue: all.filter((d: any) => ['Lead', 'Contacted', 'Negotiation'].includes(d.stage) && String(d.last_followup_at || d.created_at) < twoDaysAgo).length,
+    followUpsOverdue: all.filter((d: any) => ['Lead', 'Contacted', 'Qualified', 'Warm', 'Meeting Offered', 'Meeting Done', 'Negotiation'].includes(d.stage) && String(d.last_followup_at || d.created_at) < twoDaysAgo).length,
     bySalesman: Array.from(bySalesman.entries()).map(([salesman, v]) => ({ salesman, ...v, value: rupiah(v.value) })),
   };
 }

@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { adminSection, addDays, dayOf, inRange, planReport } from '@/lib/reports/whatsapp-report';
 import { inputByDay, type InputReport } from '@/lib/advertiser/input-series';
+import { PIPELINE_STAGES } from '@/lib/sales/flow';
 
 /**
  * The daily BOD report (Nico and Herlan), as data for a 3-section PDF:
@@ -14,7 +15,7 @@ import { inputByDay, type InputReport } from '@/lib/advertiser/input-series';
  * so the Session 1 inputted today carries yesterday's numbers. That is the latest day whose numbers are complete when the report goes out (19:00).
  */
 
-export const STAGES = ['Lead', 'Contacted', 'Negotiation', 'Invoice', 'Deal', 'Cold Case'] as const;
+export const STAGES = PIPELINE_STAGES;
 export const SPARK_DAYS = 7;
 
 // ---------------------------------------------------------------- advertising

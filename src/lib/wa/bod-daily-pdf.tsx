@@ -3,6 +3,7 @@ import { Document, Page, View, Text, Svg, Polyline, Circle, StyleSheet, renderTo
 import { dmy, rp } from '@/lib/reports/whatsapp-report';
 import { ensureFonts, pdfText, shortRp } from './weekly-pdf';
 import { STAGES, ENDING_WINDOW_DAYS, type BodDaily, type EndingClient } from './bod-daily';
+import { stageLabel } from '@/lib/sales/flow';
 
 /**
  * The daily BOD report as a PDF for Nico and Herlan: Advertising, Admin, Sales (each starts on its own page; a long table continues on the next).
@@ -10,7 +11,9 @@ import { STAGES, ENDING_WINDOW_DAYS, type BodDaily, type EndingClient } from './
  */
 
 const GOLD = '#b8901f', INK = '#111827', MUTED = '#6b7280', LINE = '#e5e7eb', GREEN = '#059669', RED = '#dc2626', BLUE = '#2563eb', AMBER = '#d97706';
-const STAGE_COLOR: Record<string, string> = { Lead: '#93c5fd', Contacted: '#60a5fa', Negotiation: '#f59e0b', Invoice: '#a78bfa', Deal: '#10b981', 'Cold Case': '#9ca3af' };
+const STAGE_COLOR: Record<string, string> = { Lead: '#bfdbfe', Contacted: '#93c5fd', Qualified: '#60a5fa', Warm: '#fb923c', 'Meeting Offered': '#c4b5fd', 'Meeting Booked': '#a78bfa', 'Meeting Done': '#8b5cf6', Negotiation: '#f59e0b', 'Invoice Requested': '#7dd3fc', Invoice: '#38bdf8', Deal: '#10b981', 'Cold Case': '#9ca3af' };
+// short column titles for the per-sales table (12 stages on one A4 row)
+const STAGE_SHORT: Record<string, string> = { Lead: 'NEW', Contacted: 'CONT', Qualified: 'QUAL', Warm: 'WARM', 'Meeting Offered': 'OFFER', 'Meeting Booked': 'BOOK', 'Meeting Done': 'MEET', Negotiation: 'NEGO', 'Invoice Requested': 'REQ', Invoice: 'INV', Deal: 'ACTIVE', 'Cold Case': 'LOST' };
 
 const st = StyleSheet.create({
   page: { padding: 28, paddingBottom: 44, fontFamily: 'Roboto', fontSize: 9, color: INK },
@@ -203,8 +206,8 @@ export function BodDailyDocument({ d }: { d: BodDaily }) {
         <Text style={st.h2}>Jumlah deal per tahap</Text>
         {d.pipeline.stages.map((x) => (
           <View key={x.stage} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }} wrap={false}>
-            <Text style={{ width: '16%', fontSize: 8.5 }}>{x.stage}</Text>
-            <View style={{ width: '64%', height: 11, backgroundColor: '#f3f4f6', borderRadius: 2 }}>
+            <Text style={{ width: '20%', fontSize: 8.5 }}>{stageLabel(x.stage)}</Text>
+            <View style={{ width: '60%', height: 11, backgroundColor: '#f3f4f6', borderRadius: 2 }}>
               <View style={{ width: `${Math.max(x.count > 0 ? 2 : 0, (x.count / maxStage) * 100)}%`, height: 11, backgroundColor: STAGE_COLOR[x.stage] || BLUE, borderRadius: 2 }} />
             </View>
             <Text style={{ width: '8%', fontSize: 9, fontFamily: 'Roboto', fontWeight: 700, textAlign: 'right' }}>{x.count}</Text>
@@ -214,23 +217,23 @@ export function BodDailyDocument({ d }: { d: BodDaily }) {
 
         <Text style={st.h2}>Per sales</Text>
         <View style={st.head}>
-          <Text style={[st.th, { width: '22%' }]}>SALES</Text>
-          {STAGES.map((g) => <Text key={g} style={[st.th, { width: '10.5%', textAlign: 'right' }]}>{g.toUpperCase()}</Text>)}
-          <Text style={[st.th, { width: '8%', textAlign: 'right' }]}>BARU</Text>
-          <Text style={[st.th, { width: '7%', textAlign: 'right' }]}>PINDAH</Text>
+          <Text style={[st.th, { width: '16%' }]}>SALES</Text>
+          {STAGES.map((g) => <Text key={g} style={[st.th, { width: '6%', textAlign: 'right', fontSize: 6 }]}>{STAGE_SHORT[g] || g.toUpperCase()}</Text>)}
+          <Text style={[st.th, { width: '6%', textAlign: 'right', fontSize: 6 }]}>BARU</Text>
+          <Text style={[st.th, { width: '6%', textAlign: 'right', fontSize: 6 }]}>PINDAH</Text>
         </View>
         {d.pipeline.bySales.length === 0 && <Text style={{ fontSize: 8.5, color: MUTED, paddingTop: 6 }}>Belum ada data pipeline.</Text>}
         {d.pipeline.bySales.map((p) => (
           <View key={p.name} style={st.row} wrap={false}>
-            <Text style={{ width: '22%', fontSize: 8.5, fontFamily: 'Roboto', fontWeight: 700 }}>{cut(pdfText(p.name), 18)}</Text>
-            {STAGES.map((g) => <Text key={g} style={{ width: '10.5%', fontSize: 8.5, textAlign: 'right', color: p.counts[g] ? INK : '#9ca3af' }}>{p.counts[g]}</Text>)}
-            <Text style={{ width: '8%', fontSize: 8.5, textAlign: 'right' }}>{p.newOnDay}</Text>
-            <Text style={{ width: '7%', fontSize: 8.5, textAlign: 'right' }}>{p.movedOnDay}</Text>
+            <Text style={{ width: '16%', fontSize: 8.5, fontFamily: 'Roboto', fontWeight: 700 }}>{cut(pdfText(p.name), 14)}</Text>
+            {STAGES.map((g) => <Text key={g} style={{ width: '6%', fontSize: 8.5, textAlign: 'right', color: p.counts[g] ? INK : '#9ca3af' }}>{p.counts[g]}</Text>)}
+            <Text style={{ width: '6%', fontSize: 8.5, textAlign: 'right' }}>{p.newOnDay}</Text>
+            <Text style={{ width: '6%', fontSize: 8.5, textAlign: 'right' }}>{p.movedOnDay}</Text>
           </View>
         ))}
         <EndingTable title={`Project sudah berakhir (${ENDING_WINDOW_DAYS} hari terakhir)`} rows={d.endings.ended} ago empty="Tidak ada project yang berakhir dalam 2 minggu terakhir." />
         <EndingTable title={`Project berakhir dalam ${ENDING_WINDOW_DAYS} hari ke depan`} rows={d.endings.soon} empty="Tidak ada project yang berakhir dalam 2 minggu ke depan." />
-        <Text style={[st.hint, { marginTop: 6 }]}>BARU = deal yang dimasukkan hari ini. PINDAH = deal yang berpindah tahap hari ini. Cold Case = deal yang sudah ditinggalkan.</Text>
+        <Text style={[st.hint, { marginTop: 6 }]}>BARU = deal yang dimasukkan hari ini. PINDAH = deal yang berpindah tahap hari ini. NEW New Lead, CONT Contacted, QUAL Qualified, OFFER Meeting Offered, BOOK Meeting Booked, MEET Meeting Done, NEGO Negotiation, REQ Invoice Requested, INV Invoice Sent, ACTIVE Active Client, LOST Lost.</Text>
         <View style={st.footer} fixed><Text>Professor Online · Daily BOD Report {dmy(d.reportDay)}</Text></View>
       </Page>
     </Document>

@@ -2,12 +2,13 @@ import { createAdminClient } from '@/lib/api/supabase-admin';
 import { availableSlots, slotLabel, type Meeting } from './meetings';
 import { noShowText, offerSlots, thanksText } from './meet-rules';
 import { createLeadFromChat } from './crm-data';
-import { phoneTail } from './channel';
+import { findChatDeal, mayAutoMove } from './pipeline';
+import { stageLabel } from '@/lib/sales/flow';
 import { sendToChat } from './send-any';
 
 /**
  * After the consultation, when the team marks it (Jadwal or the chat panel):
- *  - Done: the lead is thanked (and told who sends the next step), and the lead in the ERP moves to Negotiation (made first when there is none).
+ *  - Done: the lead is thanked (and told who sends the next step), and the lead in the ERP moves to Meeting Done (made first when there is none).
  *  - Did not come: the lead gets three other free times; answering with a number books it (the same as a follow-up nudge, see nudges.ts).
  * Each message can be switched off in Jadwal. Runs once, only when a booked meeting becomes Done or Did not come. Never throws.
  */
@@ -45,33 +46,26 @@ async function note(ws: string, groupId: string, body: string) {
 }
 
 /**
- * The lead in the ERP after a consultation that happened: the chat's open deal (by the client with this number) moves to Negotiation; Invoice and
- * Deal are never moved back. Without a deal, a lead is made for the salesperson of the meeting and put in Negotiation. Returns the stage, or null.
+ * The lead in the ERP after a consultation that happened: the chat's deal moves forward to Meeting Done (a deal already in Negotiation or with
+ * Accounting stays where it is). Without a deal, a lead is made for the salesperson of the meeting and put in Meeting Done. Returns the stage, or null.
  */
 async function moveLead(ws: string, m: Meeting, chatName: string | null, waId: string): Promise<string | null> {
   const db = createAdminClient();
-  const t = phoneTail(waId);
-  let dealId: string | null = null; let stage: string | null = null; let clientId: string | null = null;
-  if (t.length >= 8) {
-    const { data: clients } = await db.from('clients').select('id, phone').eq('workspace_id', ws).not('phone', 'is', null).limit(3000);
-    const mine = ((clients || []) as Array<{ id: string; phone: string }>).filter((c) => phoneTail(c.phone) === t).map((c) => c.id);
-    if (mine.length) {
-      const { data: deals } = await db.from('crm_deals').select('id, stage, client_id').in('client_id', mine).neq('stage', 'Cold Case').order('created_at', { ascending: false }).limit(1);
-      const d = (deals || [])[0] as any;
-      if (d) { dealId = d.id; stage = d.stage; clientId = d.client_id; }
-    }
-  }
-  if (stage === 'Invoice' || stage === 'Deal' || stage === 'Negotiation') return stage;
-  if (!dealId) {
+  let deal = await findChatDeal(ws, waId);
+  if (!deal) {
     if (!m.owner_id || !m.group_id) return null;
     const made = await createLeadFromChat(ws, m.group_id, { name: m.lead_name || chatName || undefined, title: 'Konsultasi gratis (dari chat)', store: m.store || undefined, salesmanId: m.owner_id }, { userId: m.owner_id, name: m.owner_name || 'Sales', role: 'founder' });
     if (!made.ok) { console.error('after-meeting lead failed', made.error); return null; }
-    dealId = made.dealId; clientId = made.clientId;
+    deal = { id: made.dealId, stage: 'Lead', clientId: made.clientId };
   }
-  const now = new Date().toISOString();
-  await db.from('crm_deals').update({ stage: 'Negotiation', stage_changed_at: now, updated_at: now }).eq('id', dealId);
-  if (m.lead_visit_id) await db.from('lead_visits').update({ deal_id: dealId, client_id: clientId }).eq('id', m.lead_visit_id).then(() => undefined, () => undefined);
-  return 'Negotiation';
+  let stage = deal.stage;
+  if (mayAutoMove(deal.stage, 'Meeting Done')) {
+    const now = new Date().toISOString();
+    await db.from('crm_deals').update({ stage: 'Meeting Done', stage_changed_at: now, updated_at: now }).eq('id', deal.id);
+    stage = 'Meeting Done';
+  }
+  if (m.lead_visit_id) await db.from('lead_visits').update({ deal_id: deal.id, client_id: deal.clientId }).eq('id', m.lead_visit_id).then(() => undefined, () => undefined);
+  return stage;
 }
 
 /** Runs the after-meeting step for a meeting that just became Done or Did not come. */
@@ -88,10 +82,10 @@ export async function afterMeeting(ws: string, meetingId: string, status: 'done'
 
     if (status === 'done') {
       const stage = await moveLead(ws, m, chat.name, chat.waId).catch((e) => { console.error('after-meeting stage failed', e); return null; });
-      if (stage) await note(ws, m.group_id, `Konsultasi ${slotLabel(start)} selesai. Lead di ERP: ${stage}.`);
-      if (!s.thanks) return { message: 'off', stage, detail: `Marked done.${stage ? ` The ERP lead is in ${stage}.` : ''}` };
+      if (stage) await note(ws, m.group_id, `Konsultasi ${slotLabel(start)} selesai. Lead di ERP: ${stageLabel(stage)}.`);
+      if (!s.thanks) return { message: 'off', stage, detail: `Marked done.${stage ? ` The ERP lead is in ${stageLabel(stage)}.` : ''}` };
       const ok = await say(ws, m.group_id, chat.waId, thanksText(m.lead_name || chat.name || '', m.owner_name ?? null), `thanks:${m.id}`);
-      return { message: ok ? 'sent' : 'failed', stage, detail: `${ok ? 'The lead got a thank-you.' : 'The thank-you could not be sent.'}${stage ? ` The ERP lead is in ${stage}.` : ''}` };
+      return { message: ok ? 'sent' : 'failed', stage, detail: `${ok ? 'The lead got a thank-you.' : 'The thank-you could not be sent.'}${stage ? ` The ERP lead is in ${stageLabel(stage)}.` : ''}` };
     }
 
     await note(ws, m.group_id, `Lead tidak hadir di konsultasi ${slotLabel(start)}.`);

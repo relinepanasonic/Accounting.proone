@@ -1,22 +1,54 @@
 // Sales flow rules: pipeline stages and how a project's end date / deliverables follow from the products sold.
 // Pure module: safe for server and client.
 
-// 'Invoice' is the stored name of the "Waiting Payment" column: the invoice exists and the client has not paid yet.
-// 'Cold Case' comes after Deal: a lead the salesman gave up chasing. Follow-up tasks stop there.
-export const PIPELINE_STAGES = ['Lead', 'Contacted', 'Negotiation', 'Invoice', 'Deal', 'Cold Case'] as const;
+/**
+ * The pipeline, built around the goal of every chat: the free consultation (meeting), then the sale.
+ *   New Lead > Contacted > Qualified > Warm > Meeting Offered > Meeting Booked > Meeting Done > Negotiation > Invoice Requested > Invoice Sent > Active Client, and Lost.
+ * The STORED names of the stages that existed before are kept, so old deals, invoices and reports keep working; only what people read changed:
+ *   'Lead' is shown as "New Lead", 'Invoice' (the invoice exists, not paid yet) as "Invoice Sent", 'Deal' (paid) as "Active Client", 'Cold Case' as "Lost".
+ * This list is the single source: the ERP board, the chat dashboard, the planner, the KPI and the BOD report all read it.
+ */
+export const PIPELINE_STAGES = ['Lead', 'Contacted', 'Qualified', 'Warm', 'Meeting Offered', 'Meeting Booked', 'Meeting Done', 'Negotiation', 'Invoice Requested', 'Invoice', 'Deal', 'Cold Case'] as const;
 export type PipelineStage = (typeof PIPELINE_STAGES)[number];
 
-export const STAGE_LABEL: Record<string, string> = { Invoice: 'Waiting Payment' };
+export const STAGE_LABEL: Record<string, string> = { Lead: 'New Lead', Invoice: 'Invoice Sent', Deal: 'Active Client', 'Cold Case': 'Lost' };
 export const stageLabel = (stage: string) => STAGE_LABEL[stage] || stage;
 
-/** Stages a salesman may drag a card between by hand. Invoice and Deal are reached through the flow. */
-export const MANUAL_STAGES: string[] = ['Lead', 'Contacted', 'Negotiation', 'Cold Case'];
+/** What a lead did to be in the stage (shown under the column title, and in the chat dashboard). */
+export const STAGE_HINT: Record<string, string> = {
+  Lead: 'First message, nothing known yet',
+  Contacted: 'We answered and the lead replied',
+  Qualified: 'We know the name, the store and the need',
+  Warm: 'Asked about price, packages or the deck',
+  'Meeting Offered': 'Free times sent, waiting for a pick',
+  'Meeting Booked': 'A consultation is booked',
+  'Meeting Done': 'The consultation happened',
+  Negotiation: 'Proposal and price, then the ACC',
+  'Invoice Requested': 'Waiting for Accounting',
+  Invoice: 'Invoice made, waiting for payment',
+  Deal: 'Paid: the project starts',
+  'Cold Case': 'No answer, or said no',
+};
+
+/** Stages a salesman may drag a card between by hand. The three after Negotiation are reached through the invoice request and the payment only. */
+export const MANUAL_STAGES: string[] = ['Lead', 'Contacted', 'Qualified', 'Warm', 'Meeting Offered', 'Meeting Booked', 'Meeting Done', 'Negotiation', 'Cold Case'];
+/** Set by the flow only: the invoice request, the invoice, the payment. A card in one of these never moves by hand. */
+export const LOCKED_STAGES: string[] = ['Invoice Requested', 'Invoice', 'Deal'];
+/** Before the meeting: the stages the bot and the follow-ups work on. */
+export const PRE_MEETING_STAGES: string[] = ['Lead', 'Contacted', 'Qualified', 'Warm', 'Meeting Offered'];
+/** Still being worked on by sales (not invoiced, not lost). */
+export const OPEN_SALES_STAGES: string[] = [...PRE_MEETING_STAGES, 'Meeting Booked', 'Meeting Done', 'Negotiation'];
+
+/** Where a stage sits in the pipeline (Lost is last); -1 for a name that is not a stage. */
+export const stageIndex = (stage: string) => (PIPELINE_STAGES as readonly string[]).indexOf(stage);
+/** True when `to` is further along than `from`. Used by everything automatic: a bot or a meeting only ever moves a lead forward. */
+export const isForward = (from: string, to: string) => stageIndex(to) > stageIndex(from) && stageIndex(from) >= 0;
 
 /** Follow-up task every N days while a card sits in the stage. No entry = no follow-up task. */
-export const FOLLOWUP_DAYS: Record<string, number> = { Lead: 2, Contacted: 7 };
+export const FOLLOWUP_DAYS: Record<string, number> = { Lead: 2, Contacted: 3, Qualified: 3, Warm: 2, 'Meeting Offered': 2, 'Meeting Done': 2 };
 
-/** Stages where the one-time "send the proposal" task is open until it is done. */
-export const PROPOSAL_STAGES = ['Lead', 'Contacted'];
+/** Stages where the one-time "send the proposal" task is open until it is done: after the meeting, not before it. */
+export const PROPOSAL_STAGES = ['Meeting Done', 'Negotiation'];
 
 const dayOf = (iso: string) => new Date(new Date(iso).getTime() + 7 * 3600000).toISOString().slice(0, 10); // Jakarta calendar day
 

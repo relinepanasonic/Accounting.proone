@@ -2,6 +2,7 @@
  * Chat batch 2, the pure parts (no database, no network): labels, turning a chat into an ERP lead, moving a deal's stage, follow-up reminder
  * times, and checking an image before it is sent. Tested. The rules for leads and stages are the ERP's own (src/app/actions/sales-flow.ts).
  */
+import { LOCKED_STAGES, MANUAL_STAGES } from '@/lib/sales/flow';
 
 // ---------------------------------------------------------------- labels
 export const LABEL_COLORS = ['blue', 'green', 'amber', 'red', 'violet', 'teal', 'pink', 'gray'] as const;
@@ -22,8 +23,8 @@ export function cleanLabelIds(ids: unknown, existing: string[]): string[] {
 }
 
 // ---------------------------------------------------------------- leads and stages
-/** The stages a person can choose. Invoice and Deal are reached through the ERP's invoice and payment flow only. */
-export const MANUAL_STAGES = ['Lead', 'Contacted', 'Negotiation', 'Cold Case'] as const;
+/** The stages a person can choose: the ERP's own list (src/lib/sales/flow.ts). The three after Negotiation are reached through the ERP's invoice and payment flow only. */
+export { MANUAL_STAGES };
 export const FINANCE_ROLES = ['accounting', 'admin', 'superadmin', 'founder'];
 
 export interface LeadInput { name?: unknown; title?: unknown; value?: unknown; store?: unknown; notes?: unknown; salesmanId?: unknown }
@@ -43,7 +44,7 @@ export function cleanLeadInput(input: LeadInput, fallbackName: string): { ok: tr
 
 /** Same rule as the ERP: a salesperson only moves their own (or unowned) deals; finance roles and owners move any. */
 export function mayMoveDeal(role: string, userId: string, deal: { salesman_id: string | null; stage: string }): { ok: true } | { ok: false; error: string } {
-  if (deal.stage === 'Invoice' || deal.stage === 'Deal') return { ok: false, error: 'An invoiced deal cannot move back. It moves on through the invoice and payment in the ERP.' };
+  if (LOCKED_STAGES.includes(deal.stage)) return { ok: false, error: deal.stage === 'Invoice Requested' ? 'The invoice is requested. Cancel the request in the ERP first to move this deal.' : 'An invoiced deal cannot move back. It moves on through the invoice and payment in the ERP.' };
   if (FINANCE_ROLES.includes(role)) return { ok: true };
   if (role === 'sales' && (!deal.salesman_id || deal.salesman_id === userId)) return { ok: true };
   return { ok: false, error: 'This deal belongs to another salesperson.' };
@@ -51,8 +52,8 @@ export function mayMoveDeal(role: string, userId: string, deal: { salesman_id: s
 
 export function checkStage(stage: unknown): { ok: true; stage: string } | { ok: false; error: string } {
   const s = String(stage ?? '');
-  if ((MANUAL_STAGES as readonly string[]).includes(s)) return { ok: true, stage: s };
-  if (s === 'Invoice' || s === 'Deal') return { ok: false, error: s === 'Invoice' ? 'A deal reaches Invoice when Accounting makes its invoice in the ERP.' : 'A deal becomes a Deal when its invoice is paid.' };
+  if (MANUAL_STAGES.includes(s)) return { ok: true, stage: s };
+  if (LOCKED_STAGES.includes(s)) return { ok: false, error: s === 'Deal' ? 'A deal becomes an Active Client when its invoice is paid.' : s === 'Invoice' ? 'A deal reaches Invoice Sent when Accounting makes its invoice in the ERP.' : 'A deal reaches Invoice Requested with Request invoice in the ERP.' };
   return { ok: false, error: 'Unknown stage.' };
 }
 

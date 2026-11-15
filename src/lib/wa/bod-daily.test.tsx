@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { adTotals, advertisingRows, endingsOf, pipelineOf, sessionStatus, SPARK_DAYS, type BodDaily } from './bod-daily';
+import { buildSalesBod } from './bod-sales';
 import { renderBodDailyPdf } from './bod-daily-pdf';
 
 const row = (r: Partial<{ biaya: string; penjualan: string }> = {}) => [{ biayaIklan: r.biaya ?? '', penjualan: r.penjualan ?? '' }];
@@ -104,15 +105,30 @@ describe('renderBodDailyPdf', () => {
     admin: { lines: [{ name: 'Vani', files: 4, total: 8, uploaded: 2, uploadedNames: ['onat.hardware', 'botanea'], pendingNames: ['mery.farma'] }], errors: [], fo: { startedOnDay: ['Client Satu'], ongoing: 3 } },
     pipeline: pipelineOf([{ salesman_name: 'Lucy', stage: 'Lead', value: 1, created_at: '2026-11-12T03:00:00Z' }], '2026-11-12'),
     endings: endingsOf([{ name: 'Client Lama', service_end_date: '2026-11-10', sales_name: 'Lucy' }, { name: 'Client Baru', service_end_date: '2026-11-20' }], '2026-11-13'),
+    sales: buildSalesBod({
+      deals: [
+        { id: 'd1', client: 'Toko Satu', salesman_name: 'Lucy', stage: 'Negotiation', value: 3000000, created_at: '2026-11-01T03:00:00Z', stage_changed_at: '2026-11-02T03:00:00Z', proposal_sent_at: '2026-11-12T03:00:00Z' },
+        { id: 'd2', client: 'Toko Dua', salesman_name: 'Rani', stage: 'Meeting Booked', value: 0, created_at: '2026-11-12T03:00:00Z', stage_changed_at: '2026-11-12T03:00:00Z' },
+        { id: 'd3', client: 'Toko Tiga', salesman_name: 'Rani', stage: 'Invoice', value: 5000000, created_at: '2026-10-20T03:00:00Z', stage_changed_at: '2026-11-01T03:00:00Z' },
+      ],
+      meetings: [{ status: 'booked', created_at: '2026-11-12T03:00:00Z', starts_at: '2026-11-13T03:00:00Z', owner_name: 'Rani', lead_name: 'Dua' }, { status: 'done', created_at: '2026-11-08T03:00:00Z', starts_at: '2026-11-12T03:00:00Z', owner_name: 'Lucy', lead_name: 'Satu' }],
+      invoices: [{ number: 'INV-1', client: 'Toko Tiga', total: 5000000, paid: 0, due: '2026-11-08', sales: 'Rani' }],
+      paymentsToday: { count: 1, amount: 2500000 },
+    }, '2026-11-12'),
   };
-  it('makes a 3-page PDF (one page per section) from the data', async () => {
+  it('makes a 4-page PDF (advertising, admin, sales, pipeline) from the data', async () => {
     const pdf = await renderBodDailyPdf(sample);
     expect(Buffer.from(pdf.subarray(0, 4)).toString()).toBe('%PDF');
+    const pages = (Buffer.from(pdf).toString('latin1').match(/\/Type\s*\/Page[^s]/g) || []).length;
+    expect(pages).toBe(4);
+  }, 60000);
+  it('keeps the 3 pages when the sales page could not be read (sales is null)', async () => {
+    const pdf = await renderBodDailyPdf({ ...sample, sales: null });
     const pages = (Buffer.from(pdf).toString('latin1').match(/\/Type\s*\/Page[^s]/g) || []).length;
     expect(pages).toBe(3);
   }, 60000);
   it('still makes the PDF when there is no data at all', async () => {
-    const empty: BodDaily = { ...sample, ads: [], totals: { sales: 0, cost: 0, roas: 0, salesSeries: [], costSeries: [], roasSeries: [] }, advertisers: [], admin: { lines: [], errors: [], fo: { startedOnDay: [], ongoing: 0 } }, pipeline: pipelineOf([], '2026-11-12'), endings: { ended: [], soon: [] } };
+    const empty: BodDaily = { ...sample, ads: [], totals: { sales: 0, cost: 0, roas: 0, salesSeries: [], costSeries: [], roasSeries: [] }, advertisers: [], admin: { lines: [], errors: [], fo: { startedOnDay: [], ongoing: 0 } }, pipeline: pipelineOf([], '2026-11-12'), endings: { ended: [], soon: [] }, sales: null };
     const pdf = await renderBodDailyPdf(empty);
     expect(pdf.byteLength).toBeGreaterThan(1000);
   }, 60000);

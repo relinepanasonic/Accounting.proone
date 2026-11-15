@@ -3,6 +3,7 @@ import { Document, Page, View, Text, Svg, Polyline, Circle, StyleSheet, renderTo
 import { dmy, rp } from '@/lib/reports/whatsapp-report';
 import { ensureFonts, pdfText, shortRp } from './weekly-pdf';
 import { STAGES, ENDING_WINDOW_DAYS, type BodDaily, type EndingClient } from './bod-daily';
+import type { SalesBod } from './bod-sales';
 import { stageLabel } from '@/lib/sales/flow';
 
 /**
@@ -102,6 +103,83 @@ function EndingTable({ title, rows, ago, empty }: { title: string; rows: EndingC
   );
 }
 
+const MOVE_LABEL: Array<[keyof SalesBod['movement'], string]> = [
+  ['newLeads', 'LEAD BARU'], ['meetingsBooked', 'MEETING DIBOOKING'], ['meetingsHeld', 'MEETING TERJADI'], ['noShow', 'TIDAK HADIR'],
+  ['proposalsSent', 'PROPOSAL DIKIRIM'], ['invoicesRequested', 'REQUEST INVOICE'], ['invoicesSent', 'INVOICE TERKIRIM'], ['newActive', 'CLIENT AKTIF BARU'],
+];
+const pct0 = (p: number | null) => (p === null ? '-' : `${Math.round(p * 100)}%`);
+const timeWib = (iso: string) => new Date(new Date(iso).getTime() + 7 * 3600000).toISOString().slice(11, 16);
+
+/** The sales page: today's movement, the funnel now with its conversion, each salesperson, and what needs attention. */
+function SalesPage({ sales: s, day }: { sales: SalesBod; day: string }) {
+  const max = Math.max(1, ...s.funnel.map((f) => f.count));
+  return (
+    <Page size="A4" style={st.page}>
+      <Header kicker="PROFESSOR ONLINE · DAILY BOD REPORT" title="3. Sales" day={day} right="Dari lead ke meeting ke client aktif" />
+
+      <Text style={st.h2}>Yang terjadi hari ini</Text>
+      <View style={st.kpiRow}>{MOVE_LABEL.slice(0, 4).map(([k, label]) => <Kpi key={k} label={label} value={String(s.movement[k])} />)}</View>
+      <View style={st.kpiRow}>
+        {MOVE_LABEL.slice(4).map(([k, label]) => <Kpi key={k} label={label} value={String(s.movement[k])} />)}
+      </View>
+      <View style={st.kpiRow}>
+        <Kpi label="PEMBAYARAN DITERIMA HARI INI" value={money(s.paymentsToday.amount)} note={`${s.paymentsToday.count} invoice`} />
+        <Kpi label="SHOW RATE MEETING (30 HARI)" value={pct0(s.showRate30)} note="meeting yang benar-benar terjadi" />
+      </View>
+
+      <Text style={st.h2}>Funnel sekarang dan konversinya</Text>
+      {s.funnel.map((f) => (
+        <View key={f.stage} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 3 }} wrap={false}>
+          <Text style={{ width: '20%', fontSize: 8.5 }}>{f.label}</Text>
+          <View style={{ width: '56%', height: 9, backgroundColor: '#f3f4f6', borderRadius: 2 }}>
+            <View style={{ width: `${Math.max(f.count > 0 ? 2 : 0, (f.count / max) * 100)}%`, height: 9, backgroundColor: STAGE_COLOR[f.stage] || BLUE, borderRadius: 2 }} />
+          </View>
+          <Text style={{ width: '8%', fontSize: 9, fontFamily: 'Roboto', fontWeight: 700, textAlign: 'right' }}>{f.count}</Text>
+          <Text style={{ width: '16%', fontSize: 7.5, color: MUTED, textAlign: 'right' }}>{f.value > 0 ? shortRp(f.value) : ''}</Text>
+        </View>
+      ))}
+      <View style={{ flexDirection: 'row', marginTop: 5 }}>
+        {s.conversions.map((c) => (
+          <View key={c.from} style={[st.kpi, { marginRight: 4, padding: 5 }]}>
+            <Text style={{ fontSize: 6, color: MUTED }}>{stageLabel(c.from).toUpperCase()} KE {stageLabel(c.to).toUpperCase()}</Text>
+            <Text style={{ fontSize: 11, fontFamily: 'Roboto', fontWeight: 700, marginTop: 2 }}>{pct0(c.pct)}</Text>
+            <Text style={{ fontSize: 6.5, color: MUTED }}>{c.toCount} dari {c.fromCount}</Text>
+          </View>
+        ))}
+      </View>
+
+      <Text style={st.h2}>Per sales hari ini</Text>
+      <View style={st.head}>
+        <Text style={[st.th, { width: '20%' }]}>SALES</Text>
+        {['LEAD', 'BOOK', 'MEET', 'ABSEN', 'PROP', 'REQ', 'INV', 'AKTIF'].map((h) => <Text key={h} style={[st.th, { width: '10%', textAlign: 'right' }]}>{h}</Text>)}
+      </View>
+      {s.bySales.length === 0 && <Text style={{ fontSize: 8.5, color: MUTED, paddingTop: 5 }}>Belum ada aktivitas sales hari ini.</Text>}
+      {s.bySales.map((p) => (
+        <View key={p.name} style={st.row} wrap={false}>
+          <Text style={{ width: '20%', fontSize: 8.5, fontFamily: 'Roboto', fontWeight: 700 }}>{cut(pdfText(p.name), 16)}</Text>
+          {([p.newLeads, p.meetingsBooked, p.meetingsHeld, p.noShow, p.proposalsSent, p.invoicesRequested, p.invoicesSent, p.newActive]).map((v, i) => <Text key={i} style={{ width: '10%', fontSize: 8.5, textAlign: 'right', color: v ? INK : '#9ca3af' }}>{v}</Text>)}
+        </View>
+      ))}
+      <Text style={st.hint}>LEAD = lead baru. BOOK = meeting dibooking. MEET = meeting terjadi. ABSEN = tidak hadir. PROP = proposal dikirim. REQ = request invoice. INV = invoice terkirim. AKTIF = client aktif baru.</Text>
+
+      <Text style={st.h2}>Perlu perhatian</Text>
+      <Text style={{ fontSize: 8, fontFamily: 'Roboto', fontWeight: 700, color: AMBER }}>Meeting besok yang belum dikonfirmasi ({s.unconfirmed.length})</Text>
+      {s.unconfirmed.length === 0 ? <Text style={{ fontSize: 8, color: MUTED, marginBottom: 4 }}>Semua meeting besok sudah dikonfirmasi, atau tidak ada.</Text> : s.unconfirmed.map((u, i) => (
+        <Text key={i} style={{ fontSize: 8, marginTop: 1.5 }}>{timeWib(u.at)} WIB  {cut(pdfText(u.name), 30)}  ({cut(pdfText(u.owner), 16)})</Text>
+      ))}
+      <Text style={{ fontSize: 8, fontFamily: 'Roboto', fontWeight: 700, color: AMBER, marginTop: 5 }}>Deal tertahan terlalu lama ({s.stuck.length})</Text>
+      {s.stuck.length === 0 ? <Text style={{ fontSize: 8, color: MUTED, marginBottom: 4 }}>Tidak ada deal yang tertahan.</Text> : s.stuck.map((x) => (
+        <Text key={x.id} style={{ fontSize: 8, marginTop: 1.5 }}>{cut(pdfText(x.client), 30)}  di {stageLabel(x.stage)} {x.days} hari  ({cut(pdfText(x.sales), 16)})</Text>
+      ))}
+      <Text style={{ fontSize: 8, fontFamily: 'Roboto', fontWeight: 700, color: RED, marginTop: 5 }}>Invoice lewat jatuh tempo ({s.overdue.length})</Text>
+      {s.overdue.length === 0 ? <Text style={{ fontSize: 8, color: MUTED }}>Tidak ada invoice yang lewat jatuh tempo.</Text> : s.overdue.map((o) => (
+        <Text key={o.number} style={{ fontSize: 8, marginTop: 1.5 }}>{cut(pdfText(o.client), 28)}  {o.number}  sisa {shortRp(o.balance)}  telat {o.daysLate} hari</Text>
+      ))}
+      <View style={st.footer} fixed><Text>Professor Online · Daily BOD Report {dmy(day)} · Sales</Text></View>
+    </Page>
+  );
+}
+
 export function BodDailyDocument({ d }: { d: BodDaily }) {
   const s = d.sessions;
   const maxStage = Math.max(1, ...d.pipeline.stages.map((x) => x.count));
@@ -194,9 +272,12 @@ export function BodDailyDocument({ d }: { d: BodDaily }) {
         <View style={st.footer} fixed><Text>Professor Online · Daily BOD Report {dmy(d.reportDay)}</Text></View>
       </Page>
 
-      {/* ---------------------------------------------------------------- 3. Sales */}
+      {/* ---------------------------------------------------------------- 3. Sales: what moved today, the funnel, what needs attention */}
+      {d.sales && <SalesPage sales={d.sales} day={d.reportDay} />}
+
+      {/* ---------------------------------------------------------------- 4. Pipeline per stage and salesperson */}
       <Page size="A4" style={st.page}>
-        <Header kicker="PROFESSOR ONLINE · DAILY BOD REPORT" title="3. Sales" day={d.reportDay} right="Pipeline per tahap" />
+        <Header kicker="PROFESSOR ONLINE · DAILY BOD REPORT" title={d.sales ? '4. Pipeline' : '3. Sales'} day={d.reportDay} right="Pipeline per tahap" />
         <View style={st.kpiRow}>
           <Kpi label="TOTAL DEAL DI PIPELINE" value={String(d.pipeline.total)} />
           <Kpi label="LEAD BARU HARI INI" value={String(d.pipeline.newOnDay)} />

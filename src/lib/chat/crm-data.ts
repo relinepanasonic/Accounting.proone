@@ -132,6 +132,7 @@ export async function createLeadFromChat(ws: string, groupId: string, input: Lea
     if (newClient) await db.from('clients').delete().eq('id', client!.id);   // never leave an orphan prospect behind
     return fail(500, `Could not create the deal: ${dErr?.message}`);
   }
+  await db.from('chat_state').upsert({ group_id: groupId, workspace_id: ws, deal_id: (deal as any).id, updated_at: now }, { onConflict: 'group_id' }).then(() => undefined, () => undefined);   // the chat knows its deal (Instagram and Messenger have no phone to match)
   return { ok: true, dealId: (deal as any).id, clientId: client!.id, newClient };
 }
 

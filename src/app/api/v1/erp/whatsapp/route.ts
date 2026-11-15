@@ -8,7 +8,7 @@ export const maxDuration = 120;
 
 /**
  * GET /api/v1/erp/whatsapp: the WhatsApp report for Nico, Herlan and Lucy (Make.com sends it at 09:00).
- *  ?slot=evening: the Daily report of that day (Monday to Friday). ?slot=morning: the Weekly report on Monday (Monthly on the first Monday of a month).
+ *  ?slot=evening: the Daily report of that day (Monday to Saturday). ?slot=morning: the Weekly report on Monday (Monthly on the first Monday of a month).
  *  Without ?slot: morning before 14:00 Jakarta time, evening after.
  * Header: Authorization: Bearer <ERP_API_KEY>. Optional ?date=YYYY-MM-DD acts as "today" (to test a day).
  * Response: { send, kind, date, text }. Make must only send when send is true.

@@ -7,9 +7,9 @@ import { normalizeLogs, buildPerformance, type LogRow, type AssignedStore } from
 
 /**
  * The WhatsApp report for Nico, Herlan and Lucy. By division (Sales, Admin, Advertiser, Accounting), no AI names.
- *  Two times a week-day: the EVENING report (19:00, Monday to Friday) is the Daily report of that same day. The MORNING report (Monday 08:00)
+ *  Two times a week-day: the EVENING report (19:00, Monday to Saturday) is the Daily report of that same day. The MORNING report (Monday 08:00)
  *  is the Weekly report, which is the ongoing month from the 1st to yesterday (Sunday); on the first Monday of a new month it is the Monthly
- *  report of the last month. Saturday and Sunday evenings, and every other morning: nothing.
+ *  report of the last month. Sunday evening, and every other morning: nothing.
  * Every number is counted from the data; only "Saran Prof" is written by the model, from those numbers.
  */
 
@@ -36,9 +36,9 @@ export function planReport(today: string, slot: ReportSlot = 'evening'): ReportP
   const yesterday = addDays(today, -1);
   const none: ReportPlan = { kind: 'none', from: today, to: today, prevFrom: today, prevTo: today };
   if (slot === 'evening') {
-    // the day itself, compared with the work day before it (Monday is compared with Friday)
-    if (dow === 0 || dow === 6) return none;
-    const prev = addDays(today, dow === 1 ? -3 : -1);
+    // the day itself, compared with the day before it (Monday is compared with Saturday: Sunday has no report)
+    if (dow === 0) return none;
+    const prev = addDays(today, dow === 1 ? -2 : -1);
     return { kind: 'daily', from: today, to: today, prevFrom: prev, prevTo: prev };
   }
   if (dow !== 1) return none;

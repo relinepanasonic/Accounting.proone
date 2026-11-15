@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/api/supabase-admin';
 import { adminSection, addDays, dayOf, inRange, planReport } from '@/lib/reports/whatsapp-report';
 import { inputByDay, type InputReport } from '@/lib/advertiser/input-series';
 import { PIPELINE_STAGES } from '@/lib/sales/flow';
+import { buildSalesBod, type SalesBod, type SalesDeal, type SalesInvoice, type SalesMeeting } from './bod-sales';
 
 /**
  * The daily BOD report (Nico and Herlan), as data for a 3-section PDF:
@@ -148,6 +149,7 @@ export interface BodDaily {
   admin: { lines: Array<{ name: string; files: number; total: number; uploaded: number; uploadedNames: string[]; pendingNames: string[] }>; errors: string[]; fo: { startedOnDay: string[]; ongoing: number } };
   pipeline: Pipeline;
   endings: Endings;
+  sales: SalesBod | null;      // the sales page built around the pipeline (null when it could not be read)
 }
 
 /** Reads everything the daily BOD PDF shows. `today` is the Jakarta day the report is made on, at 19:00, and is about. */
@@ -158,13 +160,14 @@ export async function loadBodDaily(today: string): Promise<BodDaily | null> {
   const dataDay = addDays(reportDay, -1);
   const db = createAdminClient();
 
-  const [{ data: reps }, { data: asg }, { data: clients }, { data: deals }, { data: fo }, admin] = await Promise.all([
+  const [{ data: reps }, { data: asg }, { data: clients }, { data: deals }, { data: fo }, admin, sales] = await Promise.all([
     db.from('advertiser_reports').select('client_id, report_date, session, store_label, data_inkubasi, data_group, data_mandiri').gte('report_date', addDays(reportDay, -SPARK_DAYS)).lte('report_date', reportDay).limit(8000),
     db.from('client_assignments').select('client_id, user_id').eq('job', 'advertising'),
     db.from('clients').select('id, name, sales_name, service_end_date'),
     db.from('crm_deals').select('salesman_name, stage, value, created_at, stage_changed_at'),
     db.from('fake_order_projects').select('client_name, start_date, finished_at'),
     adminSection(db, plan, today).catch(() => null),
+    loadSalesBod(today).catch((e) => { console.error('bod sales failed', e); return null; }),
   ]);
   const reports = (reps || []).map((r: any) => ({ ...r, report_date: String(r.report_date).slice(0, 10) })) as Array<InputReport & { store_label?: string | null }>;
   const names = new Map<string, string>((clients || []).map((c: any) => [c.id as string, String(c.name || 'Client')]));
@@ -192,5 +195,31 @@ export async function loadBodDaily(today: string): Promise<BodDaily | null> {
     },
     pipeline: pipelineOf(deals || [], reportDay),
     endings: endingsOf(clients || [], today),
+    sales,
   };
+}
+
+/** Reads the deals, the consultations and the invoices the sales page needs (the whole pipeline, not one month). */
+export async function loadSalesBod(day: string): Promise<SalesBod> {
+  const db = createAdminClient();
+  const dayStart = new Date(`${day}T00:00:00+07:00`).toISOString();
+  const since = new Date(new Date(`${day}T00:00:00+07:00`).getTime() - 35 * 86400000).toISOString();
+  const [{ data: deals }, { data: meetings }, { data: paidToday }] = await Promise.all([
+    db.from('crm_deals').select('id, client_id, lead_name, salesman_name, stage, value, created_at, stage_changed_at, proposal_sent_at, invoice_requested_at, invoice_generated_at, paid_at, acc_approved_at, invoice_id').limit(8000),
+    db.from('chat_meetings').select('status, created_at, starts_at, confirmed_at, owner_name, lead_name').gte('starts_at', since).limit(5000),
+    db.from('invoices').select('amount_paid').eq('client_paid_date', day).limit(2000),
+  ]);
+  const list = (deals || []) as any[];
+  const clientIds = [...new Set(list.map((d) => d.client_id).filter(Boolean))];
+  const { data: cl } = clientIds.length ? await db.from('clients').select('id, name').in('id', clientIds) : { data: [] as any[] };
+  const nameOf = new Map<string, string>(((cl || []) as any[]).map((c) => [c.id, String(c.name || '')]));
+  const salesDeals: SalesDeal[] = list.map((d) => ({ ...d, client: nameOf.get(d.client_id) || d.lead_name || 'Client' }));
+  // invoices that are out and not paid yet (stage Invoice Sent): which are past their due date
+  const invIds = list.filter((d) => d.stage === 'Invoice' && d.invoice_id).map((d) => d.invoice_id as string);
+  const { data: invs } = invIds.length ? await db.from('invoices').select('id, invoice_number, total_amount, amount_paid, due_date').in('id', invIds) : { data: [] as any[] };
+  const dealOfInv = new Map<string, any>(list.filter((d) => d.invoice_id).map((d) => [d.invoice_id as string, d]));
+  const invoices: SalesInvoice[] = ((invs || []) as any[]).map((i) => ({ number: i.invoice_number, client: nameOf.get(dealOfInv.get(i.id)?.client_id) || dealOfInv.get(i.id)?.lead_name || 'Client', total: Number(i.total_amount || 0), paid: Number(i.amount_paid || 0), due: i.due_date, sales: dealOfInv.get(i.id)?.salesman_name }));
+  const pays = (paidToday || []) as any[];
+  void dayStart;
+  return buildSalesBod({ deals: salesDeals, meetings: (meetings || []) as SalesMeeting[], invoices, paymentsToday: { count: pays.length, amount: pays.reduce((s, p) => s + Number(p.amount_paid || 0), 0) } }, day);
 }

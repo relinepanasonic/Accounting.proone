@@ -123,11 +123,19 @@ describe('renderBodDailyPdf', () => {
     const pages = (Buffer.from(pdf).toString('latin1').match(/\/Type\s*\/Page[^s]/g) || []).length;
     expect(pages).toBe(4);
   }, 60000);
-  it('shows what clients asked when there are chats, and still makes 4 pages', async () => {
-    const asks = { days: 7, from: '', to: '', chats: 12, messages: 40, packages: [{ key: 'juragan', label: 'Paket Juragan', chats: 6, mentions: 9, examples: [] }], concerns: [{ key: 'harga', label: 'Harga dan biaya', chats: 8, mentions: 11, examples: [] }], unmatched: 5, needs: [], handedOver: [] };
+  it('adds the Insight Chat page (page 5) with the summary, the numbers and the action plan, in the same file', async () => {
+    const daily = Array.from({ length: 7 }, (_, i) => ({ day: `2026-11-${String(6 + i).padStart(2, '0')}`, chats: i + 1, messages: (i + 1) * 4 }));
+    const asks = { days: 7, from: '', to: '', chats: 28, messages: 112, packages: [{ key: 'juragan', label: 'Paket Juragan', chats: 6, mentions: 9, examples: ['kak paket juragan itu include apa aja?'] }], concerns: [{ key: 'harga', label: 'Harga dan biaya', chats: 8, mentions: 11, examples: ['harganya berapa kak per bulan?'] }], unmatched: 5, needs: [{ need: 'Iklan Shopee', chats: 4 }], handedOver: [{ text: 'bisa buat akun lazada juga ga kak?' }], daily,
+      summary: { executive: 'Selama 7 hari terakhir ada 28 calon client yang menulis dengan 112 pesan. Paket Juragan paling banyak ditanya.', insights: ['Banyak yang tanya harga sebelum paham paket.'], actions: [{ action: 'Siapkan perbandingan paket untuk balasan pertama.', pic: 'Sales', why: 'Harga ditanyakan di 8 chat.' }], model: 'claude-haiku-5-5', ai: true } };
     const pdf = await renderBodDailyPdf({ ...sample, asks });
     const pages = (Buffer.from(pdf).toString('latin1').match(/\/Type\s*\/Page[^s]/g) || []).length;
-    expect(pages).toBe(4);
+    expect(pages).toBe(5);
+  }, 60000);
+  it('still makes the Insight Chat page when the summary could not be written (counts only)', async () => {
+    const asks = { days: 7, from: '', to: '', chats: 0, messages: 0, packages: [], concerns: [], unmatched: 0, needs: [], handedOver: [], daily: [], summary: null };
+    const pdf = await renderBodDailyPdf({ ...sample, asks });
+    const pages = (Buffer.from(pdf).toString('latin1').match(/\/Type\s*\/Page[^s]/g) || []).length;
+    expect(pages).toBe(5);
   }, 60000);
   it('keeps the 3 pages when the sales page could not be read (sales is null)', async () => {
     const pdf = await renderBodDailyPdf({ ...sample, sales: null });

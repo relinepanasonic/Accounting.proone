@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { analyze, exampleOf, needsOf, summaryInput, type InMessage } from './insights';
+import { analyze, dailyOf, exampleOf, fallbackSummary, needsOf, parseSummary, summaryInput, type InMessage } from './insights';
 
 const m = (g: string, body: string, day = 10): InMessage => ({ group_id: g, body, sent_at: `2026-11-${String(day).padStart(2, '0')}T03:00:00Z` });
 
@@ -62,5 +62,43 @@ describe('the text the AI reads', () => {
     expect(t).toContain('30 hari terakhir');
     expect(t).toContain('Paket Juragan');
     expect(t).toContain('Iklan Shopee (2 chat)');
+  });
+});
+
+describe('the days', () => {
+  it('chats and messages per Jakarta day, the last 7 days ending today', () => {
+    const now = new Date('2026-11-16T05:00:00Z');
+    const d = dailyOf([m('a', 'halo kak', 16), m('a', 'mau tanya paket', 16), m('b', 'harga?? berapa', 16), m('a', 'kemarin tanya', 15), { group_id: 'c', body: 'x', sent_at: '2026-11-16T03:00:00Z' }], 7, now);
+    expect(d).toHaveLength(7);
+    expect(d[6]).toEqual({ day: '2026-11-16', chats: 2, messages: 3 });
+    expect(d[5]).toEqual({ day: '2026-11-15', chats: 1, messages: 1 });
+    expect(d[0].day).toBe('2026-11-10');
+  });
+  it('a message just after midnight in Jakarta belongs to the next day', () => {
+    const d = dailyOf([{ group_id: 'a', body: 'halo kak', sent_at: '2026-11-15T17:30:00Z' }], 3, new Date('2026-11-16T05:00:00Z'));
+    expect(d.find((x) => x.day === '2026-11-16')?.messages).toBe(1);
+  });
+});
+
+describe('the summary for the BOD', () => {
+  const good = JSON.stringify({ executive: 'Selama 7 hari terakhir ada 28 calon client dengan 112 pesan. Paket Juragan paling banyak ditanya.', insights: ['Banyak tanya harga.'], actions: [{ action: 'Siapkan perbandingan paket.', pic: 'Sales', why: 'Harga di 8 chat.' }, { action: 'Kumpulkan testimoni.', pic: 'Orang Lain', why: 'Bukti hasil.' }] });
+  it('reads the model JSON, also when it has text around it; an unknown PIC becomes Sales', () => {
+    const s = parseSummary(`Berikut:\n${good}\nSelesai`)!;
+    expect(s.executive).toContain('28 calon client');
+    expect(s.actions.map((a) => a.pic)).toEqual(['Sales', 'Sales']);
+  });
+  it('rejects an answer it cannot trust', () => {
+    expect(parseSummary('bukan json')).toBeNull();
+    expect(parseSummary('{"executive": "pendek"}')).toBeNull();
+    expect(parseSummary('{"executive": "paragraf yang cukup panjang untuk dibaca direksi", "actions": "salah"}')?.actions).toEqual([]);
+  });
+  it('without the AI, it is written from the numbers: sample warning, top package, top worry, busiest day', () => {
+    const i = analyze([m('a', 'paket juragan berapa harganya'), m('b', 'paket juragan harga berapa')]);
+    const f = fallbackSummary(i, [{ need: 'Iklan Shopee', chats: 2 }], 7, [{ day: '2026-11-15', chats: 1, messages: 2 }, { day: '2026-11-16', chats: 2, messages: 5 }]);
+    expect(f.executive).toContain('Datanya masih sedikit');
+    expect(f.executive).toContain('Paket Juragan (2 chat)');
+    expect(f.executive).toContain('2026-11-16');
+    expect(f.actions.length).toBeGreaterThan(0);
+    expect(fallbackSummary(analyze([]), [], 7).executive).toContain('Belum ada chat');
   });
 });

@@ -103,27 +103,93 @@ function EndingTable({ title, rows, ago, empty }: { title: string; rows: EndingC
   );
 }
 
-/** What clients asked in the chats over the last 7 days: the packages and the worries, by number of chats. */
-function AsksBlock({ a }: { a: NonNullable<BodDaily['asks']> }) {
-  const col = (title: string, rows: Array<{ label: string; chats: number }>) => (
-    <View style={{ width: '48%' }}>
-      <Text style={{ fontSize: 8, fontFamily: 'Roboto', fontWeight: 700, color: AMBER }}>{title}</Text>
-      {rows.length === 0 ? <Text style={{ fontSize: 8, color: MUTED, marginTop: 2 }}>-</Text> : rows.map((r) => (
-        <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 }}>
-          <Text style={{ fontSize: 8.5 }}>{cut(pdfText(r.label), 30)}</Text><Text style={{ fontSize: 8.5, fontFamily: 'Roboto', fontWeight: 700 }}>{r.chats} chat</Text>
+const dayShort = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+const idr = (n: number) => n.toLocaleString('id-ID');
+
+/**
+ * Page 5: Insight Chat, in the shape of the Product & Inquiry Intelligence report: the executive summary, the key numbers, the packages clients ask about
+ * and what worries them (with their own words as evidence), the daily trend, and the recommendations with who does them. All in the one daily file.
+ */
+function InsightPage({ a, day }: { a: NonNullable<BodDaily['asks']>; day: string }) {
+  const sum = a.summary;
+  const maxDay = Math.max(1, ...a.daily.map((x) => x.chats));
+  const asked = new Set<string>();
+  const from = a.daily[0]?.day || day;
+  return (
+    <Page size="A4" style={st.page}>
+      <Header kicker="PROFESSOR ONLINE · DAILY BOD REPORT" title="5. Insight Chat" day={day} right="Apa yang dibutuhkan client" />
+      <Text style={st.hint}>Periode data: {dmy(from)} - {dmy(a.daily[a.daily.length - 1]?.day || day)} (7 hari). Sumber: chat calon client di nomor sales. Angka dihitung dari pesan client; ringkasan ditulis {sum?.ai ? `AI (${pdfText(sum.model || 'AI')})` : 'otomatis dari angka'}.</Text>
+
+      <Text style={st.h2}>Ringkasan Eksekutif</Text>
+      <Text style={{ fontSize: 9, lineHeight: 1.5 }}>{pdfText(sum?.executive || 'Ringkasan belum bisa dibuat.')}</Text>
+      {sum && sum.insights.length > 0 && sum.insights.map((x, i) => <Text key={i} style={{ fontSize: 8.5, lineHeight: 1.4, marginTop: 2 }}>- {pdfText(x)}</Text>)}
+
+      <Text style={st.h2}>Ringkasan Angka Kunci</Text>
+      <View style={st.kpiRow}>
+        <Kpi label="CHAT CALON CLIENT" value={idr(a.chats)} />
+        <Kpi label="PESAN MASUK" value={idr(a.messages)} />
+        <Kpi label="PAKET TERATAS" value={a.packages[0] ? cut(pdfText(a.packages[0].label.replace('Paket ', '')), 16) : '-'} note={a.packages[0] ? `${a.packages[0].chats} chat` : undefined} />
+        <View style={[st.kpi, { marginRight: 0 }]}><Text style={st.kpiLabel}>KEKHAWATIRAN TERATAS</Text><Text style={[st.kpiValue, { fontSize: 9.5 }]}>{a.concerns[0] ? cut(pdfText(a.concerns[0].label), 24) : '-'}</Text>{a.concerns[0] ? <Text style={{ fontSize: 7, color: MUTED, marginTop: 2 }}>{a.concerns[0].chats} chat</Text> : null}</View>
+      </View>
+
+      <Text style={st.h2}>Paket yang paling banyak ditanya</Text>
+      <View style={st.head}>
+        <Text style={[st.th, { width: '30%' }]}>PAKET / PENAWARAN</Text><Text style={[st.th, { width: '9%', textAlign: 'right' }]}>CHAT</Text><Text style={[st.th, { width: '9%', textAlign: 'right' }]}>PESAN</Text><Text style={[st.th, { width: '52%', paddingLeft: 8 }]}>KUTIPAN CLIENT</Text>
+      </View>
+      {a.packages.length === 0 && <Text style={{ fontSize: 8.5, color: MUTED, paddingTop: 5 }}>Belum ada paket yang disebut client.</Text>}
+      {a.packages.slice(0, 6).map((r) => (
+        <View key={r.key} style={st.row} wrap={false}>
+          <Text style={{ width: '30%', fontSize: 8.5, fontFamily: 'Roboto', fontWeight: 700 }}>{pdfText(r.label)}</Text>
+          <Text style={{ width: '9%', fontSize: 8.5, textAlign: 'right' }}>{r.chats}</Text><Text style={{ width: '9%', fontSize: 8.5, textAlign: 'right' }}>{r.mentions}</Text>
+          <Text style={{ width: '52%', fontSize: 7.5, color: MUTED, paddingLeft: 8 }}>{r.examples[0] ? `"${cut(pdfText(r.examples[0]), 95)}"` : '-'}</Text>
         </View>
       ))}
-    </View>
-  );
-  return (
-    <View wrap={false}>
-      <Text style={st.h2}>Apa yang ditanyakan client (7 hari)</Text>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        {col('Paket yang paling banyak ditanya', a.packages.slice(0, 5))}
-        {col('Yang dikhawatirkan client', a.concerns.slice(0, 5))}
+
+      <Text style={st.h2}>Kekhawatiran dan kebutuhan client</Text>
+      <View style={st.head}>
+        <Text style={[st.th, { width: '30%' }]}>TEMA</Text><Text style={[st.th, { width: '9%', textAlign: 'right' }]}>CHAT</Text><Text style={[st.th, { width: '9%', textAlign: 'right' }]}>PESAN</Text><Text style={[st.th, { width: '52%', paddingLeft: 8 }]}>KUTIPAN CLIENT</Text>
       </View>
-      <Text style={st.hint}>Dihitung dari pesan calon client di chat ({a.chats} chat, {a.messages} pesan). Detail dan contoh ada di dashboard chat, halaman Statistik.</Text>
-    </View>
+      {a.concerns.length === 0 && <Text style={{ fontSize: 8.5, color: MUTED, paddingTop: 5 }}>Belum ada kekhawatiran yang terbaca.</Text>}
+      {a.concerns.slice(0, 7).map((r) => (
+        <View key={r.key} style={st.row} wrap={false}>
+          <Text style={{ width: '30%', fontSize: 8.5, fontFamily: 'Roboto', fontWeight: 700 }}>{cut(pdfText(r.label), 30)}</Text>
+          <Text style={{ width: '9%', fontSize: 8.5, textAlign: 'right' }}>{r.chats}</Text><Text style={{ width: '9%', fontSize: 8.5, textAlign: 'right' }}>{r.mentions}</Text>
+          <Text style={{ width: '52%', fontSize: 7.5, color: MUTED, paddingLeft: 8 }}>{r.examples[0] ? `"${cut(pdfText(r.examples[0]), 95)}"` : '-'}</Text>
+        </View>
+      ))}
+      {a.needs.length > 0 && <Text style={{ fontSize: 8, marginTop: 5 }}><Text style={{ fontFamily: 'Roboto', fontWeight: 700 }}>Kebutuhan yang disebut ke bot: </Text>{a.needs.slice(0, 5).map((n) => `${pdfText(n.need)} (${n.chats})`).join(', ')}</Text>}
+      {a.handedOver.length > 0 && <Text style={{ fontSize: 8, marginTop: 3 }}><Text style={{ fontFamily: 'Roboto', fontWeight: 700 }}>Pertanyaan yang belum bisa dijawab bot: </Text>{a.handedOver.slice(0, 4).map((h) => `"${cut(pdfText(h.text), 60)}"`).join('; ')}</Text>}
+
+      <View wrap={false}>
+        <Text style={st.h2}>Tren harian chat calon client</Text>
+        {a.daily.map((x) => (
+          <View key={x.day} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2.5 }}>
+            <Text style={{ width: '10%', fontSize: 8 }}>{dayShort(x.day)}</Text>
+            <View style={{ width: '70%', height: 8, backgroundColor: '#f3f4f6', borderRadius: 2 }}>
+              <View style={{ width: `${Math.max(x.chats > 0 ? 2 : 0, (x.chats / maxDay) * 100)}%`, height: 8, backgroundColor: BLUE, borderRadius: 2 }} />
+            </View>
+            <Text style={{ width: '20%', fontSize: 8, textAlign: 'right' }}>{x.chats} chat · {x.messages} pesan</Text>
+          </View>
+        ))}
+      </View>
+
+      <View wrap={false}>
+        <Text style={st.h2}>Rekomendasi dan Action Plan</Text>
+        <View style={st.head}>
+          <Text style={[st.th, { width: '5%' }]}>NO</Text><Text style={[st.th, { width: '45%' }]}>TINDAKAN</Text><Text style={[st.th, { width: '14%' }]}>PIC</Text><Text style={[st.th, { width: '36%' }]}>ALASAN</Text>
+        </View>
+        {(!sum || sum.actions.length === 0) && <Text style={{ fontSize: 8.5, color: MUTED, paddingTop: 5 }}>Belum ada rekomendasi: data chat masih terlalu sedikit.</Text>}
+        {sum?.actions.map((x, i) => (
+          <View key={i} style={st.row} wrap={false}>
+            <Text style={{ width: '5%', fontSize: 8.5 }}>{i + 1}</Text>
+            <Text style={{ width: '45%', fontSize: 8.5, lineHeight: 1.35 }}>{pdfText(x.action)}</Text>
+            <Text style={{ width: '14%', fontSize: 8.5, fontFamily: 'Roboto', fontWeight: 700 }}>{pdfText(x.pic)}</Text>
+            <Text style={{ width: '36%', fontSize: 7.5, color: MUTED, lineHeight: 1.35 }}>{pdfText(x.why)}</Text>
+          </View>
+        ))}
+      </View>
+      <View style={st.footer} fixed><Text>Professor Online · Daily BOD Report {dmy(day)} · Insight Chat</Text></View>
+    </Page>
   );
 }
 
@@ -336,12 +402,13 @@ export function BodDailyDocument({ d }: { d: BodDaily }) {
             <Text style={{ width: '6%', fontSize: 8.5, textAlign: 'right' }}>{p.movedOnDay}</Text>
           </View>
         ))}
-        {d.asks && d.asks.messages > 0 && <AsksBlock a={d.asks} />}
         <EndingTable title={`Project sudah berakhir (${ENDING_WINDOW_DAYS} hari terakhir)`} rows={d.endings.ended} ago empty="Tidak ada project yang berakhir dalam 2 minggu terakhir." />
         <EndingTable title={`Project berakhir dalam ${ENDING_WINDOW_DAYS} hari ke depan`} rows={d.endings.soon} empty="Tidak ada project yang berakhir dalam 2 minggu ke depan." />
         <Text style={[st.hint, { marginTop: 6 }]}>BARU = deal yang dimasukkan hari ini. PINDAH = deal yang berpindah tahap hari ini. NEW New Lead, CONT Contacted, QUAL Qualified, OFFER Meeting Offered, BOOK Meeting Booked, MEET Meeting Done, NEGO Negotiation, REQ Invoice Requested, INV Invoice Sent, ACTIVE Active Client, LOST Lost.</Text>
         <View style={st.footer} fixed><Text>Professor Online · Daily BOD Report {dmy(d.reportDay)}</Text></View>
       </Page>
+      {/* ---------------------------------------------------------------- 5. Insight Chat: what clients ask and need */}
+      {d.asks && <InsightPage a={d.asks} day={d.reportDay} />}
     </Document>
   );
 }

@@ -2,7 +2,7 @@ import { createAdminClient } from '@/lib/api/supabase-admin';
 import { adminSection, addDays, dayOf, inRange, planReport } from '@/lib/reports/whatsapp-report';
 import { inputByDay, type InputReport } from '@/lib/advertiser/input-series';
 import { PIPELINE_STAGES } from '@/lib/sales/flow';
-import { loadInsights, type InsightsResult } from '@/lib/chat/insights-data';
+import { loadInsights, loadSummary, type InsightsResult, type SummaryResult } from '@/lib/chat/insights-data';
 import { buildSalesBod, type SalesBod, type SalesDeal, type SalesInvoice, type SalesMeeting } from './bod-sales';
 
 /**
@@ -151,7 +151,7 @@ export interface BodDaily {
   pipeline: Pipeline;
   endings: Endings;
   sales: SalesBod | null;      // the sales page built around the pipeline (null when it could not be read)
-  asks: InsightsResult | null; // what clients asked in the chats over the last 7 days (packages and concerns); null when it could not be read
+  asks: (InsightsResult & { summary: SummaryResult | null }) | null; // what clients asked in the chats over the last 7 days, and the summary for the BOD; null when it could not be read
 }
 
 /** Reads everything the daily BOD PDF shows. `today` is the Jakarta day the report is made on, at 19:00, and is about. */
@@ -203,10 +203,12 @@ export async function loadBodDaily(today: string): Promise<BodDaily | null> {
 }
 
 /** What clients asked about in the sales number's chats over the last 7 days (for the sales number's company). */
-async function loadAsksForBod(): Promise<InsightsResult | null> {
+async function loadAsksForBod(): Promise<(InsightsResult & { summary: SummaryResult | null }) | null> {
   const { data } = await createAdminClient().from('wa_devices').select('workspace_id').eq('role', 'sales').eq('active', true).limit(1);
   const ws = (data || [])[0]?.workspace_id as string | undefined;
-  return ws ? loadInsights(ws, 7) : null;
+  if (!ws) return null;
+  const [i, summary] = await Promise.all([loadInsights(ws, 7), loadSummary(ws, 7).catch((e) => { console.error('bod summary failed', e); return null; })]);
+  return { ...i, summary };
 }
 
 /** Reads the deals, the consultations and the invoices the sales page needs (the whole pipeline, not one month). */

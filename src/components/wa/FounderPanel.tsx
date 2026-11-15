@@ -42,16 +42,16 @@ export function FounderPanel({ recipients, autoSend, sends, tokenSet, sendFiles 
           <h2 className={h2}>Team performance report</h2>
           <div className="flex flex-wrap items-center gap-2">
             <select value={slot} onChange={(e) => { setSlot(e.target.value as 'evening' | 'morning'); setPreview(null); }} className={input} title="Which report">
-              <option value="evening">Daily (19:00, Mon-Fri)</option>
+              <option value="evening">Daily (19:00, Mon-Sat)</option>
               <option value="morning">Weekly (Monday 08:00)</option>
             </select>
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={input} title="Build the report as if today were this date (empty = today)" />
-            <button disabled={pending} className={btn} onClick={() => start(async () => { setMsg('Building the report... (up to 30 seconds)'); const r: any = await previewPerformanceReport(date || undefined, slot); if (r?.error) { setMsg(`Problem: ${r.error}`); } else { setPreview(r.report); setMsg(r.report.send ? '' : slot === 'morning' ? 'The weekly report is only made on a Monday: pick a Monday.' : 'There is no daily report on Saturday and Sunday.'); } })}>
+            <button disabled={pending} className={btn} onClick={() => start(async () => { setMsg('Building the report... (up to 30 seconds)'); const r: any = await previewPerformanceReport(date || undefined, slot); if (r?.error) { setMsg(`Problem: ${r.error}`); } else { setPreview(r.report); setMsg(r.report.send ? '' : slot === 'morning' ? 'The weekly report is only made on a Monday: pick a Monday.' : 'There is no daily report on Sunday.'); } })}>
               {pending ? 'Working...' : 'Build preview'}
             </button>
           </div>
         </div>
-        <p className="text-[11px] text-zinc-500">Daily at 19:00 Monday to Friday (that day, as a PDF to Nico and Herlan); weekly on Monday at 08:00 (the month so far), monthly on the first Monday of a month. Counted from the ERP data; the advice at the end is written by Prof (AI).</p>
+        <p className="text-[11px] text-zinc-500">Daily at 19:00 Monday to Saturday (that day, a link to the PDF to Nico and Herlan); weekly on Monday at 08:00 (the month so far), monthly on the first Monday of a month. Counted from the ERP data; the advice at the end is written by Prof (AI).</p>
         {msg && <p className="mt-2 text-xs text-zinc-300">{msg}</p>}
         {preview?.send && (
           <div className="mt-4 grid gap-4 xl:grid-cols-2">
@@ -157,7 +157,7 @@ function RecipientRow({ r, tokenSet, onMsg }: { r: Recipient; tokenSet: boolean;
         <div className="text-[10px] text-zinc-500">+{r.phone}</div>
       </div>
       <button disabled={pending || !tokenSet} className={ghost} title="Send today's report to this number only" onClick={() => start(async () => { onMsg({ ok: true }); const x: any = await sendPerformanceReportNow(r.phone); onMsg(x); })}>Test</button>
-      <button disabled={pending} className={ghost} title="The daily BOD PDF (Tuesday to Saturday). Weekly and monthly reports are unaffected." onClick={() => start(async () => { await updateReportRecipient(r.id, { daily: r.receives_daily === false }); })}>{r.receives_daily === false ? 'Daily: off' : 'Daily: on'}</button>
+      <button disabled={pending} className={ghost} title="The daily BOD report (Monday to Saturday). Weekly and monthly reports are unaffected." onClick={() => start(async () => { await updateReportRecipient(r.id, { daily: r.receives_daily === false }); })}>{r.receives_daily === false ? 'Daily: off' : 'Daily: on'}</button>
       <button disabled={pending} className={ghost} onClick={() => start(async () => { await updateReportRecipient(r.id, { active: !r.active }); })}>{r.active ? 'Pause' : 'Resume'}</button>
       <button disabled={pending} className={ghost} onClick={() => { if (confirm(`Remove ${r.name || r.phone}?`)) start(async () => { await removeReportRecipient(r.id); }); }}>Remove</button>
     </li>

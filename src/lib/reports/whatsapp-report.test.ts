@@ -6,13 +6,13 @@ vi.mock('@/lib/api/erp-report', () => ({ loadErpDashboards: async () => ({}) }))
 import { currentSlot, planReport } from './whatsapp-report';
 
 describe('planReport', () => {
-  it('evening, Monday to Friday: the daily report of that same day, compared with the work day before', () => {
+  it('evening, Monday to Saturday: the daily report of that same day, compared with the day before', () => {
     expect(planReport('2026-10-21', 'evening')).toMatchObject({ kind: 'daily', from: '2026-10-21', to: '2026-10-21', prevFrom: '2026-10-20' }); // Wednesday
-    expect(planReport('2026-10-26', 'evening')).toMatchObject({ kind: 'daily', from: '2026-10-26', prevFrom: '2026-10-23' });                 // Monday vs Friday
+    expect(planReport('2026-10-24', 'evening')).toMatchObject({ kind: 'daily', from: '2026-10-24', prevFrom: '2026-10-23' });                 // Saturday has one
+    expect(planReport('2026-10-26', 'evening')).toMatchObject({ kind: 'daily', from: '2026-10-26', prevFrom: '2026-10-24' });                 // Monday vs Saturday
     expect(planReport('2026-10-21')).toMatchObject({ kind: 'daily', from: '2026-10-21' });                                                    // evening is the default
   });
-  it('Saturday and Sunday evenings send nothing', () => {
-    expect(planReport('2026-10-24', 'evening').kind).toBe('none');
+  it('only the Sunday evening sends nothing', () => {
     expect(planReport('2026-10-25', 'evening').kind).toBe('none');
   });
   it('Monday morning: month to date until yesterday (Sunday); other mornings nothing', () => {

@@ -50,7 +50,7 @@ export async function completeInvoiceRequest(db: Db, requestId: string, invoiceI
   const now = new Date().toISOString();
 
   await db.from('invoice_requests').update({ status: 'generated', invoice_id: invoiceId, generated_at: now, generated_by: userId }).eq('id', requestId);
-  await db.from('crm_deals').update({ invoice_id: invoiceId, invoice_generated_at: now, stage: 'Invoice' }).eq('id', req.deal_id);
+  await db.from('crm_deals').update({ invoice_id: invoiceId, invoice_generated_at: now, stage: 'Invoice', stage_changed_at: now }).eq('id', req.deal_id);
   await resolveNotifications(db, req.workspace_id, 'invoice_request', requestId);
 
   const [{ data: inv }, { data: client }] = await Promise.all([
@@ -79,7 +79,7 @@ export async function onInvoicePaid(db: Db, invoiceId: string) {
   const { data: deal } = await db.from('crm_deals').select('id, workspace_id, stage, title, client_id, salesman_id, paid_at').eq('invoice_id', invoiceId).maybeSingle();
   if (!deal || deal.paid_at) return;
   const now = new Date().toISOString();
-  await db.from('crm_deals').update({ stage: 'Deal', paid_at: now }).eq('id', deal.id);
+  await db.from('crm_deals').update({ stage: 'Deal', paid_at: now, stage_changed_at: now }).eq('id', deal.id);
 
   const { data: client } = await db.from('clients').select('name').eq('id', deal.client_id).maybeSingle();
   if (deal.salesman_id) {

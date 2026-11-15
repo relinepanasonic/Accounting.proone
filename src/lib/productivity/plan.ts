@@ -6,7 +6,7 @@ import { hasData, normalizeGroup } from '@/lib/advertiser/report-utils';
 import { adSessionTarget, addDays, daysBetween, monthStart, todayJakarta } from '@/lib/kpi/calendar';
 import { assignedClients, loadKpi } from '@/lib/kpi/load';
 import type { Person } from '@/lib/productivity/activity';
-import { followUpDueDay } from '@/lib/sales/flow';
+import { FOLLOWUP_DAYS, OPEN_SALES_STAGES, followUpDueDay, stageLabel } from '@/lib/sales/flow';
 
 type Db = any;
 
@@ -124,15 +124,17 @@ async function dealTasks(db: Db, workspaceId: string, userId: string): Promise<P
       } else if (d.neg_acc_status === 'rejected') {
         tasks.push({ id: `d-${d.id}`, title: `Rework the negotiation: ${client}`, subtitle: d.neg_acc_comment ? `Sent back: ${d.neg_acc_comment}` : 'ACC sent it back', category: 'Sales', done: false, urgent: true, href: '/sales/pipeline' });
       }
-    } else if (d.stage === 'Lead' || d.stage === 'Contacted') {
-      // Follow-up every 2 days in Lead, every week in Contacted, until the card is moved to Cold Case. The proposal is a one-time task.
+    } else if (d.stage === 'Meeting Booked') {
+      // the meeting itself is in Meetings and the Today calendar: no follow-up task
+    } else if (OPEN_SALES_STAGES.includes(d.stage)) {
+      // A follow-up every few days (FOLLOWUP_DAYS) until the card moves on or to Lost. After the meeting, the proposal is a one-time task.
       const due = followUpDueDay(d);
       if (due && due <= today) {
         const late = Math.round((new Date(`${today}T12:00:00Z`).getTime() - new Date(`${due}T12:00:00Z`).getTime()) / 86400000);
-        tasks.push({ id: `f-${d.id}`, title: `Follow up: ${client}`, subtitle: `${d.stage} · every ${d.stage === 'Lead' ? '2 days' : 'week'}`, category: 'Sales', done: false, urgent: late >= 2, href: '/sales/pipeline', note: late > 0 ? `${late} d late` : 'today' });
+        tasks.push({ id: `f-${d.id}`, title: `Follow up: ${client}`, subtitle: `${stageLabel(d.stage)} · every ${FOLLOWUP_DAYS[d.stage] || 2} days`, category: 'Sales', done: false, urgent: late >= 2, href: '/sales/pipeline', note: late > 0 ? `${late} d late` : 'today' });
       }
-      if (!d.proposal_sent_at) {
-        tasks.push({ id: `p-${d.id}`, title: `Send the proposal: ${client}`, subtitle: `${d.stage} · one time`, category: 'Sales', done: false, urgent: false, href: '/sales/pipeline' });
+      if (d.stage === 'Meeting Done' && !d.proposal_sent_at) {
+        tasks.push({ id: `p-${d.id}`, title: `Send the proposal: ${client}`, subtitle: `${stageLabel(d.stage)} · one time`, category: 'Sales', done: false, urgent: false, href: '/sales/pipeline' });
       }
     }
   }

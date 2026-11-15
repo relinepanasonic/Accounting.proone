@@ -4,6 +4,7 @@ import { memo, forget } from './cache';
 import { bookedText, cancelledText, confirmedText, confirmText, freeSlots, matchSlot, MEET_DEFAULTS, movedText, noTimeText, offerSlots, parseDays, readMeetingReply, remindText, rescheduleText, shouldAskConfirm, slotCode, slotLabel, validTime, type Busy, type MeetSettings } from './meet-rules';
 import { sendToChat } from './send-any';
 import { chatLabel } from './channel';
+import { advanceChatDeal } from './pipeline';
 
 /**
  * Free consultations with the expert team (server side). The bot offers free times and books one when the lead picks it; the team can book from
@@ -131,11 +132,11 @@ export async function bookMeeting(ws: string, input: { groupId: string | null; s
   const slot = matchSlot(input.start, await availableSlots(ws, true));
   if (!slot) return fail(409, 'That time is not free any more. Pick another one.');
   const db = createAdminClient();
-  let chatName = '';
+  let chatName = ''; let chatWaId = '';
   if (input.groupId) {
     const { data: g } = await db.from('wa_groups').select('name, wa_id').eq('id', input.groupId).eq('workspace_id', ws).maybeSingle();
     if (!g) return fail(404, 'Chat not found.');
-    chatName = String((g as any).name || chatLabel((g as any).wa_id));
+    chatName = String((g as any).name || chatLabel((g as any).wa_id)); chatWaId = String((g as any).wa_id || '');
     if (await upcomingFor(input.groupId)) return fail(409, 'This chat already has a meeting booked. Cancel it first to book another time.');
   }
   const end = new Date(slot.getTime() + s.minutes * 60000);
@@ -175,6 +176,7 @@ export async function bookMeeting(ws: string, input: { groupId: string | null; s
     if (input.groupId && owner.fromSettings) await db.from('chat_state').upsert({ group_id: input.groupId, workspace_id: ws, assigned_to: owner.id, assigned_name: owner.name, updated_at: new Date().toISOString() }, { onConflict: 'group_id' });
   } else note = [note, 'No salesperson takes it in the ERP yet: pick one in Jadwal.'].filter(Boolean).join(' ');
 
+  if (input.groupId && chatWaId) await advanceChatDeal(ws, input.groupId, chatWaId, 'Meeting Booked', 'konsultasi dibooking');
   if (input.groupId) {
     await db.from('chat_notes').insert({ workspace_id: ws, group_id: input.groupId, author_id: null, author_name: input.by === 'bot' ? 'Bot' : input.by,
       body: `Konsultasi gratis dibooking: ${slotLabel(slot)}${meeting.meet_url ? `. Meet: ${meeting.meet_url}` : ''}${note ? `. ${note}` : ''}` });

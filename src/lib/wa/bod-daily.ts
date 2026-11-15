@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/api/supabase-admin';
 import { adminSection, addDays, dayOf, inRange, planReport } from '@/lib/reports/whatsapp-report';
 import { inputByDay, type InputReport } from '@/lib/advertiser/input-series';
 import { PIPELINE_STAGES } from '@/lib/sales/flow';
+import { loadInsights, type InsightsResult } from '@/lib/chat/insights-data';
 import { buildSalesBod, type SalesBod, type SalesDeal, type SalesInvoice, type SalesMeeting } from './bod-sales';
 
 /**
@@ -150,6 +151,7 @@ export interface BodDaily {
   pipeline: Pipeline;
   endings: Endings;
   sales: SalesBod | null;      // the sales page built around the pipeline (null when it could not be read)
+  asks: InsightsResult | null; // what clients asked in the chats over the last 7 days (packages and concerns); null when it could not be read
 }
 
 /** Reads everything the daily BOD PDF shows. `today` is the Jakarta day the report is made on, at 19:00, and is about. */
@@ -160,7 +162,7 @@ export async function loadBodDaily(today: string): Promise<BodDaily | null> {
   const dataDay = addDays(reportDay, -1);
   const db = createAdminClient();
 
-  const [{ data: reps }, { data: asg }, { data: clients }, { data: deals }, { data: fo }, admin, sales] = await Promise.all([
+  const [{ data: reps }, { data: asg }, { data: clients }, { data: deals }, { data: fo }, admin, sales, asks] = await Promise.all([
     db.from('advertiser_reports').select('client_id, report_date, session, store_label, data_inkubasi, data_group, data_mandiri').gte('report_date', addDays(reportDay, -SPARK_DAYS)).lte('report_date', reportDay).limit(8000),
     db.from('client_assignments').select('client_id, user_id').eq('job', 'advertising'),
     db.from('clients').select('id, name, sales_name, service_end_date'),
@@ -168,6 +170,7 @@ export async function loadBodDaily(today: string): Promise<BodDaily | null> {
     db.from('fake_order_projects').select('client_name, start_date, finished_at'),
     adminSection(db, plan, today).catch(() => null),
     loadSalesBod(today).catch((e) => { console.error('bod sales failed', e); return null; }),
+    loadAsksForBod().catch((e) => { console.error('bod asks failed', e); return null; }),
   ]);
   const reports = (reps || []).map((r: any) => ({ ...r, report_date: String(r.report_date).slice(0, 10) })) as Array<InputReport & { store_label?: string | null }>;
   const names = new Map<string, string>((clients || []).map((c: any) => [c.id as string, String(c.name || 'Client')]));
@@ -195,8 +198,15 @@ export async function loadBodDaily(today: string): Promise<BodDaily | null> {
     },
     pipeline: pipelineOf(deals || [], reportDay),
     endings: endingsOf(clients || [], today),
-    sales,
+    sales, asks,
   };
+}
+
+/** What clients asked about in the sales number's chats over the last 7 days (for the sales number's company). */
+async function loadAsksForBod(): Promise<InsightsResult | null> {
+  const { data } = await createAdminClient().from('wa_devices').select('workspace_id').eq('role', 'sales').eq('active', true).limit(1);
+  const ws = (data || [])[0]?.workspace_id as string | undefined;
+  return ws ? loadInsights(ws, 7) : null;
 }
 
 /** Reads the deals, the consultations and the invoices the sales page needs (the whole pipeline, not one month). */

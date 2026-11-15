@@ -105,6 +105,7 @@ describe('renderBodDailyPdf', () => {
     admin: { lines: [{ name: 'Vani', files: 4, total: 8, uploaded: 2, uploadedNames: ['onat.hardware', 'botanea'], pendingNames: ['mery.farma'] }], errors: [], fo: { startedOnDay: ['Client Satu'], ongoing: 3 } },
     pipeline: pipelineOf([{ salesman_name: 'Lucy', stage: 'Lead', value: 1, created_at: '2026-11-12T03:00:00Z' }], '2026-11-12'),
     endings: endingsOf([{ name: 'Client Lama', service_end_date: '2026-11-10', sales_name: 'Lucy' }, { name: 'Client Baru', service_end_date: '2026-11-20' }], '2026-11-13'),
+    asks: null,
     sales: buildSalesBod({
       deals: [
         { id: 'd1', client: 'Toko Satu', salesman_name: 'Lucy', stage: 'Negotiation', value: 3000000, created_at: '2026-11-01T03:00:00Z', stage_changed_at: '2026-11-02T03:00:00Z', proposal_sent_at: '2026-11-12T03:00:00Z' },
@@ -122,13 +123,19 @@ describe('renderBodDailyPdf', () => {
     const pages = (Buffer.from(pdf).toString('latin1').match(/\/Type\s*\/Page[^s]/g) || []).length;
     expect(pages).toBe(4);
   }, 60000);
+  it('shows what clients asked when there are chats, and still makes 4 pages', async () => {
+    const asks = { days: 7, from: '', to: '', chats: 12, messages: 40, packages: [{ key: 'juragan', label: 'Paket Juragan', chats: 6, mentions: 9, examples: [] }], concerns: [{ key: 'harga', label: 'Harga dan biaya', chats: 8, mentions: 11, examples: [] }], unmatched: 5, needs: [], handedOver: [] };
+    const pdf = await renderBodDailyPdf({ ...sample, asks });
+    const pages = (Buffer.from(pdf).toString('latin1').match(/\/Type\s*\/Page[^s]/g) || []).length;
+    expect(pages).toBe(4);
+  }, 60000);
   it('keeps the 3 pages when the sales page could not be read (sales is null)', async () => {
     const pdf = await renderBodDailyPdf({ ...sample, sales: null });
     const pages = (Buffer.from(pdf).toString('latin1').match(/\/Type\s*\/Page[^s]/g) || []).length;
     expect(pages).toBe(3);
   }, 60000);
   it('still makes the PDF when there is no data at all', async () => {
-    const empty: BodDaily = { ...sample, ads: [], totals: { sales: 0, cost: 0, roas: 0, salesSeries: [], costSeries: [], roasSeries: [] }, advertisers: [], admin: { lines: [], errors: [], fo: { startedOnDay: [], ongoing: 0 } }, pipeline: pipelineOf([], '2026-11-12'), endings: { ended: [], soon: [] }, sales: null };
+    const empty: BodDaily = { ...sample, ads: [], totals: { sales: 0, cost: 0, roas: 0, salesSeries: [], costSeries: [], roasSeries: [] }, advertisers: [], admin: { lines: [], errors: [], fo: { startedOnDay: [], ongoing: 0 } }, pipeline: pipelineOf([], '2026-11-12'), endings: { ended: [], soon: [] }, sales: null, asks: null };
     const pdf = await renderBodDailyPdf(empty);
     expect(pdf.byteLength).toBeGreaterThan(1000);
   }, 60000);

@@ -103,6 +103,30 @@ function EndingTable({ title, rows, ago, empty }: { title: string; rows: EndingC
   );
 }
 
+/** What clients asked in the chats over the last 7 days: the packages and the worries, by number of chats. */
+function AsksBlock({ a }: { a: NonNullable<BodDaily['asks']> }) {
+  const col = (title: string, rows: Array<{ label: string; chats: number }>) => (
+    <View style={{ width: '48%' }}>
+      <Text style={{ fontSize: 8, fontFamily: 'Roboto', fontWeight: 700, color: AMBER }}>{title}</Text>
+      {rows.length === 0 ? <Text style={{ fontSize: 8, color: MUTED, marginTop: 2 }}>-</Text> : rows.map((r) => (
+        <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 }}>
+          <Text style={{ fontSize: 8.5 }}>{cut(pdfText(r.label), 30)}</Text><Text style={{ fontSize: 8.5, fontFamily: 'Roboto', fontWeight: 700 }}>{r.chats} chat</Text>
+        </View>
+      ))}
+    </View>
+  );
+  return (
+    <View wrap={false}>
+      <Text style={st.h2}>Apa yang ditanyakan client (7 hari)</Text>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        {col('Paket yang paling banyak ditanya', a.packages.slice(0, 5))}
+        {col('Yang dikhawatirkan client', a.concerns.slice(0, 5))}
+      </View>
+      <Text style={st.hint}>Dihitung dari pesan calon client di chat ({a.chats} chat, {a.messages} pesan). Detail dan contoh ada di dashboard chat, halaman Statistik.</Text>
+    </View>
+  );
+}
+
 const MOVE_LABEL: Array<[keyof SalesBod['movement'], string]> = [
   ['newLeads', 'LEAD BARU'], ['meetingsBooked', 'MEETING DIBOOKING'], ['meetingsHeld', 'MEETING TERJADI'], ['noShow', 'TIDAK HADIR'],
   ['proposalsSent', 'PROPOSAL DIKIRIM'], ['invoicesRequested', 'REQUEST INVOICE'], ['invoicesSent', 'INVOICE TERKIRIM'], ['newActive', 'CLIENT AKTIF BARU'],
@@ -312,6 +336,7 @@ export function BodDailyDocument({ d }: { d: BodDaily }) {
             <Text style={{ width: '6%', fontSize: 8.5, textAlign: 'right' }}>{p.movedOnDay}</Text>
           </View>
         ))}
+        {d.asks && d.asks.messages > 0 && <AsksBlock a={d.asks} />}
         <EndingTable title={`Project sudah berakhir (${ENDING_WINDOW_DAYS} hari terakhir)`} rows={d.endings.ended} ago empty="Tidak ada project yang berakhir dalam 2 minggu terakhir." />
         <EndingTable title={`Project berakhir dalam ${ENDING_WINDOW_DAYS} hari ke depan`} rows={d.endings.soon} empty="Tidak ada project yang berakhir dalam 2 minggu ke depan." />
         <Text style={[st.hint, { marginTop: 6 }]}>BARU = deal yang dimasukkan hari ini. PINDAH = deal yang berpindah tahap hari ini. NEW New Lead, CONT Contacted, QUAL Qualified, OFFER Meeting Offered, BOOK Meeting Booked, MEET Meeting Done, NEGO Negotiation, REQ Invoice Requested, INV Invoice Sent, ACTIVE Active Client, LOST Lost.</Text>

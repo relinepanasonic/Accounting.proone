@@ -115,7 +115,7 @@ export async function autoStage(ws: string, groupId: string, waId: string, ctx: 
     // a lead that went Lost and writes again comes back as Contacted
     if (!deal && ctx.text && (st as any)?.deal_id) {
       const { data: lost } = await db.from('crm_deals').select('id').eq('id', (st as any).deal_id).eq('stage', 'Cold Case').maybeSingle();
-      if (lost && stageFor({ hasName: !!name, hasStore: !!store, replied: true, text: ctx.text, offeredTimes: false, deckSent: false }, ss.words).stage !== 'Cold Case') {
+      if (lost && !['Cold Case', 'Lost'].includes(stageFor({ hasName: !!name, hasStore: !!store, replied: true, text: ctx.text, offeredTimes: false, deckSent: false }, ss.words).stage)) {
         const now = new Date().toISOString();
         await db.from('crm_deals').update({ stage: 'Contacted', stage_changed_at: now, updated_at: now }).eq('id', (lost as any).id);
         await pipelineNote(ws, groupId, 'Pipeline: Cold Leads ke Contacted (kakak menulis lagi).');

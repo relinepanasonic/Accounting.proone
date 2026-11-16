@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/api/supabase-admin';
+import { optOutForLostDeal } from './lost-lead';
 import { lockedRefusal } from './data';
 import { chatLabel, clientPhoneOf, isMetaChat, phoneTail } from './channel';
 import { sendMedia, asDelivery } from '@/lib/wa/send-media';
@@ -152,6 +153,7 @@ export async function moveDealStage(ws: string, dealId: string, stageIn: unknown
   if (!may.ok) return fail(403, may.error);
   const now = new Date().toISOString();
   const { error } = await db.from('crm_deals').update({ stage: st.stage, stage_changed_at: now, updated_at: now }).eq('id', dealId);
+  if (!error && st.stage === 'Lost') await optOutForLostDeal(ws, dealId);       // Lost = never contacted again
   return error ? fail(500, error.message) : { ok: true };
 }
 

@@ -110,8 +110,8 @@ export async function loadPipeline(ws: string): Promise<{ deals: BoardDeal[]; st
   const since = new Date(Date.now() - 30 * 86400000).toISOString();
   const cols = 'id, title, client_id, lead_name, stage, value, salesman_id, salesman_name, created_at, stage_changed_at, invoice_id';
   const [{ data: open }, { data: recent }] = await Promise.all([
-    db.from('crm_deals').select(cols).eq('workspace_id', ws).not('stage', 'in', '("Deal","Cold Case","Archived")').order('created_at', { ascending: false }).limit(1500),
-    db.from('crm_deals').select(cols).eq('workspace_id', ws).or(`and(stage.eq.Deal,stage_changed_at.gte.${since}),stage.eq.Cold Case`).order('stage_changed_at', { ascending: false }).limit(300),
+    db.from('crm_deals').select(cols).eq('workspace_id', ws).not('stage', 'in', '("Deal","Cold Case","Lost","Archived")').order('created_at', { ascending: false }).limit(1500),
+    db.from('crm_deals').select(cols).eq('workspace_id', ws).or(`and(stage.eq.Deal,stage_changed_at.gte.${since}),stage.eq.Cold Case,stage.eq.Lost`).order('stage_changed_at', { ascending: false }).limit(300),
   ]);
   const rows = [...((open || []) as any[]), ...((recent || []) as any[])];
   if (!rows.length) return { deals: [], stages: [] };

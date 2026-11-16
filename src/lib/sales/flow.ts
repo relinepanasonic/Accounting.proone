@@ -3,12 +3,12 @@
 
 /**
  * The pipeline, built around the goal of every chat: the free consultation (meeting), then the sale.
- *   New Lead > Contacted > Qualified > Warm > Meeting Offered > Meeting Booked > Meeting Done > Negotiation > Invoice Requested > Invoice Sent > Active Client, and Cold Leads.
+ *   New Lead > Contacted > Qualified > Warm > Meeting Offered > Meeting Booked > Meeting Done > Negotiation > Invoice Requested > Invoice Sent > Active Client, Cold Leads (went quiet) and Lost (said no: never contacted again).
  * The STORED names of the stages that existed before are kept, so old deals, invoices and reports keep working; only what people read changed:
  *   'Lead' is shown as "New Lead", 'Invoice' (the invoice exists, not paid yet) as "Invoice Sent", 'Deal' (paid) as "Active Client", 'Cold Case' as "Cold Leads" (no answer after the follow-ups, or not now).
  * This list is the single source: the ERP board, the chat dashboard, the planner, the KPI and the BOD report all read it.
  */
-export const PIPELINE_STAGES = ['Lead', 'Contacted', 'Qualified', 'Warm', 'Meeting Offered', 'Meeting Booked', 'Meeting Done', 'Negotiation', 'Invoice Requested', 'Invoice', 'Deal', 'Cold Case'] as const;
+export const PIPELINE_STAGES = ['Lead', 'Contacted', 'Qualified', 'Warm', 'Meeting Offered', 'Meeting Booked', 'Meeting Done', 'Negotiation', 'Invoice Requested', 'Invoice', 'Deal', 'Cold Case', 'Lost'] as const;
 export type PipelineStage = (typeof PIPELINE_STAGES)[number];
 
 export const STAGE_LABEL: Record<string, string> = { Lead: 'New Lead', Invoice: 'Invoice Sent', Deal: 'Active Client', 'Cold Case': 'Cold Leads' };
@@ -28,10 +28,11 @@ export const STAGE_HINT: Record<string, string> = {
   Invoice: 'Invoice made, waiting for payment',
   Deal: 'Paid: the project starts',
   'Cold Case': 'Quiet after 3 follow-ups, or not now',
+  Lost: 'Said no or asked not to be contacted: never messaged again',
 };
 
 /** Stages a salesman may drag a card between by hand. The three after Negotiation are reached through the invoice request and the payment only. */
-export const MANUAL_STAGES: string[] = ['Lead', 'Contacted', 'Qualified', 'Warm', 'Meeting Offered', 'Meeting Booked', 'Meeting Done', 'Negotiation', 'Cold Case'];
+export const MANUAL_STAGES: string[] = ['Lead', 'Contacted', 'Qualified', 'Warm', 'Meeting Offered', 'Meeting Booked', 'Meeting Done', 'Negotiation', 'Cold Case', 'Lost'];
 /** Set by the flow only: the invoice request, the invoice, the payment. A card in one of these never moves by hand. */
 export const LOCKED_STAGES: string[] = ['Invoice Requested', 'Invoice', 'Deal'];
 /** Before the meeting: the stages the bot and the follow-ups work on. */

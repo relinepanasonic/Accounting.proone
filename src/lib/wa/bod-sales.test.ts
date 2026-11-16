@@ -74,7 +74,7 @@ describe('show rate and the whole page', () => {
   it('builds everything from empty input without errors', () => {
     const b = buildSalesBod({ deals: [], meetings: [], invoices: [], paymentsToday: { count: 0, amount: 0 } }, DAY);
     expect(b.movement.newLeads).toBe(0);
-    expect(b.funnel).toHaveLength(12);
+    expect(b.funnel).toHaveLength(13);
     expect(b.stuck).toEqual([]);
   });
 });

@@ -1,4 +1,5 @@
 import { isForward } from '@/lib/sales/flow';
+import { doNotContact } from './do-not-contact';
 
 /**
  * Which pipeline stage a chat's lead is in, decided from what the lead did and said. Pure, so the rules are tested.
@@ -11,7 +12,7 @@ export interface StageWords { warm: string[]; negotiation: string[]; lost: strin
 export const DEFAULT_WORDS: StageWords = {
   warm: ['harga', 'berapa', 'biaya', 'tarif', 'paket', 'promo', 'diskon', 'deck', 'proposal', 'company profile', 'portofolio', 'cara kerja', 'caranya', 'gimana cara', 'mau coba', 'tertarik', 'minat', 'cocok'],
   negotiation: ['mau daftar', 'mau order', 'mau deal', 'mau bayar', 'siap bayar', 'transfer', 'minta invoice', 'minta penawaran', 'bisa nego', 'nego', 'kurangin', 'bisa kurang', 'ambil paket', 'jadi ambil', 'deal'],
-  lost: ['tidak jadi', 'ga jadi', 'gak jadi', 'nggak jadi', 'belum minat', 'tidak minat', 'ga minat', 'gak minat', 'ga dulu', 'gak dulu', 'nanti dulu', 'sudah ada yang lain', 'stop chat'],
+  lost: ['tidak jadi', 'ga jadi', 'gak jadi', 'nggak jadi', 'belum minat', 'ga dulu', 'gak dulu', 'nanti dulu', 'sudah ada yang lain'],
 };
 
 const norm = (t: string) => ` ${String(t ?? '').toLowerCase().replace(/[^\p{L}\p{N} ]/gu, ' ').replace(/\s+/g, ' ').trim()} `;
@@ -47,6 +48,7 @@ export interface StageCall { stage: string; why: string }
  * Booking, the meeting and the invoice are not decided here: they come from the meeting and the invoice flow.
  */
 export function stageFor(f: StageFacts, w: StageWords): StageCall {
+  if (doNotContact(f.text)) return { stage: 'Lost', why: 'kakak minta tidak dihubungi lagi / tidak berminat' };
   if (hasWord(f.text, w.lost)) return { stage: 'Cold Case', why: 'kakak bilang belum jadi / belum minat' };
   if (hasWord(f.text, w.negotiation)) return { stage: 'Negotiation', why: 'kakak minta daftar / invoice / nego' };
   if (f.offeredTimes) return { stage: 'Meeting Offered', why: 'waktu konsultasi sudah ditawarkan' };

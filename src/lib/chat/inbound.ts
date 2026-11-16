@@ -11,6 +11,8 @@ import { handleNudgeReply } from './nudges';
 import { autoStage } from './pipeline';
 import { notALeadReason } from './not-a-lead';
 import { archiveJunkLead } from './junk-leads';
+import { doNotContact } from './do-not-contact';
+import { markLostLead } from './lost-lead';
 import { createAdminClient } from '@/lib/api/supabase-admin';
 
 /**
@@ -39,6 +41,8 @@ export async function afterSalesMessage(device: BotDevice, parsed: ParsedWaMessa
   }
   // "STOP": no more broadcasts for this person, said once; no bot answer to it
   if (!parsed.isGroup && !parsed.isFromMe && isStopWord(parsed.body)) { await optOut(device.workspace_id, groupId, parsed.chatId).catch((e) => console.error('opt-out failed', e)); return; }
+  // a clear "no" ("jangan ganggu saya", "tidak minat"): never contacted again, the deal goes to Lost, the bot is quiet
+  if (!parsed.isGroup && !parsed.isFromMe && doNotContact(parsed.body)) { await markLostLead(device.workspace_id, groupId, parsed.chatId, 'kakak minta tidak dihubungi lagi / tidak berminat'); return; }
   // a short reply about the lead's meeting (YA, GANTI, BATAL, or the number of a new time) is answered here, not by the bot
   if (!parsed.isGroup && !parsed.isFromMe && parsed.body && (await handleMeetingReply(device.workspace_id, groupId, parsed.chatId, parsed.body).catch((e) => { console.error('meeting reply failed', e); return false; }))) return;
   // the number of a time from a follow-up nudge books it

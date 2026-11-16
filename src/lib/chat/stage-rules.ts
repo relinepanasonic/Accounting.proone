@@ -57,5 +57,31 @@ export function stageFor(f: StageFacts, w: StageWords): StageCall {
   return { stage: 'Lead', why: 'chat pertama' };
 }
 
+export interface LeadOwner { id: string; name: string }
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** The rotation list as saved: only real ids, each once, at most 10, a name for each. */
+export function cleanOwners(raw: unknown): LeadOwner[] {
+  const seen = new Set<string>();
+  const out: LeadOwner[] = [];
+  for (const x of Array.isArray(raw) ? raw : []) {
+    const id = String((x as any)?.id ?? '').toLowerCase();
+    if (!UUID.test(id) || seen.has(id)) continue;
+    seen.add(id);
+    out.push({ id, name: String((x as any)?.name ?? '').replace(/\s+/g, ' ').trim().slice(0, 60) || 'Sales' });
+  }
+  return out.slice(0, 10);
+}
+
+/**
+ * Who gets the next new lead: whoever in the list got the FEWEST new leads in the last 30 days (a tie goes to the one higher in the list), so every
+ * salesperson gets the same number. `counts` = new leads per salesperson id. Null when the list is empty.
+ */
+export function nextOwner(owners: LeadOwner[], counts: Record<string, number>): LeadOwner | null {
+  let best: LeadOwner | null = null;
+  for (const o of owners) if (!best || (counts[o.id] ?? 0) < (counts[best.id] ?? 0)) best = o;
+  return best;
+}
+
 /** Should this call move the deal? Forward only, except that a lead who writes again after Lost comes back as Contacted (handled by the caller). */
 export const movesDeal = (current: string, call: StageCall) => isForward(current, call.stage);

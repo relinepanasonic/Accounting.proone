@@ -2,7 +2,7 @@ import { createAdminClient } from '@/lib/api/supabase-admin';
 import { isForward, LOCKED_STAGES, stageLabel } from '@/lib/sales/flow';
 import { phoneTail } from './channel';
 import { createLeadFromChat } from './crm-data';
-import { stageFor, wordsOf, parseWords, type StageWords } from './stage-rules';
+import { stageFor, wordsOf, parseWords, cleanOwners, nextOwner, type LeadOwner, type StageWords } from './stage-rules';
 
 /**
  * The ERP deal of a chat, and the automatic moves. One pipeline for the ERP and the chat dashboard: both read and write crm_deals, so there is
@@ -55,18 +55,27 @@ export async function advanceChatDeal(ws: string, groupId: string | null, waId: 
 }
 
 // ---------------------------------------------------------------- the AI puts leads in the pipeline
-export interface StageSettings { auto: boolean; words: StageWords }
+export interface StageSettings { auto: boolean; words: StageWords; owners: LeadOwner[] }
 
 export async function stageSettings(ws: string): Promise<StageSettings> {
   const { data } = await createAdminClient().from('wa_bot_config').select('*').eq('workspace_id', ws).maybeSingle();
   const r: any = data || {};
-  return { auto: r.stage_auto === true, words: wordsOf(r.stage_words) };
+  return { auto: r.stage_auto === true, words: wordsOf(r.stage_words), owners: cleanOwners(r.lead_owners) };
 }
 
-export async function saveStageSettings(ws: string, p: { auto?: unknown; words?: unknown }): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+export async function saveStageSettings(ws: string, p: { auto?: unknown; words?: unknown; owners?: unknown }): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
   const row: Record<string, unknown> = { workspace_id: ws, updated_at: new Date().toISOString() };
   if (typeof p.auto === 'boolean') row.stage_auto = p.auto;
   if (p.words && typeof p.words === 'object') { const w = p.words as Record<string, unknown>; row.stage_words = { warm: parseWords(w.warm), negotiation: parseWords(w.negotiation), lost: parseWords(w.lost) }; }
+  if (p.owners !== undefined) {
+    // only people of this company who may use the chat (a name or id from outside is dropped)
+    const wanted = cleanOwners(p.owners);
+    if (wanted.length) {
+      const { data: mem } = await createAdminClient().from('workspace_members').select('user_id').eq('workspace_id', ws).in('user_id', wanted.map((o) => o.id));
+      const ok = new Set(((mem || []) as Array<{ user_id: string }>).map((m) => m.user_id));
+      row.lead_owners = wanted.filter((o) => ok.has(o.id));
+    } else row.lead_owners = [];
+  }
   const { error } = await createAdminClient().from('wa_bot_config').upsert(row, { onConflict: 'workspace_id' });
   return error ? { ok: false, status: 500, error: /column/.test(error.message) ? 'The pipeline automation is not in the database yet: run the SQL first.' : error.message } : { ok: true };
 }
@@ -115,12 +124,24 @@ export async function autoStage(ws: string, groupId: string, waId: string, ctx: 
     }
     if (!deal) {
       if (!name && !store) return null;
-      // the owner: the chat's salesperson, else the default one from Jadwal, else nobody (the lead is made without an owner and a person takes it)
-      const ownerId = ((st as any)?.assigned_to || (cfg as any)?.meet_owner_id || null) as string | null;
-      const ownerName = ownerId ? ((st as any)?.assigned_to ? String((st as any).assigned_name || 'Sales') : String((cfg as any)?.meet_owner_name || 'Sales')) : null;
+      // the owner: the chat's salesperson; else the next one in the rotation (the fewest new leads in 30 days); else the default one from Jadwal; else nobody
+      // (the lead is made without an owner and a person takes it). A chat nobody holds is given to the person who gets the lead.
+      let ownerId = ((st as any)?.assigned_to || null) as string | null;
+      let ownerName: string | null = ownerId ? String((st as any).assigned_name || 'Sales') : null;
+      let fromRotation = false;
+      if (!ownerId && ss.owners.length) {
+        const since = new Date(Date.now() - 30 * 86400000).toISOString();
+        const { data: made30 } = await db.from('crm_deals').select('salesman_id').in('salesman_id', ss.owners.map((o) => o.id)).gte('created_at', since).limit(5000);
+        const counts: Record<string, number> = {};
+        for (const d of (made30 || []) as Array<{ salesman_id: string }>) counts[d.salesman_id] = (counts[d.salesman_id] ?? 0) + 1;
+        const next = nextOwner(ss.owners, counts);
+        if (next) { ownerId = next.id; ownerName = next.name; fromRotation = true; }
+      }
+      if (!ownerId && (cfg as any)?.meet_owner_id) { ownerId = (cfg as any).meet_owner_id; ownerName = String((cfg as any)?.meet_owner_name || 'Sales'); }
       const made = await createLeadFromChat(ws, groupId, { name: name || undefined, title: 'Lead dari chat', store: store || undefined, salesmanId: ownerId || undefined }, ownerId ? { userId: ownerId, name: ownerName || 'Sales', role: 'founder' } : null);
       if (!made.ok) { console.error('auto lead failed', made.error); return null; }
       deal = { id: made.dealId, stage: 'Lead', clientId: made.clientId };
+      if (fromRotation && ownerId) await db.from('chat_state').upsert({ group_id: groupId, workspace_id: ws, assigned_to: ownerId, assigned_name: ownerName, updated_at: new Date().toISOString() }, { onConflict: 'group_id' }).then(() => undefined, () => undefined);
       await pipelineNote(ws, groupId, ownerName ? `Pipeline: lead baru dibuat di ERP untuk ${ownerName}.` : 'Pipeline: lead baru dibuat di ERP, belum ada sales yang memegang. Ambil dari Pipeline.');
     }
 

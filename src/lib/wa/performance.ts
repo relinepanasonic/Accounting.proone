@@ -2,7 +2,7 @@ import { createAdminClient } from '@/lib/api/supabase-admin';
 import { buildWhatsAppReport, currentSlot, type ReportSlot } from '@/lib/reports/whatsapp-report';
 import { signedReportUrl, SHARE_TTL_SECONDS } from '@/lib/reports/signed-url';
 import { sendWhatsApp } from './send';
-import type { ReportPdf } from './report-files';
+import { sendReportPdfs, type ReportPdf } from './report-files';
 import { loadBodDaily } from './bod-daily';
 import { renderBodDailyPdf } from './bod-daily-pdf';
 import { dmy } from '@/lib/reports/whatsapp-report';
@@ -65,17 +65,21 @@ export async function sendPerformance(workspaceId: string, opts: { trigger: 'cro
   if (opts.trigger === 'test') phones = phones.filter((p) => (opts.onlyPhones || []).includes(p));
   if (phones.length === 0) return { sent: false, reason: opts.trigger === 'test' ? 'That number is not an active recipient.' : 'No active recipient.', kind: report.kind, date: report.date };
 
-  // The BOD reports always go as a message with a LINK to the PDF: the regular Fonnte package accepts a file but never delivers it, so nothing is lost
-  // this way. The daily one is a 4-page PDF (Advertising, Admin, Sales, Pipeline) kept in storage; the weekly and monthly ones are linked in the message.
+  // The BOD reports go as PDF FILES when "PDF files" is on (WA Control > Founder): the daily 4-page PDF (Advertising, Admin, Sales, Pipeline, Insight Chat),
+  // and one PDF per company for the weekly and monthly. A file WhatsApp refuses falls back to its link, and a PDF that cannot be made falls back to the
+  // text report, so a report is never lost. With "PDF files" off, the links go instead.
+  const { data: settings } = await db.from('wa_settings').select('send_files').eq('workspace_id', workspaceId).maybeSingle();
+  const asFile = settings?.send_files === true;
   let r: { ok: boolean; detail: string };
   let sentText = report.message;
   if (report.kind === 'daily') {
-    // If the PDF cannot be made, the text report goes instead, so it is never lost.
-    r = await sendDailyPdf(phones, report.date).catch((e: any) => ({ ok: false, detail: `PDF failed: ${String(e?.message || e).slice(0, 160)}` }));
-    if (r.ok) sentText = `Daily BOD report (link) ${report.date}`;
+    r = await sendDailyPdf(phones, report.date, { asFile }).catch((e: any) => ({ ok: false, detail: `PDF failed: ${String(e?.message || e).slice(0, 160)}` }));
+    if (r.ok) sentText = `Daily BOD report (${asFile ? 'PDF' : 'link'}) ${report.date}`;
     else { const t = await sendWhatsApp(phones, report.message); r = { ok: t.ok, detail: `${r.detail} Sent the text report instead: ${t.detail}` }; }
   } else {
-    r = await sendWhatsApp(phones, report.message);
+    r = asFile && report.files && report.files.length
+      ? await sendReportPdfs(phones, report.headline || '', report.files)
+      : await sendWhatsApp(phones, report.message);
   }
   await db.from('wa_sends').insert({ workspace_id: workspaceId, kind: report.kind, report_date: report.date, trigger: opts.trigger, recipients: phones, ok: r.ok, detail: r.detail, text: sentText });
   return { sent: r.ok, reason: r.ok ? undefined : r.detail, kind: report.kind, date: report.date, recipients: phones.length, detail: r.detail };
@@ -85,21 +89,33 @@ export async function sendPerformance(workspaceId: string, opts: { trigger: 'cro
 export const DAILY_LINK_DAYS = 90;
 
 /**
- * Builds the daily BOD PDF for `today`, keeps it in the private "reports" bucket (reports/bod-daily/<year>/<month>/), and sends the title with a link to it.
- * The link shows the numbers as they were when the report went out.
+ * Builds the daily BOD PDF for `today` and keeps it in the private "reports" bucket (reports/bod-daily/<year>/<month>/). With `asFile` it is sent as a
+ * PDF FILE with the title as the caption; if WhatsApp refuses the file, the title and a link to the kept copy go instead. Without `asFile`, the link only.
  */
-export async function sendDailyPdf(phones: string[], today: string): Promise<{ ok: boolean; detail: string }> {
+export async function sendDailyPdf(phones: string[], today: string, opts: { asFile?: boolean } = {}): Promise<{ ok: boolean; detail: string }> {
   const data = await loadBodDaily(today);
   if (!data) return { ok: false, detail: 'There is no daily report for this day.' };
   const pdf = await renderBodDailyPdf(data);
   const name = `Daily-BOD-Report-${data.reportDay}.pdf`;
+  const title = `Daily Report ${dmy(data.reportDay)}`;
   const path = `bod-daily/${data.reportDay.slice(0, 4)}/${data.reportDay.slice(5, 7)}/${name}`;
   const storage = createAdminClient().storage;
   let up = await storage.from('reports').upload(path, pdf, { contentType: 'application/pdf', upsert: true });
   if (up.error && /bucket/i.test(up.error.message)) { await storage.createBucket('reports', { public: false }); up = await storage.from('reports').upload(path, pdf, { contentType: 'application/pdf', upsert: true }); }
+
+  if (opts.asFile) {
+    const f = await sendWhatsApp(phones, title, { file: { data: new Uint8Array(pdf), filename: name, contentType: 'application/pdf' } });
+    if (f.ok) return { ok: true, detail: `PDF sent: ${name}.` };
+    if (up.error) return { ok: false, detail: `PDF refused: ${f.detail}` };
+    const link = await storage.from('reports').createSignedUrl(path, DAILY_LINK_DAYS * 86400);
+    if (!link.data?.signedUrl) return { ok: false, detail: `PDF refused: ${f.detail}` };
+    const l = await sendWhatsApp(phones, `${title}\n${link.data.signedUrl}`);
+    return { ok: l.ok, detail: l.ok ? `PDF refused (${f.detail}); the link was sent instead.` : `PDF and link refused: ${l.detail}` };
+  }
+
   if (up.error) return { ok: false, detail: `The PDF could not be stored: ${up.error.message}` };
   const { data: signed, error } = await storage.from('reports').createSignedUrl(path, DAILY_LINK_DAYS * 86400);
   if (error || !signed?.signedUrl) return { ok: false, detail: `The PDF link could not be made: ${error?.message || 'unknown error'}` };
-  const r = await sendWhatsApp(phones, `Daily Report ${dmy(data.reportDay)}\n${signed.signedUrl}`);
+  const r = await sendWhatsApp(phones, `${title}\n${signed.signedUrl}`);
   return { ok: r.ok, detail: r.ok ? `Link sent: ${name}.` : `Link refused: ${r.detail}` };
 }

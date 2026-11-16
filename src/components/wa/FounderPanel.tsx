@@ -51,7 +51,7 @@ export function FounderPanel({ recipients, autoSend, sends, tokenSet, sendFiles 
             </button>
           </div>
         </div>
-        <p className="text-[11px] text-zinc-500">Daily at 19:00 Monday to Saturday (that day, a link to the PDF to Nico and Herlan); weekly on Monday at 08:00 (the month so far), monthly on the first Monday of a month. Counted from the ERP data; the advice at the end is written by Prof (AI).</p>
+        <p className="text-[11px] text-zinc-500">Daily at 19:00 Monday to Saturday (that day, as a PDF to Nico and Herlan); weekly on Monday at 08:00 (the month so far), monthly on the first Monday of a month. Counted from the ERP data; the advice at the end is written by Prof (AI).</p>
         {msg && <p className="mt-2 text-xs text-zinc-300">{msg}</p>}
         {preview?.send && (
           <div className="mt-4 grid gap-4 xl:grid-cols-2">

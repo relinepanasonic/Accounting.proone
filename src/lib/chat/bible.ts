@@ -200,15 +200,15 @@ export async function askBible(ws: string, question: string): Promise<{ ok: true
 }
 
 // ---------------------------------------------------------------- the bot's settings (also edited here, so nobody has to open the ERP)
-export interface BotSettings { enabled: boolean; media_enabled: boolean; persona_name: string; company_name: string; hours_from: string; hours_to: string; max_replies: number; knowledge: string; social_script: string; deck_url: string; stage_auto: boolean; stage_words: { warm: string; negotiation: string; lost: string } }
-const DEFAULTS: BotSettings = { enabled: false, media_enabled: false, persona_name: 'Fefe', company_name: 'Prof Toko Online', hours_from: '08:00', hours_to: '21:00', max_replies: 4, knowledge: '', social_script: '', deck_url: '', stage_auto: false, stage_words: { warm: '', negotiation: '', lost: '' } };
+export interface BotSettings { enabled: boolean; media_enabled: boolean; persona_name: string; company_name: string; hours_from: string; hours_to: string; max_replies: number; knowledge: string; social_script: string; deck_url: string; stage_auto: boolean; stage_words: { warm: string; negotiation: string; lost: string }; stage_owners: Array<{ id: string; name: string }> }
+const DEFAULTS: BotSettings = { enabled: false, media_enabled: false, persona_name: 'Fefe', company_name: 'Prof Toko Online', hours_from: '08:00', hours_to: '21:00', max_replies: 4, knowledge: '', social_script: '', deck_url: '', stage_auto: false, stage_words: { warm: '', negotiation: '', lost: '' }, stage_owners: [] };
 
 export async function getSettings(ws: string): Promise<BotSettings> {
   const { data } = await createAdminClient().from('wa_bot_config').select('*').eq('workspace_id', ws).maybeSingle();
   const base = { ...DEFAULTS, ...Object.fromEntries(Object.entries((data as any) || {}).filter(([k]) => k in DEFAULTS)) } as BotSettings;
   const ps = await stageSettings(ws);
   const join = (w: string[]) => w.join(', ');
-  return { ...base, social_script: await loadSocialScript(ws), stage_auto: ps.auto, stage_words: { warm: join(ps.words.warm), negotiation: join(ps.words.negotiation), lost: join(ps.words.lost) } };
+  return { ...base, social_script: await loadSocialScript(ws), stage_auto: ps.auto, stage_owners: ps.owners, stage_words: { warm: join(ps.words.warm), negotiation: join(ps.words.negotiation), lost: join(ps.words.lost) } };
 }
 
 export async function saveSettings(ws: string, patch: Partial<BotSettings>, by: Who | null = null): Promise<{ ok: true } | Fail> {
@@ -222,8 +222,8 @@ export async function saveSettings(ws: string, patch: Partial<BotSettings>, by: 
   if (patch.hours_to !== undefined) { const v = time(patch.hours_to); if (!v) return fail(400, 'Closing time must look like 21:00.'); row.hours_to = v; }
   if (patch.max_replies !== undefined) { const n = Math.round(Number(patch.max_replies)); if (!(n >= 1 && n <= 10)) return fail(400, 'Messages per chat must be 1 to 10.'); row.max_replies = n; }
   if (typeof patch.knowledge === 'string') row.knowledge = patch.knowledge.slice(0, 12000);
-  if (typeof patch.stage_auto === 'boolean' || patch.stage_words) {
-    const r = await saveStageSettings(ws, { auto: patch.stage_auto, words: patch.stage_words });
+  if (typeof patch.stage_auto === 'boolean' || patch.stage_words || patch.stage_owners) {
+    const r = await saveStageSettings(ws, { auto: patch.stage_auto, words: patch.stage_words, owners: patch.stage_owners });
     if (!r.ok) return r;
   }
   if (typeof patch.deck_url === 'string') {
@@ -244,6 +244,7 @@ export async function saveSettings(ws: string, patch: Partial<BotSettings>, by: 
   if (typeof patch.knowledge === 'string') what.push('The script was saved');
   if (typeof patch.stage_auto === 'boolean') what.push(patch.stage_auto ? 'Pipeline automation was switched ON' : 'Pipeline automation was switched OFF');
   if (patch.stage_words) what.push('The pipeline trigger words were saved');
+  if (patch.stage_owners) what.push(`New leads are now shared between ${patch.stage_owners.map((o) => o.name).join(', ') || 'nobody'}`);
   if (typeof patch.deck_url === 'string') what.push(patch.deck_url.trim() ? 'The sales deck link was saved' : 'The sales deck link was removed');
   if (typeof patch.social_script === 'string') what.push('The Instagram & Messenger script was saved');
   if (['persona_name', 'company_name', 'hours_from', 'hours_to', 'max_replies'].some((k) => (patch as any)[k] !== undefined)) what.push('The name, hours or message limit were saved');

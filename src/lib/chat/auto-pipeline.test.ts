@@ -23,7 +23,7 @@ vi.mock('@/lib/api/supabase-admin', () => ({
 const createLead = vi.fn();
 vi.mock('./crm-data', () => ({ createLeadFromChat: (...a: unknown[]) => createLead(...a) }));
 import { autoStage } from './pipeline';
-import { DEFAULT_WORDS, hasWord, parseWords, stageFor, wordsOf } from './stage-rules';
+import { cleanOwners, DEFAULT_WORDS, hasWord, nextOwner, parseWords, stageFor, wordsOf } from './stage-rules';
 
 const written = (t: string, op?: string) => writes.filter((w) => w.table === t && (!op || w.op === op)).map((w) => w.row);
 const facts = { hasName: false, hasStore: false, replied: false, text: '', offeredTimes: false, deckSent: false };
@@ -102,5 +102,38 @@ describe('autoStage', () => {
     rows.crm_deals = { id: 'd1', stage: 'Warm', client_id: 'c1' };
     expect(await autoStage('w1', 'g1', 'ig:123', { text: 'tidak jadi ya kak' })).toBe('Cold Case');
     expect(written('chat_notes', 'insert').pop().body).toContain('Warm ke Lost');
+  });
+});
+
+const HERLAN = { id: 'f7125e06-59f9-4d8d-8114-b54c47388454', name: 'Herlan' };
+const VELLY = { id: '0a1b2c3d-1111-4222-8333-444455556666', name: 'Velly' };
+
+describe('sharing new leads in turn', () => {
+  it('the person with the fewest new leads in 30 days gets the next one; a tie goes to the one higher in the list', () => {
+    expect(nextOwner([HERLAN, VELLY], {})).toEqual(HERLAN);
+    expect(nextOwner([HERLAN, VELLY], { [HERLAN.id]: 1 })).toEqual(VELLY);
+    expect(nextOwner([HERLAN, VELLY], { [HERLAN.id]: 3, [VELLY.id]: 3 })).toEqual(HERLAN);
+    expect(nextOwner([HERLAN, VELLY], { [HERLAN.id]: 2, [VELLY.id]: 1 })).toEqual(VELLY);
+    expect(nextOwner([], {})).toBeNull();
+  });
+  it('the saved list keeps real ids only, each once, with a name', () => {
+    expect(cleanOwners([HERLAN, HERLAN, { id: 'not-an-id', name: 'X' }, { id: VELLY.id }, null])).toEqual([HERLAN, { id: VELLY.id, name: 'Sales' }]);
+    expect(cleanOwners('nope')).toEqual([]);
+  });
+  it('autoStage gives the new lead to the next person in the list, and the chat to them too', async () => {
+    rows.wa_bot_config = { stage_auto: true, lead_owners: [HERLAN, VELLY] };
+    rows.crm_deals = [{ salesman_id: HERLAN.id }];                      // Herlan already got one: Velly is next
+    await autoStage('w1', 'g1', '628111000001', { text: 'halo' });
+    expect(createLead.mock.calls[0][2]).toMatchObject({ salesmanId: VELLY.id });
+    expect(createLead.mock.calls[0][3]).toMatchObject({ userId: VELLY.id, name: 'Velly' });
+    expect(written('chat_state', 'upsert').some((r) => r.assigned_to === VELLY.id)).toBe(true);
+    expect(written('chat_notes', 'insert').map((n) => n.body).join(' ')).toContain('untuk Velly');
+  });
+  it('a chat that already has a salesperson keeps them; the rotation is not used', async () => {
+    rows.wa_bot_config = { stage_auto: true, lead_owners: [HERLAN, VELLY] };
+    rows.chat_state = { assigned_to: HERLAN.id, assigned_name: 'Herlan' };
+    rows.crm_deals = [{ salesman_id: HERLAN.id }, { salesman_id: HERLAN.id }];
+    await autoStage('w1', 'g1', '628111000001', { text: 'halo' });
+    expect(createLead.mock.calls[0][3]).toMatchObject({ userId: HERLAN.id });
   });
 });

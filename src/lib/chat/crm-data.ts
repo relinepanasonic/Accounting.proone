@@ -91,7 +91,7 @@ const tail9 = phoneTail;
  * Creates the lead in the ERP from this chat: when the number is not a client yet, a prospect client (with the chat's phone and lead source) is made,
  * then a deal in the stage "Lead" owned by the chosen salesperson (or the person who pressed the button). Like the ERP's own "New lead".
  */
-export async function createLeadFromChat(ws: string, groupId: string, input: LeadInput, by: Who): Promise<{ ok: true; dealId: string; clientId: string; newClient: boolean } | Fail> {
+export async function createLeadFromChat(ws: string, groupId: string, input: LeadInput, by: Who | null): Promise<{ ok: true; dealId: string; clientId: string; newClient: boolean } | Fail> {
   const chat = await chatOf(ws, groupId);
   if (!chat) return fail(404, 'Chat not found.');
   const c = cleanLeadInput(input, chat.name || chatLabel(chat.wa_id));
@@ -99,10 +99,14 @@ export async function createLeadFromChat(ws: string, groupId: string, input: Lea
   const db = createAdminClient();
 
   // who owns the deal: a salesperson always owns their own; owners and admins may pick someone
-  let salesmanId = by.userId;
-  if (c.value.salesmanId && by.role !== 'sales') salesmanId = c.value.salesmanId;
-  const { data: prof } = await db.from('profiles').select('full_name, email').eq('id', salesmanId).maybeSingle();
-  const salesmanName = (prof as any)?.full_name || String((prof as any)?.email || '').split('@')[0] || by.name;
+  // (by = null: the automatic lead of the bot when nobody is assigned and no default salesperson is set: it has no owner, and a person takes it from the pipeline)
+  let salesmanId: string | null = by ? by.userId : null;
+  if (by && c.value.salesmanId && by.role !== 'sales') salesmanId = c.value.salesmanId;
+  let salesmanName: string | null = null;
+  if (salesmanId) {
+    const { data: prof } = await db.from('profiles').select('full_name, email').eq('id', salesmanId).maybeSingle();
+    salesmanName = (prof as any)?.full_name || String((prof as any)?.email || '').split('@')[0] || by?.name || null;
+  }
 
   // the client: the one with this number, or a new prospect
   const { data: clients } = await db.from('clients').select('id, name, phone').eq('workspace_id', ws).not('phone', 'is', null).limit(3000);
@@ -113,7 +117,7 @@ export async function createLeadFromChat(ws: string, groupId: string, input: Lea
     const { data: st } = await db.from('chat_state').select('source_label, source_channel, first_message, first_message_at').eq('group_id', groupId).maybeSingle();
     const s = st as any;
     const { data: made, error } = await db.from('clients').insert({
-      workspace_id: ws, name: c.value.name, phone: clientPhoneOf(chat.wa_id), store_name: c.value.store, contact_type: 'client', is_prospect: true, created_by: by.userId,
+      workspace_id: ws, name: c.value.name, phone: clientPhoneOf(chat.wa_id), store_name: c.value.store, contact_type: 'client', is_prospect: true, created_by: by ? by.userId : null,
       sales_name: salesmanName,
       lead_source: s?.source_label ?? null, lead_channel: s?.source_channel && s.source_channel !== 'unknown' ? s.source_channel : null,
       first_contact_message: s?.first_message ?? null, first_contact_at: s?.first_message_at ?? null,

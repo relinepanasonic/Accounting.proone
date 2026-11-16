@@ -115,13 +115,13 @@ export async function autoStage(ws: string, groupId: string, waId: string, ctx: 
     }
     if (!deal) {
       if (!name && !store) return null;
-      const ownerId = (st as any)?.assigned_to || (cfg as any)?.meet_owner_id;
-      if (!ownerId) return null;      // nobody to own the lead yet: pick a salesperson in Jadwal
-      const ownerName = (st as any)?.assigned_to ? String((st as any).assigned_name || 'Sales') : String((cfg as any)?.meet_owner_name || 'Sales');
-      const made = await createLeadFromChat(ws, groupId, { name: name || undefined, title: 'Lead dari chat', store: store || undefined, salesmanId: ownerId }, { userId: ownerId, name: ownerName, role: 'founder' });
+      // the owner: the chat's salesperson, else the default one from Jadwal, else nobody (the lead is made without an owner and a person takes it)
+      const ownerId = ((st as any)?.assigned_to || (cfg as any)?.meet_owner_id || null) as string | null;
+      const ownerName = ownerId ? ((st as any)?.assigned_to ? String((st as any).assigned_name || 'Sales') : String((cfg as any)?.meet_owner_name || 'Sales')) : null;
+      const made = await createLeadFromChat(ws, groupId, { name: name || undefined, title: 'Lead dari chat', store: store || undefined, salesmanId: ownerId || undefined }, ownerId ? { userId: ownerId, name: ownerName || 'Sales', role: 'founder' } : null);
       if (!made.ok) { console.error('auto lead failed', made.error); return null; }
       deal = { id: made.dealId, stage: 'Lead', clientId: made.clientId };
-      await pipelineNote(ws, groupId, `Pipeline: lead baru dibuat di ERP untuk ${ownerName}.`);
+      await pipelineNote(ws, groupId, ownerName ? `Pipeline: lead baru dibuat di ERP untuk ${ownerName}.` : 'Pipeline: lead baru dibuat di ERP, belum ada sales yang memegang. Ambil dari Pipeline.');
     }
 
     const [{ count: inbound }, { data: offered }] = await Promise.all([

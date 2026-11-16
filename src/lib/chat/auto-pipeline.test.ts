@@ -77,12 +77,17 @@ describe('autoStage', () => {
     expect(written('chat_notes', 'insert').map((n) => n.body).join(' ')).toContain('lead baru dibuat');
   });
 
-  it('no name, no store: no lead. A name but nobody to own it: no lead', async () => {
+  it('no name, no store: no lead', async () => {
     rows.wa_bot_chats = { lead: {} }; rows.wa_groups = { name: '+62 811 1000 001' };
     expect(await autoStage('w1', 'g1', '628111', { text: 'halo' })).toBeNull();
-    rows.wa_bot_chats = { lead: { name: 'Nico' } }; rows.wa_bot_config = { stage_auto: true };
-    expect(await autoStage('w1', 'g1', '628111', { text: 'halo' })).toBeNull();
     expect(createLead).not.toHaveBeenCalled();
+  });
+
+  it('a name but nobody to own it: the lead is still made, without an owner, and the team note says so', async () => {
+    rows.wa_bot_chats = { lead: { name: 'Nico' } }; rows.wa_bot_config = { stage_auto: true };
+    expect(await autoStage('w1', 'g1', '628111', { text: 'halo' })).toBe('Contacted');   // made, then moved on: the lead has written 3 times
+    expect(createLead.mock.calls[0][3]).toBeNull();                              // no owner
+    expect(written('chat_notes', 'insert').map((n) => n.body).join(' ')).toContain('belum ada sales');
   });
 
   it('a deal already further along is never moved back', async () => {

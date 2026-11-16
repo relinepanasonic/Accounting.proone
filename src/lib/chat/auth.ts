@@ -50,7 +50,13 @@ async function lookupUser(token: string): Promise<ChatUser | null> {
     if (!row && user.email) ({ data: row } = await db.from('workspace_members').select('role').eq('workspace_id', workspaceId).ilike('email', user.email.trim()).maybeSingle());
     role = String(row?.role || '');
   }
-  if (!(CHAT_ROLES as readonly string[]).includes(role)) return null;
+  if (!(CHAT_ROLES as readonly string[]).includes(role)) {
+    // a person in the sales team may use the chat dashboard as a salesperson, whatever their ERP role is (an advertiser who also sells)
+    const { data: cfg } = await db.from('wa_bot_config').select('sales_team').eq('workspace_id', workspaceId).maybeSingle();
+    const team = Array.isArray((cfg as any)?.sales_team) ? ((cfg as any).sales_team as Array<{ id?: string }>) : [];
+    if (!team.some((p) => p?.id === user.id)) return null;
+    role = 'sales';
+  }
   const name = String(user.user_metadata?.full_name || user.user_metadata?.name || (user.email || '').split('@')[0] || 'Team');
   return { userId: user.id, name, email: user.email || '', role, workspaceId };
 }

@@ -10,6 +10,7 @@ import { CHAT_ROLES } from './auth';
 import { buildSuggestPrompt, cleanSuggestion } from './suggest';
 import { upcomingFor } from './meetings';
 import { paymentOf } from './payment-status';
+import { cleanTeam } from './sales-team';
 import { PIPELINE_STAGES } from '@/lib/sales/flow';
 import {
   cleanShortcut, conversationsOf, countsOf, filterConversations, sourceOf, threadOf,
@@ -284,6 +285,14 @@ export const listAgents = (ws: string) => memo(`agents:${ws}`, 300_000, () => lo
 
 async function loadAgents(ws: string): Promise<Array<{ id: string; name: string; role: string }>> {
   const db = createAdminClient();
+  // the sales team, when one is set: only them (Accounting, advertisers and the BOD are not salespeople); else everyone with a chat role
+  const { data: cfg } = await db.from('wa_bot_config').select('sales_team').eq('workspace_id', ws).maybeSingle();
+  const team = cleanTeam((cfg as any)?.sales_team);
+  if (team.length) {
+    const { data: profs } = await db.from('profiles').select('id, full_name').in('id', team.map((p) => p.id));
+    const nameOf = new Map(((profs || []) as any[]).map((p) => [p.id as string, String(p.full_name || '').trim()]));
+    return team.map((p) => ({ id: p.id, name: nameOf.get(p.id) || p.name, role: 'sales' })).sort((a, b) => a.name.localeCompare(b.name));
+  }
   const { data: members } = await db.from('workspace_members').select('user_id, role, email').eq('workspace_id', ws).in('role', [...CHAT_ROLES]).not('user_id', 'is', null);
   const ids = Array.from(new Set((members || []).map((m: any) => m.user_id as string)));
   const { data: profs } = ids.length ? await db.from('profiles').select('id, full_name').in('id', ids) : { data: [] as any[] };

@@ -13,7 +13,7 @@ import { paymentOf } from './payment-status';
 import { cleanTeam } from './sales-team';
 import { PIPELINE_STAGES } from '@/lib/sales/flow';
 import {
-  cleanShortcut, conversationsOf, countsOf, filterConversations, sourceOf, threadOf,
+  chatLocked, LOCKED_MESSAGE, cleanShortcut, conversationsOf, countsOf, filterConversations, sourceOf, threadOf,
   type BotChatRow, type ChatFilter, type ChatGroupRow, type ChatMessageRow, type ChatNoteRow, type ChatStateRow,
 } from './shape';
 
@@ -227,6 +227,7 @@ export async function loadThread(ws: string, groupId: string) {
     flowWaiting: sessionLive && ses ? { flow: ses.flow_name, kind: ses.kind, field: ses.field, until: ses.kind === 'wait' ? ses.resume_at : ses.expires_at } : null,
     source: sourceOf(state), sourceId: state?.source_id ?? null, firstMessage: state?.first_message ?? null,
     resolved: !!state?.resolved_at && !(lastLead && lastLead.sent_at > state.resolved_at),
+    locked: chatLocked((bot as any)?.status ?? 'new', state?.assigned_to ?? null),
     ignored: !!(st as any)?.ignored, ignoredReason: (st as any)?.ignored_reason ?? null,
     client: client ? { id: (client as any).id, name: (client as any).name, sales: (client as any).sales_name, serviceEnd: (client as any).service_end_date } : null,
     deals: (deals || []).map((d: any) => { const inv = d.invoice_id ? invById.get(d.invoice_id) : null; return { id: d.id, title: d.title, stage: d.stage, value: Number(d.value || 0), sales: d.salesman_name, salesId: d.salesman_id ?? null, payment: paymentOf(inv, todayJkt), invoice: inv ? { number: inv.invoice_number ?? null, total: Number(inv.total_amount || 0), paid: Number(inv.amount_paid || 0), due: inv.due_date ?? null } : null }; }),
@@ -249,6 +250,16 @@ async function claimIfFree(ws: string, groupId: string, by: Who, reopen: boolean
 }
 
 /** Sends a reply from the sales number, keeps it in the chat history, takes the chat if it is free, and hands the chat to a person (the bot stops). */
+/** Null when the chat is open for typing; else the refusal. A message is only sent into a chat a person has taken (see chatLocked). */
+export async function lockedRefusal(groupId: string): Promise<Fail | null> {
+  const db = createAdminClient();
+  const [{ data: bot }, { data: st }] = await Promise.all([
+    db.from('wa_bot_chats').select('status').eq('group_id', groupId).maybeSingle(),
+    db.from('chat_state').select('assigned_to').eq('group_id', groupId).maybeSingle(),
+  ]);
+  return chatLocked((bot as any)?.status ?? null, (st as any)?.assigned_to) ? fail(409, LOCKED_MESSAGE) : null;
+}
+
 export async function sendReply(ws: string, groupId: string, text: string, by: Who): Promise<{ ok: true; message: { id: string; at: string } } | Fail> {
   const clean = text.replace(/\r\n/g, '\n').trim();
   if (!clean) return fail(400, 'Type a message first.');
@@ -256,6 +267,8 @@ export async function sendReply(ws: string, groupId: string, text: string, by: W
   const db = createAdminClient();
   const group = await ownGroup(ws, groupId);
   if (!group) return fail(404, 'Chat not found.');
+  const locked = await lockedRefusal(groupId);
+  if (locked) return locked;
   const { data: gd } = await db.from('wa_groups').select('device_id').eq('id', groupId).maybeSingle();
   const devicePhone = (await salesDevices(ws)).find((d) => d.id === (gd as any)?.device_id)?.phone ?? null;
 

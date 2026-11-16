@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cleanShortcut, conversationsOf, countsOf, filterConversations, initialsOf, threadOf, type BotChatRow, type ChatGroupRow, type ChatMessageRow, type ChatStateRow } from './shape';
+import { chatLocked, cleanShortcut, conversationsOf, countsOf, filterConversations, initialsOf, threadOf, type BotChatRow, type ChatGroupRow, type ChatMessageRow, type ChatStateRow } from './shape';
 
 const g = (id: string, name: string | null, wa = '628111'): ChatGroupRow => ({ id, wa_id: wa + id, name, last_message_at: null });
 const m = (id: string, group: string, at: string, fromMe: boolean, body = 'x', extra: Partial<ChatMessageRow> = {}): ChatMessageRow => ({ id, group_id: group, body, media_type: null, is_from_me: fromMe, sent_at: at, ...extra });
@@ -162,5 +162,19 @@ describe('chats that are not leads', () => {
 
   it('the counts leave them out and say how many are ignored', () => {
     expect(countsOf(list)).toMatchObject({ all: 1, unserved: 1, ignored: 2 });
+  });
+});
+
+describe('the chat lock', () => {
+  it('locked while the bot has the chat, and while nobody owns it', () => {
+    expect(chatLocked('bot', { id: 'u1' })).toBe(true);
+    expect(chatLocked('bot', null)).toBe(true);
+    expect(chatLocked('human', null)).toBe(true);
+    expect(chatLocked('new', null)).toBe(true);
+    expect(chatLocked('off', null)).toBe(true);
+  });
+  it('open once a person has the chat and the bot stepped back', () => {
+    expect(chatLocked('human', { id: 'u1' })).toBe(false);
+    expect(chatLocked('off', { id: 'u1' })).toBe(false);
   });
 });

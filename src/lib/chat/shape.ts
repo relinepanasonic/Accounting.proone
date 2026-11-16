@@ -34,6 +34,13 @@ export interface ConversationSummary {
   payment?: 'unpaid' | 'partial' | 'paid' | 'overdue' | null;
 }
 
+/**
+ * A chat is LOCKED for typing while the bot has it (status "bot"), and while nobody owns it. A salesperson clicks "I take over" to open it (the chat
+ * becomes theirs and the bot steps back) and "Bot Auto" to lock it again. So nobody answers, and takes, a chat by accident.
+ */
+export const chatLocked = (status: string | null | undefined, assignedTo: unknown) => status === 'bot' || !assignedTo;
+export const LOCKED_MESSAGE = 'This chat is locked: the bot has it, or nobody owns it yet. Click "I take over" to answer it yourself.';
+
 export const previewOf = (m: Pick<ChatMessageRow, 'body' | 'media_type'>): string => {
   const t = (m.body || '').replace(/\s+/g, ' ').trim();
   if (t) return t.length > 90 ? `${t.slice(0, 87).trimEnd()}...` : t;

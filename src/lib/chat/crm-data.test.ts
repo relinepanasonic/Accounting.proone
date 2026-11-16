@@ -134,7 +134,16 @@ describe('labels and images', () => {
     rows.wa_bot_config = { media_enabled: true };
     expect(await sendChatImage('w1', 'g1', { path: 'chat/w1/g2/out-x.jpg' }, SALES)).toMatchObject({ ok: false, status: 400 });
     expect(await sendChatImage('w1', 'g1', { path: 'chat/w1/g1/../g2/out-x.jpg' }, SALES)).toMatchObject({ ok: false, status: 400 });
+    rows.wa_bot_chats = { status: 'human' }; rows.chat_state = { assigned_to: 'u1' };           // a chat a person has taken
     expect(await sendChatImage('w1', 'g1', { path: 'chat/w1/g1/out-x.jpg' }, SALES)).toMatchObject({ ok: false, error: expect.stringMatching(/not found/) });
+  });
+  it('a picture is refused while the bot has the chat or nobody owns it: "I take over" comes first', async () => {
+    process.env.FONNTE_TOKEN_SALES = 'tok';
+    rows.wa_bot_config = { media_enabled: true };
+    rows.wa_bot_chats = { status: 'bot' }; rows.chat_state = { assigned_to: 'u1' };
+    expect(await sendChatImage('w1', 'g1', { path: 'chat/w1/g1/out-x.jpg' }, SALES)).toMatchObject({ ok: false, status: 409, error: expect.stringMatching(/I take over/) });
+    rows.wa_bot_chats = { status: 'human' }; rows.chat_state = { assigned_to: null };
+    expect(await sendChatImage('w1', 'g1', { path: 'chat/w1/g1/out-x.jpg' }, SALES)).toMatchObject({ ok: false, status: 409 });
   });
 });
 

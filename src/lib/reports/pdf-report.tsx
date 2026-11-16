@@ -1,4 +1,5 @@
 import React from 'react';
+import { MIN_OVERHEAD_FOR_BEP } from './bep';
 import { Document, Page, View, Text, Svg, Rect, Line, Path, StyleSheet, renderToBuffer } from '@react-pdf/renderer';
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { loadErpDashboards } from '@/lib/api/erp-report';
@@ -263,7 +264,7 @@ export function ReportDocument({ data, company }: { data: ReportData; company: C
           <Kpi label="A/R Total" value={rp(n.ar)} tone={AMBER} />
           <Kpi label="Overhead" value={rp(n.overhead)} />
           <Kpi label="MRR" value={rp(n.mrr)} />
-          <Kpi label="BEP Ratio" value={n.monthlyOverhead > 0 ? `${n.coverage.toFixed(2)}x` : '-'} tone={n.monthlyOverhead > 0 ? (n.coverage >= 1 ? GREEN : RED) : MUTED} />
+          <Kpi label="BEP Ratio" value={n.monthlyOverhead >= MIN_OVERHEAD_FOR_BEP ? `${n.coverage.toFixed(2)}x` : '-'} tone={n.monthlyOverhead >= MIN_OVERHEAD_FOR_BEP ? (n.coverage >= 1 ? GREEN : RED) : MUTED} />
           <Kpi label="New Customer" value={String(company.newCustomers)} />
           <Kpi label="Recurring Customer" value={String(company.recurringCustomers)} />
         </View>

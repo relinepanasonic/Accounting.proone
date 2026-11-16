@@ -277,7 +277,7 @@ function DealCard({
           </div>
         )}
         {deal.stage === 'Cold Case' && (
-          <div className="mb-3 flex items-center gap-1.5 rounded-lg border border-slate-600/40 bg-slate-500/10 p-2.5 text-[11px] text-slate-300"><Snowflake className="w-3.5 h-3.5" /> Lost: no more follow-up tasks. Drag it back to New Lead to wake it up.</div>
+          <div className="mb-3 flex items-center gap-1.5 rounded-lg border border-slate-600/40 bg-slate-500/10 p-2.5 text-[11px] text-slate-300"><Snowflake className="w-3.5 h-3.5" /> Cold Leads: no more follow-up tasks. Drag it back to New Lead to wake it up.</div>
         )}
 
         {/* ---- negotiation: notes and the ACC of a superadmin / the founder ---- */}
@@ -459,7 +459,7 @@ export function PipelineKanban({
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4 px-4 lg:px-8 shrink-0 mt-4">
           <div>
             <h1 className="text-2xl font-extrabold text-zinc-100 font-serif">Sales Pipeline</h1>
-            <p className="text-sm text-zinc-400 mt-1">Every lead moves toward the free consultation, then negotiation, the invoice and payment. Paid cards become the Active Clients of their month; unanswered leads go to Lost.</p>
+            <p className="text-sm text-zinc-400 mt-1">Every lead moves toward the free consultation, then negotiation, the invoice and payment. Paid cards become the Active Clients of their month; unanswered leads go to Cold Leads.</p>
           </div>
           <div className="flex items-center gap-3">
             <label className="text-sm font-semibold text-zinc-400">Deal month:</label>

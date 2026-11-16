@@ -118,7 +118,7 @@ export async function autoStage(ws: string, groupId: string, waId: string, ctx: 
       if (lost && stageFor({ hasName: !!name, hasStore: !!store, replied: true, text: ctx.text, offeredTimes: false, deckSent: false }, ss.words).stage !== 'Cold Case') {
         const now = new Date().toISOString();
         await db.from('crm_deals').update({ stage: 'Contacted', stage_changed_at: now, updated_at: now }).eq('id', (lost as any).id);
-        await pipelineNote(ws, groupId, 'Pipeline: Lost ke Contacted (kakak menulis lagi).');
+        await pipelineNote(ws, groupId, 'Pipeline: Cold Leads ke Contacted (kakak menulis lagi).');
         return 'Contacted';
       }
     }

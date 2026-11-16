@@ -44,8 +44,8 @@ describe('the message', () => {
     expect(t).toContain('STOP');
   });
   it('a phone number is not a name; the later nudges read differently', () => {
-    expect(nudgeText(1, '628123456', slots, 30)).toMatch(/^Hi kak, masih mau/);
-    expect(nudgeText(2, null, slots, 30)).toContain('terakhir dari kami');
+    expect(nudgeText(1, '628123456', slots, 30)).toMatch(/^Hi kak, ada info singkat/);
+    expect(nudgeText(2, null, slots, 30)).toContain('pesan terakhir');
   });
 });
 

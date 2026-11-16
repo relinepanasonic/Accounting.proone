@@ -3,6 +3,7 @@ import { sendWhatsApp } from '@/lib/wa/send';
 import { BC_DEFAULTS, composeMessage, daysNeeded, jakartaMidnight, MAX_FAILS_IN_ROW, nextGapMs, nextOpening, splitVariants, STOP_REPLY, type BcSettings } from './broadcast-rules';
 import { validTime } from './meet-rules';
 import { sendToChat } from './send-any';
+import { coldMessage, coldSlot } from './cold-education';
 
 /**
  * WhatsApp broadcasts (server side). One push queues every past lead of the sales number; the clock then sends ONE message at a time, with a random
@@ -25,7 +26,7 @@ export async function bcSettings(ws: string): Promise<BcSettings> {
 export async function saveBcSettings(ws: string, p: Partial<BcSettings>): Promise<{ ok: true } | Fail> {
   const row: Record<string, unknown> = { workspace_id: ws, updated_at: new Date().toISOString() };
   const int = (v: unknown, lo: number, hi: number) => { const n = Math.round(Number(v)); return n >= lo && n <= hi ? n : null; };
-  if (p.dailyMax !== undefined) { const n = int(p.dailyMax, 1, 300); if (n === null) return fail(400, 'The daily maximum is 1 to 300.'); row.bc_daily_max = n; }
+  if (p.dailyMax !== undefined) { const n = int(p.dailyMax, 1, 40); if (n === null) return fail(400, 'The daily maximum is 1 to 40: WhatsApp publishes no number, and above about 40 messages a day to people who have not saved the number the account risks a ban.'); row.bc_daily_max = n; }
   if (p.from !== undefined) { if (!validTime(p.from)) return fail(400, 'The start time must look like 09:00.'); row.bc_from = p.from; }
   if (p.to !== undefined) { if (!validTime(p.to)) return fail(400, 'The end time must look like 19:00.'); row.bc_to = p.to; }
   if (p.gapMin !== undefined) { const n = int(p.gapMin, 30, 3600); if (n === null) return fail(400, 'The shortest pause is 30 seconds to 1 hour.'); row.bc_gap_min = n; }
@@ -60,7 +61,7 @@ export async function audiencePreview(ws: string) {
 }
 
 // ---------------------------------------------------------------- broadcasts
-export async function createBroadcast(ws: string, input: { name?: unknown; message?: unknown }, by: string): Promise<{ ok: true; id: string; total: number; days: number } | Fail> {
+export async function createBroadcast(ws: string, input: { name?: unknown; message?: unknown }, by: string, only?: Set<string>): Promise<{ ok: true; id: string; total: number; days: number } | Fail> {
   const name = String(input.name ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
   const message = String(input.message ?? '').replace(/\r\n/g, '\n').trim();
   if (!name) return fail(400, 'Give the broadcast a name.');
@@ -70,7 +71,8 @@ export async function createBroadcast(ws: string, input: { name?: unknown; messa
   const db = createAdminClient();
   const { data: running } = await db.from('chat_broadcasts').select('id').eq('workspace_id', ws).in('status', ['running', 'paused']).limit(1);
   if (running?.length) return fail(409, 'Another broadcast is still running or paused. Finish or cancel it first, so the daily limit protects the number.');
-  const [a, s] = await Promise.all([audience(ws), bcSettings(ws)]);
+  const [a0, s] = await Promise.all([audience(ws), bcSettings(ws)]);
+  const a = only ? { ...a0, list: a0.list.filter((r) => only.has(r.group_id)) } : a0;
   if (!a.list.length) return fail(400, 'Nobody to send to yet: no past WhatsApp leads (or all said STOP).');
   const { data: bc, error } = await db.from('chat_broadcasts').insert({ workspace_id: ws, name, message, status: 'running', total: a.list.length, next_send_at: new Date().toISOString(), created_by: by }).select('id').single();
   if (error || !bc) return fail(500, error?.message || 'Could not create the broadcast.');
@@ -176,6 +178,44 @@ async function sendNext(b: { id: string; workspace_id: string; message: string; 
     await db.from('wa_groups').update({ last_message_at: at }).eq('id', r.group_id);
   }
   return true;
+}
+
+// ---------------------------------------------------------------- cold leads: an educational broadcast twice a month
+/** The chats of the cold leads: a deal in Cold Case after at least two follow-ups went unanswered (not the ones who said no). */
+async function coldGroups(ws: string): Promise<Set<string>> {
+  const db = createAdminClient();
+  const { data: deals } = await db.from('crm_deals').select('id').eq('workspace_id', ws).eq('stage', 'Cold Case').limit(2000);
+  const ids = ((deals || []) as Array<{ id: string }>).map((d) => d.id);
+  const groups = new Set<string>();
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data: st } = await db.from('chat_state').select('group_id').eq('workspace_id', ws).in('deal_id', ids.slice(i, i + 200));
+    const gids = ((st || []) as Array<{ group_id: string }>).map((x) => x.group_id);
+    if (!gids.length) continue;
+    const { data: n } = await db.from('chat_nudges').select('group_id').in('group_id', gids).gte('sent', 2);
+    for (const r of (n || []) as Array<{ group_id: string }>) groups.add(r.group_id);
+  }
+  return groups;
+}
+
+/**
+ * On the 1st and the 15th (from 09:00 Jakarta) the cold leads get one educational message, when "cold_bc_enabled" is on. It is an ordinary broadcast, so it
+ * keeps the daily maximum, the window, the random pause and STOP. A slot is made once ("Cold leads 2026-11-A"). Returns 1 when it was queued.
+ */
+export async function runColdBroadcast(now = new Date()): Promise<number> {
+  const db = createAdminClient();
+  if (new Date(now.getTime() + 7 * 3600000).getUTCHours() < 9) return 0;
+  const { data: cfgs } = await db.from('wa_bot_config').select('workspace_id').eq('cold_bc_enabled', true).limit(20);
+  let made = 0;
+  for (const c of (cfgs || []) as Array<{ workspace_id: string }>) {
+    const name = `Cold leads ${coldSlot(now)}`;
+    const { data: have } = await db.from('chat_broadcasts').select('id').eq('workspace_id', c.workspace_id).eq('name', name).limit(1);
+    if (have?.length) continue;
+    const only = await coldGroups(c.workspace_id);
+    if (!only.size) continue;
+    const r = await createBroadcast(c.workspace_id, { name, message: coldMessage(now) }, 'Fefe (cold leads)', only);
+    if (r.ok) made++;
+  }
+  return made;
 }
 
 // ---------------------------------------------------------------- STOP

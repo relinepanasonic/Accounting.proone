@@ -8,7 +8,7 @@ describe('the pipeline: new lead to meeting to active client', () => {
   it('twelve stages in order, each with a hint; the old stored names read with their new labels', () => {
     expect([...PIPELINE_STAGES]).toEqual(['Lead', 'Contacted', 'Qualified', 'Warm', 'Meeting Offered', 'Meeting Booked', 'Meeting Done', 'Negotiation', 'Invoice Requested', 'Invoice', 'Deal', 'Cold Case']);
     for (const s of PIPELINE_STAGES) expect(STAGE_HINT[s]).toBeTruthy();
-    expect(['Lead', 'Invoice', 'Deal', 'Cold Case', 'Warm'].map(stageLabel)).toEqual(['New Lead', 'Invoice Sent', 'Active Client', 'Lost', 'Warm']);
+    expect(['Lead', 'Invoice', 'Deal', 'Cold Case', 'Warm'].map(stageLabel)).toEqual(['New Lead', 'Invoice Sent', 'Active Client', 'Cold Leads', 'Warm']);
   });
   it('every stage is either picked by hand or set by the invoice flow, never both', () => {
     for (const s of PIPELINE_STAGES) expect(MANUAL_STAGES.includes(s) !== LOCKED_STAGES.includes(s)).toBe(true);

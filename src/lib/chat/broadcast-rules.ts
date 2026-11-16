@@ -3,7 +3,7 @@
  * messages, a few wordings rotated, and a way out (STOP). Pure, so the rules are tested. Times are Jakarta time.
  */
 export interface BcSettings { dailyMax: number; from: string; to: string; gapMin: number; gapMax: number }
-export const BC_DEFAULTS: BcSettings = { dailyMax: 40, from: '09:00', to: '19:00', gapMin: 90, gapMax: 240 };
+export const BC_DEFAULTS: BcSettings = { dailyMax: 20, from: '09:00', to: '19:00', gapMin: 90, gapMax: 240 };
 
 export const STOP_FOOTER = 'Balas STOP kalau tidak mau menerima info lagi ya kak.';
 export const STOP_REPLY = 'Siap kak, kami tidak akan mengirim info lagi. Kalau ada yang mau ditanyakan, chat saja kapan pun ya.';

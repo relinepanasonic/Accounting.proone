@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { MIN_OVERHEAD_FOR_BEP } from './bep';
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { loadErpDashboards } from '@/lib/api/erp-report';
 import { getDashboardUploadLogRange, getRelineUploadLogRange, jakartaDay } from '@/lib/integrations/dashboard-uploads';
@@ -68,13 +69,17 @@ const workdays = (from: string, to: string) => {
 type Db = ReturnType<typeof createAdminClient>;
 
 export async function salesSection(db: Db, plan: ReportPlan) {
-  const { data: deals } = await db.from('crm_deals').select('salesman_name, stage, created_at, invoice_generated_at');
+  const { data: deals } = await db.from('crm_deals').select('salesman_name, stage, created_at, invoice_generated_at').neq('stage', 'Archived');
+  // The sales team is the one set in the chat dashboard (Herlan, Velly...); an old report line for anyone else is not listed. Without a team, the old rule.
+  const { data: cfg } = await db.from('wa_bot_config').select('sales_team').not('sales_team', 'is', null).limit(1).maybeSingle();
+  const team = (((cfg as any)?.sales_team || []) as Array<{ name?: string }>).map((t) => String(t?.name || '').trim()).filter(Boolean);
   const { data: members } = await db.from('workspace_members').select('user_id').eq('role', 'sales');
   const ids = Array.from(new Set((members || []).map((m: any) => m.user_id)));
   const { data: profs } = ids.length ? await db.from('profiles').select('id, full_name').in('id', ids) : { data: [] as any[] };
-  const names = new Set<string>([...(profs || []).map((p: any) => String(p.full_name || '').trim()), ...(deals || []).map((d: any) => String(d.salesman_name || '').trim())].filter(Boolean));
+  const names = team.length ? new Set<string>(team) : new Set<string>([...(profs || []).map((p: any) => String(p.full_name || '').trim()), ...(deals || []).map((d: any) => String(d.salesman_name || '').trim())].filter(Boolean));
   const count = (name: string, from: string, to: string) => {
-    const mine = (deals || []).filter((d: any) => String(d.salesman_name || '').trim() === name);
+    const first = name.toLowerCase().split(/\s+/)[0];
+    const mine = (deals || []).filter((d: any) => { const s = String(d.salesman_name || '').trim().toLowerCase(); return s === name.toLowerCase() || (team.length > 0 && s.split(/\s+/)[0] === first); });
     return {
       // New Contacts = the leads the salesman entered in the period; New Leads = those still waiting at the Lead stage (not contacted yet).
       leads: mine.filter((d: any) => inRange(dayOf(d.created_at), from, to) && d.stage === 'Lead').length,
@@ -261,7 +266,7 @@ export async function buildWhatsAppReport(todayOverride?: string, slot: ReportSl
     out.push(`  A/R Total           : ${rp(acc.ar)}`);
     out.push(`  Overhead            : ${rp(acc.overhead)}`);
     out.push(`  MRR                 : ${rp(acc.mrr)}`);
-    out.push(`  BEP Ratio           : ${acc.monthlyOverhead > 0 ? `${acc.coverage.toFixed(2)}x` : '-'}`);
+    out.push(`  BEP Ratio           : ${acc.monthlyOverhead >= MIN_OVERHEAD_FOR_BEP ? `${acc.coverage.toFixed(2)}x` : '-'}`);
   }
 
   if (advice) { out.push(''); out.push('*Saran Prof*'); out.push(advice); }

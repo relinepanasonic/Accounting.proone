@@ -6,7 +6,7 @@
 import { slotLabel } from './meet-rules';
 
 export interface NudgeSettings { enabled: boolean; hours: number[] }
-export const NUDGE_DEFAULTS: NudgeSettings = { enabled: false, hours: [24, 72] };
+export const NUDGE_DEFAULTS: NudgeSettings = { enabled: false, hours: [24, 72, 168] };
 export const LIFETIME_MAX = 4;
 /** A nudge that is late (the clock was off, or the setting changed) by more than this is skipped, not sent days later. */
 export const LATE_MS = 48 * 3600000;
@@ -42,10 +42,12 @@ const firstName = (name: string | null | undefined) => {
 /** The nudge: friendly, short, about the free consultation, three numbered times, and the way out (STOP). */
 export function nudgeText(index: number, name: string | null | undefined, slots: Date[], minutes: number): string {
   const who = firstName(name) ? `kak ${firstName(name)}` : 'kak';
+  // Three messages, a day, three days and a week after the last answer. Each is easy to ignore: no pressure, no guilt, no "why did you not answer",
+  // something useful in the second, and a polite goodbye in the third.
   const open = [
-    `Hi ${who}, kemarin sempat ngobrol soal toko online kakak ya. Biar lebih jelas langkahnya, tim ahli Prof Toko Online bisa bantu cek toko kakak lewat konsultasi gratis ${minutes} menit (Google Meet).`,
-    `Hi ${who}, masih mau dibantu tingkatkan penjualan tokonya? Konsultasi gratis ${minutes} menit dengan tim ahli kami masih bisa kakak ambil.`,
-    `Hi ${who}, terakhir dari kami ya. Kalau suatu saat mau konsultasi gratis soal toko kakak, tinggal pilih waktunya.`,
+    `Hi ${who}, ini Fefe dari Prof Toko Online. Kalau kemarin kakak sempat sibuk, santai aja ya. Kapan pun kakak siap, tim ahli kami bisa bantu cek toko kakak lewat konsultasi gratis ${minutes} menit (Google Meet), tanpa kewajiban apa pun.`,
+    `Hi ${who}, ada info singkat: tokonya sepi sering bukan karena produknya, tapi karena iklan dan pengaturannya belum pas. Kalau kakak penasaran bagian mana di toko kakak yang bisa diperbaiki, konsultasi gratis ${minutes} menit kami masih terbuka.`,
+    `Hi ${who}, ini pesan terakhir dari Fefe supaya tidak mengganggu ya. Konsultasi gratis ${minutes} menit tetap terbuka kapan pun kakak butuh. Terima kasih sudah mampir, semoga tokonya makin ramai!`,
   ][Math.min(index, 2)];
   const nums = slots.map((_, i) => String(i + 1));
   const choice = nums.length > 1 ? `${nums.slice(0, -1).join(', ')} atau ${nums[nums.length - 1]}` : nums[0];

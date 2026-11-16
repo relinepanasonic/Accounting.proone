@@ -97,11 +97,11 @@ describe('autoStage', () => {
     expect(written('crm_deals', 'update')).toHaveLength(0);
   });
 
-  it('a lead who said "tidak jadi" before the meeting goes to Lost, with a note', async () => {
+  it('a lead who said "tidak jadi" before the meeting goes to Cold Leads, with a note', async () => {
     rows.chat_state = { deal_id: 'd1' };
     rows.crm_deals = { id: 'd1', stage: 'Warm', client_id: 'c1' };
     expect(await autoStage('w1', 'g1', 'ig:123', { text: 'tidak jadi ya kak' })).toBe('Cold Case');
-    expect(written('chat_notes', 'insert').pop().body).toContain('Warm ke Lost');
+    expect(written('chat_notes', 'insert').pop().body).toContain('Warm ke Cold Leads');
   });
 });
 

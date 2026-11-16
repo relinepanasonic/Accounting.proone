@@ -5,6 +5,7 @@ import { getAuthenticatedWorkspaceContext, FINANCE_ROLES } from '@/lib/auth/work
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { calendarFromReports, type InputReport, type StoreCalendar } from '@/lib/advertiser/input-series';
 import { missingNumbers } from '@/lib/advertiser/log-rules';
+import { skipSundayFor } from '@/lib/advertiser/report-utils';
 import { actionable, buildRecommendations, type DayFigures } from '@/lib/advertiser/optimasi';
 
 export async function fetchAdvertiserLogs() {
@@ -108,11 +109,14 @@ const storeOnlyKey = (v: string) => labelKey(String(v || '').replace(/^\s*(ProOn
 async function previousLogId(supabase: any, workspaceId: string, clientId: string, storeLabel: string, reportDate: string | null, session: number | null): Promise<string | null> {
   let q = supabase.from('advertiser_reports').select('id, store_label, report_date, session').eq('workspace_id', workspaceId).eq('client_id', clientId);
   if (reportDate && session !== null) q = q.or(`report_date.lt.${reportDate},and(report_date.eq.${reportDate},session.lt.${session})`);
+  const sunday = skipSundayFor(reportDate);
+  if (sunday) q = q.neq('report_date', sunday);                 // a Monday report is compared with Saturday, not Sunday
   let { data, error } = await q.order('report_date', { ascending: false }).order('session', { ascending: false }).limit(300);
   if (error && /store_label/.test(error.message)) {
     // before the store column existed: per client
     let q2 = supabase.from('advertiser_reports').select('id, report_date, session').eq('workspace_id', workspaceId).eq('client_id', clientId);
     if (reportDate && session !== null) q2 = q2.or(`report_date.lt.${reportDate},and(report_date.eq.${reportDate},session.lt.${session})`);
+    if (sunday) q2 = q2.neq('report_date', sunday);
     ({ data } = await q2.order('report_date', { ascending: false }).order('session', { ascending: false }).limit(1));
     return data?.[0]?.id || null;
   }

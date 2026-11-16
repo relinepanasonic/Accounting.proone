@@ -15,7 +15,7 @@ async function gemini(model: string, system: string, prompt: string, ms: number,
   const res = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${process.env.GEMINI_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }], ...(json ? { response_format: { type: 'json_object' } } : {}), max_tokens: 900 }),
+    body: JSON.stringify({ model, messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }], ...(json ? { response_format: { type: 'json_object' } } : {}), max_tokens: 1200 }),
     signal: AbortSignal.timeout(ms),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text()).replace(/\s+/g, ' ').slice(0, 120)}`);
@@ -26,7 +26,7 @@ async function gemini(model: string, system: string, prompt: string, ms: number,
 }
 
 async function haiku(model: string, system: string, prompt: string, ms: number) {
-  const res = await new Anthropic({ timeout: ms, maxRetries: 0 }).messages.create({ model, max_tokens: 600, system, messages: [{ role: 'user', content: prompt }] });
+  const res = await new Anthropic({ timeout: ms, maxRetries: 0 }).messages.create({ model, max_tokens: 1200, system, messages: [{ role: 'user', content: prompt }] });
   let text = '';
   for (const b of res.content) if (b.type === 'text') text += b.text;
   if (!text.trim()) throw new Error('empty answer');

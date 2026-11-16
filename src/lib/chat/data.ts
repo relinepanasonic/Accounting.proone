@@ -273,7 +273,7 @@ export async function sendReply(ws: string, groupId: string, text: string, by: W
 
 export async function setChatStatus(ws: string, groupId: string, status: 'bot' | 'human' | 'off', by: Who): Promise<{ ok: true } | Fail> {
   if (!(await ownGroup(ws, groupId))) return fail(404, 'Chat not found.');
-  const { error } = await createAdminClient().from('wa_bot_chats').upsert({ group_id: groupId, workspace_id: ws, status, reason: status === 'bot' ? null : `Set by ${by.name}.`, updated_at: new Date().toISOString() }, { onConflict: 'group_id' });
+  const { error } = await createAdminClient().from('wa_bot_chats').upsert({ group_id: groupId, workspace_id: ws, status, reason: status === 'bot' ? null : `Set by ${by.name}.`, ...(status === 'bot' ? { replies: 0 } : {}), updated_at: new Date().toISOString() }, { onConflict: 'group_id' });   // giving a chat back starts the bot's message count again
   if (error) return fail(500, error.message);
   if (status === 'human') await claimIfFree(ws, groupId, by, false);          // "Take over" also makes it yours
   return { ok: true };

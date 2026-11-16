@@ -81,6 +81,23 @@ export function matchSlot(raw: unknown, free: Date[]): Date | null {
   return free.find((s) => s.getTime() === t) ?? null;
 }
 
+/** Every free time of the next 5 days, grouped by day (the bot reads the whole list, so it can book "besok jam 10" or the nearest time to "15.09"). The server still checks the time is free. */
+export function freeByDay(free: Date[], maxDays = 5): Array<{ label: string; date: string; times: string[] }> {
+  const out: Array<{ label: string; date: string; times: string[] }> = [];
+  for (const d of free) {
+    const code = slotCode(d);
+    const date = code.slice(0, 10);
+    let day = out[out.length - 1];
+    if (!day || day.date !== date) {
+      if (out.length >= maxDays) break;
+      day = { label: slotLabel(d).split(', jam ')[0], date, times: [] };
+      out.push(day);
+    }
+    day.times.push(code.slice(11, 16).replace(':', '.'));
+  }
+  return out;
+}
+
 /** The ISO time the bot uses to name a slot: "2026-11-17T10:00+07:00". */
 export function slotCode(d: Date): string {
   const l = new Date(d.getTime() + WIB);

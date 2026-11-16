@@ -17,7 +17,7 @@ export interface BotPromptInput {
   channel?: 'whatsapp' | 'social';
   socialScript?: string;
   /** The goal of every chat: a free consultation with the expert team. The free times to offer (with the code the bot sends back), or the lead's booking. */
-  meeting?: { minutes: number; offer: Array<{ code: string; label: string }>; booked: { label: string; meetUrl: string | null } | null } | null;
+  meeting?: { minutes: number; offer: Array<{ code: string; label: string }>; days?: Array<{ label: string; date: string; times: string[] }>; booked: { label: string; meetUrl: string | null } | null } | null;
   /** A link to the sales deck is set (Google Drive): the bot may send it; the link itself is added by the code, never written by the model. */
   deck?: boolean;
 }
@@ -50,7 +50,7 @@ export function meetingSection(i: BotPromptInput): string[] {
     `- Kakak SUDAH punya jadwal konsultasi: ${m.booked.label}${m.booked.meetUrl ? ` (link: ${m.booked.meetUrl})` : ''}. Jangan tawarkan jadwal baru kecuali kakak minta ganti; bantu jawab pertanyaannya.`,
     m.offer.length ? '- Kalau kakak minta ganti jadwal, tawarkan 2 atau 3 waktu dari JADWAL KOSONG; kalau kakak memilih, isi booking.slot dengan kode waktu baru (jadwal lama otomatis dipindah, link Meet tetap).' : '- Kalau kakak minta ganti jadwal, bilang tim akan bantu atur dan set handoff = true.',
     '- Kalau kakak mau membatalkan konsultasi, isi "cancel_meeting": true dan jawab dengan ramah.',
-    ...(m.offer.length ? ['JADWAL KOSONG (kode = waktu)', ...m.offer.map((o) => `- ${o.code} = ${o.label}`)] : []),
+    ...(m.offer.length ? freeList(m) : []),
     '',
   ];
   if (!m.offer.length) return [...head, '- Belum ada jadwal kosong dalam beberapa hari ke depan. Kalau kakak mau konsultasi, bilang tim akan menghubungi untuk atur waktu, dan set handoff = true.', ''];
@@ -58,10 +58,20 @@ export function meetingSection(i: BotPromptInput): string[] {
     ...head,
     '- Saat mengajak, tawarkan 2 atau 3 waktu dari JADWAL KOSONG, ditulis persis seperti di daftar.',
     '- Kalau kakak memilih salah satu waktu di daftar (atau menyebut hari dan jam yang sama), isi "booking": {"slot": "<kode waktu itu>"} dan tulis balasan singkat yang mengiyakan. Jam dan link Meet ditambahkan otomatis: JANGAN menulis atau mengarang link.',
-    '- Kalau kakak minta waktu yang tidak ada di daftar, tawarkan waktu terdekat dari daftar. Jangan pernah booking waktu di luar daftar.',
-    'JADWAL KOSONG (kode = waktu)',
-    ...m.offer.map((o) => `- ${o.code} = ${o.label}`),
+    '- Kalau kakak menyebut hari dan jam (misalnya "besok jam 10" atau "jam 15.09"), cari di JADWAL KOSONG hari itu. Kalau jam persisnya ada, booking. Kalau tidak ada (misalnya 15.09), tawarkan jam terdekat yang kosong di hari itu dan tanya apakah cocok. Jangan pernah booking waktu di luar daftar.',
+    '- Balasanmu singkat: maksimal 3 kalimat.',
+    ...freeList(m),
     '',
+  ];
+}
+
+/** The free times for the prompt: every time of the next days, one line a day, and how to write the code of one. Falls back to the short list. */
+function freeList(m: NonNullable<BotPromptInput['meeting']>): string[] {
+  if (!m.days || !m.days.length) return ['JADWAL KOSONG (kode = waktu)', ...m.offer.map((o) => `- ${o.code} = ${o.label}`)];
+  return [
+    'JADWAL KOSONG (jam WIB, semua waktu yang masih bisa dipilih)',
+    ...m.days.map((d) => `- ${d.label} (${d.date}): ${d.times.join(', ')}`),
+    'Kode waktu untuk booking.slot = tanggal + "T" + jam:menit + "+07:00", contoh 2026-11-17T10:00+07:00 untuk 10.00 pada 17 November 2026.',
   ];
 }
 
@@ -173,12 +183,29 @@ export function sanitizeReply(text: string, knowledge = '', max = 600): string {
   return t;
 }
 
+/**
+ * The model's answer stopped in the middle (a long answer hit its limit): the start of the reply is still good. Keep it up to the last whole sentence,
+ * so the lead gets an answer instead of silence. Nothing else (booking, lead) is trusted from a cut-off answer.
+ */
+export function salvageCut(raw: string, from: number, knowledge = '', max = 600): BotAnswer | null {
+  const m = /"reply"\s*:\s*"((?:[^"\\]|\\.)*)$/.exec(raw.slice(from));
+  if (!m) return null;
+  let text = m[1];
+  try { text = JSON.parse(`"${text.replace(/\r?\n/g, '\\n').replace(/\\$/, '')}"`); } catch { /* keep the raw text */ }
+  const cut = Math.max(text.lastIndexOf('. '), text.lastIndexOf('? '), text.lastIndexOf('! '), text.lastIndexOf('.\n'));
+  const whole = cut > 20 ? text.slice(0, cut + 1) : text;
+  const reply = sanitizeReply(whole, knowledge, max);
+  if (reply.length < 20) return null;
+  return { reply, handoff: false, reason: '', lead: {}, booking: null, cancelMeeting: false, sendDeck: false };
+}
+
 /** Reads the model's JSON answer. Returns null when it cannot be trusted: the caller then hands the chat to a person. */
 export function parseBotAnswer(raw: string, knowledge = '', max = 600): BotAnswer | null {
   const s = String(raw || '');
   const a = s.indexOf('{');
   const b = s.lastIndexOf('}');
-  if (a < 0 || b <= a) return null;
+  if (a < 0) return null;
+  if (b <= a) return salvageCut(s, a, knowledge, max);      // the answer was cut off before the closing brace
   let j: any;
   try { j = JSON.parse(s.slice(a, b + 1)); } catch {
     // Slightly broken JSON (a raw line break or a stray comma): the reply text is still recoverable from its field.

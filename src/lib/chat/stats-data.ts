@@ -31,7 +31,7 @@ async function build(ws: string, days: number): Promise<Stats> {
     db.from('wa_messages').select('group_id, is_from_me, sent_at, source, bot:raw->bot, sentBy:raw->sentBy').eq('workspace_id', ws).in('group_id', ids).gte('sent_at', since).order('sent_at', { ascending: true }).limit(20000),
     db.from('chat_state').select('group_id, first_message_at, assigned_name, source_channel, resolved_at').eq('workspace_id', ws).in('group_id', ids),
     db.from('wa_bot_chats').select('group_id, status, replies, reason').eq('workspace_id', ws).in('group_id', ids),
-    db.from('crm_deals').select('client_id, salesman_name, stage, value, created_at, stage_changed_at').eq('workspace_id', ws).limit(5000),
+    db.from('crm_deals').select('client_id, salesman_name, stage, value, created_at, stage_changed_at').eq('workspace_id', ws).neq('stage', 'Archived').limit(5000),
     db.from('clients').select('id, phone').eq('workspace_id', ws).not('phone', 'is', null).limit(5000),
     db.from('chat_reminders').select('due_at, done_at').eq('workspace_id', ws).or(`done_at.is.null,due_at.gte.${since}`).limit(5000),
     db.from('chat_meetings').select('group_id, status, created_at, starts_at, booked_by, confirmed_at, owner_name').eq('workspace_id', ws).limit(5000).then((r) => r, () => ({ data: [] as any[] })),

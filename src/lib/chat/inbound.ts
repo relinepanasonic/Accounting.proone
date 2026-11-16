@@ -10,6 +10,7 @@ import { handleMeetingReply } from './meetings';
 import { handleNudgeReply } from './nudges';
 import { autoStage } from './pipeline';
 import { notALeadReason } from './not-a-lead';
+import { archiveJunkLead } from './junk-leads';
 import { createAdminClient } from '@/lib/api/supabase-admin';
 
 /**
@@ -32,6 +33,7 @@ export async function afterSalesMessage(device: BotDevice, parsed: ParsedWaMessa
       const now = new Date().toISOString();
       await db.from('chat_state').upsert({ group_id: groupId, workspace_id: device.workspace_id, ignored: true, ignored_reason: why, resolved_at: now, updated_at: now }, { onConflict: 'group_id' });
       await db.from('wa_bot_chats').upsert({ group_id: groupId, workspace_id: device.workspace_id, status: 'off', reason: why, updated_at: now }, { onConflict: 'group_id' });
+      await archiveJunkLead(device.workspace_id, groupId, parsed.chatId);      // a lead the automation made before the filter knew: archived
       return;
     }
   }

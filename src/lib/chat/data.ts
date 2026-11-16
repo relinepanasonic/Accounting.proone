@@ -10,6 +10,7 @@ import { CHAT_ROLES } from './auth';
 import { buildSuggestPrompt, cleanSuggestion } from './suggest';
 import { upcomingFor } from './meetings';
 import { paymentOf } from './payment-status';
+import { archiveJunkLead, restoreJunkLead } from './junk-leads';
 import { cleanTeam } from './sales-team';
 import { PIPELINE_STAGES } from '@/lib/sales/flow';
 import {
@@ -109,7 +110,7 @@ export async function loadPipeline(ws: string): Promise<{ deals: BoardDeal[]; st
   const since = new Date(Date.now() - 30 * 86400000).toISOString();
   const cols = 'id, title, client_id, lead_name, stage, value, salesman_id, salesman_name, created_at, stage_changed_at, invoice_id';
   const [{ data: open }, { data: recent }] = await Promise.all([
-    db.from('crm_deals').select(cols).eq('workspace_id', ws).not('stage', 'in', '("Deal","Cold Case")').order('created_at', { ascending: false }).limit(1500),
+    db.from('crm_deals').select(cols).eq('workspace_id', ws).not('stage', 'in', '("Deal","Cold Case","Archived")').order('created_at', { ascending: false }).limit(1500),
     db.from('crm_deals').select(cols).eq('workspace_id', ws).in('stage', ['Deal', 'Cold Case']).gte('stage_changed_at', since).order('stage_changed_at', { ascending: false }).limit(300),
   ]);
   const rows = [...((open || []) as any[]), ...((recent || []) as any[])];
@@ -325,6 +326,10 @@ export async function setChatIgnored(ws: string, groupId: string, ignored: boole
   const { error } = await upsertState(ws, groupId, { ignored, ignored_reason: ignored ? reason.slice(0, 200) : null, ...(ignored ? { resolved_at: now } : { resolved_at: null }) });
   if (error) return fail(500, error.message);
   await db.from('wa_bot_chats').upsert({ group_id: groupId, workspace_id: ws, status: ignored ? 'off' : 'bot', reason: ignored ? reason.slice(0, 200) : null, updated_at: now }, { onConflict: 'group_id' });
+  // the lead the automation already made for it: archived (deleted at the end of the month), or restored when the chat is given back
+  const group = await ownGroup(ws, groupId);
+  if (ignored && group) await archiveJunkLead(ws, groupId, group.wa_id);
+  else if (!ignored) await restoreJunkLead(groupId);
   return { ok: true };
 }
 

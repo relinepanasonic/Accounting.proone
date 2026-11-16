@@ -30,6 +30,10 @@
       "schedule": "0 11 * * *"
     },
     {
+      "path": "/api/crm/junk-cleanup",
+      "schedule": "30 16 * * *"
+    },
+    {
       "path": "/api/wa/groups-cron",
       "schedule": "1 5 * * *"
     }

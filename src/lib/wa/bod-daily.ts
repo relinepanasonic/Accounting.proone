@@ -166,7 +166,7 @@ export async function loadBodDaily(today: string): Promise<BodDaily | null> {
     db.from('advertiser_reports').select('client_id, report_date, session, store_label, data_inkubasi, data_group, data_mandiri').gte('report_date', addDays(reportDay, -SPARK_DAYS)).lte('report_date', reportDay).limit(8000),
     db.from('client_assignments').select('client_id, user_id').eq('job', 'advertising'),
     db.from('clients').select('id, name, sales_name, service_end_date'),
-    db.from('crm_deals').select('salesman_name, stage, value, created_at, stage_changed_at'),
+    db.from('crm_deals').select('salesman_name, stage, value, created_at, stage_changed_at').neq('stage', 'Archived'),
     db.from('fake_order_projects').select('client_name, start_date, finished_at'),
     adminSection(db, plan, today).catch(() => null),
     loadSalesBod(today).catch((e) => { console.error('bod sales failed', e); return null; }),
@@ -217,7 +217,7 @@ export async function loadSalesBod(day: string): Promise<SalesBod> {
   const dayStart = new Date(`${day}T00:00:00+07:00`).toISOString();
   const since = new Date(new Date(`${day}T00:00:00+07:00`).getTime() - 35 * 86400000).toISOString();
   const [{ data: deals }, { data: meetings }, { data: paidToday }] = await Promise.all([
-    db.from('crm_deals').select('id, client_id, lead_name, salesman_name, stage, value, created_at, stage_changed_at, proposal_sent_at, invoice_requested_at, invoice_generated_at, paid_at, acc_approved_at, invoice_id').limit(8000),
+    db.from('crm_deals').select('id, client_id, lead_name, salesman_name, stage, value, created_at, stage_changed_at, proposal_sent_at, invoice_requested_at, invoice_generated_at, paid_at, acc_approved_at, invoice_id').neq('stage', 'Archived').limit(8000),
     db.from('chat_meetings').select('status, created_at, starts_at, confirmed_at, owner_name, lead_name').gte('starts_at', since).limit(5000),
     db.from('invoices').select('amount_paid').eq('client_paid_date', day).limit(2000),
   ]);

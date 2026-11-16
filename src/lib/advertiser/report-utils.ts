@@ -35,6 +35,17 @@ export function normalizeGroup(raw: any): any[] {
 const MONTHS_ID = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des'];
 
 /** "2026-09-25" -> { dd: "25", mmm: "Sep", yy: "26" }. Parsed by hand so the timezone can never shift the day. */
+/**
+ * The Sunday a report must NOT be compared with: on a Monday the session before is Saturday's, never Sunday's (few stores are worked on Sunday, so a
+ * Sunday log would compare a store with a different, thinner picture, or with nothing). Null on every other day. `reportDate` is YYYY-MM-DD.
+ */
+export function skipSundayFor(reportDate: string | null): string | null {
+  if (!reportDate || !/^\d{4}-\d{2}-\d{2}$/.test(reportDate)) return null;
+  const d = new Date(`${reportDate}T12:00:00Z`);
+  if (d.getUTCDay() !== 1) return null;                                   // 1 = Monday
+  return new Date(d.getTime() - 86400000).toISOString().slice(0, 10);
+}
+
 export function splitReportDate(reportDate: string) {
   const [y, m, d] = reportDate.slice(0, 10).split('-');
   return { dd: d, mmm: MONTHS_ID[Number(m) - 1] || m, yy: (y || '').slice(-2) };

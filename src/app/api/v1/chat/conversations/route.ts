@@ -10,7 +10,7 @@ import { PIPELINE_STAGES } from '@/lib/sales/flow';
 export const GET = chatRoute(async ({ me, request }) => {
   const url = new URL(request.url);
   const f = url.searchParams.get('filter');
-  const filter: ChatFilter = f === 'mine' || f === 'unserved' || f === 'bot' || f === 'human' || f === 'resolved' || f === 'followup' ? f : 'all';
+  const filter: ChatFilter = f === 'mine' || f === 'unserved' || f === 'bot' || f === 'human' || f === 'resolved' || f === 'followup' || f === 'ignored' ? f : 'all';
   const label = (url.searchParams.get('label') || '').slice(0, 40);
   const rawStage = url.searchParams.get('stage') || '';
   const stage = rawStage === 'none' || (PIPELINE_STAGES as readonly string[]).includes(rawStage) ? rawStage : '';

@@ -20,7 +20,9 @@ async function build(ws: string, days: number): Promise<Stats> {
   const empty = computeStats({ messages: [], chats: [], botChats: [], deals: [], clients: [], reminders: [], unserved: [], meetings: [], nudgeBookings: [] }, { days, now });
   if (!devIds.length) return empty;
   const { data: groups } = await db.from('wa_groups').select('id, wa_id').eq('workspace_id', ws).eq('is_group', false).in('device_id', devIds).limit(2000);
-  const gs = (groups || []) as Array<{ id: string; wa_id: string }>;
+  const { data: ign } = await db.from('chat_state').select('group_id').eq('workspace_id', ws).eq('ignored', true);
+  const ignored = new Set(((ign || []) as Array<{ group_id: string }>).map((x) => x.group_id));
+  const gs = ((groups || []) as Array<{ id: string; wa_id: string }>).filter((g) => !ignored.has(g.id));      // chats that are not leads stay out of the numbers
   if (!gs.length) return empty;
   const ids = gs.map((g) => g.id);
   const waOf = new Map(gs.map((g) => [g.id, g.wa_id]));

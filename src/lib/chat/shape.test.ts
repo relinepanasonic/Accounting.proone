@@ -26,7 +26,7 @@ describe('conversationsOf', () => {
   });
   it('filters by tab and by a search over name, number, last text and lead details; counts per tab', () => {
     const list = conversationsOf(groups, msgs, bot);
-    expect(countsOf(list)).toEqual({ all: 3, mine: 0, unserved: 2, bot: 1, human: 1, resolved: 0, followup: 0 });
+    expect(countsOf(list)).toEqual({ all: 3, mine: 0, unserved: 2, bot: 1, human: 1, resolved: 0, followup: 0, ignored: 0 });
     expect(filterConversations(list, 'unserved', '').map((c) => c.id).sort()).toEqual(['b', 'c']);
     expect(filterConversations(list, 'bot', '').map((c) => c.id)).toEqual(['a']);
     expect(filterConversations(list, 'all', 'budi').map((c) => c.id)).toEqual(['a']);
@@ -145,5 +145,22 @@ describe('labels and follow-ups in the inbox', () => {
     expect(filterConversations(list, 'followup', '').map((c) => c.id)).toEqual(['a']);
     expect(countsOf(list).followup).toBe(1);
     expect(filterConversations(list, 'all', 'hot').map((c) => c.id)).toEqual(['c']);
+  });
+});
+
+describe('chats that are not leads', () => {
+  const groups = [g('a', 'Budi Santoso'), g('b', null), g('c', 'Data Pinter Customer Service')];
+  const msgs = [m('1', 'a', '2026-11-16T04:00:00Z', false, 'mau tanya optimasi shopee'), m('2', 'b', '2026-11-16T05:00:00Z', false, '11049 is your Facebook confirmation code'), m('3', 'c', '2026-11-16T06:00:00Z', false, 'Terima kasih sudah menghubungi')];
+  const states = [{ group_id: 'b', assigned_to: null, assigned_name: null, resolved_at: '2026-11-16T05:00:01Z', ignored: true }, { group_id: 'c', assigned_to: null, assigned_name: null, resolved_at: null, ignored: true }] as ChatStateRow[];
+  const list = conversationsOf(groups, msgs, [], states);
+
+  it('they leave every tab, even unserved, and show only under Ignored', () => {
+    for (const f of ['all', 'unserved', 'bot', 'human', 'resolved', 'mine', 'followup'] as const) expect(filterConversations(list, f, '', 'u1').every((c) => !c.ignored)).toBe(true);
+    expect(filterConversations(list, 'all', '').map((c) => c.id)).toEqual(['a']);
+    expect(filterConversations(list, 'ignored', '').map((c) => c.id).sort()).toEqual(['b', 'c']);
+  });
+
+  it('the counts leave them out and say how many are ignored', () => {
+    expect(countsOf(list)).toMatchObject({ all: 1, unserved: 1, ignored: 2 });
   });
 });

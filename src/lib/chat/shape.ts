@@ -8,12 +8,12 @@ import { chatLabel } from './channel';
 export interface ChatGroupRow { id: string; wa_id: string; name: string | null; last_message_at: string | null }
 export interface ChatMessageRow { id: string; group_id: string; body: string | null; media_type: string | null; is_from_me: boolean; sent_at: string; source?: string | null; raw?: any }
 export interface BotChatRow { group_id: string; status: 'bot' | 'human' | 'off'; replies: number; reason: string | null; lead: { name?: string; store?: string; need?: string } | null }
-export interface ChatStateRow { group_id: string; assigned_to: string | null; assigned_name: string | null; resolved_at: string | null; first_message?: string | null; source_label?: string | null; source_channel?: string | null; source_by?: string | null }
+export interface ChatStateRow { group_id: string; assigned_to: string | null; assigned_name: string | null; resolved_at: string | null; ignored?: boolean | null; first_message?: string | null; source_label?: string | null; source_channel?: string | null; source_by?: string | null }
 export interface ChatSource { label: string | null; channel: string; by: string | null }
 export interface ChatNoteRow { id: string; group_id: string; author_name: string; body: string; created_at: string }
 
 export type ChatStatus = 'bot' | 'human' | 'off' | 'new';
-export type ChatFilter = 'all' | 'mine' | 'unserved' | 'bot' | 'human' | 'resolved' | 'followup';
+export type ChatFilter = 'all' | 'mine' | 'unserved' | 'bot' | 'human' | 'resolved' | 'followup' | 'ignored';
 export interface ChatLabel { id: string; name: string; color: string }
 export interface NextReminder { id: string; dueAt: string; note: string | null; state: 'overdue' | 'today' | 'later' }
 
@@ -23,6 +23,8 @@ export interface ConversationSummary {
   unserved: boolean; waitingSince: string | null;
   status: ChatStatus; lead: BotChatRow['lead']; botReplies: number;
   assignedTo: { id: string; name: string } | null; resolved: boolean;
+  /** Not a lead (a verification code, a company's automatic greeting, or marked by hand): out of every tab but "Ignored". */
+  ignored?: boolean;
   source: ChatSource | null;
   /** Filled by the server after the fact (labels on the chat, its next open reminder). */
   labels?: ChatLabel[];
@@ -76,7 +78,7 @@ export function conversationsOf(groups: ChatGroupRow[], messages: ChatMessageRow
       lastText: last ? previewOf(last) : '', lastAt: last?.sent_at ?? g.last_message_at, lastFromMe: !!last?.is_from_me,
       unserved: !!last && !last.is_from_me, waitingSince: last && !last.is_from_me ? waitingSince : null,
       status: b?.status ?? 'new', lead: b?.lead ?? null, botReplies: b?.replies ?? 0,
-      assignedTo: st?.assigned_to ? { id: st.assigned_to, name: st.assigned_name || 'Team' } : null, resolved,
+      assignedTo: st?.assigned_to ? { id: st.assigned_to, name: st.assigned_name || 'Team' } : null, resolved, ignored: !!st?.ignored,
       source: sourceOf(st),
     };
   });
@@ -86,7 +88,9 @@ export function conversationsOf(groups: ChatGroupRow[], messages: ChatMessageRow
 export function filterConversations(list: ConversationSummary[], filter: ChatFilter, q: string, meId = ''): ConversationSummary[] {
   const needle = q.trim().toLowerCase();
   return list.filter((c) => {
-    if (filter === 'resolved') { if (!c.resolved) return false; }
+    if (filter === 'ignored') { if (!c.ignored) return false; }
+    else if (c.ignored) return false;                                // an ignored chat is only ever shown under "Ignored"
+    else if (filter === 'resolved') { if (!c.resolved) return false; }
     else {
       if (c.resolved) return false;                                  // every other tab shows open chats only
       if (filter === 'mine' && (!meId || c.assignedTo?.id !== meId)) return false;
@@ -100,9 +104,11 @@ export function filterConversations(list: ConversationSummary[], filter: ChatFil
   });
 }
 
-export const countsOf = (list: ConversationSummary[], meId = '') => {
+export const countsOf = (all: ConversationSummary[], meId = '') => {
+  const list = all.filter((c) => !c.ignored);
   const open = list.filter((c) => !c.resolved);
   return {
+    ignored: all.length - list.length,
     all: open.length,
     mine: meId ? open.filter((c) => c.assignedTo?.id === meId).length : 0,
     unserved: open.filter((c) => c.unserved).length,

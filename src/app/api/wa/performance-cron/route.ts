@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
 /**
- * Called by Vercel Cron (see vercel.json) at 19:00 Jakarta time (12:00 UTC), Monday to Saturday: the daily report of that day (a link to the PDF) to Nico and Herlan.
+ * Called by Vercel Cron (see vercel.json) at 19:00 Jakarta time (12:00 UTC), Monday to Saturday: the daily report of that day (as a PDF file) to Nico and Herlan.
  * The Monday 08:00 weekly report is /api/wa/weekly-report-cron.
  * Sends only for companies where WA Control > Founder > "Send automatically" is ON (default OFF), and never twice in a day.
  * Vercel sends "Authorization: Bearer <CRON_SECRET>"; anything else is refused.

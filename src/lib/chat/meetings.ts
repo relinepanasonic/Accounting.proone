@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { accessToken, authUrl, busyTimes, createMeetEvent, deleteEvent, exchangeCode, googleConfigured, makeState, patchEventTime } from '@/lib/google/calendar';
 import { memo, forget } from './cache';
-import { bookedText, cancelledText, confirmedText, confirmText, freeSlots, matchSlot, MEET_DEFAULTS, movedText, noTimeText, offerSlots, parseDays, readMeetingReply, remindText, rescheduleText, shouldAskConfirm, slotCode, slotLabel, validTime, type Busy, type MeetSettings } from './meet-rules';
+import { freeByDay, bookedText, cancelledText, confirmedText, confirmText, freeSlots, matchSlot, MEET_DEFAULTS, movedText, noTimeText, offerSlots, parseDays, readMeetingReply, remindText, rescheduleText, shouldAskConfirm, slotCode, slotLabel, validTime, type Busy, type MeetSettings } from './meet-rules';
 import { sendToChat } from './send-any';
 import { chatLabel } from './channel';
 import { advanceChatDeal } from './pipeline';
@@ -107,14 +107,14 @@ export async function availableSlots(ws: string, fresh = false): Promise<Date[]>
 }
 
 /** For the bot: the short list to offer (with the code it must send back), and the lead's own upcoming meeting if there is one. */
-export async function meetingContext(ws: string, groupId: string): Promise<{ enabled: boolean; minutes: number; offer: Array<{ code: string; label: string }>; booked: { id: string; label: string; meetUrl: string | null } | null }> {
+export async function meetingContext(ws: string, groupId: string): Promise<{ enabled: boolean; minutes: number; offer: Array<{ code: string; label: string }>; days: Array<{ label: string; date: string; times: string[] }>; booked: { id: string; label: string; meetUrl: string | null } | null }> {
   const s = await meetSettings(ws).catch(() => ({ ...MEET_DEFAULTS }));
-  if (!s.enabled) return { enabled: false, minutes: s.minutes, offer: [], booked: null };
+  if (!s.enabled) return { enabled: false, minutes: s.minutes, offer: [], days: [], booked: null };
   const mine = await upcomingFor(groupId).catch(() => null);
   // free times to offer: to book, or (when already booked) to move the meeting to
   const free = (await availableSlots(ws).catch(() => [])).filter((d) => !mine || d.getTime() !== new Date(mine.starts_at).getTime());
   const offer = offerSlots(free).map((d) => ({ code: slotCode(d), label: slotLabel(d) }));
-  return { enabled: true, minutes: s.minutes, offer, booked: mine ? { id: mine.id, label: slotLabel(new Date(mine.starts_at)), meetUrl: mine.meet_url } : null };
+  return { enabled: true, minutes: s.minutes, offer, days: freeByDay(free), booked: mine ? { id: mine.id, label: slotLabel(new Date(mine.starts_at)), meetUrl: mine.meet_url } : null };
 }
 
 export async function upcomingFor(groupId: string): Promise<Meeting | null> {

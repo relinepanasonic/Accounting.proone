@@ -26,6 +26,13 @@ export type BotDecision =
   | { action: 'limit'; reason: string }        // the bot has said enough: a person must continue
   | { action: 'skip'; reason: string };
 
+/**
+ * How many messages the bot may send in one chat. The setting (default 4) is meant to stop endless bot chats, but it must not stop the bot at the very
+ * moment a lead asks for the free consultation: while meetings are switched on, the bot keeps going up to MEETING_MAX_REPLIES so the meeting gets booked.
+ */
+export const MEETING_MAX_REPLIES = 12;
+export const effectiveMaxReplies = (setting: number, meetingsOn: boolean) => (meetingsOn ? Math.max(setting, MEETING_MAX_REPLIES) : setting);
+
 export function decideBot(i: BotInput): BotDecision {
   if (i.deviceRole !== 'sales') return { action: 'skip', reason: 'not-a-sales-number' };
   if (!i.enabled) return { action: 'skip', reason: 'bot-off' };
@@ -62,15 +69,20 @@ const HUMAN_RULES: Array<[RegExp, string]> = [
   [/\b(komplain|complain|kecewa|penipu|tipu|scam|refund|ganti rugi|marah|laporin|lapor)\w*/i, 'Complaint or upset customer.'],
   [/\b(nego|tawar|diskon|potongan|kurang(in)?|harga pas|termurah|bisa murah)\w*/i, 'Price negotiation.'],
   [/\b(transfer|rekening|bayar|pembayaran|invoice|faktur|dp\b|lunas)\w*/i, 'Payment or invoice.'],
-  [/\b(telp|telepon|telpon|call|nelp|nelpon|vc|video call|zoom|meet|ketemu|bertemu|datang)\w*/i, 'Wants a call or a meeting.'],
+  [/\b(telp|telepon|telpon|call|nelp|nelpon|vc|video call|ketemu|bertemu|datang)\w*/i, 'Wants a call or a meeting.'],
+  // a meeting (Google Meet, Zoom) is the free consultation the bot books itself; only when meetings are off does it need a person (see needsHuman)
+  [/\b(zoom|meet|meeting|google meet)\w*/i, 'Wants a call or a meeting.'],
   [/\b(minta|mau|bisa|boleh)\b.{0,20}\b(bicara|ngobrol|ditelp\w*|dihubungi|sama (sales|admin|orangnya|manager|owner|bos))/i, 'Asked for a person.'],
   [/\b(sales|admin|manager|owner|bos|pak|bu)\b.{0,12}\b(nya|mana|ada)\b.{0,8}\?/i, 'Asked for a person.'],
 ];
 
-export function needsHuman(text: string | null): string | null {
+export function needsHuman(text: string | null, opts: { meetings?: boolean } = {}): string | null {
   const t = (text || '').trim();
   if (!t) return null;
-  for (const [re, reason] of HUMAN_RULES) if (re.test(t)) return reason;
+  for (const [re, reason] of HUMAN_RULES) {
+    if (opts.meetings && re.source.startsWith('\\b(zoom|meet')) continue;     // meetings are the bot's goal: it books them
+    if (re.test(t)) return reason;
+  }
   return null;
 }
 

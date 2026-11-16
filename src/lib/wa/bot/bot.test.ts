@@ -165,3 +165,56 @@ describe('the free consultation', () => {
     expect(parseBotAnswer('{"reply":"Siap kak","handoff":false,"booking":{"slot":""}}')?.booking).toBeNull();
   });
 });
+
+import { effectiveMaxReplies, MEETING_MAX_REPLIES } from './decide';
+import { salvageCut } from './prompt';
+import { freeByDay } from '@/lib/chat/meet-rules';
+
+describe('Fefe and the free consultation (the chats of 16 Nov)', () => {
+  const ask = 'Boleh kak. \nApa bisa besok di aturkan meeting jam 15.09';
+
+  it('a meeting request is not a reason to hand over while meetings are on; with meetings off it still is; a phone call always is', () => {
+    expect(needsHuman(ask, { meetings: true })).toBeNull();
+    expect(needsHuman(ask)).toMatch(/meeting/);
+    expect(needsHuman('bisa zoom besok?', { meetings: true })).toBeNull();
+    expect(needsHuman('bisa telepon saya sekarang?', { meetings: true })).toMatch(/call/);
+    expect(needsHuman('mau ketemu langsung di kantor', { meetings: true })).toMatch(/call/);
+  });
+
+  it('the 4-message limit does not stop the bot while meetings are on', () => {
+    expect(effectiveMaxReplies(4, true)).toBe(MEETING_MAX_REPLIES);
+    expect(effectiveMaxReplies(4, false)).toBe(4);
+    expect(effectiveMaxReplies(20, true)).toBe(20);
+    const base = { enabled: true, deviceRole: 'sales', isGroup: false, isFromMe: false, body: ask, mediaType: null, state: { status: 'bot' as const, replies: 4 }, echoOfBot: false };
+    expect(decideBot({ ...base, maxReplies: 4 }).action).toBe('limit');                                     // before: silence
+    expect(decideBot({ ...base, maxReplies: effectiveMaxReplies(4, true) }).action).toBe('reply');        // now: the bot answers and books
+  });
+
+  it('an answer cut off in the middle still gives the lead the start of the reply', () => {
+    const cutOff = '{"reply": "Siap kak Nico, untuk jam 10 besok belum tersedia kak. Tapi ada jam 09.00 dan jam 11.00 yang masih kosong, kakak mau yang mana? Kalau mau jam 11.00 saya bookingkan sekarang juga, nanti Link Google Meet langsung dikir';
+    const a = parseBotAnswer(cutOff)!;
+    expect(a.reply).toBe('Siap kak Nico, untuk jam 10 besok belum tersedia kak. Tapi ada jam 09.00 dan jam 11.00 yang masih kosong, kakak mau yang mana?');
+    expect(a.handoff).toBe(false);
+    expect(a.booking).toBeNull();
+    expect(salvageCut('{"reply": "Hi', 0)).toBeNull();            // too little to send
+    expect(parseBotAnswer('tidak ada json sama sekali')).toBeNull();
+  });
+});
+
+describe('every free time goes to the bot', () => {
+  const D = (iso: string) => new Date(iso);
+  const free = [D('2026-11-17T02:00:00Z'), D('2026-11-17T03:00:00Z'), D('2026-11-17T08:00:00Z'), D('2026-11-18T02:00:00Z'), D('2026-11-19T02:00:00Z'), D('2026-11-20T02:00:00Z'), D('2026-11-21T02:00:00Z'), D('2026-11-24T02:00:00Z')];
+  it('grouped by day, in WIB, at most 5 days', () => {
+    const days = freeByDay(free);
+    expect(days).toHaveLength(5);
+    expect(days[0]).toEqual({ label: 'Selasa 17 Nov', date: '2026-11-17', times: ['09.00', '10.00', '15.00'] });
+    expect(days[4].date).toBe('2026-11-21');
+  });
+  it('the prompt lists them and explains how to write the slot code, and asks for a short answer', () => {
+    const { system } = buildBotPrompt({ persona: 'Fefe', company: 'Prof Toko Online', knowledge: 'x', history: [{ from: 'lead', text: 'besok jam 10 bisa?' }], inHours: true, replyNo: 6, meeting: { minutes: 60, offer: [{ code: '2026-11-17T09:00+07:00', label: 'Selasa 17 Nov, jam 09.00 WIB' }], days: freeByDay(free), booked: null } });
+    expect(system).toContain('- Selasa 17 Nov (2026-11-17): 09.00, 10.00, 15.00');
+    expect(system).toContain('contoh 2026-11-17T10:00+07:00');
+    expect(system).toContain('jam terdekat yang kosong');
+    expect(system).toContain('maksimal 3 kalimat');
+  });
+});

@@ -1,12 +1,12 @@
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { askBotModel } from './model';
 import { loadKnowledge, loadSocialScript } from '@/lib/chat/bible';
-import { availableSlots, bookMeeting, meetingContext, moveMeeting, setMeetingStatus } from '@/lib/chat/meetings';
+import { availableSlots, bookMeeting, meetingContext, moveMeeting, setMeetingStatus, meetSettings } from '@/lib/chat/meetings';
 import { offerSlots, slotLabel } from '@/lib/chat/meet-rules';
 import { recordBotMessage } from './store';
 import { humanPauseMs, sendToChat, showTyping } from '@/lib/chat/send-any';
 import type { ParsedWaMessage } from '../parse-webhook';
-import { decideBot, inOpenHours, isBotEcho, needsHuman } from './decide';
+import { decideBot, effectiveMaxReplies, inOpenHours, isBotEcho, needsHuman } from './decide';
 import { buildBotPrompt, parseBotAnswer, replyMax, type BotTurn } from './prompt';
 import { deckLine, validDeckUrl } from './deck';
 import { autoStage } from '@/lib/chat/pipeline';
@@ -35,10 +35,14 @@ export async function runSalesBot(device: BotDevice, m: ParsedWaMessage, groupId
   ]);
   if (!cfg?.enabled) return { done: 'bot-off' };
 
+  // the message limit does not stop a bot that is working toward the free consultation
+  const baseMax = isMetaChat(m.chatId) ? Math.max(cfg.max_replies ?? 4, SOCIAL_MAX_REPLIES) : cfg.max_replies ?? 4;
+  let maxReplies = baseMax;
+  if ((chat?.replies ?? 0) >= baseMax) maxReplies = effectiveMaxReplies(baseMax, (await meetSettings(ws).catch(() => null))?.enabled === true);
   const lastReplies = (recent || []).filter((r: any) => Date.now() - new Date(r.created_at).getTime() < 15 * 60000).map((r: any) => String(r.reply || ''));
   const decision = decideBot({
     enabled: true, deviceRole: 'sales', isGroup: m.isGroup, isFromMe: m.isFromMe, body: m.body, mediaType: m.mediaType,
-    state: { status: (chat?.status as any) ?? null, replies: chat?.replies ?? 0 }, maxReplies: isMetaChat(m.chatId) ? Math.max(cfg.max_replies ?? 4, SOCIAL_MAX_REPLIES) : cfg.max_replies ?? 4,
+    state: { status: (chat?.status as any) ?? null, replies: chat?.replies ?? 0 }, maxReplies,
     echoOfBot: m.isFromMe && isBotEcho(m.body, lastReplies),
   });
 
@@ -76,7 +80,7 @@ export async function runSalesBot(device: BotDevice, m: ParsedWaMessage, groupId
   const allowed = `${knowledge}\n${socialScript}`;   // links may come from either
   const { system, prompt } = buildBotPrompt({
     persona: cfg.persona_name, company: cfg.company_name, knowledge, history, replyNo, channel, socialScript,
-    meeting: meet?.enabled ? { minutes: meet.minutes, offer: meet.offer, booked: meet.booked } : null,
+    meeting: meet?.enabled ? { minutes: meet.minutes, offer: meet.offer, days: meet.days, booked: meet.booked } : null,
     deck: !!validDeckUrl(cfg.deck_url),
     inHours: inOpenHours(new Date(), cfg.hours_from || '08:00', cfg.hours_to || '21:00'),
   });
@@ -126,7 +130,7 @@ export async function runSalesBot(device: BotDevice, m: ParsedWaMessage, groupId
   if (answer.sendDeck && deckUrl && !history.some((t) => t.from === 'team' && t.text.includes(deckUrl))) answer = { ...answer, reply: deckLine(answer.reply, deckUrl) };
 
   // The words that always need a person decide, whatever the model said.
-  const forced = needsHuman(m.body);
+  const forced = needsHuman(m.body, { meetings: meet?.enabled === true });
   const handoff = answer.handoff || !!forced;
   const reason = forced || answer.reason || (handoff ? 'The bot asked for a person.' : '');
 

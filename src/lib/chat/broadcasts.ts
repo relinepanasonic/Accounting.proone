@@ -43,12 +43,14 @@ async function audience(ws: string): Promise<{ list: Array<{ group_id: string; w
   const { data: devs } = await db.from('wa_devices').select('id, phone').eq('workspace_id', ws).eq('role', 'sales').eq('active', true);
   const waDevices = ((devs || []) as Array<{ id: string; phone: string }>).filter((d) => !/^(ig|fb):/.test(d.phone)).map((d) => d.id);
   if (!waDevices.length) return { list: [], optedOut: 0 };
-  const [{ data: groups }, { data: outs }] = await Promise.all([
+  const [{ data: groups }, { data: outs }, { data: ign }] = await Promise.all([
     db.from('wa_groups').select('id, wa_id, name, last_message_at').eq('workspace_id', ws).eq('is_group', false).in('device_id', waDevices).order('last_message_at', { ascending: false }).limit(5000),
     db.from('chat_optouts').select('wa_id').eq('workspace_id', ws).limit(10000),
+    db.from('chat_state').select('group_id').eq('workspace_id', ws).eq('ignored', true),
   ]);
+  const ignored = new Set(((ign || []) as Array<{ group_id: string }>).map((x) => x.group_id));
   const out = new Set(((outs || []) as Array<{ wa_id: string }>).map((o) => o.wa_id));
-  const all = ((groups || []) as Array<{ id: string; wa_id: string; name: string | null }>).filter((g) => /^\d{8,16}$/.test(g.wa_id));
+  const all = ((groups || []) as Array<{ id: string; wa_id: string; name: string | null }>).filter((g) => /^\d{8,16}$/.test(g.wa_id) && !ignored.has(g.id));
   return { list: all.filter((g) => !out.has(g.wa_id)).map((g) => ({ group_id: g.id, wa_id: g.wa_id, name: g.name })), optedOut: all.filter((g) => out.has(g.wa_id)).length };
 }
 

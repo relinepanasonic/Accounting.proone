@@ -9,6 +9,8 @@ import { optOut } from './broadcasts';
 import { handleMeetingReply } from './meetings';
 import { handleNudgeReply } from './nudges';
 import { autoStage } from './pipeline';
+import { notALeadReason } from './not-a-lead';
+import { createAdminClient } from '@/lib/api/supabase-admin';
 
 /**
  * What happens after a sales chat message is saved, the same for WhatsApp, Instagram and Messenger. One sequence, in this order:
@@ -19,6 +21,20 @@ export async function afterSalesMessage(device: BotDevice, parsed: ParsedWaMessa
   if (!res.stored || !res.isNew || !res.groupId || device.role !== 'sales') return;
   const groupId = res.groupId;
   if (!parsed.isGroup && parsed.mediaUrl && res.messageId) void archiveInboundMedia(device.workspace_id, groupId, res.messageId, parsed.mediaUrl, parsed.mediaType);
+  // not a lead: a verification code or a company's automatic greeting, or a chat marked "not a lead": nothing answers it and no lead is made
+  if (!parsed.isGroup && !parsed.isFromMe) {
+    const db = createAdminClient();
+    const { data: st } = await db.from('chat_state').select('ignored').eq('group_id', groupId).maybeSingle();
+    if ((st as any)?.ignored) return;
+    const { data: g } = await db.from('wa_groups').select('name').eq('id', groupId).maybeSingle();
+    const why = notALeadReason(parsed.body, (g as any)?.name);
+    if (why) {
+      const now = new Date().toISOString();
+      await db.from('chat_state').upsert({ group_id: groupId, workspace_id: device.workspace_id, ignored: true, ignored_reason: why, resolved_at: now, updated_at: now }, { onConflict: 'group_id' });
+      await db.from('wa_bot_chats').upsert({ group_id: groupId, workspace_id: device.workspace_id, status: 'off', reason: why, updated_at: now }, { onConflict: 'group_id' });
+      return;
+    }
+  }
   // "STOP": no more broadcasts for this person, said once; no bot answer to it
   if (!parsed.isGroup && !parsed.isFromMe && isStopWord(parsed.body)) { await optOut(device.workspace_id, groupId, parsed.chatId).catch((e) => console.error('opt-out failed', e)); return; }
   // a short reply about the lead's meeting (YA, GANTI, BATAL, or the number of a new time) is answered here, not by the bot

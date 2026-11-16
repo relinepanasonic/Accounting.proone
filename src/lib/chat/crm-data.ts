@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/api/supabase-admin';
+import { lockedRefusal } from './data';
 import { chatLabel, clientPhoneOf, isMetaChat, phoneTail } from './channel';
 import { sendMedia, asDelivery } from '@/lib/wa/send-media';
 import { adminMediaStorage } from '@/lib/wa/media-storage';
@@ -272,6 +273,8 @@ export async function sendChatImage(ws: string, groupId: string, input: { path?:
   if (isMetaChat(chat.wa_id)) return fail(400, 'Sending pictures to Instagram and Messenger is not ready yet. Send text, or share a link.');
   const path = String(input.path ?? '');
   if (!path.startsWith(`chat/${ws}/${groupId}/out-`) || path.includes('..')) return fail(400, 'That picture does not belong to this chat.');
+  const locked = await lockedRefusal(groupId);                      // a picture goes only into a chat a person has taken
+  if (locked) return locked;
   if (!process.env.FONNTE_TOKEN_SALES) return fail(503, 'The sales number is not connected (FONNTE_TOKEN_SALES is missing on the server).');
   const caption = String(input.caption ?? '').trim().slice(0, 1000);
   const db = createAdminClient();

@@ -29,7 +29,9 @@ async function build(ws: string, days: number): Promise<InsightsResult> {
   const devIds = ((devs || []) as Array<{ id: string }>).map((d) => d.id);
   if (!devIds.length) return empty;
   const { data: groups } = await db.from('wa_groups').select('id').eq('workspace_id', ws).eq('is_group', false).in('device_id', devIds).limit(3000);
-  const ids = ((groups || []) as Array<{ id: string }>).map((g) => g.id);
+  const { data: ign } = await db.from('chat_state').select('group_id').eq('workspace_id', ws).eq('ignored', true);
+  const ignored = new Set(((ign || []) as Array<{ group_id: string }>).map((x) => x.group_id));
+  const ids = ((groups || []) as Array<{ id: string }>).map((g) => g.id).filter((id) => !ignored.has(id));      // chats that are not leads are not what clients ask
   if (!ids.length) return empty;
   const [{ data: msgs }, { data: bots }] = await Promise.all([
     db.from('wa_messages').select('group_id, body, sent_at').eq('workspace_id', ws).eq('is_from_me', false).in('group_id', ids).gte('sent_at', since).order('sent_at', { ascending: true }).limit(20000),

@@ -13,7 +13,7 @@ import { paymentOf } from './payment-status';
 import { cleanTeam } from './sales-team';
 import { PIPELINE_STAGES } from '@/lib/sales/flow';
 import {
-  cleanShortcut, conversationsOf, countsOf, filterConversations, sourceOf, threadOf,
+  chatLocked, LOCKED_MESSAGE, cleanShortcut, conversationsOf, countsOf, filterConversations, sourceOf, threadOf,
   type BotChatRow, type ChatFilter, type ChatGroupRow, type ChatMessageRow, type ChatNoteRow, type ChatStateRow,
 } from './shape';
 
@@ -150,13 +150,13 @@ export async function loadPipeline(ws: string): Promise<{ deals: BoardDeal[]; st
 export async function listConversations(ws: string, filter: ChatFilter, q: string, meId: string, labelId = '', stage = '') {
   const db = createAdminClient();
   const { groups } = await salesGroups(ws);
-  const none = { conversations: [], counts: { all: 0, mine: 0, unserved: 0, bot: 0, human: 0, resolved: 0, followup: 0 }, labels: await listLabels(ws), features: { media: await mediaEnabled(ws) } };
+  const none = { conversations: [], counts: { all: 0, mine: 0, unserved: 0, bot: 0, human: 0, resolved: 0, followup: 0, ignored: 0 }, labels: await listLabels(ws), features: { media: await mediaEnabled(ws) } };
   if (!groups.length) return none;
   const ids = groups.map((g) => g.id);
   const [{ data: msgs }, { data: bot }, { data: states }] = await Promise.all([
     db.from('wa_messages').select('id, group_id, body, media_type, is_from_me, sent_at').eq('workspace_id', ws).in('group_id', ids).order('sent_at', { ascending: false }).limit(1500),
     db.from('wa_bot_chats').select('group_id, status, replies, reason, lead').eq('workspace_id', ws).in('group_id', ids),
-    db.from('chat_state').select('group_id, assigned_to, assigned_name, resolved_at, first_message, source_label, source_channel, source_by, deal_id').eq('workspace_id', ws).in('group_id', ids),
+    db.from('chat_state').select('group_id, assigned_to, assigned_name, resolved_at, ignored, first_message, source_label, source_channel, source_by, deal_id').eq('workspace_id', ws).in('group_id', ids),
   ]);
   const all = conversationsOf(groups, (msgs || []) as ChatMessageRow[], (bot || []) as BotChatRow[], (states || []) as ChatStateRow[]).filter((c) => c.lastAt);
   const extra = await inboxExtras(ws, all.map((c) => c.id));
@@ -178,7 +178,7 @@ export async function loadThread(ws: string, groupId: string) {
     db.from('wa_bot_chats').select('group_id, status, replies, reason, lead').eq('group_id', groupId).maybeSingle(),
     db.from('wa_bot_log').select('reply, handoff, ok, detail, created_at').eq('group_id', groupId).order('created_at', { ascending: false }).limit(30),
     clientPhones(ws).then((data) => ({ data })),
-    db.from('chat_state').select('group_id, assigned_to, assigned_name, resolved_at, first_message, first_message_at, source_id, source_label, source_channel, source_by, answers, deal_id').eq('group_id', groupId).maybeSingle(),
+    db.from('chat_state').select('group_id, assigned_to, assigned_name, resolved_at, first_message, first_message_at, source_id, source_label, source_channel, source_by, answers, deal_id, ignored, ignored_reason').eq('group_id', groupId).maybeSingle(),
     db.from('chat_notes').select('id, group_id, author_name, body, created_at').eq('group_id', groupId).order('created_at', { ascending: false }).limit(100),
   ]);
   const client = (clients || []).find((c: any) => phoneTail(c.phone).length >= 8 && phoneTail(c.phone) === phoneTail(group.wa_id)) || null;
@@ -227,6 +227,8 @@ export async function loadThread(ws: string, groupId: string) {
     flowWaiting: sessionLive && ses ? { flow: ses.flow_name, kind: ses.kind, field: ses.field, until: ses.kind === 'wait' ? ses.resume_at : ses.expires_at } : null,
     source: sourceOf(state), sourceId: state?.source_id ?? null, firstMessage: state?.first_message ?? null,
     resolved: !!state?.resolved_at && !(lastLead && lastLead.sent_at > state.resolved_at),
+    locked: chatLocked((bot as any)?.status ?? 'new', state?.assigned_to ?? null),
+    ignored: !!(st as any)?.ignored, ignoredReason: (st as any)?.ignored_reason ?? null,
     client: client ? { id: (client as any).id, name: (client as any).name, sales: (client as any).sales_name, serviceEnd: (client as any).service_end_date } : null,
     deals: (deals || []).map((d: any) => { const inv = d.invoice_id ? invById.get(d.invoice_id) : null; return { id: d.id, title: d.title, stage: d.stage, value: Number(d.value || 0), sales: d.salesman_name, salesId: d.salesman_id ?? null, payment: paymentOf(inv, todayJkt), invoice: inv ? { number: inv.invoice_number ?? null, total: Number(inv.total_amount || 0), paid: Number(inv.amount_paid || 0), due: inv.due_date ?? null } : null }; }),
   };
@@ -248,6 +250,16 @@ async function claimIfFree(ws: string, groupId: string, by: Who, reopen: boolean
 }
 
 /** Sends a reply from the sales number, keeps it in the chat history, takes the chat if it is free, and hands the chat to a person (the bot stops). */
+/** Null when the chat is open for typing; else the refusal. A message is only sent into a chat a person has taken (see chatLocked). */
+export async function lockedRefusal(groupId: string): Promise<Fail | null> {
+  const db = createAdminClient();
+  const [{ data: bot }, { data: st }] = await Promise.all([
+    db.from('wa_bot_chats').select('status').eq('group_id', groupId).maybeSingle(),
+    db.from('chat_state').select('assigned_to').eq('group_id', groupId).maybeSingle(),
+  ]);
+  return chatLocked((bot as any)?.status ?? null, (st as any)?.assigned_to) ? fail(409, LOCKED_MESSAGE) : null;
+}
+
 export async function sendReply(ws: string, groupId: string, text: string, by: Who): Promise<{ ok: true; message: { id: string; at: string } } | Fail> {
   const clean = text.replace(/\r\n/g, '\n').trim();
   if (!clean) return fail(400, 'Type a message first.');
@@ -255,6 +267,8 @@ export async function sendReply(ws: string, groupId: string, text: string, by: W
   const db = createAdminClient();
   const group = await ownGroup(ws, groupId);
   if (!group) return fail(404, 'Chat not found.');
+  const locked = await lockedRefusal(groupId);
+  if (locked) return locked;
   const { data: gd } = await db.from('wa_groups').select('device_id').eq('id', groupId).maybeSingle();
   const devicePhone = (await salesDevices(ws)).find((d) => d.id === (gd as any)?.device_id)?.phone ?? null;
 
@@ -298,6 +312,20 @@ async function loadAgents(ws: string): Promise<Array<{ id: string; name: string;
   const { data: profs } = ids.length ? await db.from('profiles').select('id, full_name').in('id', ids) : { data: [] as any[] };
   const nameOf = (m: any) => String((profs || []).find((p: any) => p.id === m.user_id)?.full_name || '').trim() || String(m.email || '').split('@')[0] || 'Team';
   return (members || []).map((m: any) => ({ id: m.user_id as string, name: nameOf(m), role: String(m.role) })).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Marks a chat "not a lead" (or gives it back): the bot stays quiet, no lead is made, and it leaves the inbox tabs, the statistics, the follow-ups and the
+ * broadcasts. Giving it back lets the bot answer again. `reason` is shown on the chat.
+ */
+export async function setChatIgnored(ws: string, groupId: string, ignored: boolean, reason: string): Promise<{ ok: true } | Fail> {
+  if (!(await ownGroup(ws, groupId))) return fail(404, 'Chat not found.');
+  const db = createAdminClient();
+  const now = new Date().toISOString();
+  const { error } = await upsertState(ws, groupId, { ignored, ignored_reason: ignored ? reason.slice(0, 200) : null, ...(ignored ? { resolved_at: now } : { resolved_at: null }) });
+  if (error) return fail(500, error.message);
+  await db.from('wa_bot_chats').upsert({ group_id: groupId, workspace_id: ws, status: ignored ? 'off' : 'bot', reason: ignored ? reason.slice(0, 200) : null, updated_at: now }, { onConflict: 'group_id' });
+  return { ok: true };
 }
 
 /** Gives the chat to a person (or to nobody, with userId null). */

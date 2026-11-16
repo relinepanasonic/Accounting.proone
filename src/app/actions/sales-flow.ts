@@ -8,6 +8,8 @@ import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
 import { clientMask } from '@/lib/auth/client-privacy';
 import { MANUAL_STAGES, PIPELINE_STAGES, PROPOSAL_STAGES, computeProjectTerms, requestTotal, type NegotiationNote, type RequestItem, LOCKED_STAGES } from '@/lib/sales/flow';
 import { dealItems, notify, resolveNotifications } from '@/lib/sales/server';
+import { alertPeople } from '@/lib/wa/team-alerts';
+import { accRequestText, invoiceRequestText } from '@/lib/wa/team-alerts-text';
 import { invoiceScope } from '@/lib/sales/client-table';
 import { catalogError, unknownProducts } from '@/lib/invoices/catalog-workspace';
 
@@ -216,6 +218,8 @@ export async function requestInvoice(dealId: string, items: RequestItem[], note:
     link: '/invoices',
     refId: req.id,
   });
+  // WhatsApp to Lucy (Accounting) and Nico: an invoice to make, with the link to the requests page in the ERP
+  void alertPeople(ctx.activeWorkspaceId, ['Lucy', 'Nico'], invoiceRequestText({ client: client?.name || deal.lead_name || 'Client', sales: ctx.userName || deal.salesman_name || '', items: clean.map((x) => ({ name: x.name, quantity: x.quantity })), total, note: str(note, 200) || null }));
 
   revalidatePath('/sales/pipeline');
   revalidatePath('/invoices/requests');
@@ -515,6 +519,9 @@ export async function askAcc(dealId: string, approverId: string): Promise<Result
     link: '/sales/pipeline',
     refId: deal.id,
   });
+  // WhatsApp to Herlan and Nico: either of them can ACC, with the link to the card in the ERP
+  const notes = Array.isArray(deal.negotiation_notes) ? deal.negotiation_notes : [];
+  void alertPeople(a.ctx.activeWorkspaceId, ['Nico', 'Herlan'], accRequestText({ client: client?.name || deal.lead_name || 'Client', title: deal.title || 'Deal', value: Number(deal.value || 0), sales: a.ctx.userName || deal.salesman_name || '', lastNote: notes.length ? String(notes[notes.length - 1]?.text || '') : null }));
   revalidatePath('/sales/pipeline');
   return { success: true };
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isHiFefe, isTestOn, isTestOff, parseAiLead, restOf, phoneIn, codeIn, findMatches, pickMatch, personKey, parseLeadCommand, stageFromText, normalizePhone, TEMPLATE } from './staff-lead';
+import { isHiFefe, isTestOn, isTestOff, parseAiLead, restOf, phoneIn, codeIn, clientNoIn, findMatches, pickMatch, personKey, parseLeadCommand, stageFromText, normalizePhone, TEMPLATE } from './staff-lead';
 
 describe('Hi Fefe', () => {
   it('starts the command, in any of the usual spellings', () => {
@@ -119,5 +119,14 @@ describe('which lead does the message mean', () => {
     expect(codeIn('Hi Fefe #a1b2c3 pindah ke Warm')).toBe('A1B2C3');
     expect(codeIn('Hi Fefe tanpa kode')).toBe('');
     expect(personKey('Bu Tati')).toBe('tati'); expect(personKey('Pak Budi Santoso')).toBe('budi santoso');
+  });
+});
+
+describe('the Client ID', () => {
+  it('is read from "ID 1042", "klien 1042" and "#1042"', () => {
+    for (const t of ['Hi Fefe ID 1042 pindah ke Warm', 'hi fefe klien 1042 warm', 'Hi Fefe id: 1042', 'Hi Fefe #1042 pindah', 'client no. 1042']) expect(clientNoIn(t)).toBe(1042);
+  });
+  it('is not a lead code, a phone number or a number in passing', () => {
+    for (const t of ['Hi Fefe #A1B2C3 pindah', 'Hi Fefe 0812345678', 'omzet 50 juta', 'Hi Fefe #123456', '']) expect(clientNoIn(t)).toBeNull();
   });
 });

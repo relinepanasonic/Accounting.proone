@@ -72,7 +72,8 @@ Balas HANYA dengan satu objek JSON, tanpa teks lain:
 - "brand furniture" atau "toko fashion" artinya kategorinya furniture atau fashion, bukan nama merek.
 - Nomor telepon hanya di "hp", jangan di kolom lain.
 - Permintaan membuat jadwal meeting, atau hal lain yang bukan memasukkan atau mengubah lead, adalah "tidak_jelas".
-- Kalau pesan menyebut orang atau toko yang sudah ada dan hanya meminta mengubah tahap atau datanya, aksinya "ubah", jangan "buat".`;
+- Kalau pesan menyebut orang atau toko yang sudah ada dan hanya meminta mengubah tahap atau datanya, aksinya "ubah", jangan "buat".
+- "ID 1042" atau "klien 1042" adalah nomor klien, bukan nomor telepon dan bukan jumlah uang: jangan taruh di kolom lain.`;
 
 /** Reads the model's JSON (it may come wrapped in text). Null when there is none. */
 export function parseAiLead(text: string): { action: 'create' | 'update' | 'unclear'; fields: LeadFields } | null {
@@ -103,6 +104,13 @@ const HONORIFICS = new Set(['bu', 'ibu', 'pak', 'bapak', 'kak', 'kakak', 'mas', 
 export const personKey = (s: string | null | undefined) => norm(s).split(' ').filter((w) => w && !HONORIFICS.has(w)).join(' ');
 /** The short code of a lead written in a message: "#A1B2C3". Empty when there is none. */
 export const codeIn = (text: string | null | undefined) => (/#([0-9a-f]{6})\b/i.exec(String(text ?? '')) || [])[1]?.toUpperCase() ?? '';
+
+/** The Client ID written in a message: "ID 1042", "klien 1042", "#1042". Null when there is none. (A "#" plus 6 characters is a lead code, not this.) */
+export function clientNoIn(text: string | null | undefined): number | null {
+  const t = String(text ?? '');
+  const m = /\b(?:id|klien|client|pelanggan)\s*(?:no\.?|nomor)?\s*[:=]?\s*#?\s*(\d{3,6})\b/i.exec(t) || /#(\d{4,5})\b/.exec(t);
+  return m ? Number(m[1]) : null;
+}
 
 export interface ClientRow { id: string; name: string | null; store_name: string | null; contact_name: string | null; phone: string | null }
 export interface Match { client: ClientRow; score: number }

@@ -166,7 +166,7 @@ export function ClientContactTable({ rows, canEdit, storeOptions, waGroups }: { 
       if (filter === 'nostore' && (r.row.stores || []).length) return false;
       if (filter === 'nopic' && r.pic.trim()) return false;
       if (filter === 'nobrand' && r.brand.trim()) return false;
-      return !q || [r.name, r.brand, r.pic, r.address, storeText(r)].some((t) => t.toLowerCase().includes(q));
+      return !q || [r.name, r.brand, r.pic, r.address, storeText(r), r.row.clientNo ? `id ${r.row.clientNo} ${r.row.clientNo}` : ''].some((t) => t.toLowerCase().includes(q));
     });
     const val = (r: ContactRow) => (sort.key === 'name' ? r.name : sort.key === 'brand' ? r.brand : sort.key === 'pic' ? r.pic : sort.key === 'address' ? r.address : (r.row.stores || []).map((s) => s.store).join(' ')).toLowerCase();
     return list.sort((a, b) => val(a).localeCompare(val(b), 'id', { numeric: true }) * (sort.asc ? 1 : -1));
@@ -227,6 +227,7 @@ export function ClientContactTable({ rows, canEdit, storeOptions, waGroups }: { 
                         <div className="flex items-center gap-3">
                           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[11px] font-extrabold text-black" style={{ background: colorOf(r.name) }} aria-hidden>{initials(r.name)}</span>
                           <div className="min-w-0 flex-1">
+                            {r.row.clientNo ? <span className="ml-2 inline-block rounded-full border border-[#d4af37]/30 bg-[#d4af37]/10 px-2 py-px text-[10.5px] font-bold text-[#f5d77f]" title="Client ID: tell Fefe, Hi Fefe ID {r.row.clientNo}">ID {r.row.clientNo}</span> : null}
                             <EditCell clientId={r.clientId} kind="name" value={r.name} canEdit={canEdit} placeholder="Company name" />
                             {canEdit && <div className="px-2 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"><AddBrand company={r.name} /></div>}
                           </div>
@@ -256,6 +257,7 @@ export function ClientContactTable({ rows, canEdit, storeOptions, waGroups }: { 
                       <div className="flex flex-wrap items-center gap-3">
                         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[11px] font-extrabold text-black" style={{ background: colorOf(head.name) }} aria-hidden>{initials(head.name)}</span>
                         <div className="min-w-[220px] max-w-[360px] flex-1"><EditCell clientId={head.clientId} ids={g.map((x) => x.clientId)} kind="name" value={head.name} canEdit={canEdit} placeholder="Company name" /></div>
+                        {head.row.clientNo ? <span className="rounded-full border border-[#d4af37]/30 bg-[#d4af37]/10 px-2 py-px text-[10.5px] font-bold text-[#f5d77f]" title="Client ID">ID {head.row.clientNo}</span> : null}
                         <span className="rounded-full border border-[#d4af37]/30 bg-[#d4af37]/10 px-2.5 py-0.5 text-[11px] font-bold text-[#f5d77f]">{g.length} brands</span>
                         {canEdit && <AddBrand company={head.name} />}
                         {showWa && canEdit && (

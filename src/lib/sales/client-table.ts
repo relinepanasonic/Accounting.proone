@@ -22,6 +22,8 @@ type Db = any;
 
 export interface ClientRow {
   key: string;
+  /** The Client ID: a permanent number that is easy to say (1001, 1002...). */
+  clientNo?: number | null;
   invoiceId: string;
   dealId: string | null;
   clientId: string;
@@ -99,7 +101,7 @@ async function loadInvoiceRows(db: Db, workspaceId: string, opts: LoadOpts): Pro
 
   const [dealsRes, clientsRes, projectsRes, linesRes, productsRes, assignRes, payRes, txPayRes] = await Promise.all([
     db.from('crm_deals').select('id, invoice_id, stage, salesman_id, salesman_name, paid_at, acc_approved_at').eq('workspace_id', workspaceId).in('invoice_id', invoiceIds),
-    db.from('clients').select('id, name, company_name, store_name').in('id', clientIds),
+    db.from('clients').select('id, name, company_name, store_name, client_no').in('id', clientIds),
     db.from('projects').select('invoice_id, deal_id, start_date').eq('workspace_id', workspaceId).in('invoice_id', invoiceIds),
     db.from('invoice_line_items').select('invoice_id, package_name, description, quantity, scale').in('invoice_id', invoiceIds),
     db.from('products').select('id, name, duration_type, duration_value, deliverable_unit').eq('workspace_id', workspaceId),
@@ -219,6 +221,7 @@ async function loadInvoiceRows(db: Db, workspaceId: string, opts: LoadOpts): Pro
         invoiceId: inv.id,
         dealId: deal?.id || null,
         clientId: inv.client_id,
+        clientNo: (client as any).client_no ?? null,
         clientName: opts.maskName(client.name, inv.assigned_workspace_id),
         brand: client.company_name || '',
         store: client.store_name || '',
@@ -316,7 +319,7 @@ async function loadClientRowsBase(db: Db, workspaceId: string, opts: LoadOpts & 
   const hasInvoice = new Set<string>((used || []).filter((i: any) => !HIDDEN_STATUS.includes(String(i.status || '').toLowerCase())).map((i: any) => i.client_id));
 
   const build = (hide: boolean) => {
-    let q = db.from('clients').select('id, name, company_name, store_name, contact_type').eq('workspace_id', workspaceId).neq('contact_type', 'vendor').order('name').limit(1000);
+    let q = db.from('clients').select('id, name, company_name, store_name, contact_type, client_no').eq('workspace_id', workspaceId).neq('contact_type', 'vendor').order('name').limit(1000);
     if (hide) q = q.eq('is_prospect', false);
     return q;
   };
@@ -347,6 +350,7 @@ async function loadClientRowsBase(db: Db, workspaceId: string, opts: LoadOpts & 
     invoiceId: '',
     dealId: null,
     clientId: c.id,
+    clientNo: (c as any).client_no ?? null,
     clientName: opts.maskName(c.name, null),
     brand: c.company_name || '',
     store: c.store_name || '',

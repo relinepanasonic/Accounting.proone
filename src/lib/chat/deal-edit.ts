@@ -16,7 +16,7 @@ async function load(ws: string, dealId: string) {
   const { data: deal } = await db.from('crm_deals').select('id, title, value, notes, stage, client_id, salesman_id, invoice_id, paid_at').eq('id', dealId).eq('workspace_id', ws).maybeSingle();
   if (!deal) return null;
   const clientId = (deal as any).client_id as string | null;
-  const { data: client } = clientId ? await db.from('clients').select('id, name, store_name, contact_name, phone, billing_address, is_prospect').eq('id', clientId).maybeSingle() : { data: null };
+  const { data: client } = clientId ? await db.from('clients').select('id, name, store_name, contact_name, phone, billing_address, is_prospect, client_no').eq('id', clientId).maybeSingle() : { data: null };
   return { deal: deal as any, client: (client || null) as any };
 }
 
@@ -25,7 +25,7 @@ export async function getDealDetail(ws: string, dealId: string) {
   if (!r) return fail(404, 'Lead not found.');
   const { deal, client } = r;
   return {
-    id: deal.id as string, code: dealCode(deal.id), stage: deal.stage as string, title: String(deal.title || ''), value: Number(deal.value || 0), notes: String(deal.notes || ''),
+    id: deal.id as string, code: dealCode(deal.id), clientNo: (client?.client_no ?? null) as number | null, stage: deal.stage as string, title: String(deal.title || ''), value: Number(deal.value || 0), notes: String(deal.notes || ''),
     name: String(client?.name || ''), store: String(client?.store_name || ''), pic: String(client?.contact_name || ''), phone: String(client?.phone || ''), address: String(client?.billing_address || ''),
     realClient: !!client && client.is_prospect === false,
   };

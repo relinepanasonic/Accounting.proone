@@ -59,7 +59,7 @@ export async function findClientByPhone(ws: string, waId: string): Promise<{ id:
 
 /** The phone numbers of the company's clients (to show the client next to a chat): kept for 5 minutes instead of reading thousands of rows on every poll. */
 const clientPhones = (ws: string) => memo(`clients:${ws}`, 300_000, async () => {
-  const { data } = await createAdminClient().from('clients').select('id, name, phone, sales_name, service_end_date, lead_source, first_contact_message').eq('workspace_id', ws).not('phone', 'is', null).limit(3000);
+  const { data } = await createAdminClient().from('clients').select('id, name, phone, sales_name, service_end_date, lead_source, first_contact_message, client_no').eq('workspace_id', ws).not('phone', 'is', null).limit(3000);
   return (data || []) as any[];
 });
 
@@ -97,7 +97,7 @@ async function dealsOfChats(ws: string, groups: ChatGroupRow[], linked: Map<stri
 }
 
 export interface BoardDeal {
-  id: string; code: string; title: string; client: string; stage: string; value: number;
+  id: string; code: string; clientNo: number | null; title: string; client: string; stage: string; value: number;
   sales: string | null; salesId: string | null; groupId: string | null;
   daysInStage: number; payment: ReturnType<typeof paymentOf>; nextMeetingAt: string | null;
 }
@@ -124,9 +124,10 @@ export async function loadPipeline(ws: string): Promise<{ deals: BoardDeal[]; st
     db.from('chat_state').select('group_id, deal_id').eq('workspace_id', ws).in('deal_id', ids),
     db.from('invoices').select('id, status, total_amount, amount_paid, due_date').in('id', rows.map((d) => d.invoice_id).filter(Boolean)),
     db.from('chat_meetings').select('group_id, starts_at').eq('workspace_id', ws).eq('status', 'booked').gte('starts_at', new Date().toISOString()).order('starts_at', { ascending: true }).limit(500),
-    clientIds.length ? db.from('clients').select('id, name').in('id', clientIds) : Promise.resolve({ data: [] as any[] }),
+    clientIds.length ? db.from('clients').select('id, name, client_no').in('id', clientIds) : Promise.resolve({ data: [] as any[] }),
   ]);
   const nameOf = new Map<string, string>(((cn || []) as any[]).map((c) => [c.id, String(c.name || '')]));
+  const noOf = new Map<string, number>(((cn || []) as any[]).filter((c) => c.client_no != null).map((c) => [c.id, Number(c.client_no)]));
   const groupOfDeal = new Map<string, string>(((links || []) as any[]).map((l) => [l.deal_id as string, l.group_id as string]));
   const groupOfTail = new Map<string, string>();
   for (const g of groups) { const t = phoneTail(g.wa_id); if (t.length >= 8 && !groupOfTail.has(t)) groupOfTail.set(t, g.id); }
@@ -140,7 +141,7 @@ export async function loadPipeline(ws: string): Promise<{ deals: BoardDeal[]; st
     const groupId = groupOfDeal.get(d.id) || groupOfTail.get(phoneOfClient.get(d.client_id) || '') || null;
     const since = day(d.stage_changed_at || d.created_at);
     return {
-      id: d.id, code: dealCode(d.id), title: String(d.title || 'Deal'), client: nameOf.get(d.client_id) || d.lead_name || 'Client', stage: d.stage, value: Number(d.value || 0),
+      id: d.id, code: dealCode(d.id), clientNo: noOf.get(d.client_id) ?? null, title: String(d.title || 'Deal'), client: nameOf.get(d.client_id) || d.lead_name || 'Client', stage: d.stage, value: Number(d.value || 0),
       sales: d.salesman_name ?? null, salesId: d.salesman_id ?? null, groupId,
       daysInStage: Math.max(0, Math.round((Date.parse(`${today}T12:00:00Z`) - Date.parse(`${since}T12:00:00Z`)) / 86400000)),
       payment: d.invoice_id ? paymentOf(invOf.get(d.invoice_id), today) : null, nextMeetingAt: groupId ? nextMeet.get(groupId) ?? null : null,
@@ -231,7 +232,7 @@ export async function loadThread(ws: string, groupId: string) {
     resolved: !!state?.resolved_at && !(lastLead && lastLead.sent_at > state.resolved_at),
     locked: chatLocked((bot as any)?.status ?? 'new', state?.assigned_to ?? null),
     ignored: !!(st as any)?.ignored, ignoredReason: (st as any)?.ignored_reason ?? null,
-    client: client ? { id: (client as any).id, name: (client as any).name, sales: (client as any).sales_name, serviceEnd: (client as any).service_end_date } : null,
+    client: client ? { id: (client as any).id, name: (client as any).name, sales: (client as any).sales_name, serviceEnd: (client as any).service_end_date, no: (client as any).client_no ?? null } : null,
     deals: (deals || []).map((d: any) => { const inv = d.invoice_id ? invById.get(d.invoice_id) : null; return { id: d.id, title: d.title, stage: d.stage, value: Number(d.value || 0), sales: d.salesman_name, salesId: d.salesman_id ?? null, payment: paymentOf(inv, todayJkt), invoice: inv ? { number: inv.invoice_number ?? null, total: Number(inv.total_amount || 0), paid: Number(inv.amount_paid || 0), due: inv.due_date ?? null } : null }; }),
   };
 }

@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/api/supabase-admin';
 import { parseFonnteWebhook, readWebhookPayload } from '@/lib/wa/parse-webhook';
 import { deviceBySecret, ingestMessage } from '@/lib/wa/ingest';
 import { afterSalesMessage } from '@/lib/chat/inbound';
+import { handleSalesGroupMessage } from '@/lib/chat/group-consultant';
 
 export const dynamic = 'force-dynamic';
 // The sales bot runs after the answer to Fonnte, inside this same function: it needs room for the model call (at most ~35 s) and the send.
@@ -41,6 +42,14 @@ export async function POST(request: Request, ctx: { params: Promise<{ secret: st
     if (!parsed) {
       await logCall(device, 'ignored', Object.keys(payload).length ? 'no text or media, or no device/sender' : 'empty body', contentType, payload);
       return NextResponse.json({ ok: true, ignored: true }, { headers: NO_STORE });
+    }
+
+    // The sales number may sit in seller groups where Fefe answers questions. A group message on it is NEVER saved (not the text, not the members' numbers):
+    // it is read once, and Fefe may answer it (see lib/chat/group-consultant.ts).
+    if (device.role === 'sales' && parsed.isGroup) {
+      after(() => handleSalesGroupMessage(device, parsed));
+      await logCall(device, 'ignored', 'group message on the sales number (not saved)', contentType, null);
+      return NextResponse.json({ ok: true, group: true }, { headers: NO_STORE });
     }
 
     try {

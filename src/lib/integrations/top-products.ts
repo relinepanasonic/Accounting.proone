@@ -24,7 +24,7 @@ export function normalizeStoreProducts(source: PerfSource, s: any, limit = 10): 
   return { source, store, workspace: String(s?.workspace || '').trim(), products };
 }
 
-export async function fetchTopProducts(source: PerfSource, from: string, to: string, timeoutMs = 45000): Promise<ProductsResult> {
+export async function fetchTopProducts(source: PerfSource, from: string, to: string, timeoutMs = 45000, opts: { fresh?: boolean } = {}): Promise<ProductsResult> {
   const keyName = source === 'dashboard' ? 'DASHBOARD_API_KEY' : 'RELINE_API_KEY';
   const key = source === 'dashboard' ? process.env.DASHBOARD_API_KEY : process.env.RELINE_API_KEY;
   const base = (source === 'dashboard' ? process.env.DASHBOARD_API_URL || 'https://dashboard.profesoronline.id' : process.env.RELINE_API_URL || 'https://reline.profesoronline.id').replace(/\/$/, '');
@@ -32,7 +32,7 @@ export async function fetchTopProducts(source: PerfSource, from: string, to: str
   try {
     const res = await fetch(`${base}/api/erp/top-products?from=${from}&to=${to}&limit=10`, {
       headers: { Authorization: `Bearer ${key}`, Accept: 'application/json' },
-      next: { revalidate: 300 },
+      ...(opts.fresh ? { cache: 'no-store' as const } : { next: { revalidate: 300 } }),
       redirect: 'manual',
       signal: AbortSignal.timeout(timeoutMs),
     });

@@ -18,11 +18,11 @@ export interface StorePerformance {
 }
 
 /** range: the dates asked from both feeds (a whole year and more: the month, week and date-range cuts are made in memory, and the baseline snapshot of a store is never lost). */
-export async function loadStorePerformance(range: { from: string; to: string }, viewer: { userId: string | null; role: string }): Promise<StorePerformance> {
+export async function loadStorePerformance(range: { from: string; to: string }, viewer: { userId: string | null; role: string }, opts: { fresh?: boolean } = {}): Promise<StorePerformance> {
   const { from, to } = range;
   const [dash, reline, map] = await Promise.all([
-    fetchPerformance('dashboard', from, to),
-    fetchPerformance('reline', from, to),
+    fetchPerformance('dashboard', from, to, 55000, opts),
+    fetchPerformance('reline', from, to, 55000, opts),
     loadStoreAdvertisers(createAdminClient()),
   ]);
   const allRows = [...(dash.ok ? dash.rows : []), ...(reline.ok ? reline.rows : [])];

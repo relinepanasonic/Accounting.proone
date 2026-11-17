@@ -31,7 +31,7 @@ export async function sendStoreWeek(workspaceId: string, userId: string | null, 
   let { data: row } = await find();
   if (row?.status === 'sent' && !opts.resend) return { ok: false, detail: 'Already sent.' };
   if (!row || row.status === 'draft' || row.status === 'failed') {
-    const prep = await prepareClientWeekly(workspaceId, { onlyKey: storeKeyOf(id), week: monday, refresh: true });
+    const prep = await prepareClientWeekly(workspaceId, { onlyKey: storeKeyOf(id), onlyLabel: label, week: monday, refresh: true });
     ({ data: row } = await find());
     if (!row) return { ok: false, detail: `There are no numbers for ${label} in the week of ${monday} yet.${prep.errors[0] ? ` ${prep.errors[0]}` : ''}` };
   }

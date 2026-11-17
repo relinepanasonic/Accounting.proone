@@ -93,7 +93,8 @@ export function workspaceLabel(source: PerfSource, workspace: string): string {
 }
 export const storeLabel = (r: Pick<PerfRow, 'source' | 'store' | 'workspace'>) => `${workspaceLabel(r.source, r.workspace)} - ${r.store}`;
 
-export async function fetchPerformance(source: PerfSource, from: string, to: string, timeoutMs = 55000): Promise<PerfResult> {
+/** fresh: skip the 5 minute cache (the weekly report must see the files that were uploaded a moment ago). */
+export async function fetchPerformance(source: PerfSource, from: string, to: string, timeoutMs = 55000, opts: { fresh?: boolean } = {}): Promise<PerfResult> {
   const keyName = source === 'dashboard' ? 'DASHBOARD_API_KEY' : 'RELINE_API_KEY';
   const key = source === 'dashboard' ? process.env.DASHBOARD_API_KEY : process.env.RELINE_API_KEY;
   const base = (source === 'dashboard' ? process.env.DASHBOARD_API_URL || 'https://dashboard.profesoronline.id' : process.env.RELINE_API_URL || 'https://reline.profesoronline.id').replace(/\/$/, '');
@@ -101,7 +102,7 @@ export async function fetchPerformance(source: PerfSource, from: string, to: str
   try {
     const res = await fetch(`${base}/api/erp/performance?from=${from}&to=${to}`, {
       headers: { Authorization: `Bearer ${key}`, Accept: 'application/json' },
-      next: { revalidate: 300 },
+      ...(opts.fresh ? { cache: 'no-store' as const } : { next: { revalidate: 300 } }),
       redirect: 'manual',
       signal: AbortSignal.timeout(timeoutMs), // the first call after an upload takes about 30 seconds (the app rebuilds its weekly cache)
     });

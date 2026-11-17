@@ -13,13 +13,15 @@ import { renderWeeklyJpeg } from './report-image';
 
 const addDaysIso = (day: string, n: number) => new Date(new Date(`${day}T12:00:00Z`).getTime() + n * 86400000).toISOString().slice(0, 10);
 
+const normLabel = (v: string) => String(v || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+
 export interface PrepareResult { from: string; to: string; created: number; refreshed: number; kept: number; noData: number; errors: string[] }
 
 /**
  * Prepares one DRAFT per store for the last full week (Monday to Sunday). It never sends anything.
  * A draft that already exists is left alone (an admin may have edited it) unless `refresh` is true; sent and skipped ones are never touched.
  */
-export async function prepareClientWeekly(workspaceId: string, opts: { today?: string; refresh?: boolean; onlyKey?: string; week?: string } = {}): Promise<PrepareResult> {
+export async function prepareClientWeekly(workspaceId: string, opts: { today?: string; refresh?: boolean; onlyKey?: string; onlyLabel?: string; week?: string } = {}): Promise<PrepareResult> {
   const db = createAdminClient();
   // a given Monday is that week; else the last full week before today
   const week = opts.week ? { from: opts.week, to: addDaysIso(opts.week, 6), prevFrom: addDaysIso(opts.week, -7), prevTo: addDaysIso(opts.week, -1) } : lastFullWeek(opts.today || jakartaDate());
@@ -28,9 +30,9 @@ export async function prepareClientWeekly(workspaceId: string, opts: { today?: s
   // The feeds of Dashboard Prof and Reline, for every store (the owner view): the report week and the 4 weeks before it (the charts),
   // and the best-selling products of the report week. Products are best effort: an app that does not send them yet leaves page 2 without the list.
   const [perf, prodDash, prodReline] = await Promise.all([
-    loadStorePerformance({ from: seriesFrom(week.from), to: week.to }, { userId: null, role: 'founder' }),
-    fetchTopProducts('dashboard', week.from, week.to),
-    fetchTopProducts('reline', week.from, week.to),
+    loadStorePerformance({ from: seriesFrom(week.from), to: week.to }, { userId: null, role: 'founder' }, { fresh: !!opts.onlyKey }), // one store asked for right after an upload: never from the cache
+    fetchTopProducts('dashboard', week.from, week.to, 45000, { fresh: !!opts.onlyKey }),
+    fetchTopProducts('reline', week.from, week.to, 45000, { fresh: !!opts.onlyKey }),
   ]);
   res.errors.push(...perf.errors);
   const productsOf = new Map<string, { name: string; sales: number }[]>();
@@ -62,7 +64,8 @@ export async function prepareClientWeekly(workspaceId: string, opts: { today?: s
 
   const inserts: Record<string, unknown>[] = [];
   for (const [key, rows] of byStore) {
-    if (opts.onlyKey && key !== opts.onlyKey) continue;      // one store only (asked by Dashboard Prof / Reline)
+    // one store only (asked by Dashboard Prof / Reline): the same key, or the same label in any spelling (the app may send the workspace in another form)
+    if (opts.onlyKey && key !== opts.onlyKey && !(opts.onlyLabel && normLabel(storeLabel(rows[0])) === normLabel(opts.onlyLabel))) continue;
     const cur = sumRows(rows, week.from, week.to);
     if (!hasActivity(cur)) { res.noData++; continue; }
     const label = storeLabel(rows[0]);

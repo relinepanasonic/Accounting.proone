@@ -45,9 +45,9 @@ export async function POST(request: Request) {
     const find = () => db.from('wa_outbox').select('id, status, group_id, client_name, message, period_from, period_to, sent_at, detail').eq('workspace_id', ws).eq('kind', 'client-weekly').eq('store_label', label).eq('period_from', weekFrom).maybeSingle();
     let { data: row } = await find();
     if (!row || row.status === 'draft' || row.status === 'failed') {
-      const prep = await prepareClientWeekly(ws, { onlyKey: key, week: weekFrom, refresh: true });
+      const prep = await prepareClientWeekly(ws, { onlyKey: key, onlyLabel: label, week: weekFrom, refresh: true });
       ({ data: row } = await find());
-      if (!row) return reply({ error: 'no_data', message: `There are no numbers for ${label} in the week of ${weekFrom} yet. Upload the weekly files first.`, problems: prep.errors }, 404);
+      if (!row) return reply({ error: 'no_data', message: `There are no numbers for ${label} in the week of ${weekFrom} yet. If you just uploaded the 5 weekly files, wait about a minute (the numbers are being rebuilt) and press the button again; otherwise upload the weekly files first.`, problems: prep.errors }, 404);
     }
 
     let groupName: string | null = null;

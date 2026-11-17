@@ -15,7 +15,7 @@ import { isHiFefe, norm, normalizePhone, parseLeadCommand, STAGE_CHOICES, stageF
  */
 export interface StaffPerson { name: string; ownerId: string | null; bod: boolean }
 
-const BOD_NAMES = ['nico', 'herlan'];
+const BOD_NAMES = ['nico', 'herlan', 'lucy'];     // the report numbers allowed to command Fefe: Nico, Herlan and Lucy (Accounting)
 const first = (n: string | null | undefined) => String(n || '').trim().split(/\s+/)[0] || '';
 
 /** Who this WhatsApp number is, when it is a team number; else null. */

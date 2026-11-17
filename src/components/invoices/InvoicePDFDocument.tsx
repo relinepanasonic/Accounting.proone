@@ -509,7 +509,7 @@ export function InvoicePDFDocument({
                           {item.quantity} <span className="text-[9px] text-zinc-400 font-sans ml-0.5">{item.scale || 'pc'}</span>
                         </td>
                         <td className="py-1.5 px-2 text-right font-mono font-bold text-[#1e2536] align-top text-[11px] whitespace-nowrap">
-                          Rp {((hasDiscount ? (item.unitPrice * item.quantity - (item.discountAmount ?? 0)) : item.total) || 0).toLocaleString('id-ID', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                          Rp {((item.unitPrice * item.quantity) || 0).toLocaleString('id-ID', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                         </td>
                       </tr>
                       {hasDiscount && (

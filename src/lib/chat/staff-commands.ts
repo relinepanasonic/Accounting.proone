@@ -88,7 +88,8 @@ export async function handleStaffMessage(ws: string, groupId: string, waId: stri
     const db = createAdminClient();
     const same = (a: string | null | undefined, b: string) => !!b && !!a && norm(a) === norm(b);
     const { data: clients } = await db.from('clients').select('id, name, store_name, contact_name, billing_address, phone').eq('workspace_id', ws).limit(3000);
-    const found = ((clients || []) as any[]).find((c) => same(c.store_name, f.store) || same(c.name, f.brand) || same(c.name, f.store)) || null;
+    const tail = normalizePhone(f.phone) ? phoneTail(normalizePhone(f.phone)) : '';
+    const found = ((clients || []) as any[]).find((c) => same(c.store_name, f.store) || same(c.name, f.brand) || same(c.name, f.store) || (tail.length >= 8 && c.phone && phoneTail(String(c.phone)) === tail)) || null;
     const salesName = who.ownerId ? who.name : null;
     const now = new Date().toISOString();
     const noteLines = [f.category && `Kategori: ${f.category}`, f.note].filter(Boolean).join('\n') || null;
@@ -103,7 +104,7 @@ export async function handleStaffMessage(ws: string, groupId: string, waId: stri
       const { error: dErr } = await db.from('crm_deals').insert({ workspace_id: ws, client_id: (made as any).id, lead_name: f.brand || f.store, title: 'Lead dari tim', stage, salesman_id: who.ownerId, salesman_name: salesName, notes: noteLines, pipeline_month: now.slice(0, 7), stage_changed_at: now });
       if (dErr) { await db.from('clients').delete().eq('id', (made as any).id); return void (await say_('Maaf kak, Fefe gagal menyimpan lead ini. Coba lagi sebentar ya.')); }
       forget(`clients:${ws}`);
-      const rows = [f.brand && `Brand: ${f.brand}`, f.store && `Toko: ${f.store}`, f.pic && `PIC: ${f.pic}`, f.address && `Alamat: ${f.address}`, f.category && `Kategori: ${f.category}`].filter(Boolean).join('\n');
+      const rows = [f.brand && `Brand: ${f.brand}`, f.store && `Toko: ${f.store}`, f.pic && `PIC: ${f.pic}`, normalizePhone(f.phone) && `No Hp: ${normalizePhone(f.phone)}`, f.address && `Alamat: ${f.address}`, f.category && `Kategori: ${f.category}`].filter(Boolean).join('\n');
       return void (await say_(`Siap kak ${who.name}, lead baru sudah masuk pipeline.\n\n${rows}\nPipeline: ${stageLabel(stage)}\nPemilik: ${salesName || 'belum ada (ambil dari Pipeline)'}\n\nUntuk ubah pipeline, kirim lagi Hi Fefe + Nama Toko + Pipeline.`));
     }
 

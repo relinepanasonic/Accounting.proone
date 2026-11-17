@@ -13,7 +13,7 @@ export const isHiFefe = (text: string | null | undefined) => /^\s*(hi|hai|halo|h
 export const isTestOn = (text: string | null | undefined) => /^\s*(test|tes)\s+fefe\s*[.!]*\s*$/i.test(String(text ?? ''));
 export const isTestOff = (text: string | null | undefined) => /^\s*(test|tes)\s+(off|selesai|stop)\s*[.!]*\s*$/i.test(String(text ?? '')) || /^\s*(test|tes)\s+fefe\s+(off|selesai)\s*[.!]*\s*$/i.test(String(text ?? ''));
 
-export const TEMPLATE = ['Hi Fefe', 'Nama Brand:', 'Nama Toko:', 'Nama PIC:', 'Alamat:', 'Kategori:', 'Pipeline:'].join('\n');
+export const TEMPLATE = ['Hi Fefe', 'Nama Brand:', 'No Hp: 628', 'Nama Toko:', 'Nama PIC:', 'Alamat:', 'Kategori:', 'Pipeline:'].join('\n');
 
 export interface LeadFields { brand: string; store: string; pic: string; address: string; category: string; stage: string; phone: string; note: string }
 
@@ -33,6 +33,7 @@ export function parseLeadCommand(text: string): LeadFields {
     const key = LABELS[m[1].toLowerCase().replace(/\s+/g, ' ').trim()];
     if (key) out[key] = m[2].replace(/\s+/g, ' ').trim().slice(0, 300);
   }
+  if (out.phone.replace(/\D/g, '').length <= 4) out.phone = '';        // the template's "No Hp: 628" left as it is
   return out;
 }
 

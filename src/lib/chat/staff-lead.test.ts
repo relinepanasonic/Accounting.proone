@@ -22,6 +22,13 @@ describe('the template', () => {
   it('the template itself reads as empty', () => expect(Object.values(parseLeadCommand(TEMPLATE)).every((v) => v === '')).toBe(true));
 });
 
+describe('the phone line of the template', () => {
+  it('"No Hp: 628" left as it is counts as empty; a real number is read', () => {
+    expect(parseLeadCommand(['Hi Fefe', 'No Hp: 628', 'Nama Toko: A'].join('\n')).phone).toBe('');
+    expect(parseLeadCommand(['Hi Fefe', 'No Hp: 6281234567890'].join('\n')).phone).toBe('6281234567890');
+  });
+});
+
 describe('the pipeline asked for', () => {
   it('a stage a person may pick', () => {
     expect(stageFromText('Warm')).toEqual({ kind: 'stage', stage: 'Warm' });

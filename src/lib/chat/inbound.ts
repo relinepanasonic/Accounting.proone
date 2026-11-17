@@ -12,6 +12,7 @@ import { autoStage } from './pipeline';
 import { notALeadReason } from './not-a-lead';
 import { archiveJunkLead } from './junk-leads';
 import { doNotContact } from './do-not-contact';
+import { handleStaffMessage, staffOf } from './staff-commands';
 import { markLostLead } from './lost-lead';
 import { createAdminClient } from '@/lib/api/supabase-admin';
 
@@ -24,6 +25,11 @@ export async function afterSalesMessage(device: BotDevice, parsed: ParsedWaMessa
   if (!res.stored || !res.isNew || !res.groupId || device.role !== 'sales') return;
   const groupId = res.groupId;
   if (!parsed.isGroup && parsed.mediaUrl && res.messageId) void archiveInboundMedia(device.workspace_id, groupId, res.messageId, parsed.mediaUrl, parsed.mediaType);
+  // a team number (a salesperson or the BOD): "Hi Fefe" + the template enters a lead or changes its pipeline; the chat itself is never a lead
+  if (!parsed.isGroup && !parsed.isFromMe) {
+    const staff = await staffOf(device.workspace_id, parsed.chatId).catch(() => null);
+    if (staff) { await handleStaffMessage(device.workspace_id, groupId, parsed.chatId, parsed.body || '', staff); return; }
+  }
   // not a lead: a verification code or a company's automatic greeting, or a chat marked "not a lead": nothing answers it and no lead is made
   if (!parsed.isGroup && !parsed.isFromMe) {
     const db = createAdminClient();

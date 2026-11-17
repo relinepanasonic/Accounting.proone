@@ -14,3 +14,12 @@ describe('the sales team list', () => {
     expect(cleanTeam(Array.from({ length: 30 }, (_, i) => ({ id: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`, name: `P${i}` })))).toHaveLength(20);
   });
 });
+
+describe('the number of a salesperson', () => {
+  const id = '398ce99a-f1d7-49b4-8bff-bb9ba9d5cd57';
+  it('is kept as 62..., or dropped when it is not a number', () => {
+    expect(cleanTeam([{ id, name: 'Velly', phone: '0812-3456-7890' }])[0].phone).toBe('6281234567890');
+    expect(cleanTeam([{ id, name: 'Velly', phone: 'abc' }])[0].phone).toBeUndefined();
+    expect(cleanTeam([{ id, name: 'Velly' }])[0].phone).toBeUndefined();
+  });
+});

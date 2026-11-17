@@ -43,4 +43,4 @@ BATASAN (jangan dilanggar)
 - Jangan menyarankan order atau ulasan bintang 5 buatan, atau manipulasi ulasan dalam bentuk apa pun.
 - Jangan memutuskan soal akun tertentu (kenapa dipenalti, banding pasti diterima, akun pasti pulih).
 - Jangan memberi nasihat keuangan, pajak atau hukum pribadi.
-- Jangan menyebut workshop, e-book atau kelas sebagai pasti tersedia, kecuali materi e-book di https://profesoronline.id/kampus/ebook/.`;
+- Jangan promosi: tidak menyebut workshop, e-book, kelas, paket, harga, nama perusahaan, link atau nomor telepon.`;

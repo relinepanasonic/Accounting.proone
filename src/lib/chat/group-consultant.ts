@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { askBotModel } from '@/lib/wa/bot/model';
 import { sendWhatsApp } from '@/lib/wa/send';
-import { cleanGroupReply, GROUP_SYSTEM, mayAnswerNow, parseGroupAnswer, worthAnswering, type GroupHistory } from './group-rules';
+import { classifyGroupMessage, cleanBubbles, GROUP_SYSTEM, mayAnswerNow, parseGroupAnswer, type GroupHistory } from './group-rules';
 import { MARKETPLACE_KNOWLEDGE } from './group-knowledge';
 import { staffOf } from './staff-commands';
 
@@ -26,7 +26,7 @@ export async function handleSalesGroupMessage(device: Device, m: Msg, now = new 
     if (!g || (g as any).fefe_active !== true) return 'group-off';
     if (m.isFromMe) return 'own-message';
     const text = String(m.body || '').trim();
-    if (!worthAnswering(text)) return 'not-a-question';
+    if (!classifyGroupMessage(text)) return 'nothing-to-say';
     const { data: cfg } = await db.from('wa_bot_config').select('enabled').eq('workspace_id', device.workspace_id).maybeSingle();
     if ((cfg as any)?.enabled === false) return 'bot-off';
     if (m.senderPhone && (await staffOf(device.workspace_id, m.senderPhone).catch(() => null))) return 'team-member';
@@ -55,15 +55,23 @@ export async function handleSalesGroupMessage(device: Device, m: Msg, now = new 
       parsed = parseGroupAnswer(out.text);
       if (!parsed) parsed = parseGroupAnswer((await askBotModel(GROUP_SYSTEM(MARKETPLACE_KNOWLEDGE), `${text}\n\nPENTING: balas HANYA dengan satu objek JSON yang valid.`)).text);
     } catch (e) { console.error('group answer failed', e); }
-    if (!parsed || !parsed.answer) { await drop(); return 'model-skipped'; }
-    const reply = cleanGroupReply(parsed.reply, { invite: parsed.invite, salesPhone: device.phone });
-    if (!reply) { await drop(); return 'empty-reply'; }
-
-    await sleep(6000 + Math.floor(Math.random() * 14000));                // a person takes a moment
+    if (!parsed || !parsed.talk) { await drop(); return 'model-skipped'; }
+    const bubbles = cleanBubbles(parsed.bubbles, { dm: parsed.dm, pick: who ? parseInt(who.slice(0, 2), 16) : 0 });
+    if (!bubbles.length) { await drop(); return 'empty-reply'; }
     if (!process.env.FONNTE_TOKEN_SALES) { await drop(); return 'no-token'; }
-    const res = await sendWhatsApp([`${m.chatId}@g.us`], reply, { token: process.env.FONNTE_TOKEN_SALES });
-    if (claimId) await db.from('fefe_group_answers').update({ reply, ok: res.ok, detail: res.ok ? 'sent' : res.detail.slice(0, 200) }).eq('id', claimId);
-    return res.ok ? 'answered' : 'send-failed';
+
+    // like someone typing a few short lines: a pause first, then a pause between the bubbles
+    await sleep(5000 + Math.floor(Math.random() * 10000));
+    let sent = 0;
+    let detail = 'sent';
+    for (let i = 0; i < bubbles.length; i++) {
+      const res = await sendWhatsApp([`${m.chatId}@g.us`], bubbles[i], { token: process.env.FONNTE_TOKEN_SALES });
+      if (!res.ok) { detail = res.detail.slice(0, 200); break; }
+      sent++;
+      if (i < bubbles.length - 1) await sleep(2500 + Math.floor(Math.random() * 3500));
+    }
+    if (claimId) await db.from('fefe_group_answers').update({ reply: bubbles.slice(0, sent).join(String.fromCharCode(10)), ok: sent > 0, detail }).eq('id', claimId);
+    return sent > 0 ? 'answered' : 'send-failed';
   } catch (e) { console.error('group consultant failed', e); return 'error'; }
 }
 

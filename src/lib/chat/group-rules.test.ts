@@ -1,21 +1,28 @@
 import { describe, it, expect } from 'vitest';
-import { cleanGroupReply, GROUP_MAX_PER_DAY, mayAnswerNow, parseGroupAnswer, worthAnswering } from './group-rules';
+import { classifyGroupMessage, cleanBubbles, DM_LINES, GROUP_MAX_PER_DAY, mayAnswerNow, parseGroupAnswer, worthAnswering } from './group-rules';
 
-describe('which group messages Fefe may answer', () => {
+describe('what Fefe reacts to in a group', () => {
   it('a real question about selling on a marketplace', () => {
-    for (const t of ['Kak gimana caranya biar toko Shopee ga sepi? produk udah 50 tapi order dikit', 'Iklan shopee saya boncos terus, ROAS cuma 2, enaknya gimana ya?', 'Ada yang tau cara naikin rating toko di tokopedia?']) expect(worthAnswering(t)).toBe(true);
+    for (const t of ['Kak gimana caranya biar toko Shopee ga sepi? produk udah 50 tapi order dikit', 'Iklan shopee saya boncos terus, ROAS cuma 2, enaknya gimana ya?', 'Ada yang tau cara naikin rating toko di tokopedia?']) expect(classifyGroupMessage(t)).toBe('question');
   });
-  it('not chatter, not a question about something else, not an advert', () => {
-    for (const t of ['siap kak', 'Selamat pagi semua, semoga hari ini lancar jualannya', 'Gimana cara masak rendang yang enak?', 'WTS ready stock baju murah, wa.me/628123456789', 'Open reseller dropship, join grup kami https://chat.whatsapp.com/xyz', 'Jasa edit foto produk murah, hubungi saya 081234567890', '']) expect(worthAnswering(t)).toBe(false);
+  it('someone showing their store or their work gets a cheer', () => {
+    for (const t of ['Alhamdulillah omzet toko shopee saya akhirnya tembus 50 juta bulan ini', 'Baru launching toko di tiktok shop nih, ini hasil foto produk saya', 'ini toko saya guys, baru buka seminggu udah ada order']) expect(classifyGroupMessage(t)).toBe('flex');
+  });
+  it('not chatter, not another topic, not an advert', () => {
+    for (const t of ['siap kak', 'Selamat pagi semua, semoga hari ini lancar jualannya', 'Gimana cara masak rendang yang enak?', 'WTS ready stock baju murah, wa.me/628123456789', 'Open reseller dropship, join grup kami https://chat.whatsapp.com/xyz', 'Jasa edit foto produk murah, hubungi saya 081234567890', '']) expect(classifyGroupMessage(t)).toBeNull();
+  });
+  it('worthAnswering is only the questions', () => {
+    expect(worthAnswering('Iklan shopee saya boncos terus, ROAS cuma 2, enaknya gimana ya?')).toBe(true);
+    expect(worthAnswering('Alhamdulillah omzet toko shopee saya akhirnya tembus 50 juta bulan ini')).toBe(false);
   });
 });
 
-describe('how often Fefe answers', () => {
+describe('how often Fefe talks', () => {
   const now = new Date('2026-11-17T08:00:00Z');
   const h = (o: Partial<Parameters<typeof mayAnswerNow>[0]> = {}) => ({ lastAnswerAt: null, answersToday: 0, personLastAt: null, ...o });
-  it('free to answer', () => expect(mayAnswerNow(h(), now)).toEqual({ ok: true }));
-  it('a few answers a day per group', () => expect(mayAnswerNow(h({ answersToday: GROUP_MAX_PER_DAY }), now)).toMatchObject({ ok: false }));
-  it('a pause between answers in a group', () => {
+  it('free to talk', () => expect(mayAnswerNow(h(), now)).toEqual({ ok: true }));
+  it('a few times a day per group', () => expect(mayAnswerNow(h({ answersToday: GROUP_MAX_PER_DAY }), now)).toMatchObject({ ok: false }));
+  it('a pause between two times in a group', () => {
     expect(mayAnswerNow(h({ lastAnswerAt: '2026-11-17T07:50:00Z' }), now)).toMatchObject({ ok: false });
     expect(mayAnswerNow(h({ lastAnswerAt: '2026-11-17T07:30:00Z' }), now)).toEqual({ ok: true });
   });
@@ -25,24 +32,31 @@ describe('how often Fefe answers', () => {
   });
 });
 
-describe('the answer', () => {
-  it('reads the JSON, and nothing else is trusted', () => {
-    expect(parseGroupAnswer('{"jawab":true,"balasan":"Halo kak","ajak":false}')).toEqual({ answer: true, reply: 'Halo kak', invite: false });
-    expect(parseGroupAnswer('{"jawab":false}')?.answer).toBe(false);
-    expect(parseGroupAnswer('tidak tahu')).toBeNull();
+describe('the answer model output', () => {
+  it('reads the JSON with its short bubbles', () => {
+    expect(parseGroupAnswer('{"bicara":true,"jenis":"puji","pesan":["wah kereeeen kak","tokonya rapi banget"],"japri":false}')).toEqual({ talk: true, bubbles: ['wah kereeeen kak', 'tokonya rapi banget'], dm: false });
+    expect(parseGroupAnswer('{"bicara":false}')?.talk).toBe(false);
+    expect(parseGroupAnswer('hmm')).toBeNull();
   });
-  it('is cleaned: no number, no link but the Kampus, no stars', () => {
-    const t = cleanGroupReply('**Coba cek** judul produknya kak, pakai kata kunci yang dicari pembeli. Hubungi 0812-3456-7890 atau lihat https://bit.ly/abc dan https://profesoronline.id/kampus/ebook/ untuk materinya.', { invite: false, salesPhone: '6285758789999' });
-    expect(t).not.toMatch(/0812|bit\.ly|\*/);
-    expect(t).toContain('https://profesoronline.id/kampus/ebook/');
+});
+
+describe('the bubbles that are sent', () => {
+  it('are short and at most three', () => {
+    const out = cleanBubbles(['satu '.repeat(80), 'dua', 'tiga ya guys', 'empat ga boleh muncul'], { dm: false });
+    expect(out).toHaveLength(3);
+    expect(Math.max(...out.map((x) => x.length))).toBeLessThanOrEqual(170);
   });
-  it('is short, and a too-short answer is not sent', () => {
-    expect(cleanGroupReply('x'.repeat(2000), { invite: false, salesPhone: '' }).length).toBeLessThanOrEqual(700);
-    expect(cleanGroupReply('ok', { invite: false, salesPhone: '' })).toBe('');
+  it('carry no link, no number, no stars and nothing that sells', () => {
+    const out = cleanBubbles(['**Coba cek** judulnya kak https://bit.ly/abc', 'chat aja 0812-3456-7890 ya', 'ambil paket kami dong, harga Rp 2 juta', 'ROAS impas itu 1 dibagi margin bersih guys'], { dm: false });
+    expect(out.join(' ')).not.toMatch(/bit\.ly|0812|\*|paket|harga|Rp/i);
+    expect(out).toContain('ROAS impas itu 1 dibagi margin bersih guys');
   });
-  it('the invite is one polite line with the sales number, only when asked for', () => {
-    const base = 'Coba cek dulu margin bersih dan ROAS impasnya kak, rumusnya 1 dibagi margin bersih.';
-    expect(cleanGroupReply(base, { invite: true, salesPhone: '6285758789999' })).toContain('wa.me/6285758789999');
-    expect(cleanGroupReply(base, { invite: false, salesPhone: '6285758789999' })).not.toContain('wa.me');
+  it('the japri line is added last, and only when asked for', () => {
+    const withDm = cleanBubbles(['wah iklannya boncos ya', 'cek dulu margin bersihnya guys'], { dm: true });
+    expect(DM_LINES).toContain(withDm[withDm.length - 1]);
+    expect(withDm[withDm.length - 1]).toContain('japri');
+    const without = cleanBubbles(['wah iklannya boncos ya'], { dm: false });
+    expect(without.some((b) => /japri/i.test(b))).toBe(false);
   });
+  it('nothing usable means nothing is sent', () => expect(cleanBubbles(['', 'ok', 'hubungi kami konsultasi gratis'], { dm: true })).toEqual([]));
 });

@@ -141,11 +141,21 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
   // Old invoices may still carry a name that is not in the catalog: it can stay while editing.
   const grandfathered = React.useMemo(() => new Set<string>((initialData?.lineItems || []).map((l: any) => String(l.packageName || '').trim().toLowerCase())), [initialData]);
 
+  const [justAdded, setJustAdded] = useState<string | null>(null);
+  React.useEffect(() => {
+    if (!justAdded) return;
+    const el = document.getElementById(`line-item-${justAdded}`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setJustAdded(null);
+  }, [justAdded]);
+
   const handleAddLineItem = () => {
+    const newId = Math.random().toString(36).substring(2, 9);
+    setJustAdded(newId);
     setLineItems((prev) => [
       ...prev,
       {
-        id: Math.random().toString(36).substring(2, 9),
+        id: newId,
         packageName: '',
         description: '',
         quantity: 1,
@@ -507,7 +517,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
         <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
           <div>
             <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-200">
-              DELIVERABLE LINE ITEMS & SUBTOTALS
+              DELIVERABLE LINE ITEMS & SUBTOTALS <span className="font-mono text-[#f5d77f]">({lineItems.length})</span>
             </h3>
             <p className="text-[10px] text-zinc-400 font-mono mt-0.5">
               INSTANT CLIENT-SIDE CALCULATION ENGINE
@@ -551,6 +561,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
               return (
                 <div
                   key={item.id}
+                  id={`line-item-${item.id}`}
                   className="flex flex-col gap-2 p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80 mb-2 relative"
                 >
                   <button
@@ -656,6 +667,15 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                 </div>
               );
             })}
+            <button
+              type="button"
+              onClick={handleAddLineItem}
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-[#d4af37]/40 py-2.5 text-xs font-bold text-[#f5d77f] hover:bg-[#d4af37]/10 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>ADD ITEM</span>
+              <span className="font-normal text-zinc-500">· {lineItems.length} line{lineItems.length === 1 ? '' : 's'} now</span>
+            </button>
           </div>
         )}
 

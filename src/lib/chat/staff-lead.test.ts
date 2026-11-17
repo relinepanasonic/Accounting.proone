@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isHiFefe, isTestOn, isTestOff, parseAiLead, restOf, phoneIn, parseLeadCommand, stageFromText, normalizePhone, TEMPLATE } from './staff-lead';
+import { isHiFefe, isTestOn, isTestOff, parseAiLead, restOf, phoneIn, codeIn, findMatches, pickMatch, personKey, parseLeadCommand, stageFromText, normalizePhone, TEMPLATE } from './staff-lead';
 
 describe('Hi Fefe', () => {
   it('starts the command, in any of the usual spellings', () => {
@@ -85,5 +85,39 @@ describe('free text to the AI', () => {
     expect(phoneIn(t)).toBe('62816987122');
     expect(phoneIn('hubungi 0812-3456-7890 ya')).toBe('6281234567890');
     expect(phoneIn('toko saya 50 juta sebulan')).toBe('');
+  });
+});
+
+describe('which lead does the message mean', () => {
+  const tailOf = (p: string) => String(p).replace(/\D/g, '').slice(-9);
+  const C = (id: string, name: string, store: string | null, pic: string | null, phone: string | null) => ({ id, name, store_name: store, contact_name: pic, phone });
+  const clients = [C('1', 'Furniture', 'unknown', 'Tati', null), C('2', 'Pipa', 'Pipa', 'William', '62881335373180'), C('3', 'Kidsmom', 'Kidsmom Official', 'Bu Rina', null)];
+  const F = (o: Partial<ReturnType<typeof parseLeadCommand>>) => ({ ...parseLeadCommand(''), ...o });
+
+  it('"Bu Tati" is the PIC "Tati" (this made a copy before)', () => {
+    const r = pickMatch(findMatches(F({ pic: 'Bu Tati', category: 'furniture' }), clients, tailOf));
+    expect(r.kind).toBe('one'); expect(r.kind === 'one' && r.match.client.id).toBe('1');
+  });
+  it('"William who sells pipa" finds Pipa by its PIC (this made a copy before)', () => {
+    const r = pickMatch(findMatches(F({ pic: 'William', category: 'pipa' }), clients, tailOf));
+    expect(r.kind === 'one' && r.match.client.id).toBe('2');
+  });
+  it('a phone number beats a name', () => {
+    const r = pickMatch(findMatches(F({ pic: 'Tati', phone: '0881-3353-73180' }), clients, tailOf));
+    expect(r.kind === 'one' && r.match.client.id).toBe('2');
+  });
+  it('the store or the brand written the same', () => {
+    expect(pickMatch(findMatches(F({ store: 'kidsmom official' }), clients, tailOf)).kind).toBe('one');
+    expect(pickMatch(findMatches(F({ brand: 'Pipa' }), clients, tailOf)).kind).toBe('one');
+  });
+  it('nothing alike is a new lead', () => expect(pickMatch(findMatches(F({ pic: 'Budi', brand: 'Sepatu Kita' }), clients, tailOf)).kind).toBe('none'));
+  it('two equally likely leads are asked about, not guessed', () => {
+    const twin = [...clients, C('4', 'Tati Mebel', null, 'Bu Tati', null)];
+    expect(pickMatch(findMatches(F({ pic: 'Tati' }), twin, tailOf)).kind).toBe('many');
+  });
+  it('the short code, and a name without its title', () => {
+    expect(codeIn('Hi Fefe #a1b2c3 pindah ke Warm')).toBe('A1B2C3');
+    expect(codeIn('Hi Fefe tanpa kode')).toBe('');
+    expect(personKey('Bu Tati')).toBe('tati'); expect(personKey('Pak Budi Santoso')).toBe('budi santoso');
   });
 });

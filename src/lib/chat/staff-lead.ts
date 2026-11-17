@@ -70,7 +70,9 @@ Balas HANYA dengan satu objek JSON, tanpa teks lain:
 - "brand" nama merek. "toko" nama toko di marketplace. "pic" nama orang yang dihubungi (misal "Bu Tati"). "kategori" jenis produk atau bisnis (misal furniture, fashion). "hp" nomor telepon atau WA. "alamat" alamat. "catatan" hal lain yang perlu dicatat.
 - "pipeline": salah satu dari New Lead, Contacted, Qualified, Warm, Meeting Offered, Meeting Booked, Meeting Done, Negotiation, Cold Leads, Lost. Kosong kalau tidak diminta.
 - "brand furniture" atau "toko fashion" artinya kategorinya furniture atau fashion, bukan nama merek.
-- Nomor telepon hanya di "hp", jangan di kolom lain.`;
+- Nomor telepon hanya di "hp", jangan di kolom lain.
+- Permintaan membuat jadwal meeting, atau hal lain yang bukan memasukkan atau mengubah lead, adalah "tidak_jelas".
+- Kalau pesan menyebut orang atau toko yang sudah ada dan hanya meminta mengubah tahap atau datanya, aksinya "ubah", jangan "buat".`;
 
 /** Reads the model's JSON (it may come wrapped in text). Null when there is none. */
 export function parseAiLead(text: string): { action: 'create' | 'update' | 'unclear'; fields: LeadFields } | null {
@@ -93,6 +95,54 @@ export const restOf = (text: string) => String(text ?? '').replace(/^\s*(hi|hai|
 export function phoneIn(text: string): string {
   const m = /(?:\+?62|0)8[\d\s-]{7,13}\d|\b8\d{8,12}\b/.exec(String(text ?? ''));
   return m ? normalizePhone(m[0]) : '';
+}
+
+// ---------------------------------------------------------------- which lead does the message mean?
+const HONORIFICS = new Set(['bu', 'ibu', 'pak', 'bapak', 'kak', 'kakak', 'mas', 'mbak', 'om', 'tante', 'ko', 'koh', 'cik', 'mr', 'mrs', 'ms', 'sdr', 'dr']);
+/** A person's name without "Bu", "Pak", "Kak"...: "Bu Tati" and "Tati" are the same person. */
+export const personKey = (s: string | null | undefined) => norm(s).split(' ').filter((w) => w && !HONORIFICS.has(w)).join(' ');
+/** The short code of a lead written in a message: "#A1B2C3". Empty when there is none. */
+export const codeIn = (text: string | null | undefined) => (/#([0-9a-f]{6})\b/i.exec(String(text ?? '')) || [])[1]?.toUpperCase() ?? '';
+
+export interface ClientRow { id: string; name: string | null; store_name: string | null; contact_name: string | null; phone: string | null }
+export interface Match { client: ClientRow; score: number }
+
+const words = (k: string) => k.split(' ').filter((w) => w.length >= 3);
+const within = (a: string, b: string) => { const x = words(a); const y = words(b); return x.length > 0 && y.length > 0 && (x.every((w) => y.includes(w)) || y.every((w) => x.includes(w))); };
+
+/**
+ * The clients a message may mean, best first (score 50 or more). A phone number is the surest sign (100), then the store or the brand written the same
+ * (85, 75), then the person ("Bu Tati" = "Tati", also against the PIC of a lead, 70), then a name that contains the other (50).
+ */
+export function findMatches(f: LeadFields, clients: ClientRow[], tailOf: (phone: string) => string): Match[] {
+  const tail = normalizePhone(f.phone) ? tailOf(normalizePhone(f.phone)) : '';
+  const brand = norm(f.brand); const store = norm(f.store); const pic = personKey(f.pic);
+  const out: Match[] = [];
+  for (const c of clients) {
+    const name = norm(c.name); const cstore = norm(c.store_name); const cpic = personKey(c.contact_name); const cname = personKey(c.name);
+    let score = 0;
+    const take = (n: number) => { if (n > score) score = n; };
+    if (tail.length >= 8 && c.phone && tailOf(String(c.phone)) === tail) take(100);
+    if (store && (store === cstore || store === name)) take(85);
+    if (brand && brand === name) take(85);
+    if (brand && brand === cstore) take(75);
+    if (pic && (pic === cpic || pic === cname)) take(70);
+    if (pic && (within(pic, cpic) || within(pic, cname))) take(50);
+    if (brand && within(brand, name)) take(50);
+    if (store && within(store, name)) take(50);
+    if (score >= 50) out.push({ client: c, score });
+  }
+  return out.sort((a, b) => b.score - a.score);
+}
+
+/** One lead, none, or several that fit equally well (Fefe then asks which, instead of guessing and making a copy). */
+export function pickMatch(m: Match[]): { kind: 'none' } | { kind: 'one'; match: Match } | { kind: 'many'; list: Match[] } {
+  if (!m.length) return { kind: 'none' };
+  const top = m[0];
+  const tied = m.filter((x) => x.score === top.score);
+  if (tied.length > 1) return { kind: 'many', list: tied.slice(0, 4) };
+  if (top.score < 70 && m.length > 1) return { kind: 'many', list: m.slice(0, 4) };
+  return { kind: 'one', match: top };
 }
 
 export const STAGE_CHOICES = 'New Lead, Contacted, Qualified, Warm, Meeting Offered, Meeting Booked, Meeting Done, Negotiation, Cold Leads, Lost';

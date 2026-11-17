@@ -53,6 +53,20 @@ export async function restoreJunkLead(groupId: string): Promise<boolean> {
 }
 
 /**
+ * Deletes a client that is only a prospect with nothing attached (no other deal, invoice, project, report, assignment, store, visit or invoice request), because
+ * deleting a client cascades. Returns whether it was deleted. Call it after the deal itself is gone.
+ */
+export async function deleteBareProspect(clientId: string): Promise<boolean> {
+  const db = createAdminClient();
+  const { data: cl } = await db.from('clients').select('id, is_prospect').eq('id', clientId).maybeSingle();
+  if (!(cl as any)?.is_prospect) return false;
+  const counts = await Promise.all(['crm_deals', 'invoices', 'projects', 'advertiser_reports', 'client_assignments', 'client_stores', 'lead_visits', 'invoice_requests'].map(async (t) => (await db.from(t).select('id', { count: 'exact', head: true }).eq('client_id', clientId)).count ?? 0));
+  if (counts.some((n) => n > 0)) return false;
+  await db.from('clients').delete().eq('id', clientId);
+  return true;
+}
+
+/**
  * The month-end cleanup: deletes the deals still archived, and the prospect client of each only when that client is a bare prospect (no other deal, invoice,
  * project, report, assignment, store, visit or invoice request), because deleting a client cascades. A deal with an invoice or a project is left archived.
  * Runs only on the last day of the month unless `force`. Returns the counts.
@@ -71,13 +85,7 @@ export async function cleanupArchivedJunk(opts: { now?: Date; force?: boolean } 
     if (d.invoice_id || d.paid_at || (reqs ?? 0) > 0 || (projs ?? 0) > 0) { skipped++; continue; }
     await db.from('crm_deals').delete().eq('id', d.id);
     nDeals++;
-    if (!d.client_id) continue;
-    const { data: cl } = await db.from('clients').select('id, is_prospect').eq('id', d.client_id).maybeSingle();
-    if (!(cl as any)?.is_prospect) continue;
-    const counts = await Promise.all(['crm_deals', 'invoices', 'projects', 'advertiser_reports', 'client_assignments', 'client_stores', 'lead_visits', 'invoice_requests'].map(async (t) => (await db.from(t).select('id', { count: 'exact', head: true }).eq('client_id', d.client_id!)).count ?? 0));
-    if (counts.some((n) => n > 0)) continue;
-    await db.from('clients').delete().eq('id', d.client_id);
-    nClients++;
+    if (d.client_id && (await deleteBareProspect(d.client_id))) nClients++;
   }
   return { ran: true, deals: nDeals, clients: nClients, skipped };
 }

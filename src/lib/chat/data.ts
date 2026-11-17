@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/api/supabase-admin';
+import { dealCode } from './deal-edit-rules';
 import { memo } from './cache';
 import { loadKnowledge } from './bible';
 import { syncClientSource } from './sources';
@@ -96,7 +97,7 @@ async function dealsOfChats(ws: string, groups: ChatGroupRow[], linked: Map<stri
 }
 
 export interface BoardDeal {
-  id: string; title: string; client: string; stage: string; value: number;
+  id: string; code: string; title: string; client: string; stage: string; value: number;
   sales: string | null; salesId: string | null; groupId: string | null;
   daysInStage: number; payment: ReturnType<typeof paymentOf>; nextMeetingAt: string | null;
 }
@@ -139,7 +140,7 @@ export async function loadPipeline(ws: string): Promise<{ deals: BoardDeal[]; st
     const groupId = groupOfDeal.get(d.id) || groupOfTail.get(phoneOfClient.get(d.client_id) || '') || null;
     const since = day(d.stage_changed_at || d.created_at);
     return {
-      id: d.id, title: String(d.title || 'Deal'), client: nameOf.get(d.client_id) || d.lead_name || 'Client', stage: d.stage, value: Number(d.value || 0),
+      id: d.id, code: dealCode(d.id), title: String(d.title || 'Deal'), client: nameOf.get(d.client_id) || d.lead_name || 'Client', stage: d.stage, value: Number(d.value || 0),
       sales: d.salesman_name ?? null, salesId: d.salesman_id ?? null, groupId,
       daysInStage: Math.max(0, Math.round((Date.parse(`${today}T12:00:00Z`) - Date.parse(`${since}T12:00:00Z`)) / 86400000)),
       payment: d.invoice_id ? paymentOf(invOf.get(d.invoice_id), today) : null, nextMeetingAt: groupId ? nextMeet.get(groupId) ?? null : null,

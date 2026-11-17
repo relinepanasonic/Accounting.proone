@@ -26,12 +26,13 @@ export async function afterSalesMessage(device: BotDevice, parsed: ParsedWaMessa
   const groupId = res.groupId;
   if (!parsed.isGroup && parsed.mediaUrl && res.messageId) void archiveInboundMedia(device.workspace_id, groupId, res.messageId, parsed.mediaUrl, parsed.mediaType);
   // a team number (a salesperson or the BOD): "Hi Fefe" + the template enters a lead or changes its pipeline; the chat itself is never a lead
+  let testChat = false;                                          // a team number in test mode: Fefe answers it, but it is never a lead
   if (!parsed.isGroup && !parsed.isFromMe) {
     const staff = await staffOf(device.workspace_id, parsed.chatId).catch(() => null);
-    if (staff) { await handleStaffMessage(device.workspace_id, groupId, parsed.chatId, parsed.body || '', staff); return; }
+    if (staff) { testChat = (await handleStaffMessage(device.workspace_id, groupId, parsed.chatId, parsed.body || '', staff)) === true; if (!testChat) return; }
   }
   // not a lead: a verification code or a company's automatic greeting, or a chat marked "not a lead": nothing answers it and no lead is made
-  if (!parsed.isGroup && !parsed.isFromMe) {
+  if (!parsed.isGroup && !parsed.isFromMe && !testChat) {
     const db = createAdminClient();
     const { data: st } = await db.from('chat_state').select('ignored').eq('group_id', groupId).maybeSingle();
     if ((st as any)?.ignored) return;

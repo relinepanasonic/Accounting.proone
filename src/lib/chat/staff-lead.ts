@@ -9,6 +9,10 @@ export { normalizePhone };
 /** "Hi Fefe", "hai fefe", "Halo Fefe,": the start of the message. */
 export const isHiFefe = (text: string | null | undefined) => /^\s*(hi|hai|halo|hello|hey)\s+fefe\b/i.test(String(text ?? ''));
 
+/** "Test Fefe": a team number chats with Fefe as a lead, for testing. "Test off" ends it. */
+export const isTestOn = (text: string | null | undefined) => /^\s*(test|tes)\s+fefe\s*[.!]*\s*$/i.test(String(text ?? ''));
+export const isTestOff = (text: string | null | undefined) => /^\s*(test|tes)\s+(off|selesai|stop)\s*[.!]*\s*$/i.test(String(text ?? '')) || /^\s*(test|tes)\s+fefe\s+(off|selesai)\s*[.!]*\s*$/i.test(String(text ?? ''));
+
 export const TEMPLATE = ['Hi Fefe', 'Nama Brand:', 'Nama Toko:', 'Nama PIC:', 'Alamat:', 'Kategori:', 'Pipeline:'].join('\n');
 
 export interface LeadFields { brand: string; store: string; pic: string; address: string; category: string; stage: string; phone: string; note: string }

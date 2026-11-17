@@ -101,11 +101,12 @@ export async function autoStage(ws: string, groupId: string, waId: string, ctx: 
     const [ss, { data: cfg }, { data: st }, { data: bot }, { data: grp }] = await Promise.all([
       stageSettings(ws),
       db.from('wa_bot_config').select('meet_owner_id, meet_owner_name').eq('workspace_id', ws).maybeSingle(),
-      db.from('chat_state').select('assigned_to, assigned_name, deal_id').eq('group_id', groupId).maybeSingle(),
+      db.from('chat_state').select('assigned_to, assigned_name, deal_id, ignored').eq('group_id', groupId).maybeSingle(),
       db.from('wa_bot_chats').select('lead').eq('group_id', groupId).maybeSingle(),
       db.from('wa_groups').select('name').eq('id', groupId).maybeSingle(),
     ]);
     if (!ss.auto) return null;
+    if ((st as any)?.ignored) return null;                        // a chat that is not a lead (a team number, a code) never makes a lead
     const lead = { ...(((bot as any)?.lead || {}) as { name?: string; store?: string }), ...Object.fromEntries(Object.entries(ctx.lead || {}).filter(([, v]) => v)) };
     const gname = String((grp as any)?.name || '').trim();
     const name = String(lead.name || (/^[\d+ ()-]*$/.test(gname) ? '' : gname) || '').trim();

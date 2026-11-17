@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isHiFefe, parseLeadCommand, stageFromText, normalizePhone, TEMPLATE } from './staff-lead';
+import { isHiFefe, isTestOn, isTestOff, parseLeadCommand, stageFromText, normalizePhone, TEMPLATE } from './staff-lead';
 
 describe('Hi Fefe', () => {
   it('starts the command, in any of the usual spellings', () => {
@@ -47,5 +47,15 @@ describe('phone numbers', () => {
     expect(normalizePhone('81234567890')).toBe('6281234567890');
     expect(normalizePhone('abc')).toBe('');
     expect(normalizePhone('123')).toBe('');
+  });
+});
+
+describe('test mode', () => {
+  it('"Test Fefe" starts it, "Test off" ends it', () => {
+    for (const t of ['Test Fefe', 'tes fefe', ' test fefe!']) { expect(isTestOn(t)).toBe(true); expect(isTestOff(t)).toBe(false); }
+    for (const t of ['Test off', 'test selesai', 'Test Fefe off', 'tes stop']) { expect(isTestOff(t)).toBe(true); expect(isTestOn(t)).toBe(false); }
+  });
+  it('ordinary messages are neither', () => {
+    for (const t of ['test', 'fefe test paket', 'Hi Fefe', 'apa itu paket Lapak?', '']) { expect(isTestOn(t)).toBe(false); expect(isTestOff(t)).toBe(false); }
   });
 });

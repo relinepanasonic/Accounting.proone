@@ -6,7 +6,7 @@ import { archiveJunkLead } from './junk-leads';
 import { optOutForLostDeal } from './lost-lead';
 import { sendToChat } from './send-any';
 import { cleanTeam } from './sales-team';
-import { isHiFefe, norm, normalizePhone, parseLeadCommand, STAGE_CHOICES, stageFromText, TEMPLATE } from './staff-lead';
+import { isHiFefe, isTestOff, isTestOn, norm, normalizePhone, parseLeadCommand, STAGE_CHOICES, stageFromText, TEMPLATE } from './staff-lead';
 
 /**
  * Team numbers. A salesperson with a WhatsApp number set in AI Kamus > Sales team, and the BOD (Nico, Herlan: the numbers of the report recipients), may write
@@ -53,12 +53,30 @@ async function markTeamChat(ws: string, groupId: string, waId: string) {
   await archiveJunkLead(ws, groupId, waId);
 }
 
-/** A message from a team number. Always handled here (never by the lead bot). Never throws. */
-export async function handleStaffMessage(ws: string, groupId: string, waId: string, body: string, who: StaffPerson): Promise<void> {
+/**
+ * A message from a team number. Handled here, never by the lead bot, except in TEST MODE ("Test Fefe" ... "Test off"): then the message goes on to Fefe as if
+ * the team member were a lead, and the answer is true. Even then no lead is made, and the chat stays out of the numbers, the follow-ups and the broadcasts. Never throws.
+ */
+export async function handleStaffMessage(ws: string, groupId: string, waId: string, body: string, who: StaffPerson): Promise<boolean | void> {
   try {
     await markTeamChat(ws, groupId, waId);
-    if (!isHiFefe(body)) return;                                  // a team member chatting: nothing answers
+    const db0 = createAdminClient();
+    const { data: ts } = await db0.from('chat_state').select('test_mode').eq('group_id', groupId).maybeSingle();
+    const testing = (ts as any)?.test_mode === true;
+    const now0 = new Date().toISOString();
+    if (isTestOn(body)) {
+      await db0.from('chat_state').upsert({ group_id: groupId, workspace_id: ws, test_mode: true, updated_at: now0 }, { onConflict: 'group_id' });
+      await db0.from('wa_bot_chats').upsert({ group_id: groupId, workspace_id: ws, status: 'bot', reason: null, replies: 0, updated_at: now0 }, { onConflict: 'group_id' });
+      return void (await say(ws, groupId, waId, `Mode test aktif kak ${who.name}. Mulai sekarang Fefe menjawab chat ini seperti ke calon pelanggan, tanpa membuat lead. Kirim "Test off" untuk selesai.`));
+    }
+    if (isTestOff(body)) {
+      await db0.from('chat_state').upsert({ group_id: groupId, workspace_id: ws, test_mode: false, updated_at: now0 }, { onConflict: 'group_id' });
+      await db0.from('wa_bot_chats').upsert({ group_id: groupId, workspace_id: ws, status: 'off', reason: 'Nomor tim: bukan lead.', updated_at: now0 }, { onConflict: 'group_id' });
+      return void (await say(ws, groupId, waId, `Mode test selesai kak ${who.name}. Kirim "Hi Fefe" untuk memasukkan lead, atau "Test Fefe" untuk test lagi.`));
+    }
     const f = parseLeadCommand(body);
+    const isCommand = isHiFefe(body) && (!testing || Object.values(f).some(Boolean));      // in test mode a plain "Hi Fefe" is just a greeting
+    if (!isCommand) return testing;                               // a team member chatting: in test mode Fefe answers, else nothing
     const say_ = (t: string) => say(ws, groupId, waId, t);
     if (!Object.values(f).some(Boolean)) return void (await say_(`Hi kak ${who.name}, Fefe siap. Untuk memasukkan lead atau mengubah pipeline, kirim format ini ya:\n\n${TEMPLATE}\n\nPipeline: ${STAGE_CHOICES}.`));
     const ask = stageFromText(f.stage);

@@ -660,7 +660,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                           className="w-full text-right bg-black/40 border border-[#d4af37]/20 rounded-lg px-2 py-1 text-white focus:outline-none focus:border-[#d4af37]/50 text-xs"
                       />
                     </div>
-                    <div className="w-28 text-right text-sm font-bold text-[#f5d77f]">
+                    <div className="min-w-[8.5rem] whitespace-nowrap text-right text-sm font-bold text-[#f5d77f]">
                         Rp {(item.quantity * item.unitPrice - (item.discountAmount || 0)).toLocaleString('id-ID', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                     </div>
                   </div>

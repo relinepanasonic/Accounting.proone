@@ -6,7 +6,8 @@ import { archiveJunkLead } from './junk-leads';
 import { optOutForLostDeal } from './lost-lead';
 import { sendToChat } from './send-any';
 import { cleanTeam } from './sales-team';
-import { isHiFefe, isTestOff, isTestOn, norm, normalizePhone, parseLeadCommand, STAGE_CHOICES, stageFromText, TEMPLATE } from './staff-lead';
+import { askBotModel } from '@/lib/wa/bot/model';
+import { AI_SYSTEM, isHiFefe, isTestOff, isTestOn, norm, normalizePhone, parseAiLead, parseLeadCommand, phoneIn, restOf, STAGE_CHOICES, stageFromText, TEMPLATE } from './staff-lead';
 
 /**
  * Team numbers. A salesperson with a WhatsApp number set in AI Kamus > Sales team, and the BOD (Nico, Herlan: the numbers of the report recipients), may write
@@ -74,34 +75,48 @@ export async function handleStaffMessage(ws: string, groupId: string, waId: stri
       await db0.from('wa_bot_chats').upsert({ group_id: groupId, workspace_id: ws, status: 'off', reason: 'Nomor tim: bukan lead.', updated_at: now0 }, { onConflict: 'group_id' });
       return void (await say(ws, groupId, waId, `Mode test selesai kak ${who.name}. Kirim "Hi Fefe" untuk memasukkan lead, atau "Test Fefe" untuk test lagi.`));
     }
-    const f = parseLeadCommand(body);
+    let f = parseLeadCommand(body);
     const isCommand = isHiFefe(body) && (!testing || Object.values(f).some(Boolean));      // in test mode a plain "Hi Fefe" is just a greeting
     if (!isCommand) return testing;                               // a team member chatting: in test mode Fefe answers, else nothing
     const say_ = (t: string) => say(ws, groupId, waId, t);
-    if (!Object.values(f).some(Boolean)) return void (await say_(`Hi kak ${who.name}, Fefe siap. Untuk memasukkan lead atau mengubah pipeline, kirim format ini ya:\n\n${TEMPLATE}\n\nPipeline: ${STAGE_CHOICES}.`));
+    if (!Object.values(f).some(Boolean)) {
+      // not the template: free text ("Hi fefe, masukkan nomor bu Tati brand furniture 0812...") is read by the AI
+      const rest = restOf(body);
+      const help = `Hi kak ${who.name}, Fefe siap. Tulis saja permintaannya (contoh: "Hi Fefe, masukkan nomor Bu Tati, brand furniture, 0812...", atau "Hi Fefe, Toko Kidsmom pindah ke Warm"), atau pakai format ini:\n\n${TEMPLATE}\n\nPipeline: ${STAGE_CHOICES}.`;
+      if (rest.length < 6) return void (await say_(help));
+      let ai: ReturnType<typeof parseAiLead> = null;
+      try {
+        const out = await askBotModel(AI_SYSTEM, rest);
+        ai = parseAiLead(out.text);
+        if (!ai) ai = parseAiLead((await askBotModel(AI_SYSTEM, `${rest}\n\nPENTING: balas HANYA dengan satu objek JSON yang valid.`)).text);
+      } catch (e) { console.error('staff free text failed', e); }
+      if (!ai || ai.action === 'unclear' || !Object.values(ai.fields).some(Boolean)) return void (await say_(`Maaf kak, Fefe belum mengerti permintaannya.\n\n${help}`));
+      f = ai.fields;
+      if (!f.phone) f.phone = phoneIn(rest);
+    }
     const ask = stageFromText(f.stage);
     if (ask.kind === 'unknown') return void (await say_(`Pipeline "${f.stage}" belum Fefe kenal kak. Pilihannya: ${STAGE_CHOICES}.`));
     if (ask.kind === 'locked') return void (await say_('Tahap Invoice dan Active Client diatur lewat Request Invoice dan pembayaran di ERP, tidak bisa lewat chat kak. Pilihan lewat chat: ' + STAGE_CHOICES + '.'));
-    const label = f.brand || f.store;
-    if (!label) return void (await say_(`Nama Brand atau Nama Toko wajib diisi ya kak.\n\n${TEMPLATE}`));
+    const label = f.brand || f.store || f.pic;
+    if (!label) return void (await say_(`Nama Brand, Nama Toko atau Nama PIC wajib diisi ya kak.\n\n${TEMPLATE}`));
 
     const db = createAdminClient();
     const same = (a: string | null | undefined, b: string) => !!b && !!a && norm(a) === norm(b);
     const { data: clients } = await db.from('clients').select('id, name, store_name, contact_name, billing_address, phone').eq('workspace_id', ws).limit(3000);
     const tail = normalizePhone(f.phone) ? phoneTail(normalizePhone(f.phone)) : '';
-    const found = ((clients || []) as any[]).find((c) => same(c.store_name, f.store) || same(c.name, f.brand) || same(c.name, f.store) || (tail.length >= 8 && c.phone && phoneTail(String(c.phone)) === tail)) || null;
+    const found = ((clients || []) as any[]).find((c) => same(c.store_name, f.store) || same(c.name, f.brand) || same(c.name, f.store) || (!f.brand && !f.store && same(c.name, f.pic)) || (tail.length >= 8 && c.phone && phoneTail(String(c.phone)) === tail)) || null;
     const salesName = who.ownerId ? who.name : null;
     const now = new Date().toISOString();
     const noteLines = [f.category && `Kategori: ${f.category}`, f.note].filter(Boolean).join('\n') || null;
 
     if (!found) {
       const { data: made, error } = await db.from('clients').insert({
-        workspace_id: ws, name: f.brand || f.store, store_name: f.store || null, contact_name: f.pic || null, billing_address: f.address || null, phone: normalizePhone(f.phone) || null,
+        workspace_id: ws, name: label, store_name: f.store || null, contact_name: f.pic || null, billing_address: f.address || null, phone: normalizePhone(f.phone) || null,
         contact_type: 'client', is_prospect: true, created_by: who.ownerId, sales_name: salesName, lead_source: `Input tim (${who.name})`,
       }).select('id').single();
       if (error || !made) return void (await say_(`Maaf kak, Fefe gagal menyimpan lead ini. Coba lagi sebentar ya.`));
       const stage = ask.kind === 'stage' ? ask.stage : 'Lead';
-      const { error: dErr } = await db.from('crm_deals').insert({ workspace_id: ws, client_id: (made as any).id, lead_name: f.brand || f.store, title: 'Lead dari tim', stage, salesman_id: who.ownerId, salesman_name: salesName, notes: noteLines, pipeline_month: now.slice(0, 7), stage_changed_at: now });
+      const { error: dErr } = await db.from('crm_deals').insert({ workspace_id: ws, client_id: (made as any).id, lead_name: label, title: 'Lead dari tim', stage, salesman_id: who.ownerId, salesman_name: salesName, notes: noteLines, pipeline_month: now.slice(0, 7), stage_changed_at: now });
       if (dErr) { await db.from('clients').delete().eq('id', (made as any).id); return void (await say_('Maaf kak, Fefe gagal menyimpan lead ini. Coba lagi sebentar ya.')); }
       forget(`clients:${ws}`);
       const rows = [f.brand && `Brand: ${f.brand}`, f.store && `Toko: ${f.store}`, f.pic && `PIC: ${f.pic}`, normalizePhone(f.phone) && `No Hp: ${normalizePhone(f.phone)}`, f.address && `Alamat: ${f.address}`, f.category && `Kategori: ${f.category}`].filter(Boolean).join('\n');

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isHiFefe, isTestOn, isTestOff, parseLeadCommand, stageFromText, normalizePhone, TEMPLATE } from './staff-lead';
+import { isHiFefe, isTestOn, isTestOff, parseAiLead, restOf, phoneIn, parseLeadCommand, stageFromText, normalizePhone, TEMPLATE } from './staff-lead';
 
 describe('Hi Fefe', () => {
   it('starts the command, in any of the usual spellings', () => {
@@ -64,5 +64,26 @@ describe('test mode', () => {
   });
   it('ordinary messages are neither', () => {
     for (const t of ['test', 'fefe test paket', 'Hi Fefe', 'apa itu paket Lapak?', '']) { expect(isTestOn(t)).toBe(false); expect(isTestOff(t)).toBe(false); }
+  });
+});
+
+describe('free text to the AI', () => {
+  it('reads the JSON, also when it is wrapped in text', () => {
+    const r = parseAiLead('Tentu: {"aksi":"buat","brand":"","toko":"","pic":"Bu Tati","alamat":"","kategori":"furniture","hp":"62816987122","pipeline":"","catatan":""}');
+    expect(r?.action).toBe('create');
+    expect(r?.fields).toMatchObject({ pic: 'Bu Tati', category: 'furniture', phone: '62816987122' });
+  });
+  it('update, unclear, and no JSON at all', () => {
+    expect(parseAiLead('{"aksi":"ubah","toko":"Kidsmom","pipeline":"Warm"}')?.action).toBe('update');
+    expect(parseAiLead('{"aksi":"tidak_jelas"}')?.action).toBe('unclear');
+    expect(parseAiLead('maaf saya tidak mengerti')).toBeNull();
+    expect(parseAiLead('{rusak')).toBeNull();
+  });
+  it('the message without its greeting, and a phone number found in it', () => {
+    const t = 'Hi fefe\n\nMasukkan nomor bu Tati brand furniture\n\n62816987122';
+    expect(restOf(t)).toBe('Masukkan nomor bu Tati brand furniture\n\n62816987122');
+    expect(phoneIn(t)).toBe('62816987122');
+    expect(phoneIn('hubungi 0812-3456-7890 ya')).toBe('6281234567890');
+    expect(phoneIn('toko saya 50 juta sebulan')).toBe('');
   });
 });

@@ -62,6 +62,39 @@ export function stageFromText(raw: string): StageAsk {
   return { kind: 'unknown' };
 }
 
+// ---------------------------------------------------------------- free text: "Hi fefe, masukkan nomor bu Tati brand furniture 0812..."
+export const AI_SYSTEM = `Kamu membaca pesan WhatsApp dari anggota tim sales kami kepada asisten bernama Fefe. Pesan itu meminta Fefe memasukkan lead baru atau mengubah lead yang sudah ada di pipeline. Ambil datanya. Jangan mengarang: kalau sesuatu tidak disebut, kosongkan.
+Balas HANYA dengan satu objek JSON, tanpa teks lain:
+{"aksi":"buat","brand":"","toko":"","pic":"","alamat":"","kategori":"","hp":"","pipeline":"","catatan":""}
+- "aksi": "buat" kalau memasukkan orang atau toko baru, "ubah" kalau mengubah tahap atau data lead yang sudah ada, "tidak_jelas" kalau pesannya bukan permintaan seperti itu.
+- "brand" nama merek. "toko" nama toko di marketplace. "pic" nama orang yang dihubungi (misal "Bu Tati"). "kategori" jenis produk atau bisnis (misal furniture, fashion). "hp" nomor telepon atau WA. "alamat" alamat. "catatan" hal lain yang perlu dicatat.
+- "pipeline": salah satu dari New Lead, Contacted, Qualified, Warm, Meeting Offered, Meeting Booked, Meeting Done, Negotiation, Cold Leads, Lost. Kosong kalau tidak diminta.
+- "brand furniture" atau "toko fashion" artinya kategorinya furniture atau fashion, bukan nama merek.
+- Nomor telepon hanya di "hp", jangan di kolom lain.`;
+
+/** Reads the model's JSON (it may come wrapped in text). Null when there is none. */
+export function parseAiLead(text: string): { action: 'create' | 'update' | 'unclear'; fields: LeadFields } | null {
+  const m = /\{[\s\S]*\}/.exec(String(text ?? ''));
+  if (!m) return null;
+  let j: any;
+  try { j = JSON.parse(m[0]); } catch { return null; }
+  if (!j || typeof j !== 'object') return null;
+  const s = (v: unknown) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, 300);
+  const action = j.aksi === 'buat' ? 'create' : j.aksi === 'ubah' ? 'update' : 'unclear';
+  const fields: LeadFields = { brand: s(j.brand), store: s(j.toko), pic: s(j.pic), address: s(j.alamat), category: s(j.kategori), stage: s(j.pipeline), phone: s(j.hp), note: s(j.catatan) };
+  if (fields.phone.replace(/\D/g, '').length <= 4) fields.phone = '';
+  return { action, fields };
+}
+
+/** The message without its "Hi Fefe" greeting. */
+export const restOf = (text: string) => String(text ?? '').replace(/^\s*(hi|hai|halo|hello|hey)\s+fefe\b[\s,.:!-]*/i, '').trim();
+
+/** A phone number written anywhere in a text ("62816987122", "0812-3456-7890", "+62 812 3456 7890"), as 62..., or empty. */
+export function phoneIn(text: string): string {
+  const m = /(?:\+?62|0)8[\d\s-]{7,13}\d|\b8\d{8,12}\b/.exec(String(text ?? ''));
+  return m ? normalizePhone(m[0]) : '';
+}
+
 export const STAGE_CHOICES = 'New Lead, Contacted, Qualified, Warm, Meeting Offered, Meeting Booked, Meeting Done, Negotiation, Cold Leads, Lost';
 
 export const norm = (s: string | null | undefined) => String(s ?? '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();

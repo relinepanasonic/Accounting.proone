@@ -36,3 +36,17 @@ describe('pickGroup', () => {
     expect(pickGroup('S', '', new Map(), byClient)).toBeNull();
   });
 });
+
+describe('looseGroupByStore', () => {
+  const m = new Map<string, string | null>([['angkasajaya', 'g-aks'], ['artakusumasejati', 'g-aks'], ['sumber', 'g-a'], ['sumbermulti', 'g-b']]);
+  it('finds the client whose name is inside the store name', () => {
+    expect(pickGroup('Reline - Angkasa Jaya Elektronik', '', new Map(), m)).toBe('g-aks');
+  });
+  it('never guesses when two groups match, or the name is short', () => {
+    expect(pickGroup('Reline - Sumber Multi Cinere', '', new Map(), m)).toBeNull();
+    expect(pickGroup('Reline - Ab', '', new Map(), m)).toBeNull();
+  });
+  it('a known client is not second-guessed', () => {
+    expect(pickGroup('Reline - Angkasa Jaya Elektronik', 'Someone', new Map(), m)).toBeNull();
+  });
+});

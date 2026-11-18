@@ -108,6 +108,16 @@ export async function listSalesGroups(ws: string) {
   return { groups: list.map((g) => ({ id: g.id as string, name: String(g.name || `Group ···${String(g.wa_id).slice(-6)}`), active: g.fefe_active === true, lastAt: g.last_message_at as string | null, today: today.get(g.id) ?? 0, total: total.get(g.id) ?? 0 })) };
 }
 
+/** What Fefe saw and said in one group: each question she reacted to and her answer (or why it did not go out). No names, no numbers. */
+export async function groupLog(ws: string, id: string): Promise<{ entries: Array<{ at: string; question: string; reply: string; ok: boolean; detail: string }> } | { ok: false; status: number; error: string }> {
+  const db = createAdminClient();
+  const { data: g } = await db.from('wa_groups').select('id, is_group').eq('id', id).eq('workspace_id', ws).maybeSingle();
+  if (!g || !(g as any).is_group) return { ok: false, status: 404, error: 'Group not found.' };
+  const { data } = await db.from('fefe_group_answers').select('created_at, question, reply, ok, detail').eq('group_id', id).order('created_at', { ascending: false }).limit(60);
+  const entries = ((data || []) as any[]).filter((r) => r.detail !== 'pending').map((r) => ({ at: r.created_at as string, question: String(r.question || ''), reply: String(r.reply || ''), ok: r.ok === true, detail: String(r.detail || '') })).reverse();
+  return { entries };
+}
+
 export async function setGroupActive(ws: string, id: string, active: boolean): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
   const db = createAdminClient();
   const { data: g } = await db.from('wa_groups').select('id, is_group').eq('id', id).eq('workspace_id', ws).maybeSingle();

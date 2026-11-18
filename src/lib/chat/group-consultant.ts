@@ -5,6 +5,7 @@ import { sendWhatsApp } from '@/lib/wa/send';
 import { classifyGroupMessage, cleanBubbles, GROUP_SYSTEM, mayAnswerNow, parseGroupAnswer, type GroupHistory } from './group-rules';
 import { MARKETPLACE_KNOWLEDGE } from './group-knowledge';
 import { staffOf } from './staff-commands';
+import { fetchFonnteGroups } from '@/lib/wa/fonnte-groups';
 
 /**
  * Fefe as a marketplace consultant in WhatsApp groups. The sales number may be a member of random seller groups; a group message is NEVER stored, and nobody
@@ -15,6 +16,22 @@ type Device = { id: string; workspace_id: string; phone: string };
 type Msg = { chatId: string; groupName: string | null; senderPhone: string | null; body: string | null; isFromMe: boolean };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Fonnte only sends to a group that is in ITS list for this number. A group the number joined a moment ago is not there yet: Fonnte then answers "invalid group id".
+ * So when that happens, the list is refreshed from WhatsApp once (Fonnte warns not to do it often), the names of our groups are filled in (the webhook never
+ * carries them), and the send is tried again. At most once an hour per server instance.
+ */
+let lastRefresh = 0;
+async function refreshGroupList(device: Device): Promise<boolean> {
+  if (Date.now() - lastRefresh < 3600000) return false;
+  lastRefresh = Date.now();
+  const r = await fetchFonnteGroups({ refresh: true, token: process.env.FONNTE_TOKEN_SALES });
+  if (!r.ok) { console.error('group list refresh failed', r.error); return false; }
+  const db = createAdminClient();
+  for (const g of r.groups) if (g.name) await db.from('wa_groups').update({ name: g.name }).eq('workspace_id', device.workspace_id).eq('device_id', device.id).eq('wa_id', g.waId).is('name', null);
+  return true;
+}
 const hashOf = (phone: string | null) => (phone ? crypto.createHash('sha256').update(`${process.env.CRON_SECRET || 'fefe'}:${phone}`).digest('hex').slice(0, 16) : '');
 const jakartaMidnight = (now: Date) => { const j = new Date(now.getTime() + 7 * 3600000); return new Date(Date.UTC(j.getUTCFullYear(), j.getUTCMonth(), j.getUTCDate()) - 7 * 3600000); };
 
@@ -65,7 +82,8 @@ export async function handleSalesGroupMessage(device: Device, m: Msg, now = new 
     let sent = 0;
     let detail = 'sent';
     for (let i = 0; i < bubbles.length; i++) {
-      const res = await sendWhatsApp([`${m.chatId}@g.us`], bubbles[i], { token: process.env.FONNTE_TOKEN_SALES });
+      let res = await sendWhatsApp([`${m.chatId}@g.us`], bubbles[i], { token: process.env.FONNTE_TOKEN_SALES });
+      if (!res.ok && i === 0 && /invalid group/i.test(res.detail) && (await refreshGroupList(device))) res = await sendWhatsApp([`${m.chatId}@g.us`], bubbles[i], { token: process.env.FONNTE_TOKEN_SALES });
       if (!res.ok) { detail = res.detail.slice(0, 200); break; }
       sent++;
       if (i < bubbles.length - 1) await sleep(2500 + Math.floor(Math.random() * 3500));

@@ -7,6 +7,7 @@ import { optOutForLostDeal } from './lost-lead';
 import { sendToChat } from './send-any';
 import { cleanTeam } from './sales-team';
 import { dealCode } from './deal-edit-rules';
+import { handleAssignReply } from './meeting-assign';
 import { askBotModel } from '@/lib/wa/bot/model';
 import { AI_SYSTEM, clientNoIn, codeIn, findMatches, pickMatch, isHiFefe, isTestOff, isTestOn, norm, normalizePhone, parseAiLead, parseLeadCommand, phoneIn, restOf, STAGE_CHOICES, stageFromText, TEMPLATE } from './staff-lead';
 
@@ -75,6 +76,11 @@ export async function handleStaffMessage(ws: string, groupId: string, waId: stri
       await db0.from('chat_state').upsert({ group_id: groupId, workspace_id: ws, test_mode: false, updated_at: now0 }, { onConflict: 'group_id' });
       await db0.from('wa_bot_chats').upsert({ group_id: groupId, workspace_id: ws, status: 'off', reason: 'Nomor tim: bukan lead.', updated_at: now0 }, { onConflict: 'group_id' });
       return void (await say(ws, groupId, waId, `Mode test selesai kak ${who.name}. Kirim "Hi Fefe" untuk memasukkan lead, atau "Test Fefe" untuk test lagi.`));
+    }
+    // Herlan answering "who handles this meeting?": 1 (Herlan), 2 (Velly), 3 (both)
+    if (!testing && who.name.toLowerCase() === 'herlan') {
+      const assigned = await handleAssignReply(ws, body).catch((e) => { console.error('meeting assign reply failed', e); return null; });
+      if (assigned) return void (await say(ws, groupId, waId, assigned));
     }
     let f = parseLeadCommand(body);
     let intent: 'create' | 'update' | 'template' = 'template';

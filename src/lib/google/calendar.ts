@@ -95,6 +95,19 @@ export async function createMeetEvent(token: string, calendarId: string, e: { ti
   return { id: String(j.id), meetUrl: meet ? String(meet) : null };
 }
 
+/**
+ * Puts people on the event as ATTENDEES, by their email. They do not sign in to anything: Google emails them an invitation and the event appears in their
+ * own Google Calendar (with the Meet link). Their answer (accept) stays between them and Google.
+ */
+export async function setAttendees(token: string, calendarId: string, eventId: string, emails: string[]): Promise<void> {
+  const res = await fetch(`${CAL}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ attendees: emails.map((email) => ({ email })) }),
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!res.ok) { const j: any = await res.json().catch(() => null); throw new Error(`Google Calendar: ${j?.error?.message || res.status}`); }
+}
+
 /** Moves an event to a new time (the Meet link stays the same). */
 export async function patchEventTime(token: string, calendarId: string, eventId: string, start: Date, end: Date): Promise<void> {
   const res = await fetch(`${CAL}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, {

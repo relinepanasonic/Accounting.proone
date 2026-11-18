@@ -19,6 +19,7 @@ export interface Meeting {
   status: 'booked' | 'done' | 'no_show' | 'cancelled'; meet_url: string | null; booked_by: string; note: string | null; created_at: string; chat?: string;
   google_event_id?: string | null; confirm_sent_at?: string | null; confirmed_at?: string | null; reschedule_offer?: string[] | null; reschedule_asked_at?: string | null;
   owner_id?: string | null; owner_name?: string | null; lead_visit_id?: string | null;
+  assign_status?: string | null; assign_asked_at?: string | null; assignees?: Array<{ id: string; name: string; visitId?: string | null }>;
 }
 
 // ---------------------------------------------------------------- settings
@@ -55,7 +56,7 @@ export async function saveMeetSettings(ws: string, p: Partial<MeetSettings>): Pr
 }
 
 // ---------------------------------------------------------------- Google
-async function googleLink(ws: string): Promise<{ email: string | null; refresh_token: string; calendar_id: string } | null> {
+export async function googleLink(ws: string): Promise<{ email: string | null; refresh_token: string; calendar_id: string } | null> {
   const { data } = await createAdminClient().from('google_calendar_link').select('email, refresh_token, calendar_id').eq('workspace_id', ws).maybeSingle();
   return (data as any) ?? null;
 }
@@ -181,6 +182,8 @@ export async function bookMeeting(ws: string, input: { groupId: string | null; s
     await db.from('chat_notes').insert({ workspace_id: ws, group_id: input.groupId, author_id: null, author_name: input.by === 'bot' ? 'Bot' : input.by,
       body: `Konsultasi gratis dibooking: ${slotLabel(slot)}${meeting.meet_url ? `. Meet: ${meeting.meet_url}` : ''}${note ? `. ${note}` : ''}` });
   }
+  // a lead booked it (the bot or a follow-up): Herlan decides who handles it. A person booking by hand picks the owner herself.
+  if (input.by === 'bot') { try { const { askAssignment } = await import('./meeting-assign'); await askAssignment(ws, meeting); } catch (e) { console.error('meeting assignment ask failed', e); } }
   return { ok: true, meeting, text: bookedText(slot, s.minutes, meeting.meet_url) };
 }
 
@@ -214,7 +217,7 @@ export async function listMeetings(ws: string, days = 30) {
 export async function setMeetingStatus(ws: string, id: string, status: unknown): Promise<{ ok: true; prev: string } | Fail> {
   if (!['booked', 'done', 'no_show', 'cancelled'].includes(String(status))) return fail(400, 'Unknown status.');
   const db = createAdminClient();
-  const { data: m } = await db.from('chat_meetings').select('id, google_event_id, status, lead_visit_id').eq('id', id).eq('workspace_id', ws).maybeSingle();
+  const { data: m } = await db.from('chat_meetings').select('id, google_event_id, status, lead_visit_id, assignees').eq('id', id).eq('workspace_id', ws).maybeSingle();
   if (!m) return fail(404, 'Meeting not found.');
   const { error } = await db.from('chat_meetings').update({ status }).eq('id', id);
   if (error) return fail(/duplicate|unique/i.test(error.message) ? 409 : 500, /duplicate|unique/i.test(error.message) ? 'That time is taken by another booking now.' : error.message);
@@ -223,6 +226,7 @@ export async function setMeetingStatus(ws: string, id: string, status: unknown):
     if (link) { try { await deleteEvent(await accessToken(link.refresh_token), link.calendar_id, (m as any).google_event_id); } catch { /* the booking is cancelled anyway */ } }
   }
   if (status === 'cancelled' && (m as any).lead_visit_id) await db.from('lead_visits').delete().eq('id', (m as any).lead_visit_id).then(() => undefined, () => undefined);
+  if (status === 'cancelled') for (const a of ((m as any).assignees || []) as Array<{ visitId?: string | null }>) if (a.visitId && a.visitId !== (m as any).lead_visit_id) await db.from('lead_visits').delete().eq('id', a.visitId).then(() => undefined, () => undefined);
   forget(`slots:${ws}`);
   return { ok: true, prev: String((m as any).status) };
 }
@@ -242,7 +246,7 @@ async function ownerFor(ws: string, groupId: string | null, s: MeetSettings, byU
 }
 
 /** The meeting in the ERP's Meetings (lead_visits), so the salesperson sees it in Meetings and on the Today calendar. Updates it when it moves. */
-async function saveVisit(ws: string, m: Meeting, owner: { id: string; name: string }, visitId: string | null): Promise<string | null> {
+export async function saveVisit(ws: string, m: Meeting, owner: { id: string; name: string }, visitId: string | null): Promise<string | null> {
   const db = createAdminClient();
   const row = {
     client_name: String(m.lead_name || m.chat || 'Lead').slice(0, 120), salesman_id: owner.id, salesman_name: owner.name,
@@ -285,6 +289,7 @@ export async function moveMeeting(ws: string, id: string, start: unknown, by: st
   const link = await googleLink(ws).catch(() => null);
   if (link && m.google_event_id) { try { await patchEventTime(await accessToken(link.refresh_token), link.calendar_id, m.google_event_id, slot, end); } catch (e) { console.error('google move failed', e); } }
   if (m.owner_id && m.lead_visit_id) await saveVisit(ws, moved, { id: m.owner_id, name: m.owner_name || 'Sales' }, m.lead_visit_id).catch(() => null);
+  for (const a of m.assignees || []) if (a.visitId && a.visitId !== m.lead_visit_id) await saveVisit(ws, moved, { id: a.id, name: a.name }, a.visitId).catch(() => null);
   if (m.group_id) await teamNote(ws, m.group_id, `Jadwal konsultasi dipindah oleh ${by === 'bot' ? 'bot' : by}: ${slotLabel(new Date(m.starts_at))} menjadi ${slotLabel(slot)}.`);
   return { ok: true, meeting: moved, text: movedText(slot, s.minutes, moved.meet_url) };
 }

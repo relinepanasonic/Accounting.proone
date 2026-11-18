@@ -5,9 +5,11 @@
  * "kl mau tanya tanya lebih detail boleh japri saya ya guys": whoever wants that writes to us first. Nobody in a group is stored or contacted.
  */
 
-export const GROUP_MAX_PER_DAY = 5;          // times Fefe talks per group per day
-export const GROUP_GAP_MIN = 20;             // minutes between two of them in one group
-export const PERSON_GAP_HOURS = 6;           // hours before the same person gets an answer again
+export const GROUP_MAX_PER_DAY = 12;         // times Fefe talks per group per day (a back-and-forth counts every turn)
+export const GROUP_GAP_MIN = 20;             // minutes between the START of two different conversations in one group
+export const FOLLOWUP_WINDOW_MIN = 30;       // a person who writes again within this time after Fefe's answer is in the same conversation
+export const MAX_TURNS = 6;                  // Fefe's answers to one person in one conversation, at most
+export const FOLLOWUP_GAP_SEC = 20;          // the shortest pause between two turns of a conversation
 export const GROUP_MIN_CHARS = 15;
 export const GROUP_MAX_CHARS = 600;
 export const MAX_BUBBLES = 3;
@@ -23,10 +25,13 @@ const ADVERT = /(wts|open (reseller|dropship|po)|ready stock|jasa (edit|desain|i
 export type GroupKind = 'question' | 'flex';
 
 /** What this group message is: a real marketplace question, someone showing their work or store, or nothing Fefe should react to. */
-export function classifyGroupMessage(text: string | null | undefined): GroupKind | null {
+export function classifyGroupMessage(text: string | null | undefined, opts: { followUp?: boolean } = {}): GroupKind | null {
   const t = String(text ?? '').replace(/\s+/g, ' ').trim();
-  if (t.length < GROUP_MIN_CHARS || t.length > GROUP_MAX_CHARS) return null;
+  if (t.length > GROUP_MAX_CHARS) return null;
   if (ADVERT.test(t)) return null;
+  // someone Fefe is already talking to: their next question counts even without a marketplace word ("kenapa gitu kak?")
+  if (opts.followUp && t.length >= 8 && QUESTION.test(t)) return 'question';
+  if (t.length < GROUP_MIN_CHARS) return null;
   if (QUESTION.test(t) && MARKETPLACE.test(t)) return 'question';
   if (FLEX.test(t) && MARKETPLACE.test(t)) return 'flex';
   return null;
@@ -35,15 +40,43 @@ export function classifyGroupMessage(text: string | null | undefined): GroupKind
 /** A real marketplace question (kept for the callers that only care about questions). */
 export const worthAnswering = (text: string | null | undefined) => classifyGroupMessage(text) === 'question';
 
-export interface GroupHistory { lastAnswerAt: string | null; answersToday: number; personLastAt: string | null }
+/** The conversation Fefe is having with one person: her answers to them, each within FOLLOWUP_WINDOW_MIN of the next message, counted back from now. */
+export interface Chain { turns: number; lastAt: string | null; invited: boolean }
 
-/** May Fefe talk now: not too many today, not too soon after the last time in the group, not the same person again too soon. */
+export function chainOf(answers: Array<{ at: string; reply: string }>, now: Date): Chain {
+  const sorted = [...answers].sort((a, b) => b.at.localeCompare(a.at));
+  let turns = 0; let lastAt: string | null = null; let invited = false;
+  let cur = now.getTime();
+  for (const a of sorted) {
+    const t = new Date(a.at).getTime();
+    if (cur - t > FOLLOWUP_WINDOW_MIN * 60000) break;
+    turns++; cur = t; lastAt = lastAt ?? a.at; invited = invited || /japri/i.test(a.reply);
+  }
+  return { turns, lastAt, invited };
+}
+
+export interface GroupHistory { lastAnswerAt: string | null; answersToday: number; chain: Chain }
+
+/**
+ * May Fefe talk now. A new conversation: not too many today, and not too soon after the last one in the group. A follow-up from the person she is already
+ * talking to: yes, after a short pause, until the conversation has had MAX_TURNS answers.
+ */
 export function mayAnswerNow(h: GroupHistory, now: Date): { ok: true } | { ok: false; why: string } {
   if (h.answersToday >= GROUP_MAX_PER_DAY) return { ok: false, why: 'daily limit of the group' };
+  if (h.chain.turns >= 1) {
+    if (h.chain.turns >= MAX_TURNS) return { ok: false, why: 'this conversation has had enough turns' };
+    if (h.lastAnswerAt && now.getTime() - new Date(h.lastAnswerAt).getTime() < FOLLOWUP_GAP_SEC * 1000) return { ok: false, why: 'too fast' };
+    return { ok: true };
+  }
   if (h.lastAnswerAt && now.getTime() - new Date(h.lastAnswerAt).getTime() < GROUP_GAP_MIN * 60000) return { ok: false, why: 'too soon after the last answer' };
-  if (h.personLastAt && now.getTime() - new Date(h.personLastAt).getTime() < PERSON_GAP_HOURS * 3600000) return { ok: false, why: 'this person was answered recently' };
   return { ok: true };
 }
+
+/**
+ * The invitation to continue in private is never the first thing Fefe says: only after she has talked with the person for a few turns in a row (3, 4 or 5,
+ * fixed per person), and once per conversation. `turn` = the number of this answer in the conversation (1 = the first).
+ */
+export const japriAllowed = (turn: number, personSeed: number, chain: Chain) => !chain.invited && turn >= 3 + (Math.abs(personSeed) % 3);
 
 export interface GroupAnswer { talk: boolean; bubbles: string[]; dm: boolean }
 
@@ -76,7 +109,7 @@ const SELLING = /\b(paket|harga|rp ?\d|diskon|promo|konsultasi gratis|gratis kon
 export function cleanBubbles(bubbles: string[], opts: { dm: boolean; pick?: number }): string[] {
   const out: string[] = [];
   for (const b of bubbles) {
-    let t = String(b ?? '').replace(/\r\n/g, '\n').replace(/\*+/g, '').replace(/^#+\s*/gm, '').replace(/https?:\/\/\S+/gi, '').replace(/\b(\+?62|0)8[\d\s-]{8,13}\d\b/g, '').replace(/\s+/g, ' ').trim();
+    let t = stripLaugh(String(b ?? '')).replace(/\r\n/g, '\n').replace(/\*+/g, '').replace(/^#+\s*/gm, '').replace(/https?:\/\/\S+/gi, '').replace(/\b(\+?62|0)8[\d\s-]{8,13}\d\b/g, '').replace(/\s+/g, ' ').trim();
     if (t.length < 3 || SELLING.test(t)) continue;
     out.push(cutAtSentence(t, BUBBLE_MAX));
     if (out.length >= MAX_BUBBLES) break;
@@ -86,11 +119,15 @@ export function cleanBubbles(bubbles: string[], opts: { dm: boolean; pick?: numb
   return out;
 }
 
+/** Laughing sounds ("wkwk", "hahaha", "hehe") are never used: they are taken out of whatever the model writes. */
+const LAUGH = /\b(w+k+(w+k*)+|wk+|k?w+k+w+k+w*|(ha){2,}h?|(he){2,}h?|(hi){2,}h?|xi(xi)+|kwk+w*|a?wkwk\w*|lol|lmao)\b/gi;
+export const stripLaugh = (t: string) => t.replace(LAUGH, ' ').replace(/\s+([,.!?])/g, '$1').replace(/\s+/g, ' ').trim();
+
 export const GROUP_SYSTEM = (knowledge: string, persona = 'Fefe') => [
   `Kamu ${persona}, anak marketplace yang paling jago dan paling asyik di grup WhatsApp para seller (Shopee, TikTok Shop, Tokopedia). Kamu bukan sales, kamu temen nongkrong yang pinter: ngasih jawaban yang berguna sambil bercanda, ga sok pinter, ga menggurui.`,
   '',
   'GAYA (penting)',
-  '- Ngobrol santai ala WhatsApp: "guys", "kak", "wkwk", "sih", "nih", "dong", "banget". Boleh satu emoji sesekali, jangan banyak.',
+  '- Ngobrol santai ala WhatsApp: "guys", "kak", "sih", "nih", "dong", "banget". JANGAN pakai tawa tertulis seperti "wkwk", "haha", "hehe". Boleh satu emoji sesekali, jangan banyak.',
   '- PENDEK. Kirim 1 sampai 3 pesan, tiap pesan cuma 1 kalimat pendek (maksimal sekitar 150 huruf). Jangan satu paragraf panjang. Seperti orang yang nyerocos pelan-pelan, satu ide per pesan.',
   '- Kalau ada yang pamer toko, hasil kerja atau pencapaian (omzet naik, toko baru, foto bagus), puji dengan tulus dan heboh, misalnya "wah kereeeen kak" lalu satu komentar spesifik atau pertanyaan singkat. Jenisnya "puji".',
   '- Kalau ada pertanyaan seller, jawab yang berguna dengan bahasa gampang. Jenisnya "jawab".',
@@ -99,7 +136,8 @@ export const GROUP_SYSTEM = (knowledge: string, persona = 'Fefe') => [
   '- DILARANG promosi dalam bentuk apa pun: jangan sebut paket, harga, diskon, jasa, nama perusahaan, link atau nomor telepon. Kamu cuma anggota grup yang pinter.',
   '- Jawab hanya kalau yakin jawabannya benar dari PENGETAHUAN atau ilmu dasar e-commerce yang pasti. Kalau tidak yakin, atau soal kebijakan, biaya, angka atau fitur yang sering berubah, isi "bicara": false (jangan menebak).',
   '- Jangan menjanjikan hasil. Jangan menyalahkan orang. Jangan menjawab hal yang bukan soal jualan online.',
-  '- Isi "japri": true HANYA kalau orangnya jelas butuh bahasan lebih dalam soal tokonya sendiri (misalnya "toko saya sepi, tolong dicek", "iklan saya boncos terus"), dan paling banyak di sekitar 1 dari 3 kali kamu bicara. JANGAN menulis ajakan japri sendiri di "pesan", sistem yang menambahkannya.',
+  '- Isi "japri": true HANYA kalau orangnya jelas butuh bahasan lebih dalam soal tokonya sendiri dan obrolan kalian sudah berlangsung beberapa kali bolak-balik. Di jawaban pertama selalu false. JANGAN menulis ajakan japri sendiri di "pesan", sistem yang menambahkannya.',
+  '- Kalau di bawah ada "OBROLAN SEBELUMNYA", ini lanjutan: jawab lanjutannya, jangan mengulang yang sudah kamu bilang.',
   '',
   'PENGETAHUAN',
   knowledge.trim() || '(kosong: jawab hanya yang pasti)',

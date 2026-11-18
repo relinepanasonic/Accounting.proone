@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifyGroupMessage, cleanBubbles, DM_LINES, GROUP_MAX_PER_DAY, mayAnswerNow, parseGroupAnswer, worthAnswering } from './group-rules';
+import { chainOf, classifyGroupMessage, cleanBubbles, DM_LINES, GROUP_MAX_PER_DAY, japriAllowed, mayAnswerNow, parseGroupAnswer, worthAnswering } from './group-rules';
 
 describe('what Fefe reacts to in a group', () => {
   it('a real question about selling on a marketplace', () => {
@@ -19,16 +19,57 @@ describe('what Fefe reacts to in a group', () => {
 
 describe('how often Fefe talks', () => {
   const now = new Date('2026-11-17T08:00:00Z');
-  const h = (o: Partial<Parameters<typeof mayAnswerNow>[0]> = {}) => ({ lastAnswerAt: null, answersToday: 0, personLastAt: null, ...o });
+  const none = { turns: 0, lastAt: null, invited: false };
+  const h = (o: Partial<Parameters<typeof mayAnswerNow>[0]> = {}) => ({ lastAnswerAt: null, answersToday: 0, chain: none, ...o });
   it('free to talk', () => expect(mayAnswerNow(h(), now)).toEqual({ ok: true }));
-  it('a few times a day per group', () => expect(mayAnswerNow(h({ answersToday: GROUP_MAX_PER_DAY }), now)).toMatchObject({ ok: false }));
-  it('a pause between two times in a group', () => {
+  it('a limit per group per day', () => expect(mayAnswerNow(h({ answersToday: GROUP_MAX_PER_DAY }), now)).toMatchObject({ ok: false }));
+  it('a pause before a NEW conversation in the group', () => {
     expect(mayAnswerNow(h({ lastAnswerAt: '2026-11-17T07:50:00Z' }), now)).toMatchObject({ ok: false });
     expect(mayAnswerNow(h({ lastAnswerAt: '2026-11-17T07:30:00Z' }), now)).toEqual({ ok: true });
   });
-  it('not the same person again soon', () => {
-    expect(mayAnswerNow(h({ personLastAt: '2026-11-17T04:00:00Z' }), now)).toMatchObject({ ok: false });
-    expect(mayAnswerNow(h({ personLastAt: '2026-11-17T00:00:00Z' }), now)).toEqual({ ok: true });
+  it('the person she is talking to may follow up at once (after a short pause), up to a few turns', () => {
+    const chain = { turns: 2, lastAt: '2026-11-17T07:55:00Z', invited: false };
+    expect(mayAnswerNow(h({ lastAnswerAt: '2026-11-17T07:55:00Z', chain }), now)).toEqual({ ok: true });
+    expect(mayAnswerNow(h({ lastAnswerAt: '2026-11-17T07:59:50Z', chain }), now)).toMatchObject({ ok: false });
+    expect(mayAnswerNow(h({ lastAnswerAt: '2026-11-17T07:55:00Z', chain: { ...chain, turns: 6 } }), now)).toMatchObject({ ok: false });
+  });
+});
+
+describe('the conversation with one person', () => {
+  const now = new Date('2026-11-17T08:00:00Z');
+  it('counts the answers that follow each other within 30 minutes', () => {
+    const c = chainOf([{ at: '2026-11-17T07:55:00Z', reply: 'a' }, { at: '2026-11-17T07:40:00Z', reply: 'b' }, { at: '2026-11-17T07:20:00Z', reply: 'c' }], now);
+    expect(c.turns).toBe(3);
+    expect(chainOf([{ at: '2026-11-17T05:00:00Z', reply: 'old' }], now).turns).toBe(0);
+  });
+  it('notices that the japri invitation was already made', () => {
+    expect(chainOf([{ at: '2026-11-17T07:55:00Z', reply: 'x\nkl mau tanya tanya lebih detail boleh japri saya ya guys' }], now).invited).toBe(true);
+  });
+  it('japri only after 3 to 5 turns, and once', () => {
+    const c = { turns: 0, lastAt: null, invited: false };
+    for (const seed of [0, 1, 2]) {
+      expect(japriAllowed(1, seed, c)).toBe(false);
+      expect(japriAllowed(2, seed, c)).toBe(false);
+      expect(japriAllowed(5, seed, c)).toBe(true);
+    }
+    expect(japriAllowed(3, 0, c)).toBe(true);
+    expect(japriAllowed(3, 2, c)).toBe(false);
+    expect(japriAllowed(9, 0, { ...c, invited: true })).toBe(false);
+  });
+  it('a follow-up counts even without a marketplace word', () => {
+    expect(classifyGroupMessage('kenapa gitu kak?')).toBeNull();
+    expect(classifyGroupMessage('kenapa gitu kak?', { followUp: true })).toBe('question');
+    expect(classifyGroupMessage('oke makasih ya', { followUp: true })).toBeNull();
+  });
+});
+
+describe('no written laughter', () => {
+  it('wkwk, haha and hehe are taken out', () => {
+    const out = cleanBubbles(['Waduh, boncos terus emang bikin pusing kak wkwk. Coba hitung ROAS impas', 'hahaha santai guys', 'wkwkwk', 'seru juga hehe nih'], { dm: false });
+    expect(out.join(' ')).not.toMatch(/wk|haha|hehe/i);
+    expect(out).toContain('Waduh, boncos terus emang bikin pusing kak. Coba hitung ROAS impas');
+    expect(out).toContain('santai guys');
+    expect(out).not.toContain('');
   });
 });
 

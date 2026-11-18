@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import { createAdminClient } from '@/lib/api/supabase-admin';
 import { askBotModel } from '@/lib/wa/bot/model';
 import { sendWhatsApp } from '@/lib/wa/send';
-import { classifyGroupMessage, cleanBubbles, GROUP_SYSTEM, mayAnswerNow, parseGroupAnswer, type GroupHistory } from './group-rules';
+import { chainOf, classifyGroupMessage, cleanBubbles, GROUP_SYSTEM, japriAllowed, mayAnswerNow, parseGroupAnswer, type GroupHistory } from './group-rules';
 import { MARKETPLACE_KNOWLEDGE } from './group-knowledge';
 import { staffOf } from './staff-commands';
 import { fetchFonnteGroups } from '@/lib/wa/fonnte-groups';
@@ -43,21 +43,23 @@ export async function handleSalesGroupMessage(device: Device, m: Msg, now = new 
     if (!g || (g as any).fefe_active !== true) return 'group-off';
     if (m.isFromMe) return 'own-message';
     const text = String(m.body || '').trim();
-    if (!classifyGroupMessage(text)) return 'nothing-to-say';
     const { data: cfg } = await db.from('wa_bot_config').select('enabled').eq('workspace_id', device.workspace_id).maybeSingle();
     if ((cfg as any)?.enabled === false) return 'bot-off';
     if (m.senderPhone && (await staffOf(device.workspace_id, m.senderPhone).catch(() => null))) return 'team-member';
 
     const groupId = (g as any).id as string;
     const who = hashOf(m.senderPhone);
-    const { data: recent } = await db.from('fefe_group_answers').select('created_at, sender_hash, ok, detail').eq('group_id', groupId).gte('created_at', new Date(now.getTime() - 24 * 3600000).toISOString()).order('created_at', { ascending: false }).limit(50);
+    const { data: recent } = await db.from('fefe_group_answers').select('created_at, sender_hash, ok, detail, question, reply').eq('group_id', groupId).gte('created_at', new Date(now.getTime() - 24 * 3600000).toISOString()).order('created_at', { ascending: false }).limit(50);
     const answered = ((recent || []) as any[]).filter((r) => r.ok === true || r.detail === 'pending');
     const midnight = jakartaMidnight(now).getTime();
+    const mine = who ? answered.filter((r) => r.sender_hash === who && r.ok === true) : [];
+    const chain = chainOf(mine.map((r) => ({ at: r.created_at as string, reply: String(r.reply || '') })), now);
     const hist: GroupHistory = {
       lastAnswerAt: answered[0]?.created_at ?? null,
       answersToday: answered.filter((r) => new Date(r.created_at).getTime() >= midnight).length,
-      personLastAt: who ? answered.find((r) => r.sender_hash === who)?.created_at ?? null : null,
+      chain,
     };
+    if (!classifyGroupMessage(text, { followUp: chain.turns >= 1 })) return 'nothing-to-say';
     const may = mayAnswerNow(hist, now);
     if (!may.ok) return may.why;
 
@@ -68,17 +70,22 @@ export async function handleSalesGroupMessage(device: Device, m: Msg, now = new 
 
     let parsed = null as ReturnType<typeof parseGroupAnswer>;
     try {
-      const out = await askBotModel(GROUP_SYSTEM(MARKETPLACE_KNOWLEDGE), text);
+      // a follow-up carries the last turns of the conversation, so the answer goes on from there
+      const before = mine.slice(0, chain.turns).reverse().slice(-2).map((r) => `Dia: ${String(r.question || '').slice(0, 300)}\nKamu: ${String(r.reply || '').replace(/\n/g, ' ').slice(0, 400)}`).join('\n');
+      const prompt = before ? `OBROLAN SEBELUMNYA\n${before}\n\nPESAN BARU DARI DIA\n${text}` : text;
+      const out = await askBotModel(GROUP_SYSTEM(MARKETPLACE_KNOWLEDGE), prompt);
       parsed = parseGroupAnswer(out.text);
-      if (!parsed) parsed = parseGroupAnswer((await askBotModel(GROUP_SYSTEM(MARKETPLACE_KNOWLEDGE), `${text}\n\nPENTING: balas HANYA dengan satu objek JSON yang valid.`)).text);
+      if (!parsed) parsed = parseGroupAnswer((await askBotModel(GROUP_SYSTEM(MARKETPLACE_KNOWLEDGE), `${prompt}\n\nPENTING: balas HANYA dengan satu objek JSON yang valid.`)).text);
     } catch (e) { console.error('group answer failed', e); }
     if (!parsed || !parsed.talk) { await drop(); return 'model-skipped'; }
-    const bubbles = cleanBubbles(parsed.bubbles, { dm: parsed.dm, pick: who ? parseInt(who.slice(0, 2), 16) : 0 });
+    const seed = who ? parseInt(who.slice(0, 4), 16) : 0;
+    const dm = parsed.dm && japriAllowed(chain.turns + 1, seed, chain);           // never in the first answers: it would read as an advert
+    const bubbles = cleanBubbles(parsed.bubbles, { dm, pick: seed });
     if (!bubbles.length) { await drop(); return 'empty-reply'; }
     if (!process.env.FONNTE_TOKEN_SALES) { await drop(); return 'no-token'; }
 
     // like someone typing a few short lines: a pause first, then a pause between the bubbles
-    await sleep(5000 + Math.floor(Math.random() * 10000));
+    await sleep(chain.turns >= 1 ? 3000 + Math.floor(Math.random() * 6000) : 5000 + Math.floor(Math.random() * 10000));
     let sent = 0;
     let detail = 'sent';
     for (let i = 0; i < bubbles.length; i++) {

@@ -8,9 +8,11 @@ import { sendToChat } from './send-any';
 import { cleanTeam } from './sales-team';
 import { dealCode } from './deal-edit-rules';
 import { handleAssignReply } from './meeting-assign';
-import { handleMeetingCommand, handleMomReply } from './pa';
+import { handleMeetingCommand, handleMomReply, type Override } from './pa';
+import { confirmQuestion, needsConfirm, readConfirmAnswer, toCandidate } from './staff-confirm-rules';
+import { clearPending, readPending, savePending } from './staff-pending';
 import { askBotModel } from '@/lib/wa/bot/model';
-import { AI_SYSTEM, clientNoIn, codeIn, findMatches, pickMatch, isHiFefe, isTestOff, isTestOn, norm, normalizePhone, parseAiLead, parseLeadCommand, phoneIn, restOf, STAGE_CHOICES, stageFromText, TEMPLATE } from './staff-lead';
+import { AI_SYSTEM, clientNoIn, codeIn, findMatches, isHiFefe, isTestOff, isTestOn, norm, normalizePhone, parseAiLead, parseLeadCommand, phoneIn, restOf, STAGE_CHOICES, stageFromText, TEMPLATE } from './staff-lead';
 
 /**
  * Team numbers. A salesperson with a WhatsApp number set in AI Kamus > Sales team, and the BOD (Nico, Herlan: the numbers of the report recipients), may write
@@ -63,6 +65,7 @@ async function markTeamChat(ws: string, groupId: string, waId: string) {
  */
 export async function handleStaffMessage(ws: string, groupId: string, waId: string, body: string, who: StaffPerson): Promise<boolean | void> {
   try {
+    let override: Override | null = null;
     await markTeamChat(ws, groupId, waId);
     const db0 = createAdminClient();
     const { data: ts } = await db0.from('chat_state').select('test_mode').eq('group_id', groupId).maybeSingle();
@@ -83,9 +86,25 @@ export async function handleStaffMessage(ws: string, groupId: string, waId: stri
       const assigned = await handleAssignReply(ws, body).catch((e) => { console.error('meeting assign reply failed', e); return null; });
       if (assigned) return void (await say(ws, groupId, waId, assigned));
     }
+    // an answer to "Apakah ini sama dengan client kita?": carry on with the message that was asked, now that Fefe knows which client it is
+    if (!testing) {
+      const pend = await readPending(ws, waId).catch(() => null);
+      if (pend) {
+        if (isHiFefe(body)) await clearPending(pend.id);                      // a new request replaces the old question
+        else {
+          const ans = readConfirmAnswer(body, pend.candidates);
+          if (ans?.kind === 'which') return void (await say(ws, groupId, waId, `Yang mana kak? Balas Client ID-nya: ${pend.candidates.map((c) => c.no).filter(Boolean).join(' atau ')}. Atau TIDAK kalau lead baru.`));
+          if (ans) {
+            await clearPending(pend.id);
+            override = ans.kind === 'new' ? { forceNew: true } : ans.kind === 'client' ? { clientId: ans.clientId } : { clientNo: ans.no };
+            body = pend.body;
+          }
+        }
+      }
+    }
     // the personal assistant: a meeting told to Fefe goes in the calendars; the answer to "Notes meetingnya apa ya?" becomes the MoM
     if (!testing && isHiFefe(body)) {
-      const meeting = await handleMeetingCommand(ws, who, body).catch((e) => { console.error('meeting command failed', e); return null; });
+      const meeting = await handleMeetingCommand(ws, who, body, { waId, override }).catch((e) => { console.error('meeting command failed', e); return null; });
       if (meeting) return void (await say(ws, groupId, waId, meeting));
     }
     if (!testing && !isHiFefe(body)) {
@@ -137,20 +156,21 @@ export async function handleStaffMessage(ws: string, groupId: string, waId: stri
       // "ID 1042": exactly that client
       found = ((clients || []) as any[]).find((c) => Number(c.client_no) === cno) || null;
       if (!found) return void (await say_(`Fefe tidak menemukan klien dengan ID ${cno} kak. Cek ID-nya di daftar Client Contact di ERP atau di kartu Pipeline.`));
+    } else if (override?.clientId || override?.clientNo) {
+      // the salesperson said which client it is
+      found = ((clients || []) as any[]).find((c) => (override!.clientId ? c.id === override!.clientId : Number(c.client_no) === override!.clientNo)) || null;
+      if (!found) return void (await say_('Fefe tidak menemukan klien itu kak. Cek Client ID-nya ya.'));
+    } else if (override?.forceNew) {
+      found = null;
     } else {
-      const pick = pickMatch(findMatches(f, (clients || []) as any[], phoneTail));
-      if (pick.kind === 'many') {
-        const lines: string[] = [];
-        const codes: string[] = [];
-        for (const m of pick.list) {
-          const { data: dd } = await db.from('crm_deals').select('id, stage').eq('client_id', m.client.id).neq('stage', 'Archived').order('created_at', { ascending: false }).limit(1);
-          const d0 = (dd || [])[0] as any;
-          codes.push(d0 ? dealCode(d0.id) : '');
-          lines.push(`- ${m.client.name}${(m.client as any).client_no ? ` (ID ${(m.client as any).client_no})` : ''}${m.client.contact_name ? ` (PIC ${m.client.contact_name})` : ''}${d0 ? `, ${stageLabel(d0.stage)}, kode #${dealCode(d0.id)}` : ''}`);
-        }
-        return void (await say_(`Ada beberapa lead yang mirip kak, Fefe tidak mau salah ubah:\n${lines.join('\n')}\n\nKirim lagi pakai kodenya, contoh: Hi Fefe #${codes.find(Boolean) || 'KODE'} pindah ke Warm.`));
+      // not sure it is the same client as one we have: ask, so no double lead is made (a clear match goes on without a question)
+      const matches = findMatches(f, (clients || []) as any[], phoneTail);
+      const cands = needsConfirm(matches, { update: intent === 'update' });
+      if (cands) {
+        await savePending(ws, waId, 'lead', body, cands.map(toCandidate));
+        return void (await say_(confirmQuestion(cands.map(toCandidate))));
       }
-      if (pick.kind === 'one') found = pick.match.client;
+      if (matches.length) found = matches[0].client;
     }
     if (!found && intent === 'update') return void (await say_(`Fefe tidak menemukan lead yang kakak maksud. Tulis nama toko atau nomor HP-nya, atau pakai kode lead (#KODE). Kalau ini lead baru, tulis "masukkan ..." ya.`));
     if (!label) return void (await say_(`Nama Brand, Nama Toko atau Nama PIC wajib diisi ya kak.\n\n${TEMPLATE}`));

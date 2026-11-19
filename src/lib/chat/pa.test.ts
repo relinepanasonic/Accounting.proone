@@ -15,6 +15,15 @@ describe('a meeting told to Fefe', () => {
     const t = parseMeetingTemplate('Hi Fefe\nMeeting Offline\nDengan: Brand X\nTanggal: besok\nJam:\nLokasi:', NOW);
     expect(t?.withWhom).toBe('Brand X'); expect(t?.start).toBeNull(); expect(t?.minutes).toBe(60);
   });
+  it("the team's own template", () => {
+    const t = parseMeetingTemplate(['Hi Fefe', 'Saya ada meeting dengan', 'Brand: Kidsmom', 'Nama: Bu Rina', '', 'tanggal: 19 Nov 26', 'jam: 14.00', '', 'Tolong masukkan ke calendar'].join(String.fromCharCode(10)), NOW);
+    expect(t).toMatchObject({ withWhom: 'Kidsmom', pic: 'Bu Rina' });
+    expect(t?.start?.toISOString()).toBe('2026-11-19T07:00:00.000Z');
+  });
+  it("the team's template with only a name, or with the time left empty", () => {
+    const only = parseMeetingTemplate(['Hi Fefe', 'Saya ada meeting dengan', 'Brand:', 'Nama: Bu Rina', 'tanggal: besok', 'jam:', 'Tolong masukkan ke calendar'].join(String.fromCharCode(10)), NOW);
+    expect(only?.withWhom).toBe('Bu Rina'); expect(only?.start).toBeNull();
+  });
   it('a message that is not the template is not read as one', () => {
     expect(parseMeetingTemplate('Hi Fefe\nNama Toko: A', NOW)).toBeNull();
   });

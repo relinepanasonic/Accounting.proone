@@ -8,7 +8,9 @@ import { phoneTail } from './channel';
 import { googleLink } from './meetings';
 import { cleanTeam } from './sales-team';
 import { dealCode } from './deal-edit-rules';
-import { clientNoIn, codeIn, findMatches, pickMatch } from './staff-lead';
+import { clientNoIn, codeIn, findMatches } from './staff-lead';
+import { confirmQuestion, needsConfirm, toCandidate } from './staff-confirm-rules';
+import { savePending } from './staff-pending';
 import { dmyShort, hmDot, inQuietHours, isoJakarta, momAskText, momDue, MOM_SYSTEM, pastText, readMomReply, whenOf, type MeetingAsk } from './pa-rules';
 
 /**
@@ -150,13 +152,16 @@ export function parseMeetingAi(text: string): { meeting: boolean; withWhom: stri
 }
 
 /** The labelled template: "Meeting Offline / Dengan: / Tanggal: / Jam: / Lokasi: / Durasi:". Null when the message is not that template. */
-export function parseMeetingTemplate(body: string, now: Date): { complete: boolean; withWhom: string; start: Date | null; minutes: number; place: string; dateText: string; timeText: string } | null {
+export function parseMeetingTemplate(body: string, now: Date): { complete: boolean; withWhom: string; pic: string; start: Date | null; minutes: number; place: string; dateText: string; timeText: string } | null {
   const lines = String(body ?? '').replace(/\r\n/g, '\n').split('\n');
-  if (!lines.some((l) => /^\s*meeting\s+offline\s*$/i.test(l))) return null;
+  // the team's template ("Saya ada meeting dengan / Brand: / Nama: / tanggal: / jam: / Tolong masukkan ke calendar") or "Meeting Offline"
+  if (!lines.some((l) => /^\s*(meeting\s+offline|saya\s+ada\s+meeting(\s+dengan)?)\s*:?\s*$/i.test(l) || /^\s*tolong\s+(masukkan|catat|input)\w*\s+(ke\s+)?(calendar|kalender)/i.test(l))) return null;
   const get = (...labels: string[]) => { for (const l of lines) { const m = /^\s*([A-Za-z ]{2,20}?)\s*[:=]\s*(.*)$/.exec(l); if (m && labels.includes(m[1].toLowerCase().replace(/\s+/g, ' ').trim())) return m[2].trim(); } return ''; };
   const dateText = get('tanggal', 'tgl', 'date'); const timeText = get('jam', 'waktu', 'time', 'pukul');
   const dur = Number((/(\d{2,3})/.exec(get('durasi', 'lama')) || [])[1]);
-  return { complete: true, withWhom: get('dengan', 'bertemu dengan', 'dengan siapa', 'klien', 'brand').slice(0, 120), start: whenOf(dateText, timeText, now), minutes: dur >= 15 && dur <= 480 ? dur : 60, place: get('lokasi', 'tempat', 'alamat', 'di').slice(0, 200), dateText, timeText };
+  const pic = get('nama', 'nama pic', 'pic', 'nama kontak').slice(0, 120);
+  const brandText = get('brand', 'nama brand', 'dengan', 'bertemu dengan', 'dengan siapa', 'klien', 'toko', 'nama toko').slice(0, 120);
+  return { complete: true, pic, withWhom: brandText || pic, start: whenOf(dateText, timeText, now), minutes: dur >= 15 && dur <= 480 ? dur : 60, place: get('lokasi', 'tempat', 'alamat', 'di').slice(0, 200), dateText, timeText };
 }
 
 /** Does the message look like a request to note a meeting (before the AI is asked)? */
@@ -166,9 +171,11 @@ export const looksLikeMeeting = (text: string) => /\b(meeting|ketemu|ketemuan|be
  * "Hi Fefe ... meeting ...": noted in the calendars, and the lead found (or made). Returns the answer, or null when the message is not about a meeting
  * (then it is handled as a lead command).
  */
-export async function handleMeetingCommand(ws: string, who: Who, body: string, now = new Date()): Promise<string | null> {
+export interface Override { clientId?: string; clientNo?: number; forceNew?: boolean }
+
+export async function handleMeetingCommand(ws: string, who: Who, body: string, ctx: { waId: string; override?: Override | null }, now = new Date()): Promise<string | null> {
   const tpl = parseMeetingTemplate(body, now);
-  let ask: { withWhom: string; start: Date | null; minutes: number; place: string } | null = null;
+  let ask: { withWhom: string; pic?: string; start: Date | null; minutes: number; place: string } | null = null;
   if (tpl) ask = tpl;
   else if (looksLikeMeeting(body)) {
     try {
@@ -179,17 +186,21 @@ export async function handleMeetingCommand(ws: string, who: Who, body: string, n
     } catch (e) { console.error('meeting ai failed', e); }
   }
   if (!ask) return null;
-  if (!ask.withWhom) return `Dengan siapa meetingnya kak? Tulis nama brand atau tokonya ya.\n\nContoh: Hi Fefe, meeting offline dengan Brand X besok jam 14.00 di Kopi Kenangan.`;
-  if (!ask.start) return `Fefe butuh tanggal dan jam meetingnya kak.\n\nContoh: Hi Fefe, meeting offline dengan ${ask.withWhom} tanggal 19 Nov 26 jam 14.00 di (lokasi).`;
+  if (!ask.withWhom) return `Dengan siapa meetingnya kak? Tulis brand atau namanya ya.\n\n${meetingTemplate}`;
+  if (!ask.start) return `Fefe butuh tanggal dan jam meetingnya kak.\n\n${meetingTemplate}`;
   if (ask.start.getTime() < now.getTime() - 15 * 60000) return pastText;
 
-  // the lead: by ID, code, phone, store, brand or person; made when there is none
+  // the lead: by ID, code or the salesperson's answer; else by phone, store, brand or person. When Fefe is not sure it is the same client, she asks.
   const db = createAdminClient();
   const { data: clients } = await db.from('clients').select('id, client_no, name, store_name, contact_name, phone').eq('workspace_id', ws).limit(3000);
   const list = (clients || []) as any[];
   let found: any = null; let dealId: string | null = null;
   const code = codeIn(body); const cno = clientNoIn(body);
-  if (code) {
+  const ov = ctx.override ?? null;
+  if (ov?.clientId) found = list.find((c) => c.id === ov.clientId) || null;
+  else if (ov?.clientNo) { found = list.find((c) => Number(c.client_no) === ov.clientNo) || null; if (!found) return `Fefe tidak menemukan klien dengan ID ${ov.clientNo} kak.`; }
+  else if (ov?.forceNew) found = null;
+  else if (code) {
     const { data: all } = await db.from('crm_deals').select('id, client_id').eq('workspace_id', ws).neq('stage', 'Archived').limit(5000);
     const hit = ((all || []) as any[]).find((d) => dealCode(d.id) === code);
     if (!hit) return `Fefe tidak menemukan lead dengan kode #${code} kak.`;
@@ -198,22 +209,23 @@ export async function handleMeetingCommand(ws: string, who: Who, body: string, n
     found = list.find((c) => Number(c.client_no) === cno) || null;
     if (!found) return `Fefe tidak menemukan klien dengan ID ${cno} kak.`;
   } else {
-    const fields = { brand: ask.withWhom, store: '', pic: ask.withWhom, address: '', category: '', stage: '', phone: '', note: '' };
-    const pick = pickMatch(findMatches(fields, list, phoneTail));
-    if (pick.kind === 'many') {
-      const lines: string[] = [];
-      for (const m of pick.list) lines.push(`- ${m.client.name}${(m.client as any).client_no ? ` (ID ${(m.client as any).client_no})` : ''}`);
-      return `Ada beberapa yang mirip kak:\n${lines.join('\n')}\n\nKirim lagi pakai ID-nya, contoh: Hi Fefe meeting offline ID ${(pick.list[0].client as any).client_no ?? '1001'} besok jam 14.00.`;
+    const fields = { brand: ask.withWhom, store: '', pic: ask.pic || ask.withWhom, address: '', category: '', stage: '', phone: '', note: '' };
+    const matches = findMatches(fields, list, phoneTail);
+    const cands = needsConfirm(matches, { update: false });
+    if (cands) {
+      await savePending(ws, ctx.waId, 'meeting', body, cands.map(toCandidate));
+      return confirmQuestion(cands.map(toCandidate));
     }
-    if (pick.kind === 'one') found = pick.match.client;
+    if (matches.length) found = matches[0].client;
   }
   const ownerIds = await userIdsOf(ws, who);
   const salesName = who.ownerId ? who.name : null;
   const nowIso = new Date().toISOString();
+  const label = ask.withWhom;
   if (!found) {
-    const { data: made, error } = await db.from('clients').insert({ workspace_id: ws, name: ask.withWhom, contact_type: 'client', is_prospect: true, created_by: ownerIds[0] ?? null, sales_name: salesName, lead_source: `Input tim (${who.name})` }).select('id, client_no, name').single();
+    const { data: made, error } = await db.from('clients').insert({ workspace_id: ws, name: label, contact_name: ask.pic || null, contact_type: 'client', is_prospect: true, created_by: ownerIds[0] ?? null, sales_name: salesName, lead_source: `Input tim (${who.name})` }).select('id, client_no, name').single();
     if (error || !made) return 'Maaf kak, Fefe gagal menyimpan leadnya. Coba lagi sebentar ya.';
-    const { data: d } = await db.from('crm_deals').insert({ workspace_id: ws, client_id: (made as any).id, lead_name: ask.withWhom, title: 'Lead dari tim', stage: 'Lead', salesman_id: who.ownerId ?? ownerIds[0] ?? null, salesman_name: salesName || who.name, pipeline_month: nowIso.slice(0, 7), stage_changed_at: nowIso }).select('id').single();
+    const { data: d } = await db.from('crm_deals').insert({ workspace_id: ws, client_id: (made as any).id, lead_name: label, title: 'Lead dari tim', stage: 'Lead', salesman_id: who.ownerId ?? ownerIds[0] ?? null, salesman_name: salesName || who.name, pipeline_month: nowIso.slice(0, 7), stage_changed_at: nowIso }).select('id').single();
     forget(`clients:${ws}`);
     found = made; dealId = (d as any)?.id ?? null;
   } else if (!dealId) {
@@ -224,8 +236,12 @@ export async function handleMeetingCommand(ws: string, who: Who, body: string, n
       dealId = (d as any)?.id ?? null;
     }
   }
-  return bookOffline(ws, who, { clientId: found.id, dealId, clientName: String(found.name || ask.withWhom), ask: { withWhom: ask.withWhom, start: ask.start, minutes: ask.minutes, place: ask.place } });
+  const reply = await bookOffline(ws, who, { clientId: found.id, dealId, clientName: String(found.name || label), ask: { withWhom: label, start: ask.start, minutes: ask.minutes, place: ask.place } });
+  return `${reply}\nID Klien: ${found.client_no ?? '-'}`;
 }
+
+/** The team's template for a meeting (what Fefe shows when something is missing). */
+export const meetingTemplate = ['Hi Fefe', 'Saya ada meeting dengan', 'Brand:', 'Nama:', '', 'tanggal:', 'jam:', '', 'Tolong masukkan ke calendar'].join('\n');
 
 // ---------------------------------------------------------------- 2. the meeting notes (MoM)
 /**

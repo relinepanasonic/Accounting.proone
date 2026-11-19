@@ -21,8 +21,10 @@ const td = 'px-3 py-2 text-xs text-zinc-200';
 export function useDetailDrawer(details?: DashboardDetails) {
   const [kind, setKind] = useState<DetailKind | null>(null);
   const [search, setSearch] = useState('');
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggleAcc = (k: string) => setExpanded((p) => { const n = new Set(p); if (n.has(k)) n.delete(k); else n.add(k); return n; });
 
-  const open = (k: DetailKind) => { setSearch(''); setKind(k); };
+  const open = (k: DetailKind) => { setSearch(''); setExpanded(new Set()); setKind(k); };
 
   // The drawer is a step in the browser history: the phone's Back button (or gesture) closes it and lands on the same dashboard,
   // with the same Year / Month / Company filters, instead of leaving the page.
@@ -74,7 +76,9 @@ export function useDetailDrawer(details?: DashboardDetails) {
     const byAcc = new Map<string, number>();
     for (const l of lines) byAcc.set(`${l.code} - ${l.account}`, (byAcc.get(`${l.code} - ${l.account}`) || 0) + l.amount);
     const rows = Array.from(byAcc.entries()).sort((a, b) => b[1] - a[1]);
-    return { total: lines.reduce((s, l) => s + l.amount, 0), head: ['Account', 'Amount'], rows: rows.map(([a, v]) => [a, rp(v)]), right: [1], lines: lines.sort((a, b) => b.date.localeCompare(a.date)) };
+    const sortedLines = [...lines].sort((a, b) => b.date.localeCompare(a.date));
+    const groups = rows.map(([a, v]) => ({ key: a, total: v, lines: sortedLines.filter((l) => `${l.code} - ${l.account}` === a) }));
+    return { total: lines.reduce((s, l) => s + l.amount, 0), head: ['Account', 'Amount'], rows: rows.map(([a, v]) => [a, rp(v)]), right: [1], lines: sortedLines, groups };
   }, [kind, details, search]);
 
   const element = kind && content ? (
@@ -98,22 +102,27 @@ export function useDetailDrawer(details?: DashboardDetails) {
             <thead className="sticky top-0 bg-[#0b0c10]"><tr>{content.head.map((h, i) => <th key={h} className={`${th} ${content.right.includes(i) ? 'text-right' : ''}`}>{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-zinc-800/50">
               {content.rows.length === 0 && <tr><td colSpan={content.head.length} className="p-6 text-center text-sm text-zinc-500">Nothing in this period.</td></tr>}
-              {content.rows.map((r, i) => (
+              {'groups' in content && content.groups ? content.groups.map((g) => {
+                const isOpen = expanded.has(g.key);
+                return (
+                  <React.Fragment key={g.key}>
+                    <tr onClick={() => toggleAcc(g.key)} className="cursor-pointer hover:bg-zinc-900/40" aria-expanded={isOpen}>
+                      <td className={td}><span className="mr-2 inline-block w-3 text-[#d4af37]">{isOpen ? '▾' : '▸'}</span>{g.key} <span className="text-[10px] text-zinc-500">· {g.lines.length} line{g.lines.length === 1 ? '' : 's'}</span></td>
+                      <td className={`${td} whitespace-nowrap text-right font-mono`}>{rp(g.total)}</td>
+                    </tr>
+                    {isOpen && g.lines.map((l, i) => (
+                      <tr key={i} className="bg-zinc-950/60">
+                        <td className="py-1.5 pl-9 pr-3 text-[11px] text-zinc-400"><span className="mr-2 font-mono text-zinc-500">{day(l.date)}</span>{l.desc || <span className="text-zinc-600">no description</span>}</td>
+                        <td className="whitespace-nowrap px-3 py-1.5 text-right font-mono text-[11px] text-zinc-300">{rp(l.amount)}</td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                );
+              }) : content.rows.map((r, i) => (
                 <tr key={i} className="hover:bg-zinc-900/40">{r.map((c, j) => <td key={j} className={`${td} ${content.right.includes(j) ? 'whitespace-nowrap text-right font-mono' : ''}`}>{c}</td>)}</tr>
               ))}
             </tbody>
           </table>
-          {'lines' in content && content.lines && content.lines.length > 0 && (
-            <details className="mt-4 rounded-xl border border-zinc-800 p-3">
-              <summary className="cursor-pointer text-xs font-bold text-zinc-300">Every ledger line ({content.lines.length})</summary>
-              <table className="mt-2 w-full text-left">
-                <thead><tr><th className={th}>Date</th><th className={th}>Account</th><th className={`${th} text-right`}>Amount</th></tr></thead>
-                <tbody className="divide-y divide-zinc-800/50">
-                  {content.lines.map((l, i) => <tr key={i}><td className={td}>{day(l.date)}</td><td className={td}>{l.code} {l.account}</td><td className={`${td} text-right font-mono`}>{rp(l.amount)}</td></tr>)}
-                </tbody>
-              </table>
-            </details>
-          )}
         </div>
       </div>
     </div>

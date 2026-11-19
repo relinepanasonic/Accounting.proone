@@ -118,7 +118,8 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
   const A = activeWorkspaceId;
   const queryWorkspaceIds: string[] = combined ? (workspaceIds as string[]) : A !== PT_WORKSPACE_ID ? [A, PT_WORKSPACE_ID] : [PT_WORKSPACE_ID];
   // PT Pintu's dashboard stands for itself (it is used for tax): the Company filter is for the other companies.
-  const companyFilter = !combined && A !== PT_WORKSPACE_ID && options.company ? options.company : '';
+  // A company's dashboard counts what PT Pintu paid or collected for it as its OWN (no separate "PT" source or filter): only items assigned to it.
+  const companyFilter = '';
   /** Which company an invoice / expense / ledger line counts for in a single-company dashboard; null = not part of this dashboard. */
   const sourceOf = (workspaceId: string, assigned: string | null | undefined): string | null => {
     if (A === PT_WORKSPACE_ID) return assigned || PT_WORKSPACE_ID;
@@ -276,7 +277,10 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
   const details: DashboardDetails = { invoices: [], ar: [], costs: [], cash: [] };
 
   // Mini charts and per-company numbers for the cards. The company is the workspace that holds the books (PT Pintu for what it holds for another company).
-  const codeOf = (workspaceId: string) => workspaceCode(workspaceId, availableWorkspaces.find((w: any) => w.id === workspaceId)?.name);
+  const codeOf = (workspaceId: string) => {
+    const id = !combined && A !== PT_WORKSPACE_ID && workspaceId === PT_WORKSPACE_ID ? A : workspaceId; // PT items assigned to this company count as its own
+    return workspaceCode(id, availableWorkspaces.find((w: any) => w.id === id)?.name);
+  };
   const bucketPaid = new Array(numBuckets).fill(0);
   const bucketCogs = new Array(numBuckets).fill(0);
   const bucketSalary = new Array(numBuckets).fill(0);
@@ -686,7 +690,7 @@ export async function getDashboardTelemetry(options: DashboardTelemetryOptions =
   /** The Company filter: this company's own books and the other source(s) behind it. */
   function companyOptions() {
     const name = (id: string) => availableWorkspaces.find((w: any) => w.id === id)?.name || (id === PT_WORKSPACE_ID ? 'PT Pintu Langit Inovasi Global' : 'Company');
-    if (A !== PT_WORKSPACE_ID) return [{ id: A, name: name(A) }, { id: PT_WORKSPACE_ID, name: `${name(PT_WORKSPACE_ID)} (assigned to ${name(A)})` }];
+    if (A !== PT_WORKSPACE_ID) return []; // PT items assigned to this company are simply this company's
     const others = new Set<string>();
     for (const inv of invoicesRes.data || []) if ((inv as any).assigned_workspace_id) others.add((inv as any).assigned_workspace_id);
     for (const tx of (txRes.data || []) as any[]) if (tx.assigned_workspace_id) others.add(tx.assigned_workspace_id);

@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/api/supabase-admin';
+import { syncFinishedStages } from './finished-sync';
 import { dealCode } from './deal-edit-rules';
 import { memo } from './cache';
 import { loadKnowledge } from './bible';
@@ -110,6 +111,7 @@ export async function loadPipeline(ws: string): Promise<{ deals: BoardDeal[]; st
   const db = createAdminClient();
   const since = new Date(Date.now() - 30 * 86400000).toISOString();
   const cols = 'id, title, client_id, lead_name, stage, value, salesman_id, salesman_name, created_at, stage_changed_at, invoice_id';
+  await syncFinishedStages(ws);                         // Active Client <-> Finished, as on the ERP Clients page (every 10 minutes at most)
   // an Active Client whose project is still running always stays on the board, however long ago it was paid
   const runUntil = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
   const { data: runningClients } = await db.from('clients').select('id').eq('workspace_id', ws).gte("service_end_date", runUntil).limit(1000);

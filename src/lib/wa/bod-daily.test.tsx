@@ -65,7 +65,7 @@ describe('pipelineOf', () => {
   ];
   it('counts every stage (an unknown one counts as Lead), per salesperson, with new and moved on the day', () => {
     const p = pipelineOf(deals, '2026-11-12');
-    expect(p.stages.map((s) => [s.stage, s.count])).toEqual([['Lead', 2], ['Contacted', 0], ['Qualified', 0], ['Warm', 0], ['Meeting Offered', 0], ['Meeting Booked', 0], ['Meeting Offline', 0], ['Meeting Done', 0], ['Negotiation', 1], ['Invoice Requested', 0], ['Invoice', 0], ['Deal', 1], ['Cold Case', 1], ['Lost', 0]]);
+    expect(p.stages.map((s) => [s.stage, s.count])).toEqual([['Lead', 2], ['Contacted', 0], ['Qualified', 0], ['Warm', 0], ['Meeting Offered', 0], ['Meeting Booked', 0], ['Meeting Offline', 0], ['Meeting Done', 0], ['Negotiation', 1], ['Invoice Requested', 0], ['Invoice', 0], ['Deal', 1], ['Finished', 0], ['Cold Case', 1], ['Lost', 0]]);
     expect(p.total).toBe(5);
     expect(p.newOnDay).toBe(1);        // the Lead entered that day
     expect(p.movedOnDay).toBe(1);      // the Negotiation deal that changed stage that day (a new deal is not also "moved")

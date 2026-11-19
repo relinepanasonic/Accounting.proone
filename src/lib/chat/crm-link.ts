@@ -53,7 +53,7 @@ export function mayMoveDeal(role: string, userId: string, deal: { salesman_id: s
 export function checkStage(stage: unknown): { ok: true; stage: string } | { ok: false; error: string } {
   const s = String(stage ?? '');
   if (MANUAL_STAGES.includes(s)) return { ok: true, stage: s };
-  if (LOCKED_STAGES.includes(s)) return { ok: false, error: s === 'Deal' ? 'A deal becomes an Active Client when its invoice is paid.' : s === 'Invoice' ? 'A deal reaches Invoice Sent when Accounting makes its invoice in the ERP.' : 'A deal reaches Invoice Requested with Request invoice in the ERP.' };
+  if (LOCKED_STAGES.includes(s)) return { ok: false, error: s === 'Finished' ? 'A client becomes Finished when its project ends in the ERP Clients page.' : s === 'Deal' ? 'A deal becomes an Active Client when its invoice is paid.' : s === 'Invoice' ? 'A deal reaches Invoice Sent when Accounting makes its invoice in the ERP.' : 'A deal reaches Invoice Requested with Request invoice in the ERP.' };
   return { ok: false, error: 'Unknown stage.' };
 }
 

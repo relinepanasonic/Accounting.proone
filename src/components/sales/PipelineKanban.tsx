@@ -24,7 +24,9 @@ const STAGE_COLORS: Record<string, string> = {
   Negotiation: 'bg-amber-400',
   'Invoice Requested': 'bg-sky-300',
   Invoice: 'bg-sky-400',
+  'Meeting Offline': 'bg-violet-400',
   Deal: 'bg-emerald-400',
+  Finished: 'bg-teal-500',
   'Cold Case': 'bg-slate-500',
 };
 

@@ -77,8 +77,8 @@ export function useDetailDrawer(details?: DashboardDetails) {
     for (const l of lines) byAcc.set(`${l.code} - ${l.account}`, (byAcc.get(`${l.code} - ${l.account}`) || 0) + l.amount);
     const rows = Array.from(byAcc.entries()).sort((a, b) => b[1] - a[1]);
     const sortedLines = [...lines].sort((a, b) => b.date.localeCompare(a.date));
-    const groups = rows.map(([a, v]) => ({ key: a, total: v, lines: sortedLines.filter((l) => `${l.code} - ${l.account}` === a) }));
-    return { total: lines.reduce((s, l) => s + l.amount, 0), head: ['Account', 'Amount'], rows: rows.map(([a, v]) => [a, rp(v)]), right: [1], lines: sortedLines, groups };
+    const groups = rows.map(([a, v]) => { const ls = sortedLines.filter((l) => `${l.code} - ${l.account}` === a); return { key: a, total: v, lines: ls, companies: Array.from(new Set(ls.map((l) => l.company || '').filter(Boolean))).join(', ') }; });
+    return { total: lines.reduce((s, l) => s + l.amount, 0), head: ['Account', 'Company', 'Amount'], rows: rows.map(([a, v]) => [a, '', rp(v)]), right: [2], lines: sortedLines, groups };
   }, [kind, details, search]);
 
   const element = kind && content ? (
@@ -108,11 +108,13 @@ export function useDetailDrawer(details?: DashboardDetails) {
                   <React.Fragment key={g.key}>
                     <tr onClick={() => toggleAcc(g.key)} className="cursor-pointer hover:bg-zinc-900/40" aria-expanded={isOpen}>
                       <td className={td}><span className="mr-2 inline-block w-3 text-[#d4af37]">{isOpen ? '▾' : '▸'}</span>{g.key} <span className="text-[10px] text-zinc-500">· {g.lines.length} line{g.lines.length === 1 ? '' : 's'}</span></td>
+                      <td className={td}><span className="font-mono text-[11px] text-zinc-400">{g.companies || '-'}</span></td>
                       <td className={`${td} whitespace-nowrap text-right font-mono`}>{rp(g.total)}</td>
                     </tr>
                     {isOpen && g.lines.map((l, i) => (
                       <tr key={i} className="bg-zinc-950/60">
                         <td className="py-1.5 pl-9 pr-3 text-[11px] text-zinc-400"><span className="mr-2 font-mono text-zinc-500">{day(l.date)}</span>{l.desc || <span className="text-zinc-600">no description</span>}</td>
+                        <td className="px-3 py-1.5"><span className="rounded border border-zinc-700 px-1.5 py-0.5 font-mono text-[10px] text-zinc-300">{l.company || '-'}</span></td>
                         <td className="whitespace-nowrap px-3 py-1.5 text-right font-mono text-[11px] text-zinc-300">{rp(l.amount)}</td>
                       </tr>
                     ))}

@@ -251,7 +251,7 @@ export async function saveVisit(ws: string, m: Meeting, owner: { id: string; nam
   const row = {
     client_name: String(m.lead_name || m.chat || 'Lead').slice(0, 120), salesman_id: owner.id, salesman_name: owner.name,
     agenda: [`Konsultasi gratis (Google Meet, dari chat)`, m.store ? `Toko: ${m.store}` : '', m.meet_url ? `Link: ${m.meet_url}` : ''].filter(Boolean).join('. '),
-    visit_at: m.starts_at,
+    visit_at: m.starts_at, ends_at: m.ends_at, kind: 'online',
   };
   if (visitId) { await db.from('lead_visits').update(row).eq('id', visitId); return visitId; }
   const { data } = await db.from('lead_visits').insert({ workspace_id: ws, ...row }).select('id').single();

@@ -8,6 +8,7 @@ import { sendToChat } from './send-any';
 import { cleanTeam } from './sales-team';
 import { dealCode } from './deal-edit-rules';
 import { handleAssignReply } from './meeting-assign';
+import { handleMeetingCommand, handleMomReply } from './pa';
 import { askBotModel } from '@/lib/wa/bot/model';
 import { AI_SYSTEM, clientNoIn, codeIn, findMatches, pickMatch, isHiFefe, isTestOff, isTestOn, norm, normalizePhone, parseAiLead, parseLeadCommand, phoneIn, restOf, STAGE_CHOICES, stageFromText, TEMPLATE } from './staff-lead';
 
@@ -82,6 +83,15 @@ export async function handleStaffMessage(ws: string, groupId: string, waId: stri
       const assigned = await handleAssignReply(ws, body).catch((e) => { console.error('meeting assign reply failed', e); return null; });
       if (assigned) return void (await say(ws, groupId, waId, assigned));
     }
+    // the personal assistant: a meeting told to Fefe goes in the calendars; the answer to "Notes meetingnya apa ya?" becomes the MoM
+    if (!testing && isHiFefe(body)) {
+      const meeting = await handleMeetingCommand(ws, who, body).catch((e) => { console.error('meeting command failed', e); return null; });
+      if (meeting) return void (await say(ws, groupId, waId, meeting));
+    }
+    if (!testing && !isHiFefe(body)) {
+      const mom = await handleMomReply(ws, who, body).catch((e) => { console.error('mom reply failed', e); return null; });
+      if (mom) return void (await say(ws, groupId, waId, mom));
+    }
     let f = parseLeadCommand(body);
     let intent: 'create' | 'update' | 'template' = 'template';
     const isCommand = isHiFefe(body) && (!testing || Object.values(f).some(Boolean));      // in test mode a plain "Hi Fefe" is just a greeting
@@ -90,7 +100,7 @@ export async function handleStaffMessage(ws: string, groupId: string, waId: stri
     if (!Object.values(f).some(Boolean)) {
       // not the template: free text ("Hi fefe, masukkan nomor bu Tati brand furniture 0812...") is read by the AI
       const rest = restOf(body);
-      const help = `Hi kak ${who.name}, Fefe siap. Tulis saja permintaannya. Untuk lead baru: "Hi Fefe, masukkan Bu Tati, brand furniture, 0812...". Untuk mengubah lead: "Hi Fefe ID 1042 pindah ke Warm" (ID klien ada di jawaban Fefe, di kartu Pipeline dan di daftar Client Contact), atau pakai nama tokonya. Atau pakai format ini:\n\n${TEMPLATE}\n\nPipeline: ${STAGE_CHOICES}.`;
+      const help = `Hi kak ${who.name}, Fefe siap. Tulis saja permintaannya. Untuk lead baru: "Hi Fefe, masukkan Bu Tati, brand furniture, 0812...". Untuk mengubah lead: "Hi Fefe ID 1042 pindah ke Warm" (ID klien ada di jawaban Fefe, di kartu Pipeline dan di daftar Client Contact), atau pakai nama tokonya. Untuk mencatat meeting offline: "Hi Fefe, meeting offline dengan Brand X besok jam 14.00 di (lokasi)". Atau pakai format ini:\n\n${TEMPLATE}\n\nPipeline: ${STAGE_CHOICES}.`;
       if (rest.length < 6) return void (await say_(help));
       let ai: ReturnType<typeof parseAiLead> = null;
       try {

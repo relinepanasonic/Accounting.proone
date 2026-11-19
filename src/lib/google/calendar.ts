@@ -108,6 +108,23 @@ export async function setAttendees(token: string, calendarId: string, eventId: s
   if (!res.ok) { const j: any = await res.json().catch(() => null); throw new Error(`Google Calendar: ${j?.error?.message || res.status}`); }
 }
 
+/** A plain calendar event (no Meet link) with a place and guests by email. Google emails the guests the invitation; it lands in their own calendar. */
+export async function createEvent(token: string, calendarId: string, e: { title: string; description: string; location: string | null; start: Date; end: Date; attendees: string[]; requestId: string }): Promise<{ id: string }> {
+  const res = await fetch(`${CAL}/calendars/${encodeURIComponent(calendarId)}/events?sendUpdates=all`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      summary: e.title, description: e.description, ...(e.location ? { location: e.location } : {}),
+      start: { dateTime: e.start.toISOString(), timeZone: 'Asia/Jakarta' }, end: { dateTime: e.end.toISOString(), timeZone: 'Asia/Jakarta' },
+      ...(e.attendees.length ? { attendees: e.attendees.map((email) => ({ email })) } : {}),
+      reminders: { useDefault: false, overrides: [{ method: 'popup', minutes: 30 }] },
+    }),
+    signal: AbortSignal.timeout(15000),
+  });
+  const j: any = await res.json().catch(() => null);
+  if (!res.ok || !j?.id) throw new Error(`Google Calendar: ${j?.error?.message || res.status}`);
+  return { id: String(j.id) };
+}
+
 /** Moves an event to a new time (the Meet link stays the same). */
 export async function patchEventTime(token: string, calendarId: string, eventId: string, start: Date, end: Date): Promise<void> {
   const res = await fetch(`${CAL}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, {

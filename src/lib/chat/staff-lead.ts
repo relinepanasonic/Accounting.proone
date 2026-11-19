@@ -46,6 +46,7 @@ const STAGE_WORDS: Array<[string[], string]> = [
   [['warm'], 'Warm'],
   [['meeting offered', 'offered', 'meeting ditawarkan'], 'Meeting Offered'],
   [['meeting booked', 'booked', 'booking', 'meeting', 'meeting terjadwal'], 'Meeting Booked'],
+  [['meeting offline', 'offline', 'meeting luar', 'ketemu langsung', 'bertemu langsung'], 'Meeting Offline'],
   [['meeting done', 'done', 'meeting selesai'], 'Meeting Done'],
   [['negotiation', 'nego', 'negosiasi'], 'Negotiation'],
   [['cold', 'cold leads', 'cold lead', 'cold case', 'dingin'], 'Cold Case'],
@@ -68,7 +69,7 @@ Balas HANYA dengan satu objek JSON, tanpa teks lain:
 {"aksi":"buat","brand":"","toko":"","pic":"","alamat":"","kategori":"","hp":"","pipeline":"","catatan":""}
 - "aksi": "buat" kalau memasukkan orang atau toko baru, "ubah" kalau mengubah tahap atau data lead yang sudah ada, "tidak_jelas" kalau pesannya bukan permintaan seperti itu.
 - "brand" nama merek. "toko" nama toko di marketplace. "pic" nama orang yang dihubungi (misal "Bu Tati"). "kategori" jenis produk atau bisnis (misal furniture, fashion). "hp" nomor telepon atau WA. "alamat" alamat. "catatan" hal lain yang perlu dicatat.
-- "pipeline": salah satu dari New Lead, Contacted, Qualified, Warm, Meeting Offered, Meeting Booked, Meeting Done, Negotiation, Cold Leads, Lost. Kosong kalau tidak diminta.
+- "pipeline": salah satu dari New Lead, Contacted, Qualified, Warm, Meeting Offered, Meeting Booked, Meeting Offline, Meeting Done, Negotiation, Cold Leads, Lost. Kosong kalau tidak diminta.
 - "brand furniture" atau "toko fashion" artinya kategorinya furniture atau fashion, bukan nama merek.
 - Nomor telepon hanya di "hp", jangan di kolom lain.
 - Permintaan membuat jadwal meeting, atau hal lain yang bukan memasukkan atau mengubah lead, adalah "tidak_jelas".
@@ -153,6 +154,6 @@ export function pickMatch(m: Match[]): { kind: 'none' } | { kind: 'one'; match: 
   return { kind: 'one', match: top };
 }
 
-export const STAGE_CHOICES = 'New Lead, Contacted, Qualified, Warm, Meeting Offered, Meeting Booked, Meeting Done, Negotiation, Cold Leads, Lost';
+export const STAGE_CHOICES = 'New Lead, Contacted, Qualified, Warm, Meeting Offered, Meeting Booked, Meeting Offline, Meeting Done, Negotiation, Cold Leads, Lost';
 
 export const norm = (s: string | null | undefined) => String(s ?? '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();

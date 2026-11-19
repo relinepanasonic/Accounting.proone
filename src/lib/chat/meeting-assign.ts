@@ -65,6 +65,7 @@ async function assign(ws: string, m: Meeting, pick: AssignPick): Promise<string>
   for (const p of chosen) {
     const keep = p === chosen[0] ? m.lead_visit_id ?? null : null;
     const visitId = await saveVisit(ws, m, { id: p.id, name: p.name }, keep).catch(() => null);
+    if (visitId && p !== chosen[0]) await db.from('lead_visits').update({ mom_status: 'skipped' }).eq('id', visitId);       // only the first person is asked for the notes
     assignees.push({ id: p.id, name: p.name, visitId });
   }
   const main = chosen[0];

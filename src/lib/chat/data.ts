@@ -110,11 +110,17 @@ export async function loadPipeline(ws: string): Promise<{ deals: BoardDeal[]; st
   const db = createAdminClient();
   const since = new Date(Date.now() - 30 * 86400000).toISOString();
   const cols = 'id, title, client_id, lead_name, stage, value, salesman_id, salesman_name, created_at, stage_changed_at, invoice_id';
-  const [{ data: open }, { data: recent }] = await Promise.all([
+  // an Active Client whose project is still running always stays on the board, however long ago it was paid
+  const runUntil = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
+  const { data: runningClients } = await db.from('clients').select('id').eq('workspace_id', ws).gte("service_end_date", runUntil).limit(1000);
+  const runningIds = ((runningClients || []) as Array<{ id: string }>).map((c) => c.id);
+  const [{ data: open }, { data: recent }, { data: running }] = await Promise.all([
     db.from('crm_deals').select(cols).eq('workspace_id', ws).not('stage', 'in', '("Deal","Cold Case","Lost","Archived")').order('created_at', { ascending: false }).limit(1500),
     db.from('crm_deals').select(cols).eq('workspace_id', ws).or(`and(stage.eq.Deal,stage_changed_at.gte.${since}),stage.eq.Cold Case,stage.eq.Lost`).order('stage_changed_at', { ascending: false }).limit(300),
+    runningIds.length ? db.from('crm_deals').select(cols).eq('workspace_id', ws).eq('stage', 'Deal').in('client_id', runningIds).limit(300) : Promise.resolve({ data: [] as any[] }),
   ]);
-  const rows = [...((open || []) as any[]), ...((recent || []) as any[])];
+  const seenIds = new Set<string>();
+  const rows = [...((open || []) as any[]), ...((recent || []) as any[]), ...((running || []) as any[])].filter((d) => (seenIds.has(d.id) ? false : (seenIds.add(d.id), true)));
   if (!rows.length) return { deals: [], stages: [] };
   const ids = rows.map((d) => d.id as string);
   const clientIds = [...new Set(rows.map((d) => d.client_id).filter(Boolean))] as string[];

@@ -2,10 +2,11 @@
 
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Plus, Receipt, Search, Filter, Calendar, ChevronDown, ChevronRight } from 'lucide-react';
 import { ExpenseRowActions } from './ExpenseRowActions';
 import { formatIndoDate } from '@/lib/utils';
-import { updateExpenseAssignment } from '@/app/actions/expense-workspace';
+import { updateExpenseAssignment, updateExpenseAssignments } from '@/app/actions/expense-workspace';
 import { workspaceCode } from '@/lib/workspaces/known';
 import { SortArrows } from '@/components/ui/SortArrows';
 
@@ -74,6 +75,14 @@ export function ExpenseClientTable({ initialRecords, workspaces, fromPtLabel = '
   const [filterMonth, setFilterMonth] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [catDropdownOpen, setCatDropdownOpen] = useState(false);
+  // PT Pintu: filter by company, hide the upcoming asset-schedule lines, and hand several expenses to a company at once
+  const [filterCompany, setFilterCompany] = useState('');
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [bulkTarget, setBulkTarget] = useState('');
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkMsg, setBulkMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const router = useRouter();
   const [searchCatStr, setSearchCatStr] = useState('');
   const [expandedCatGroups, setExpandedCatGroups] = useState<Record<string, boolean>>({});
 
@@ -119,6 +128,10 @@ export function ExpenseClientTable({ initialRecords, workspaces, fromPtLabel = '
       if (searchNotes && !r.notes.toLowerCase().includes(searchNotes.toLowerCase())) return false;
       if (filterMonth && !r.date.startsWith(filterMonth)) return false;
       if (filterCategory && r.category !== filterCategory) return false;
+      if (workspaces && !showSchedule && r.schedule === 'upcoming') return false;
+      if (workspaces && filterCompany) {
+        if (filterCompany === 'pt' ? Boolean(r.assignedWorkspaceId) : r.assignedWorkspaceId !== filterCompany) return false;
+      }
       return true;
     });
     const val = (r: ExpenseRecord): string | number =>
@@ -129,7 +142,19 @@ export function ExpenseClientTable({ initialRecords, workspaces, fromPtLabel = '
       return (typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y))) * (sort.asc ? 1 : -1);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialRecords, searchPayee, searchNotes, filterMonth, filterCategory, sort, workspaces]);
+  }, [initialRecords, searchPayee, searchNotes, filterMonth, filterCategory, filterCompany, showSchedule, sort, workspaces]);
+
+  const pickable = filteredRecords.filter((r) => !r.schedule && !r.readOnly);
+  const allPicked = pickable.length > 0 && pickable.every((r) => picked.has(r.id));
+  const toggleAll = () => setPicked(allPicked ? new Set() : new Set(pickable.map((r) => r.id)));
+  const toggleOne = (id: string) => setPicked((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const applyBulk = async () => {
+    setBulkBusy(true); setBulkMsg(null);
+    const res = await updateExpenseAssignments(Array.from(picked), bulkTarget === 'pt' ? null : bulkTarget);
+    setBulkBusy(false);
+    if (res.success) { setBulkMsg({ ok: true, text: `${res.changed ?? 0} expense(s) updated.` }); setPicked(new Set()); router.refresh(); }
+    else setBulkMsg({ ok: false, text: res.error || 'Could not assign.' });
+  };
 
   if (initialRecords.length === 0) {
     return (
@@ -263,11 +288,35 @@ export function ExpenseClientTable({ initialRecords, workspaces, fromPtLabel = '
         </div>
       </div>
 
+      {workspaces && (
+        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-zinc-800/70 bg-zinc-950/50 px-3 py-2.5 font-sans text-xs">
+          <label className="flex items-center gap-2 text-zinc-400">Company
+            <select value={filterCompany} onChange={(e) => setFilterCompany(e.target.value)} className="rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-200 focus:border-[#d4af37] focus:outline-none">
+              <option value="">All</option>
+              <option value="pt">PLIG only (not assigned)</option>
+              {workspaces.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select>
+          </label>
+          <label className="flex cursor-pointer items-center gap-2 text-zinc-400"><input type="checkbox" checked={showSchedule} onChange={(e) => setShowSchedule(e.target.checked)} className="accent-[#d4af37]" /> Show upcoming asset schedule lines</label>
+          <span className="ml-auto flex flex-wrap items-center gap-2">
+            <span className="text-zinc-500">{picked.size} selected</span>
+            <select value={bulkTarget} onChange={(e) => setBulkTarget(e.target.value)} className="rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-200 focus:border-[#d4af37] focus:outline-none">
+              <option value="">Assign selected to...</option>
+              <option value="pt">PLIG (back to PT)</option>
+              {workspaces.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select>
+            <button type="button" disabled={bulkBusy || !bulkTarget || picked.size === 0} onClick={applyBulk} className="rounded-lg border border-[#d4af37]/40 bg-[#d4af37]/10 px-3 py-1.5 text-xs font-bold text-[#f5d77f] hover:brightness-125 disabled:opacity-40">{bulkBusy ? 'Saving...' : 'Apply'}</button>
+          </span>
+          {bulkMsg && <div className={`w-full text-[11px] ${bulkMsg.ok ? 'text-emerald-400' : 'text-red-400'}`}>{bulkMsg.text}</div>}
+        </div>
+      )}
+
       {/* Tidy Table */}
       <div className="overflow-x-auto bg-zinc-950/40 rounded-xl border border-zinc-800/60">
         <table className="w-full text-left border-collapse text-xs font-mono">
           <thead>
             <tr className="border-b border-zinc-800 text-zinc-400 uppercase text-[10px] font-sans whitespace-nowrap bg-zinc-900/40">
+              {workspaces && <th className="w-8 py-3 px-2.5"><input type="checkbox" checked={allPicked} onChange={toggleAll} aria-label="Select all shown" className="accent-[#d4af37]" /></th>}
               <th className="py-3 px-2.5 font-bold "><button onClick={() => toggleSort('date')} className={`inline-flex items-center gap-1.5 uppercase hover:text-zinc-200 ${sort.key === 'date' ? 'text-[#f5d77f]' : ''}`}>Due Date<SortArrows dir={sort.key === 'date' ? (sort.asc ? 'asc' : 'desc') : null} /></button></th>
               <th className="py-3 px-2.5 font-bold "><button onClick={() => toggleSort('vendor')} className={`inline-flex items-center gap-1.5 uppercase hover:text-zinc-200 ${sort.key === 'vendor' ? 'text-[#f5d77f]' : ''}`}>Vendor / Payee<SortArrows dir={sort.key === 'vendor' ? (sort.asc ? 'asc' : 'desc') : null} /></button></th>
               <th className="py-3 px-2.5 font-bold w-1/3"><button onClick={() => toggleSort('notes')} className={`inline-flex items-center gap-1.5 uppercase hover:text-zinc-200 ${sort.key === 'notes' ? 'text-[#f5d77f]' : ''}`}>Notes / Remarks<SortArrows dir={sort.key === 'notes' ? (sort.asc ? 'asc' : 'desc') : null} /></button></th>
@@ -280,13 +329,14 @@ export function ExpenseClientTable({ initialRecords, workspaces, fromPtLabel = '
           <tbody className="divide-y divide-zinc-800/40">
             {filteredRecords.length === 0 ? (
               <tr>
-                <td colSpan={7} className="py-12 text-center text-zinc-500 font-sans border-dashed border border-zinc-800/60">
+                <td colSpan={8} className="py-12 text-center text-zinc-500 font-sans border-dashed border border-zinc-800/60">
                   No records match your filters.
                 </td>
               </tr>
             ) : (
               filteredRecords.map((item) => (
                 <tr key={item.id} className="hover:bg-zinc-800/30 transition-colors group">
+                  {workspaces && <td className="py-3 px-2.5">{!item.schedule && !item.readOnly ? <input type="checkbox" checked={picked.has(item.id)} onChange={() => toggleOne(item.id)} aria-label="Select expense" className="accent-[#d4af37]" /> : null}</td>}
                   <td className="py-3 px-2.5 text-zinc-400 whitespace-nowrap">
                     {formatIndoDate(item.date)}
                   </td>

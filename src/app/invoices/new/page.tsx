@@ -1,3 +1,4 @@
+import { attachStores } from '@/lib/invoices/client-store-options';
 import React, { Suspense } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, FileText, Package, AlertTriangle } from 'lucide-react';
@@ -62,6 +63,7 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: P
       .maybeSingle();
     if (rc) clientList.unshift(rc);
   }
+  await attachStores(clientList);
   const requestInitialData = requestData
     ? {
         requestId: requestData.id,

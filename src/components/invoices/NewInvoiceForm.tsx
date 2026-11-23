@@ -75,7 +75,7 @@ export interface BankAccountOption {
 }
 
 interface NewInvoiceFormProps {
-  clients: Array<{ id: string; name: string, company_name?: string, company_legal_name?: string }>;
+  clients: Array<{ id: string; name: string, company_name?: string, company_legal_name?: string, stores?: string[] }>;
   products?: CatalogProductOption[];
   bankAccounts?: BankAccountOption[];
   isHistorical?: boolean;
@@ -96,6 +96,8 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
   };
 
   const [localClients, setLocalClients] = useState(clients);
+  // the store this invoice is for (a client can have several)
+  const [storeLabel, setStoreLabel] = useState<string>(initialData?.storeLabel || '');
   const [clientId, setClientId] = useState(initialData?.clientId || (clients.length === 1 ? clients[0].id : ''));
   const searchParams = useSearchParams();
   const [isQuotation, setIsQuotation] = useState(() => initialData ? initialData.isQuotation : searchParams.get('type') === 'quotation');
@@ -269,6 +271,10 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
       setErrorMsg('Please add at least one deliverable line item before saving.');
       return;
     }
+    {
+      const st: string[] = ((localClients.find((c: any) => c.id === clientId) as any)?.stores || []);
+      if (st.length > 1 && !storeLabel) { setErrorMsg('This client has several stores: choose the store of this invoice.'); return; }
+    }
     if (!isHistorical) {
       const bad = lineItems.filter((l) => { const k = String(l.packageName || '').trim().toLowerCase(); return !k || !(catalogNames.has(k) || grandfathered.has(k)); });
       if (bad.length) {
@@ -302,6 +308,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
             })),
             isQuotation: submitAsQuotation,
             assignedWorkspaceId: assignedWorkspaceId || undefined,
+            storeLabel: storeLabel || undefined,
             taxCalculationType,
             hasPpn,
             hasPph,
@@ -341,6 +348,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
             requestId: initialData?.requestId || undefined,
             isQuotation: submitAsQuotation,
             assignedWorkspaceId: assignedWorkspaceId || undefined,
+            storeLabel: storeLabel || undefined,
             taxCalculationType,
             hasPpn,
             hasPph,
@@ -425,7 +433,7 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
 
             <ClientSelect
               value={clientId}
-              onChange={setClientId}
+              onChange={(id: string) => { setClientId(id); const st = (localClients.find((c: any) => c.id === id) as any)?.stores || []; setStoreLabel(st.length === 1 ? st[0] : ''); }}
               options={localClients
                 .filter((c: any) => c.contact_type !== 'vendor' || c.id === initialData?.clientId)
                 .map((c: any) => {
@@ -443,6 +451,26 @@ export function NewInvoiceForm({ clients, products = [], bankAccounts = [], isHi
                 })}
             />
             
+            {(() => {
+              const stores: string[] = ((localClients.find((c: any) => c.id === clientId) as any)?.stores || []);
+              if (stores.length < 2) return null;
+              return (
+                <div className="mt-4">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Store of this {isQuotation ? 'quotation' : 'invoice'} *</label>
+                  <select
+                    value={storeLabel}
+                    onChange={(e) => setStoreLabel(e.target.value)}
+                    className={`w-full bg-zinc-950 border rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#d4af37] ${storeLabel ? 'border-zinc-800' : 'border-amber-500/60'}`}
+                  >
+                    <option value="">Choose the store...</option>
+                    {stores.map((st) => <option key={st} value={st}>{st.replace(/^[^-]+-\s*/, '')} · {st.split(' - ')[0]}</option>)}
+                    {storeLabel && !stores.includes(storeLabel) && <option value={storeLabel}>{storeLabel}</option>}
+                  </select>
+                  <p className="mt-1 text-[10px] text-zinc-500">{stores.length} stores: the store is printed on the invoice.</p>
+                </div>
+              );
+            })()}
+
             {(() => {
               const selectedClient = localClients.find((c: any) => c.id === clientId);
               return (

@@ -1,3 +1,4 @@
+import { attachStores } from '@/lib/invoices/client-store-options';
 import React, { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
@@ -60,7 +61,8 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
   const { data: workspaces } = await supabase.from('workspaces').select('is_tax_registered').eq('id', activeWorkspaceId).single();
   const isTaxRegistered = workspaces?.is_tax_registered || false;
 
-  const clientList = clients || [];
+  const clientList: any[] = clients || [];
+  await attachStores(clientList);
   const productList = products || [];
 
   const rawNotes = invoice.notes || '';
@@ -91,6 +93,7 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
     })),
     globalDiscount: invoice.discount_amount || 0,
     assignedWorkspaceId: invoice.assigned_workspace_id || '',
+    storeLabel: invoice.store_label || '',
     taxCalculationType: invoice.tax_calculation_type || 'exclude',
     hasPpn: invoice.has_ppn || false,
     hasPph: invoice.has_pph || false,

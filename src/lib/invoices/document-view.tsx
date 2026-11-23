@@ -94,7 +94,8 @@ export async function InvoiceDocumentView({
   const clientLegalName = clientObj?.company_legal_name || '';
   const clientBrand = clientObj?.company_name || clientObj?.company || '';
   // The store of the client ("ProOne - japarutomo" -> "japarutomo"): printed after the company name. The PIC is not printed.
-  const clientStore = parseStoreText(clientObj?.store_name)?.store || '';
+  // the store this invoice is for (chosen on the invoice), else the client's main store
+  const clientStore = parseStoreText(inv?.store_label)?.store || parseStoreText(clientObj?.store_name)?.store || '';
   const clientContact = clientObj?.contact_name || clientObj?.name || '';
   const clientAddress = clientObj?.billing_address || clientObj?.address || '';
   const clientPhone = clientObj?.phone || '';

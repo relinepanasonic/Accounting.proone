@@ -28,6 +28,8 @@ export interface CreateInvoicePayload {
   discountAmount?: number;
   lineItems: LineItem[];
   assignedWorkspaceId?: string;
+  /** The store this invoice is for ("Company - Store") when the client has several. */
+  storeLabel?: string;
   taxCalculationType?: 'include' | 'exclude' | 'none';
   hasPpn?: boolean;
   hasPph?: boolean;
@@ -317,6 +319,7 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
       notes: payload.projectDate ? `[ProjectDate:${payload.projectDate}]\n${payload.notes || ''}`.trim() : (payload.notes || null),
       bank_account_id: payload.bankAccountId || null,
       payment_instructions: payload.paymentInstructions || null,
+      store_label: payload.storeLabel ? String(payload.storeLabel).slice(0, 200) : null,
       updated_at: new Date().toISOString(),
     };
     // The company tag (set in the Company column or from the catalog) is never changed by editing an invoice.
@@ -341,6 +344,7 @@ export async function updateInvoice(payload: UpdateInvoicePayload): Promise<Invo
       delete safeUpdate.dpp_amount;
       delete safeUpdate.bank_account_id;
       delete safeUpdate.payment_instructions;
+      delete safeUpdate.store_label; // before 20261123_invoice_store.sql
       let retryQuery = supabase
         .from('invoices')
         .update(safeUpdate)
@@ -626,6 +630,7 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
       if (payload.assignedWorkspaceId === NEW_WAVE_WORKSPACE_ID) insertData.assigned_workspace_id = NEW_WAVE_WORKSPACE_ID;
       if (payload.bankAccountId) insertData.bank_account_id = payload.bankAccountId;
       if (payload.paymentInstructions) insertData.payment_instructions = payload.paymentInstructions;
+      if (payload.storeLabel) insertData.store_label = String(payload.storeLabel).slice(0, 200);
 
       let res = await supabase
         .from('invoices')
@@ -642,6 +647,7 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<Invo
         delete insertData.pph_rate;
         delete insertData.pph_amount;
         delete insertData.dpp_amount;
+        delete insertData.store_label;
         res = await supabase.from('invoices').insert(insertData).select('id').single();
       }
 

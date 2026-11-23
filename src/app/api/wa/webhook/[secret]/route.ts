@@ -4,6 +4,7 @@ import { parseFonnteWebhook, readWebhookPayload } from '@/lib/wa/parse-webhook';
 import { deviceBySecret, ingestMessage } from '@/lib/wa/ingest';
 import { afterSalesMessage } from '@/lib/chat/inbound';
 import { handleSalesGroupMessage } from '@/lib/chat/group-consultant';
+import { isLidDuplicate, removeLidTwin } from '@/lib/wa/lid-twin';
 
 export const dynamic = 'force-dynamic';
 // The sales bot runs after the answer to Fonnte, inside this same function: it needs room for the model call (at most ~35 s) and the send.
@@ -52,8 +53,15 @@ export async function POST(request: Request, ctx: { params: Promise<{ secret: st
       return NextResponse.json({ ok: true, group: true }, { headers: NO_STORE });
     }
 
+    // one message can arrive twice: with the hidden WhatsApp id (@lid) and with the real number. The hidden-id copy is not a chat of its own.
+    if (await isLidDuplicate(device.id, parsed).catch(() => false)) {
+      await logCall(device, 'ignored', 'the hidden-id (@lid) copy of a message that already arrived with the real number', contentType, null);
+      return NextResponse.json({ ok: true, duplicate: true }, { headers: NO_STORE });
+    }
+
     try {
       const res = await ingestMessage(device, parsed, payload);
+      if (res.stored && res.isNew) await removeLidTwin(device.id, parsed).catch((e) => console.error('lid twin cleanup failed', e));
       await logCall(device, res.stored ? 'stored' : 'ignored', res.reason ?? null, contentType, payload);
       // A sales number: the bot may answer a new lead. It runs after the reply to Fonnte (see lib/chat/inbound.ts for the order of steps).
       if (res.stored && res.isNew && device.role === 'sales') after(() => afterSalesMessage(device, parsed, res));

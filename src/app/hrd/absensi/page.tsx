@@ -1,191 +1,164 @@
-'use client';
+import React from 'react';
+import { CalendarCheck, ShieldAlert } from 'lucide-react';
+import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/api/supabase-admin';
+import { getAuthenticatedWorkspaceContext } from '@/lib/auth/workspace-context';
+import { isHrdBodRole, isMissingHrdTableError, mapDbProfile } from '@/lib/hrd/types';
+import { jakartaDateIso } from '@/lib/hrd/absensi';
+import type { OfficeSettingsData } from '@/app/actions/hrd-absensi';
+import { AbsensiBoard, type AttendanceLogRow, type ApprovedLeaveDay, type StaffInfoRow } from '@/components/hrd/AbsensiBoard';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Camera, CheckCircle } from 'lucide-react';
-import { compressImage } from '@/lib/utils/image';
-import { getMonthlyAbsensi, submitCheckIn, submitCheckOut } from '@/app/actions/sales-ext';
+export const dynamic = 'force-dynamic';
 
-export default function AbsensiPage() {
-  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
-  const [logs, setLogs] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  // Use ref for actionType to ensure it is immediately available across closures
-  const actionTypeRef = useRef<'checkin' | 'checkout' | null>(null);
-  const [uiActionType, setUiActionType] = useState<'checkin' | 'checkout' | null>(null);
+export default async function AbsensiPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ month?: string }>;
+}) {
+  const supabase = await createClient();
+  const ctx = await getAuthenticatedWorkspaceContext(supabase);
 
-  useEffect(() => {
-    setLoading(true);
-    getMonthlyAbsensi(month).then(data => {
-      setLogs(data);
-      setLoading(false);
-    }).catch(err => {
-      console.error(err);
-      setLoading(false);
-    });
-  }, [month]);
+  if (!ctx.userId || !ctx.activeWorkspaceId || ctx.role === 'none' || ctx.role === 'client') {
+    return (
+      <div className="mx-auto max-w-xl p-12 text-center">
+        <ShieldAlert className="mx-auto mb-3 h-8 w-8 text-red-400" />
+        <p className="text-sm text-zinc-300">Please sign in with a company staff account to access Absensi.</p>
+      </div>
+    );
+  }
 
-  const today = new Date().toISOString().split('T')[0];
-  const todayLog = logs.find(l => l.date === today);
+  const params = await searchParams;
+  const todayWib = jakartaDateIso();
+  const month = params?.month && /^\d{4}-\d{2}$/.test(params.month) ? params.month : todayWib.slice(0, 7);
+  const [y, m] = month.split('-').map(Number);
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const monthStart = `${month}-01`;
+  const monthEnd = `${month}-${String(lastDay).padStart(2, '0')}`;
 
-  const handleCameraCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const action = actionTypeRef.current;
-    if (!e.target.files || e.target.files.length === 0 || !action) {
-      // User cancelled camera or action not set
-      actionTypeRef.current = null;
-      setUiActionType(null);
-      return;
-    }
-    
-    setSubmitting(true);
-    
-    try {
-      const file = e.target.files[0];
-      const base64 = await compressImage(file, 600);
-      
-      let res;
-      if (action === 'checkin') {
-        res = await submitCheckIn(base64);
-      } else {
-        res = await submitCheckOut(base64);
-      }
-      
-      if (res && res.error) {
-        alert("System Error: " + res.error + "\n\n(Did you run the SQL script in Supabase?)");
-      } else {
-        // Refresh logs immediately
-        const newLogs = await getMonthlyAbsensi(month);
-        setLogs(newLogs);
-      }
-    } catch (err: any) {
-      alert("Application Error: " + err.message);
-    } finally {
-      setSubmitting(false);
-      actionTypeRef.current = null;
-      setUiActionType(null);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
+  const isBod = isHrdBodRole(ctx.role);
+  const db = createAdminClient();
+  let absensiMigrationNeeded = false;
+
+  const { data: members } = await db
+    .from('workspace_members')
+    .select('user_id, role')
+    .eq('workspace_id', ctx.activeWorkspaceId);
+
+  const memberIds = Array.from(
+    new Set([ctx.userId, ...(members || []).filter((x: any) => x.role !== 'client').map((x: any) => x.user_id).filter(Boolean)])
+  );
+
+  const [profilesRes, hrRes, officeRes, attRes, leavesRes] = await Promise.all([
+    memberIds.length ? db.from('profiles').select('id, full_name, email').in('id', memberIds) : Promise.resolve({ data: [] as any[] }),
+    db.from('employee_profiles').select('*').eq('workspace_id', ctx.activeWorkspaceId),
+    db.from('hrd_office_settings').select('*').eq('workspace_id', ctx.activeWorkspaceId).maybeSingle(),
+    db
+      .from('sales_attendance')
+      .select('*')
+      .eq('workspace_id', ctx.activeWorkspaceId)
+      .gte('date', monthStart)
+      .lte('date', monthEnd)
+      .order('date', { ascending: false }),
+    db
+      .from('hrd_leave_requests')
+      .select('id, user_id, leave_type, start_date, end_date, days_count')
+      .eq('workspace_id', ctx.activeWorkspaceId)
+      .eq('status', 'approved')
+      .lte('start_date', monthEnd)
+      .gte('end_date', monthStart),
+  ]);
+
+  if (officeRes.error && isMissingHrdTableError(officeRes.error)) {
+    absensiMigrationNeeded = true;
+  }
+
+  const nameByUser = new Map<string, string>(
+    (profilesRes.data || []).map((p: any) => [p.id, p.full_name || p.email?.split('@')[0] || 'Staff'])
+  );
+  const hrByUser = new Map<string, ReturnType<typeof mapDbProfile>>();
+  for (const row of hrRes.data || []) hrByUser.set(row.user_id, mapDbProfile(row));
+
+  const staffList: StaffInfoRow[] = memberIds
+    .map((uid) => {
+      const prof = hrByUser.get(uid) || mapDbProfile(null);
+      return {
+        userId: uid,
+        name: nameByUser.get(uid) || 'Staff',
+        department: prof.department,
+        profile: prof,
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const myProfile = hrByUser.get(ctx.userId) || mapDbProfile(null);
+
+  const officeSettings: OfficeSettingsData = {
+    officeName: officeRes.data?.office_name || 'Kantor Pusat',
+    officeLat: officeRes.data?.office_lat ?? null,
+    officeLng: officeRes.data?.office_lng ?? null,
+    geofenceRadiusM: Number(officeRes.data?.geofence_radius_m ?? 150),
+    lateGraceMinutes: Number(officeRes.data?.late_grace_minutes ?? 5),
+    requireGps: Boolean(officeRes.data?.require_gps),
   };
 
-  const triggerCamera = (type: 'checkin' | 'checkout') => {
-    actionTypeRef.current = type;
-    setUiActionType(type);
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
-  };
+  const logs: AttendanceLogRow[] = (attRes.data || []).map((r: any) => ({
+    id: r.id,
+    userId: r.user_id,
+    employeeName: nameByUser.get(r.user_id) || 'Staff',
+    date: r.date,
+    checkInTime: r.check_in_time || null,
+    checkInPhoto: r.check_in_photo || null,
+    checkOutTime: r.check_out_time || null,
+    checkOutPhoto: r.check_out_photo || null,
+    workMode: (r.work_mode || 'wfo') as 'wfo' | 'wfh' | 'client_visit',
+    checkInLat: r.check_in_lat ?? null,
+    checkInLng: r.check_in_lng ?? null,
+    checkInDistanceM: r.check_in_distance_m ?? null,
+    checkOutLat: r.check_out_lat ?? null,
+    checkOutLng: r.check_out_lng ?? null,
+    lateMinutes: Number(r.late_minutes || 0),
+    earlyOutMinutes: Number(r.early_out_minutes || 0),
+    overtimeMinutes: Number(r.overtime_minutes || 0),
+    workMinutes: Number(r.work_minutes || 0),
+    status: r.status || 'on_time',
+    notes: r.notes || '',
+  }));
+
+  const approvedLeaves: ApprovedLeaveDay[] = (leavesRes.data || []).map((l: any) => ({
+    id: l.id,
+    userId: l.user_id,
+    leaveType: l.leave_type,
+    startDate: l.start_date,
+    endDate: l.end_date,
+    daysCount: Number(l.days_count || 0),
+  }));
 
   return (
-    <div className="p-4 lg:p-8 animate-in fade-in zoom-in-95 duration-300">
-      <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+    <div className="space-y-6 p-4 lg:p-8 animate-in fade-in duration-300">
+      <div className="flex items-center gap-4">
+        <div className="rounded-xl bg-[#d4af37]/10 p-3 text-[#d4af37]">
+          <CalendarCheck className="h-7 w-7" />
+        </div>
         <div>
-          <h1 className="text-2xl font-extrabold text-zinc-100 font-serif">Absensi</h1>
-          <p className="text-sm text-zinc-400 mt-1">Live camera check-in and check-out tracking.</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <label className="text-sm font-semibold text-zinc-400">Month:</label>
-          <input 
-            type="month" 
-            value={month}
-            onChange={(e) => setMonth(e.target.value)}
-            className="bg-[#0e0f14] border border-[#d4af37]/30 text-zinc-100 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-[#d4af37] [color-scheme:dark]"
-          />
+          <h1 className="font-serif text-2xl font-extrabold text-zinc-100">Absensi</h1>
+          <p className="mt-1 text-sm text-zinc-400">
+            {ctx.activeWorkspaceName} · Live WIB attendance, selfie + GPS geofence, WFO/WFH schedule &amp; team monitor.
+          </p>
         </div>
       </div>
 
-      <input 
-        type="file" 
-        accept="image/*" 
-        capture="user" 
-        className="hidden" 
-        ref={fileInputRef}
-        onChange={handleCameraCapture}
+      <AbsensiBoard
+        month={month}
+        todayWib={todayWib}
+        currentUserId={ctx.userId}
+        isBod={isBod}
+        myProfile={myProfile}
+        officeSettings={officeSettings}
+        staffList={staffList}
+        logs={logs}
+        approvedLeaves={approvedLeaves}
+        absensiMigrationNeeded={absensiMigrationNeeded}
       />
-
-      <div className="bg-[#0e0f14] border border-[#d4af37]/20 rounded-2xl p-6 mb-8 shadow-xl flex flex-col md:flex-row items-center justify-center gap-6">
-        <button 
-          onClick={() => triggerCamera('checkin')}
-          disabled={submitting || !!todayLog?.check_in_time}
-          className="flex-1 w-full flex flex-col items-center justify-center p-8 rounded-xl border-2 border-dashed transition-all disabled:opacity-50 disabled:cursor-not-allowed
-            border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/10 text-emerald-400"
-        >
-          {todayLog?.check_in_time ? (
-            <CheckCircle className="w-12 h-12 mb-3" />
-          ) : (
-            <Camera className="w-12 h-12 mb-3" />
-          )}
-          <span className="font-bold text-lg">{submitting && uiActionType === 'checkin' ? 'Saving...' : todayLog?.check_in_time ? 'Checked In' : 'Check In'}</span>
-          <span className="text-xs mt-1 opacity-70">
-            {todayLog?.check_in_time ? new Date(todayLog.check_in_time).toLocaleTimeString() : 'Requires Camera'}
-          </span>
-        </button>
-
-        <button 
-          onClick={() => triggerCamera('checkout')}
-          disabled={submitting || !todayLog?.check_in_time || !!todayLog?.check_out_time}
-          className="flex-1 w-full flex flex-col items-center justify-center p-8 rounded-xl border-2 border-dashed transition-all disabled:opacity-50 disabled:cursor-not-allowed
-            border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10 text-amber-400"
-        >
-          {todayLog?.check_out_time ? (
-            <CheckCircle className="w-12 h-12 mb-3" />
-          ) : (
-            <Camera className="w-12 h-12 mb-3" />
-          )}
-          <span className="font-bold text-lg">{submitting && uiActionType === 'checkout' ? 'Saving...' : todayLog?.check_out_time ? 'Checked Out' : 'Check Out'}</span>
-          <span className="text-xs mt-1 opacity-70">
-            {todayLog?.check_out_time ? new Date(todayLog.check_out_time).toLocaleTimeString() : 'Requires Camera'}
-          </span>
-        </button>
-      </div>
-
-      <div className="bg-[#0e0f14] border border-[#d4af37]/20 rounded-xl overflow-hidden shadow-xl">
-        {loading ? (
-          <div className="p-8 text-center text-zinc-500">Loading attendance logs...</div>
-        ) : logs.length === 0 ? (
-          <div className="p-8 text-center text-zinc-500">No attendance logs found for this month.</div>
-        ) : (
-          <table className="w-full text-sm text-left">
-            <thead className="bg-zinc-900/50 text-xs uppercase text-zinc-400 border-b border-[#d4af37]/10">
-              <tr>
-                <th className="px-6 py-4 font-bold tracking-wider">Date</th>
-                <th className="px-6 py-4 font-bold tracking-wider text-center">Check In</th>
-                <th className="px-6 py-4 font-bold tracking-wider text-center">Check Out</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-800/50">
-              {logs.map((log, idx) => (
-                <tr key={idx} className="hover:bg-zinc-900/30 transition-colors">
-                  <td className="px-6 py-4 font-bold text-zinc-100">
-                    {new Date(log.date).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' })}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col items-center">
-                      <div className="text-emerald-400 font-mono font-bold">
-                        {log.check_in_time ? new Date(log.check_in_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '--:--'}
-                      </div>
-                      {log.check_in_photo && (
-                        <img src={log.check_in_photo} alt="Check in" className="w-10 h-10 object-cover rounded mt-2 border border-emerald-500/20" />
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col items-center">
-                      <div className="text-amber-400 font-mono font-bold">
-                        {log.check_out_time ? new Date(log.check_out_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '--:--'}
-                      </div>
-                      {log.check_out_photo && (
-                        <img src={log.check_out_photo} alt="Check out" className="w-10 h-10 object-cover rounded mt-2 border border-amber-500/20" />
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
     </div>
   );
 }

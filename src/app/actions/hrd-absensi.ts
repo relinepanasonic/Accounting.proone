@@ -103,8 +103,10 @@ export async function submitAbsensiCheckIn(input: {
     }
 
     let distanceM: number | null = null;
-    if (input.lat != null && input.lng != null && office?.office_lat != null && office?.office_lng != null) {
-      distanceM = distanceMeters(input.lat, input.lng, Number(office.office_lat), Number(office.office_lng));
+    const officeLat = office?.office_lat != null ? Number(office.office_lat) : -7.2388118;
+    const officeLng = office?.office_lng != null ? Number(office.office_lng) : 112.7726573;
+    if (input.lat != null && input.lng != null) {
+      distanceM = distanceMeters(input.lat, input.lng, officeLat, officeLng);
     }
 
     const shift = getShiftForDate(profile, now);
@@ -193,8 +195,10 @@ export async function submitAbsensiCheckOut(input: {
     const shift = getShiftForDate(profile, now);
 
     let distanceM: number | null = null;
-    if (input.lat != null && input.lng != null && office?.office_lat != null && office?.office_lng != null) {
-      distanceM = distanceMeters(input.lat, input.lng, Number(office.office_lat), Number(office.office_lng));
+    const officeLat = office?.office_lat != null ? Number(office.office_lat) : -7.2388118;
+    const officeLng = office?.office_lng != null ? Number(office.office_lng) : 112.7726573;
+    if (input.lat != null && input.lng != null) {
+      distanceM = distanceMeters(input.lat, input.lng, officeLat, officeLng);
     }
 
     const metrics = calcCheckOutMetrics(existingRes.data.check_in_time, now, shift.end);

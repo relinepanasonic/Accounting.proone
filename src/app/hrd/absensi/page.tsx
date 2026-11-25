@@ -94,8 +94,8 @@ export default async function AbsensiPage({
 
   const officeSettings: OfficeSettingsData = {
     officeName: officeRes.data?.office_name || 'Kantor Pusat',
-    officeLat: officeRes.data?.office_lat ?? null,
-    officeLng: officeRes.data?.office_lng ?? null,
+    officeLat: officeRes.data?.office_lat ?? -7.2388118,
+    officeLng: officeRes.data?.office_lng ?? 112.7726573,
     geofenceRadiusM: Number(officeRes.data?.geofence_radius_m ?? 150),
     lateGraceMinutes: Number(officeRes.data?.late_grace_minutes ?? 5),
     requireGps: Boolean(officeRes.data?.require_gps),

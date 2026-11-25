@@ -169,6 +169,20 @@ function OfficeSettingsModal({
             />
           </label>
 
+          <label className={labelCls}>
+            Paste Link Google Maps (opsional)
+            <input
+              placeholder="https://www.google.com/maps?q=-7.2388118,112.7726573"
+              onChange={(e) => {
+                const m = e.target.value.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
+                if (m) {
+                  setForm((p) => ({ ...p, officeLat: Number(m[1]), officeLng: Number(m[2]) }));
+                }
+              }}
+              className={`${inputCls} mt-1 normal-case text-xs`}
+            />
+          </label>
+
           <div className="grid grid-cols-2 gap-3">
             <label className={labelCls}>
               Latitude

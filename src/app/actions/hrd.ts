@@ -96,6 +96,7 @@ export async function saveEmployeeProfile(
       cuti_approved_at: cutiApprovedAt,
       base_salary: Math.max(0, Number(profile.baseSalary || 0)),
       allowances: Math.max(0, Number(profile.allowances || 0)),
+      commission_rate: Math.max(0, Math.min(100, Number(profile.commissionRate || 0))),
       bank_name: profile.bankName.trim() || null,
       bank_account_no: profile.bankAccountNo.trim() || null,
       bank_account_name: profile.bankAccountName.trim() || null,
@@ -113,15 +114,79 @@ export async function saveEmployeeProfile(
       .upsert(payload, { onConflict: 'workspace_id,user_id' });
 
     if (error) {
-      return { success: false, error: isMissingHrdTableError(error) ? migrationErr() : error.message };
+      if (/commission_rate/.test(error.message)) {
+        const { commission_rate: _drop, ...fallbackPayload } = payload;
+        const retry = await db.from('employee_profiles').upsert(fallbackPayload, { onConflict: 'workspace_id,user_id' });
+        if (retry.error) return { success: false, error: retry.error.message };
+      } else {
+        return { success: false, error: isMissingHrdTableError(error) ? migrationErr() : error.message };
+      }
     }
 
     revalidatePath('/hrd/employees');
     revalidatePath('/hrd/cuti');
     revalidatePath('/hrd/kasbon');
+    revalidatePath('/payroll');
     return { success: true };
   } catch (e: any) {
     return { success: false, error: e?.message || 'Failed to save employee profile.' };
+  }
+}
+
+export async function autoGenerateStaffIds(): Promise<{ success: boolean; generated?: number; error?: string }> {
+  try {
+    const supabase = await createClient();
+    const ctx = await getAuthenticatedWorkspaceContext(supabase);
+    if (!ctx.userId || !ctx.activeWorkspaceId) return { success: false, error: 'Please sign in again.' };
+    if (!isHrdBodRole(ctx.role)) {
+      return { success: false, error: 'Only BOD (Founder, Superadmin, Accounting) can generate Staff IDs.' };
+    }
+
+    const db = createAdminClient();
+    const [{ data: members }, { data: existingProfiles, error: pErr }] = await Promise.all([
+      db.from('workspace_members').select('user_id, role, created_at').eq('workspace_id', ctx.activeWorkspaceId).order('created_at', { ascending: true }),
+      db.from('employee_profiles').select('user_id, employee_code').eq('workspace_id', ctx.activeWorkspaceId),
+    ]);
+
+    if (pErr && isMissingHrdTableError(pErr)) return { success: false, error: migrationErr() };
+
+    const codeByUser = new Map<string, string>();
+    let maxNum = 0;
+    for (const p of existingProfiles || []) {
+      if (p.employee_code) {
+        codeByUser.set(p.user_id, p.employee_code);
+        const m = String(p.employee_code).match(/(\d+)$/);
+        if (m) maxNum = Math.max(maxNum, Number(m[1]));
+      }
+    }
+
+    const staffIds = (members || [])
+      .filter((m: any) => m.role !== 'client' && m.user_id && !codeByUser.get(m.user_id))
+      .map((m: any) => m.user_id as string);
+
+    if (staffIds.length === 0) {
+      return { success: true, generated: 0 };
+    }
+
+    const nowIso = new Date().toISOString();
+    const upserts = staffIds.map((uid) => {
+      maxNum += 1;
+      return {
+        workspace_id: ctx.activeWorkspaceId,
+        user_id: uid,
+        employee_code: `STF-${String(maxNum).padStart(3, '0')}`,
+        updated_at: nowIso,
+      };
+    });
+
+    const { error } = await db.from('employee_profiles').upsert(upserts, { onConflict: 'workspace_id,user_id' });
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath('/hrd/employees');
+    revalidatePath('/payroll');
+    return { success: true, generated: upserts.length };
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Failed to generate Staff IDs.' };
   }
 }
 

@@ -2,13 +2,14 @@
 
 import React, { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Plus, Pencil, Trash2, Copy, Check, Link2, SlidersHorizontal, Home, CalendarOff, AlertTriangle } from 'lucide-react';
+import { Search, Plus, Pencil, Trash2, Copy, Check, Link2, SlidersHorizontal, Home, CalendarOff, AlertTriangle, Hash } from 'lucide-react';
 import { createInvite, revokeInvite } from '@/app/actions/invite';
 import { deleteTeamMember, updateTeamMemberAccess } from '@/app/actions/settings';
 import { setEmploymentStatus } from '@/app/actions/employees';
+import { autoGenerateStaffIds } from '@/app/actions/hrd';
 import { SortArrows } from '@/components/ui/SortArrows';
 import { EmployeeProfileDrawer } from '@/components/hrd/EmployeeProfileDrawer';
-import { WFH_DAY_OPTIONS, type EmployeeProfileData } from '@/lib/hrd/types';
+import { formatRp, WFH_DAY_OPTIONS, type EmployeeProfileData } from '@/lib/hrd/types';
 
 export type Status = 'tetap' | 'freelance' | null;
 export interface Person {
@@ -277,6 +278,16 @@ export function EmployeeDirectory({ people, companies, activeWorkspaceId, curren
     });
   };
 
+  const missingStaffIds = useMemo(() => people.filter((p) => !p.profile.employeeCode && p.role !== 'founder').length, [people]);
+  const handleGenerateIds = () => {
+    setError('');
+    start(async () => {
+      const res = await autoGenerateStaffIds();
+      if (!res.success) setError(res.error || 'Could not generate Staff IDs.');
+      else router.refresh();
+    });
+  };
+
   const Th = ({ k, children }: { k: SortKey; children: React.ReactNode }) => (
     <th className="px-4 py-3 font-bold">
       <button onClick={() => setSort((p) => (p.key === k ? { key: k, asc: !p.asc } : { key: k, asc: true }))} className={`inline-flex items-center gap-1.5 uppercase tracking-wider hover:text-zinc-200 ${sort.key === k ? 'text-[#f5d77f]' : ''}`}>
@@ -307,7 +318,14 @@ export function EmployeeDirectory({ people, companies, activeWorkspaceId, curren
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, email, phone, job title or role" className="w-full rounded-xl border border-zinc-800 bg-zinc-950 py-2 pl-9 pr-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-[#d4af37]/50 focus:outline-none" />
         </div>
         <div className="flex flex-wrap gap-2">{pill('all', 'All')}{pill('tetap', 'Tetap')}{pill('freelance', 'Freelance')}{pill('cuti', 'Cuti ACC')}{pill('wfh', 'WFH ACC')}{pill('unset', 'Status not set')}</div>
-        {canManage && <button type="button" onClick={() => setAdding(true)} className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-[#d4af37]/40 bg-[#d4af37]/10 px-3.5 py-2 text-xs font-bold text-[#f5d77f] hover:brightness-125"><Plus className="h-4 w-4" /> Add employee</button>}
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {canEditHrProfile && missingStaffIds > 0 && (
+            <button type="button" disabled={pending} onClick={handleGenerateIds} className="inline-flex items-center gap-1.5 rounded-lg border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-xs font-bold text-sky-300 hover:bg-sky-500/20 disabled:opacity-50">
+              <Hash className="h-3.5 w-3.5" /> Auto-Generate Staff IDs ({missingStaffIds})
+            </button>
+          )}
+          {canManage && <button type="button" onClick={() => setAdding(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-[#d4af37]/40 bg-[#d4af37]/10 px-3.5 py-2 text-xs font-bold text-[#f5d77f] hover:brightness-125"><Plus className="h-4 w-4" /> Add employee</button>}
+        </div>
       </div>
 
       {error && <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-2.5 text-xs text-red-300">{error}</div>}
@@ -330,26 +348,35 @@ export function EmployeeDirectory({ people, companies, activeWorkspaceId, curren
       )}
 
       <div className="overflow-x-auto rounded-2xl border border-[#d4af37]/20 bg-[#0e0f14] shadow-xl">
-        <table className="w-full min-w-[1160px] text-left text-sm">
+        <table className="w-full min-w-[1260px] text-left text-sm">
           <thead className="border-b border-[#d4af37]/10 bg-zinc-950 text-[11px] text-zinc-400">
             <tr>
+              <th className="px-4 py-3 font-bold uppercase tracking-wider">Staff ID</th>
               <Th k="name">Employee</Th><Th k="role">Role</Th><Th k="status">Status (tax)</Th>
+              {canEditHrProfile && <th className="px-4 py-3 font-bold uppercase tracking-wider">Gaji / Tunjangan / Komisi</th>}
               <th className="px-4 py-3 font-bold uppercase tracking-wider">Cuti (BOD ACC)</th>
-              <th className="px-4 py-3 font-bold uppercase tracking-wider">WFH & Shift</th>
+              <th className="px-4 py-3 font-bold uppercase tracking-wider">WFH &amp; Shift</th>
               <th className="px-4 py-3 font-bold uppercase tracking-wider">Companies</th>
-              <Th k="phone">Phone</Th>
               <th className="px-4 py-3 text-right font-bold uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800/50">
-            {shown.length === 0 && <tr><td colSpan={8} className="p-10 text-center text-sm text-zinc-500">No one matches.</td></tr>}
+            {shown.length === 0 && <tr><td colSpan={canEditHrProfile ? 9 : 8} className="p-10 text-center text-sm text-zinc-500">No one matches.</td></tr>}
             {shown.map((p) => (
               <tr key={p.userId} className="align-top transition-colors hover:bg-[#d4af37]/[0.04]">
+                <td className="px-4 py-3">
+                  {p.profile.employeeCode ? (
+                    <span className="inline-flex rounded-md border border-[#d4af37]/30 bg-[#d4af37]/10 px-2 py-0.5 font-mono text-[11px] font-bold text-[#f5d77f]">
+                      {p.profile.employeeCode}
+                    </span>
+                  ) : (
+                    <span className="font-mono text-[11px] text-zinc-600">—</span>
+                  )}
+                </td>
                 <td className="px-4 py-3">
                   <button type="button" onClick={() => setProfilePerson(p)} className="group text-left">
                     <div className="flex items-center gap-2 font-bold text-zinc-100 group-hover:text-[#f5d77f]">
                       {p.name}
-                      {p.profile.employeeCode && <span className="font-mono text-[10px] text-zinc-500">{p.profile.employeeCode}</span>}
                       {p.isCurrentUser && <span className="rounded border border-[#d4af37]/30 bg-[#d4af37]/20 px-1.5 py-0.5 text-[9px] uppercase tracking-widest text-[#f5d77f]">You</span>}
                     </div>
                     <div className="text-[11px] text-zinc-500">
@@ -359,6 +386,22 @@ export function EmployeeDirectory({ people, companies, activeWorkspaceId, curren
                 </td>
                 <td className="px-4 py-3"><span className="rounded-full border border-[#d4af37]/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#f5d77f]">{ROLE_LABEL[p.role] || p.role}</span></td>
                 <td className="px-4 py-3"><StatusPicker person={p} canSet={canSetStatus} /></td>
+                {canEditHrProfile && (
+                  <td className="px-4 py-3">
+                    {p.profile.baseSalary > 0 || p.profile.allowances > 0 || p.profile.commissionRate > 0 ? (
+                      <div className="space-y-0.5 font-mono text-[11px]">
+                        <div className="font-bold text-zinc-100">{formatRp(p.profile.baseSalary)}</div>
+                        <div className="text-[10px] text-zinc-400">
+                          Tunj: {formatRp(p.profile.allowances)} · <span className="text-[#f5d77f]">Komisi {p.profile.commissionRate}%</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <button type="button" onClick={() => setProfilePerson(p)} className="text-[11px] text-amber-400/80 underline hover:text-amber-300">
+                        Isi Gaji / Komisi
+                      </button>
+                    )}
+                  </td>
+                )}
                 <td className="px-4 py-3">
                   {p.profile.cutiEligible ? (
                     <div className="space-y-0.5">
@@ -390,10 +433,6 @@ export function EmployeeDirectory({ people, companies, activeWorkspaceId, curren
                   <div className="flex flex-wrap gap-1">
                     {p.workspaceIds.map((id) => <span key={id} className={`rounded border px-1.5 py-0.5 text-[10px] ${id === activeWorkspaceId ? 'border-[#d4af37]/40 text-[#f5d77f]' : 'border-zinc-700 text-zinc-400'}`}>{companyName(id)}</span>)}
                   </div>
-                </td>
-                <td className="px-4 py-3 text-zinc-300">
-                  <div>{p.phone || '-'}</div>
-                  <div className="text-[10px] text-zinc-500">Joined {since(p.profile.joinDate || p.since)}</div>
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="inline-flex items-center gap-1">

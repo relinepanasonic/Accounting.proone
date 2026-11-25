@@ -4,7 +4,7 @@ import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { X, Briefcase, CalendarClock, Wallet, CheckCircle2, Home, CalendarOff, ShieldCheck } from 'lucide-react';
 import { saveEmployeeProfile } from '@/app/actions/hrd';
-import { WFH_DAY_OPTIONS, type EmployeeProfileData, type WeekdayKey } from '@/lib/hrd/types';
+import { formatRp, WFH_DAY_OPTIONS, type EmployeeProfileData, type WeekdayKey } from '@/lib/hrd/types';
 
 interface Props {
   person: {
@@ -302,13 +302,13 @@ export function EmployeeProfileDrawer({ person, canEdit, onClose }: Props) {
             <div className="space-y-4">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <label className={labelCls}>
-                  Employee ID / NIK
+                  Staff ID (Kode Karyawan)
                   <input
                     disabled={!canEdit}
                     value={form.employeeCode}
                     onChange={(e) => set('employeeCode', e.target.value)}
-                    placeholder="e.g. EMP-001"
-                    className={`${inputCls} mt-1 normal-case`}
+                    placeholder="e.g. STF-001"
+                    className={`${inputCls} mt-1 font-mono uppercase`}
                   />
                 </label>
                 <label className={labelCls}>
@@ -395,44 +395,69 @@ export function EmployeeProfileDrawer({ person, canEdit, onClose }: Props) {
 
           {tab === 'compensation' && (
             <div className="space-y-4">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <label className={labelCls}>
-                  Gaji Pokok (Rp)
-                  <input
-                    type="number"
-                    min={0}
-                    step={100000}
-                    disabled={!canEdit}
-                    value={form.baseSalary}
-                    onChange={(e) => set('baseSalary', Number(e.target.value))}
-                    className={`${inputCls} mt-1 font-mono`}
-                  />
-                </label>
-                <label className={labelCls}>
-                  Tunjangan Tetap (Rp)
-                  <input
-                    type="number"
-                    min={0}
-                    step={50000}
-                    disabled={!canEdit}
-                    value={form.allowances}
-                    onChange={(e) => set('allowances', Number(e.target.value))}
-                    className={`${inputCls} mt-1 font-mono`}
-                  />
-                </label>
-                <label className={labelCls}>
-                  Max Kasbon Limit (Rp)
-                  <input
-                    type="number"
-                    min={0}
-                    step={100000}
-                    disabled={!canEdit}
-                    value={form.kasbonLimit}
-                    onChange={(e) => set('kasbonLimit', Number(e.target.value))}
-                    placeholder="0 = no preset cap"
-                    className={`${inputCls} mt-1 font-mono`}
-                  />
-                </label>
+              <div className="rounded-xl border border-[#d4af37]/25 bg-[#d4af37]/5 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-bold uppercase tracking-wider text-[#f5d77f]">
+                    Gaji, Tunjangan &amp; Komisi (Diisi oleh BOD)
+                  </div>
+                  <div className="text-xs font-mono text-zinc-300">
+                    Fixed: <b className="text-[#f5d77f]">{formatRp(Number(form.baseSalary || 0) + Number(form.allowances || 0))}</b>
+                    {form.commissionRate > 0 ? ` + ${form.commissionRate}% Komisi` : ''}
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label className={labelCls}>
+                    Gaji Pokok (Rp)
+                    <input
+                      type="number"
+                      min={0}
+                      step={100000}
+                      disabled={!canEdit}
+                      value={form.baseSalary}
+                      onChange={(e) => set('baseSalary', Number(e.target.value))}
+                      className={`${inputCls} mt-1 font-mono`}
+                    />
+                  </label>
+                  <label className={labelCls}>
+                    Tunjangan Tetap (Rp)
+                    <input
+                      type="number"
+                      min={0}
+                      step={50000}
+                      disabled={!canEdit}
+                      value={form.allowances}
+                      onChange={(e) => set('allowances', Number(e.target.value))}
+                      className={`${inputCls} mt-1 font-mono`}
+                    />
+                  </label>
+                  <label className={labelCls}>
+                    Komisi (%)
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.5}
+                      disabled={!canEdit}
+                      value={form.commissionRate}
+                      onChange={(e) => set('commissionRate', Number(e.target.value))}
+                      placeholder="e.g. 2.5"
+                      className={`${inputCls} mt-1 font-mono`}
+                    />
+                  </label>
+                  <label className={labelCls}>
+                    Max Kasbon Limit (Rp)
+                    <input
+                      type="number"
+                      min={0}
+                      step={100000}
+                      disabled={!canEdit}
+                      value={form.kasbonLimit}
+                      onChange={(e) => set('kasbonLimit', Number(e.target.value))}
+                      placeholder="0 = sesuai ACC BOD"
+                      className={`${inputCls} mt-1 font-mono`}
+                    />
+                  </label>
+                </div>
               </div>
 
               <div className="border-t border-zinc-800 pt-4">

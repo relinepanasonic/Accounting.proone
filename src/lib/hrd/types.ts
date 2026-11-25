@@ -54,6 +54,7 @@ export interface EmployeeProfileData {
   cutiApprovedBy: string;
   baseSalary: number;
   allowances: number;
+  commissionRate: number;
   bankName: string;
   bankAccountNo: string;
   bankAccountName: string;
@@ -86,6 +87,7 @@ export const DEFAULT_EMPLOYEE_PROFILE: EmployeeProfileData = {
   cutiApprovedBy: '',
   baseSalary: 0,
   allowances: 0,
+  commissionRate: 0,
   bankName: '',
   bankAccountNo: '',
   bankAccountName: '',
@@ -120,6 +122,7 @@ export function mapDbProfile(row: any | null | undefined): EmployeeProfileData {
     cutiApprovedBy: row.cuti_approved_by || '',
     baseSalary: Number(row.base_salary || 0),
     allowances: Number(row.allowances || 0),
+    commissionRate: Number(row.commission_rate || 0),
     bankName: row.bank_name || '',
     bankAccountNo: row.bank_account_no || '',
     bankAccountName: row.bank_account_name || '',

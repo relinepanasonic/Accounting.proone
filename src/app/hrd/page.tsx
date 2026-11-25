@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
-// HRD opens on Team Payroll.
+// HRD opens on Employee Directory (the brain of HRD).
 export default function HrdHome() {
-  redirect('/payroll');
+  redirect('/hrd/employees');
 }

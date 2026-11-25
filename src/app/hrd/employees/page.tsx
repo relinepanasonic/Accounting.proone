@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/api/supabase-admin';
 import { getAuthenticatedWorkspaceContext, FINANCE_ROLES } from '@/lib/auth/workspace-context';
 import { founderEmails, isFounderEmail } from '@/lib/auth/founders';
 import { EmployeeDirectory, type Person, type PendingEmployeeInvite } from '@/components/hrd/EmployeeDirectory';
+import { isHrdBodRole, isMissingHrdTableError, mapDbProfile } from '@/lib/hrd/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,6 +37,16 @@ export default async function EmployeeDirectoryPage() {
   const { data: profiles } = ids.length ? await db.from('profiles').select('id, full_name, email, phone').in('id', ids) : { data: [] as any[] };
   const { data: founderProfiles } = await db.from('profiles').select('id, full_name, email, phone').in('email', founderEmails());
 
+  // HRD Brain: extended employee profiles (WFH, Annual Cuti BOD ACC, Shift, Salary, Bank, Kasbon Limit)
+  let migrationRequired = false;
+  const hrProfileByUser = new Map<string, any>();
+  const hrRes = await db.from('employee_profiles').select('*').eq('workspace_id', ctx.activeWorkspaceId);
+  if (hrRes.error) {
+    if (isMissingHrdTableError(hrRes.error)) migrationRequired = true;
+  } else {
+    for (const row of hrRes.data || []) hrProfileByUser.set(row.user_id, row);
+  }
+
   // The companies this viewer manages: a person's access to them is shown and can be changed.
   const manageable = ctx.availableWorkspaces.filter((w) => w.role === 'founder' || w.role === 'superadmin').map((w) => ({ id: w.id, name: w.name }));
   const accessByUser = new Map<string, string[]>();
@@ -59,12 +70,13 @@ export default async function EmployeeDirectoryPage() {
       since: (m.created_at as string | null) || null,
       workspaceIds: accessByUser.get(m.user_id) || [ctx.activeWorkspaceId],
       isCurrentUser: m.user_id === ctx.userId,
+      profile: mapDbProfile(hrProfileByUser.get(m.user_id)),
     };
   });
   // The founder is not a member row in every company, but belongs in the directory.
   for (const f of founderProfiles || []) {
     if (!people.some((x) => x.userId === f.id)) {
-      people.push({ memberId: null, userId: f.id, name: f.full_name || f.email.split('@')[0], email: f.email, phone: f.phone || '', role: 'founder', status: null, since: null, workspaceIds: manageable.map((w) => w.id), isCurrentUser: f.id === ctx.userId });
+      people.push({ memberId: null, userId: f.id, name: f.full_name || f.email.split('@')[0], email: f.email, phone: f.phone || '', role: 'founder', status: null, since: null, workspaceIds: manageable.map((w) => w.id), isCurrentUser: f.id === ctx.userId, profile: mapDbProfile(hrProfileByUser.get(f.id)) });
     }
   }
 
@@ -102,6 +114,8 @@ export default async function EmployeeDirectoryPage() {
         currentUserRole={ctx.role}
         canManage={isOwner}
         canSetStatus={isOwner || ctx.role === 'accounting'}
+        canEditHrProfile={isHrdBodRole(ctx.role)}
+        migrationRequired={migrationRequired}
         pendingInvites={pending}
       />
     </div>

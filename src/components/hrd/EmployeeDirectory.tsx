@@ -2,11 +2,13 @@
 
 import React, { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Plus, Pencil, Trash2, Copy, Check, Link2 } from 'lucide-react';
+import { Search, Plus, Pencil, Trash2, Copy, Check, Link2, SlidersHorizontal, Home, CalendarOff, AlertTriangle } from 'lucide-react';
 import { createInvite, revokeInvite } from '@/app/actions/invite';
 import { deleteTeamMember, updateTeamMemberAccess } from '@/app/actions/settings';
 import { setEmploymentStatus } from '@/app/actions/employees';
 import { SortArrows } from '@/components/ui/SortArrows';
+import { EmployeeProfileDrawer } from '@/components/hrd/EmployeeProfileDrawer';
+import { WFH_DAY_OPTIONS, type EmployeeProfileData } from '@/lib/hrd/types';
 
 export type Status = 'tetap' | 'freelance' | null;
 export interface Person {
@@ -20,6 +22,7 @@ export interface Person {
   since: string | null;
   workspaceIds: string[];
   isCurrentUser: boolean;
+  profile: EmployeeProfileData;
 }
 export interface PendingEmployeeInvite { id: string; fullName: string; role: string; expiresAt: string; workspaceIds: string[] }
 
@@ -219,24 +222,28 @@ function EditPerson({ person, companies, onClose }: { person: Person; companies:
 
 type SortKey = 'name' | 'role' | 'status' | 'phone' | 'since';
 
-export function EmployeeDirectory({ people, companies, activeWorkspaceId, currentUserRole, canManage, canSetStatus, pendingInvites }: {
-  people: Person[]; companies: { id: string; name: string }[]; activeWorkspaceId: string; currentUserRole: string; canManage: boolean; canSetStatus: boolean; pendingInvites: PendingEmployeeInvite[];
+export function EmployeeDirectory({ people, companies, activeWorkspaceId, currentUserRole, canManage, canSetStatus, canEditHrProfile, migrationRequired, pendingInvites }: {
+  people: Person[]; companies: { id: string; name: string }[]; activeWorkspaceId: string; currentUserRole: string; canManage: boolean; canSetStatus: boolean; canEditHrProfile: boolean; migrationRequired?: boolean; pendingInvites: PendingEmployeeInvite[];
 }) {
   const router = useRouter();
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<'all' | 'tetap' | 'freelance' | 'unset'>('all');
+  const [filter, setFilter] = useState<'all' | 'tetap' | 'freelance' | 'wfh' | 'cuti' | 'unset'>('all');
   const [sort, setSort] = useState<{ key: SortKey; asc: boolean }>({ key: 'name', asc: true });
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Person | null>(null);
+  const [profilePerson, setProfilePerson] = useState<Person | null>(null);
   const [error, setError] = useState('');
   const [pending, start] = useTransition();
   const companyName = (id: string) => companies.find((c) => c.id === id)?.name || 'Company';
+  const wfhShort = (key: string) => WFH_DAY_OPTIONS.find((d) => d.key === key)?.short || key;
   const q = search.trim().toLowerCase();
 
   const counts = useMemo(() => ({
     all: people.length,
     tetap: people.filter((p) => p.status === 'tetap').length,
     freelance: people.filter((p) => p.status === 'freelance').length,
+    wfh: people.filter((p) => p.profile.wfhApproved).length,
+    cuti: people.filter((p) => p.profile.cutiEligible).length,
     unset: people.filter((p) => !p.status && p.memberId).length,
   }), [people]);
 
@@ -244,8 +251,10 @@ export function EmployeeDirectory({ people, companies, activeWorkspaceId, curren
     const list = people.filter((p) => {
       if (filter === 'tetap' && p.status !== 'tetap') return false;
       if (filter === 'freelance' && p.status !== 'freelance') return false;
+      if (filter === 'wfh' && !p.profile.wfhApproved) return false;
+      if (filter === 'cuti' && !p.profile.cutiEligible) return false;
       if (filter === 'unset' && (p.status || !p.memberId)) return false;
-      return !q || [p.name, p.email, p.phone, ROLE_LABEL[p.role] || p.role].some((t) => t.toLowerCase().includes(q));
+      return !q || [p.name, p.email, p.phone, p.profile.jobTitle, p.profile.department, ROLE_LABEL[p.role] || p.role].some((t) => (t || '').toLowerCase().includes(q));
     });
     const val = (p: Person) => (sort.key === 'name' ? p.name.toLowerCase() : sort.key === 'role' ? p.role : sort.key === 'status' ? p.status || 'zzz' : sort.key === 'phone' ? p.phone : p.since || '');
     return list.sort((a, b) => val(a).localeCompare(val(b), 'id', { numeric: true }) * (sort.asc ? 1 : -1));
@@ -283,12 +292,21 @@ export function EmployeeDirectory({ people, companies, activeWorkspaceId, curren
 
   return (
     <div className="space-y-4">
+      {migrationRequired && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-500/35 bg-amber-500/10 p-3.5 text-xs text-amber-200">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+          <div>
+            <b>HRD Database Migration Needed:</b> Run <code className="rounded bg-black/40 px-1.5 py-0.5 font-mono text-[11px]">supabase/migrations/20261213_hrd_core.sql</code> in Supabase SQL Editor to enable HR Profiles (Annual Cuti BOD ACC, WFH Days, Shifts, Salary) as well as Cuti and Kasbon.
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative w-full max-w-sm">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, email, phone or role" className="w-full rounded-xl border border-zinc-800 bg-zinc-950 py-2 pl-9 pr-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-[#d4af37]/50 focus:outline-none" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, email, phone, job title or role" className="w-full rounded-xl border border-zinc-800 bg-zinc-950 py-2 pl-9 pr-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-[#d4af37]/50 focus:outline-none" />
         </div>
-        <div className="flex flex-wrap gap-2">{pill('all', 'All')}{pill('tetap', 'Tetap')}{pill('freelance', 'Freelance')}{pill('unset', 'Status not set')}</div>
+        <div className="flex flex-wrap gap-2">{pill('all', 'All')}{pill('tetap', 'Tetap')}{pill('freelance', 'Freelance')}{pill('cuti', 'Cuti ACC')}{pill('wfh', 'WFH ACC')}{pill('unset', 'Status not set')}</div>
         {canManage && <button type="button" onClick={() => setAdding(true)} className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-[#d4af37]/40 bg-[#d4af37]/10 px-3.5 py-2 text-xs font-bold text-[#f5d77f] hover:brightness-125"><Plus className="h-4 w-4" /> Add employee</button>}
       </div>
 
@@ -312,51 +330,99 @@ export function EmployeeDirectory({ people, companies, activeWorkspaceId, curren
       )}
 
       <div className="overflow-x-auto rounded-2xl border border-[#d4af37]/20 bg-[#0e0f14] shadow-xl">
-        <table className="w-full min-w-[980px] text-left text-sm">
+        <table className="w-full min-w-[1160px] text-left text-sm">
           <thead className="border-b border-[#d4af37]/10 bg-zinc-950 text-[11px] text-zinc-400">
             <tr>
-              <Th k="name">Name</Th><Th k="role">Role</Th><Th k="status">Status (tax)</Th>
+              <Th k="name">Employee</Th><Th k="role">Role</Th><Th k="status">Status (tax)</Th>
+              <th className="px-4 py-3 font-bold uppercase tracking-wider">Cuti (BOD ACC)</th>
+              <th className="px-4 py-3 font-bold uppercase tracking-wider">WFH & Shift</th>
               <th className="px-4 py-3 font-bold uppercase tracking-wider">Companies</th>
-              <Th k="phone">Phone</Th><Th k="since">Joined</Th>
-              {canManage && <th className="px-4 py-3 text-right font-bold uppercase tracking-wider">Actions</th>}
+              <Th k="phone">Phone</Th>
+              <th className="px-4 py-3 text-right font-bold uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800/50">
-            {shown.length === 0 && <tr><td colSpan={canManage ? 7 : 6} className="p-10 text-center text-sm text-zinc-500">No one matches.</td></tr>}
+            {shown.length === 0 && <tr><td colSpan={8} className="p-10 text-center text-sm text-zinc-500">No one matches.</td></tr>}
             {shown.map((p) => (
               <tr key={p.userId} className="align-top transition-colors hover:bg-[#d4af37]/[0.04]">
                 <td className="px-4 py-3">
-                  <div className="flex items-center gap-2 font-bold text-zinc-100">{p.name}{p.isCurrentUser && <span className="rounded border border-[#d4af37]/30 bg-[#d4af37]/20 px-1.5 py-0.5 text-[9px] uppercase tracking-widest text-[#f5d77f]">You</span>}</div>
-                  <div className="text-[11px] text-zinc-500">{p.email || '-'}</div>
+                  <button type="button" onClick={() => setProfilePerson(p)} className="group text-left">
+                    <div className="flex items-center gap-2 font-bold text-zinc-100 group-hover:text-[#f5d77f]">
+                      {p.name}
+                      {p.profile.employeeCode && <span className="font-mono text-[10px] text-zinc-500">{p.profile.employeeCode}</span>}
+                      {p.isCurrentUser && <span className="rounded border border-[#d4af37]/30 bg-[#d4af37]/20 px-1.5 py-0.5 text-[9px] uppercase tracking-widest text-[#f5d77f]">You</span>}
+                    </div>
+                    <div className="text-[11px] text-zinc-500">
+                      {p.profile.jobTitle ? `${p.profile.jobTitle}${p.profile.department ? ` · ${p.profile.department}` : ''}` : (p.email || '-')}
+                    </div>
+                  </button>
                 </td>
                 <td className="px-4 py-3"><span className="rounded-full border border-[#d4af37]/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#f5d77f]">{ROLE_LABEL[p.role] || p.role}</span></td>
                 <td className="px-4 py-3"><StatusPicker person={p} canSet={canSetStatus} /></td>
+                <td className="px-4 py-3">
+                  {p.profile.cutiEligible ? (
+                    <div className="space-y-0.5">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
+                        <CalendarOff className="h-3 w-3" /> ACC · {p.profile.annualCutiQuota}d/yr
+                      </span>
+                      {p.profile.cutiApprovedBy && <div className="text-[10px] text-zinc-500">by {p.profile.cutiApprovedBy}</div>}
+                    </div>
+                  ) : (
+                    <span className="inline-flex rounded-full border border-zinc-800 bg-zinc-950 px-2 py-0.5 text-[10px] text-zinc-500">Belum ACC</span>
+                  )}
+                </td>
+                <td className="px-4 py-3">
+                  <div className="space-y-1">
+                    {p.profile.wfhApproved ? (
+                      <div className="inline-flex flex-wrap items-center gap-1 rounded-full border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-[10px] font-bold text-purple-300">
+                        <Home className="h-3 w-3" />
+                        <span>WFH: {p.profile.wfhDays.length > 0 ? p.profile.wfhDays.map(wfhShort).join(', ') : 'Hari belum dipilih'}</span>
+                      </div>
+                    ) : (
+                      <span className="inline-flex rounded-full border border-zinc-800 bg-zinc-950 px-2 py-0.5 text-[10px] text-zinc-500">WFO Only</span>
+                    )}
+                    <div className="text-[10px] font-mono text-zinc-500">
+                      {p.profile.workStartTime}–{p.profile.workEndTime}{p.profile.satHalfDay ? ` · Sab ${p.profile.satWorkStart}–${p.profile.satWorkEnd}` : ''}
+                    </div>
+                  </div>
+                </td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap gap-1">
                     {p.workspaceIds.map((id) => <span key={id} className={`rounded border px-1.5 py-0.5 text-[10px] ${id === activeWorkspaceId ? 'border-[#d4af37]/40 text-[#f5d77f]' : 'border-zinc-700 text-zinc-400'}`}>{companyName(id)}</span>)}
                   </div>
                 </td>
-                <td className="px-4 py-3 text-zinc-300">{p.phone || '-'}</td>
-                <td className="px-4 py-3 text-zinc-500">{since(p.since)}</td>
-                {canManage && (
-                  <td className="px-4 py-3 text-right">
+                <td className="px-4 py-3 text-zinc-300">
+                  <div>{p.phone || '-'}</div>
+                  <div className="text-[10px] text-zinc-500">Joined {since(p.profile.joinDate || p.since)}</div>
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <div className="inline-flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setProfilePerson(p)}
+                      title="Open HR Profile (Cuti ACC, WFH, Shift, Salary, Bank)"
+                      className="inline-flex items-center gap-1 rounded-lg border border-[#d4af37]/35 bg-[#d4af37]/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[#f5d77f] hover:bg-[#d4af37]/20"
+                    >
+                      <SlidersHorizontal className="h-3 w-3" /> HR Profile
+                    </button>
                     {mayEdit(p) && (
-                      <div className="inline-flex gap-1">
+                      <>
                         <button type="button" onClick={() => setEditing(p)} title="Edit role, status and companies" className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white"><Pencil className="h-3.5 w-3.5" /></button>
                         <button type="button" disabled={pending} onClick={() => remove(p)} title="Remove from the company" className="rounded-md p-1.5 text-zinc-500 hover:bg-red-500/10 hover:text-red-400"><Trash2 className="h-3.5 w-3.5" /></button>
-                      </div>
+                      </>
                     )}
-                  </td>
-                )}
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p className="text-[11px] text-zinc-500">{shown.length} of {people.length} · Status Tetap / Freelance is kept per company, for the tax of each company.</p>
+      <p className="text-[11px] text-zinc-500">{shown.length} of {people.length} · Click any employee or <b>HR Profile</b> to manage BOD ACC (Annual Cuti &amp; WFH Days), Saturday half-day shift, Salary, Bank &amp; Kasbon Limit.</p>
 
       {adding && <AddEmployee companies={companies} activeWorkspaceId={activeWorkspaceId} onClose={() => setAdding(false)} />}
       {editing && <EditPerson person={editing} companies={companies} onClose={() => setEditing(null)} />}
+      {profilePerson && <EmployeeProfileDrawer person={profilePerson} canEdit={canEditHrProfile} onClose={() => setProfilePerson(null)} />}
     </div>
   );
 }

@@ -34,6 +34,8 @@ import {
   Truck,
   Wallet,
   CalendarCheck,
+  CalendarOff,
+  Banknote,
   MessageCircle,
   CircleDot
 } from 'lucide-react';
@@ -46,6 +48,7 @@ import {
   OPTIMIZING_CHILDREN,
   ACCOUNTING_CHILDREN,
   HRD_CHILDREN,
+  HRD_STAFF_CHILDREN,
 } from '@/components/navigation/nav-config';
 
 type NavEntry =
@@ -75,9 +78,11 @@ const ACCOUNTING_ICONS: Record<string, React.ReactNode> = {
 };
 
 const HRD_ICONS: Record<string, React.ReactNode> = {
-  'Team Payroll': <Wallet className="w-3.5 h-3.5" />,
-  Absensi: <CalendarCheck className="w-3.5 h-3.5" />,
   'Employee Directory': <Users className="w-3.5 h-3.5" />,
+  Absensi: <CalendarCheck className="w-3.5 h-3.5" />,
+  Cuti: <CalendarOff className="w-3.5 h-3.5" />,
+  Kasbon: <Banknote className="w-3.5 h-3.5" />,
+  'Team Payroll': <Wallet className="w-3.5 h-3.5" />,
   'WA Control': <MessageCircle className="w-3.5 h-3.5" />,
 };
 
@@ -166,18 +171,20 @@ export function CyberSidebar({ workspaceContext }: CyberSidebarProps = {}) {
       ? [
           { type: 'group', name: 'Optimizing', icon: <TrendingUp className="w-4 h-4" />, isActive: isOptimizingPath, children: OPTIMIZING_CHILDREN.filter((c) => c.name === 'Advertiser') },
           { type: 'link', name: 'Productivity', href: '/productivity/me', icon: <Activity className="w-4 h-4" />, isActive: (p) => p.startsWith('/productivity/me') },
+          { type: 'group', name: 'HRD', icon: <Users className="w-4 h-4" />, isActive: isHrdPath, children: HRD_STAFF_CHILDREN },
         ]
       : activeRole === 'sales'
         ? [
             { type: 'link', name: 'Sales', href: '/sales', icon: <TrendingUp className="w-4 h-4" />, isActive: (p) => p === '/sales' || p.startsWith('/sales/') },
             { type: 'link', name: 'Productivity', href: '/productivity/me', icon: <Activity className="w-4 h-4" />, isActive: (p) => p.startsWith('/productivity/me') },
-            { type: 'link', name: 'Absensi', href: '/hrd/absensi', icon: <Users className="w-4 h-4" />, isActive: isHrdPath },
+            { type: 'group', name: 'HRD', icon: <Users className="w-4 h-4" />, isActive: isHrdPath, children: HRD_STAFF_CHILDREN },
           ]
       : activeRole === 'admin'
         ? [
-            // Admin staff: the Admin page and their own Productivity. Nothing else.
+            // Admin staff: the Admin page, their own Productivity, and self-service HRD (Absensi, Cuti, Kasbon).
             { type: 'group', name: 'Optimizing', icon: <TrendingUp className="w-4 h-4" />, isActive: isOptimizingPath, children: OPTIMIZING_CHILDREN.filter((c) => c.name === 'Admin') },
             { type: 'link', name: 'Productivity', href: '/productivity/me', icon: <Activity className="w-4 h-4" />, isActive: (p) => p.startsWith('/productivity/me') || p.startsWith('/productivity/tasks') || p.startsWith('/productivity/meetings') || p.startsWith('/productivity/stats') },
+            { type: 'group', name: 'HRD', icon: <Users className="w-4 h-4" />, isActive: isHrdPath, children: HRD_STAFF_CHILDREN },
           ]
       : limited
         ? [{ type: 'link', name: 'Dream of AI', href: '/productivity/pabrik-sosmed', icon: <Share2 className="w-4 h-4" />, isActive: isPabrikPath }]

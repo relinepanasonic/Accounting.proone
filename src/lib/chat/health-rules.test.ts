@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { healthOf, workingHours } from './health-rules';
+import { healthOf, shouldAlert, workingHours } from './health-rules';
 
 const at = (s: string) => new Date(s);
 
@@ -30,4 +30,28 @@ describe('is the sales number delivering', () => {
   });
   it('never any message, in working hours: a problem', () => expect(healthOf({ now, lastIncomingAt: null, deviceStatus: null })).toMatchObject({ ok: false, reason: 'silent' }));
   it('the text says days after two days', () => expect(healthOf({ now, lastIncomingAt: '2026-11-19T13:28:00Z', deviceStatus: 'connect' }).text).toContain('3 days'));
+});
+
+describe('Oli, the admin number', () => {
+  const now = at('2026-11-23T05:00:00Z');
+  it('is judged by its connection only, never by silence', () => {
+    expect(healthOf({ now, lastIncomingAt: null, deviceStatus: 'connect', role: 'admin' }).ok).toBe(true);
+    expect(healthOf({ now, lastIncomingAt: '2026-11-10T00:00:00Z', deviceStatus: 'connect', role: 'admin' }).ok).toBe(true);
+  });
+  it('a disconnected Oli is named, and says what stops', () => {
+    const h = healthOf({ now, lastIncomingAt: null, deviceStatus: 'disconnect', role: 'admin' });
+    expect(h).toMatchObject({ ok: false, reason: 'disconnected' });
+    expect(h.text).toContain('Oli'); expect(h.text).toContain('report');
+  });
+  it('a disconnected Fefe is named too', () => expect(healthOf({ now, lastIncomingAt: null, deviceStatus: 'disconnect', role: 'sales' }).text).toContain('Fefe'));
+});
+
+describe('when the team is told', () => {
+  const now = at('2026-11-23T05:00:00Z');
+  it('at once for a new problem', () => expect(shouldAlert(true, null, now)).toBe(true));
+  it('not again before 12 hours, then again', () => {
+    expect(shouldAlert(true, '2026-11-22T22:00:00Z', now)).toBe(false);          // 7 hours ago
+    expect(shouldAlert(true, '2026-11-22T16:00:00Z', now)).toBe(true);           // 13 hours ago
+  });
+  it('never when there is no problem', () => expect(shouldAlert(false, null, now)).toBe(false));
 });
